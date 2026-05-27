@@ -173,7 +173,7 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
       <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-md my-4 flex flex-col">
         <div className="flex items-center justify-between gap-2 p-4 border-b border-[var(--bd)]">
           <div className="flex items-center gap-2 min-w-0">
-            <MessageSquare size={20} style={{ color: '#06C755' }} className="flex-shrink-0" />
+            <MessageSquare size={20} style={{ color: 'var(--accent-line)' }} className="flex-shrink-0" />
             <h3 className="text-lg font-bold text-[var(--tx-heading)] truncate">
               {linkState === LINK_STATES.UNLINKED ? 'วิธีผูก LINE บัญชีลูกค้า' : 'จัดการการผูก LINE'}
             </h3>
@@ -286,21 +286,21 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
                   <button onClick={() => setConfirmAction('suspend')} disabled={busy}
                     data-testid="suspend-line-btn"
                     className="px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 hover:shadow-md active:scale-95 disabled:opacity-50"
-                    style={{ color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)', backgroundColor: 'rgba(245,158,11,0.08)' }}>
+                    style={{ color: 'var(--accent-amber)', borderColor: 'rgba(245,158,11,0.3)', backgroundColor: 'rgba(245,158,11,0.08)' }}>
                     <Pause size={12} /> ปิดชั่วคราว
                   </button>
                 ) : (
                   <button onClick={() => setConfirmAction('resume')} disabled={busy}
                     data-testid="resume-line-btn"
                     className="px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 hover:shadow-md active:scale-95 disabled:opacity-50"
-                    style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}>
+                    style={{ color: 'var(--accent-line)', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}>
                     <Play size={12} /> เปิดใหม่
                   </button>
                 )}
                 <button onClick={() => setConfirmAction('unlink')} disabled={busy}
                   data-testid="unlink-line-btn"
                   className="px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 hover:shadow-md active:scale-95 disabled:opacity-50"
-                  style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.08)' }}>
+                  style={{ color: 'var(--accent-red)', borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.08)' }}>
                   <Unlink size={12} /> ยกเลิกการผูก
                 </button>
               </div>

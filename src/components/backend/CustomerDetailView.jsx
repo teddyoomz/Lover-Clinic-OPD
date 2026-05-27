@@ -838,7 +838,7 @@ export default function CustomerDetailView({
                     <button onClick={onEditCustomer}
                       data-testid="edit-customer-btn"
                       className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
-                      style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
+                      style={{ color: 'var(--accent-blue)', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
                       title="แก้ไขข้อมูลลูกค้าทั้งหมด">
                       <Edit3 size={11} /> แก้ไข
                     </button>
@@ -846,7 +846,7 @@ export default function CustomerDetailView({
                   <button onClick={() => setLineQrOpen(true)}
                     data-testid="link-line-btn"
                     className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
-                    style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
+                    style={{ color: 'var(--accent-line)', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
                     title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
                     <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
                   </button>
@@ -854,7 +854,7 @@ export default function CustomerDetailView({
                   <button onClick={() => setShowPatientLinkModal(true)}
                     data-testid="patient-link-btn"
                     className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
-                    style={{ color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)', backgroundColor: 'rgba(168,85,247,0.12)' }}
+                    style={{ color: 'var(--accent-purple)', borderColor: 'rgba(168,85,247,0.4)', backgroundColor: 'rgba(168,85,247,0.12)' }}
                     title="สร้างลิงก์ให้ลูกค้าดูนัดหมาย + คอร์สคงเหลือ (ไม่ต้องล็อกอิน)">
                     <Link size={11} /> {customer?.patientLinkToken ? 'ลิงก์ ✓' : 'ลิงก์ดูข้อมูล'}
                   </button>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light-Theme Audit &amp; Fix — Design Spec</title>
+<style>
+  :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+  h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+  h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2.2em; }
+  h3 { margin-top:1.4em; }
+  pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.84em; }
+  code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+  blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+  .section { background:var(--bg-section); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+  .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.6em; font-weight:700; }
+  table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.92em; }
+  th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+  th { background:var(--bg-meta); }
+  .tag { display:inline-block; font-size:.72em; font-weight:700; padding:.1em .5em; border-radius:4px; background:#fee2e2; color:#b91c1c; }
+  .tag.ok { background:#dcfce7; color:#15803d; }
+  /* ── light-theme bug demo helpers (simulate the real app's light surface) ── */
+  .lightsurface { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; }
+  .ba { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .ba > div { border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:#f8fafc; }
+  .ba .cap { font-size:.7em; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin-bottom:8px; }
+  .cap.bad { color:#b91c1c; } .cap.good { color:#15803d; }
+  .demobox { padding:10px 12px; border-radius:8px; font-size:.85em; }
+  /* flow */
+  .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:1em 0; }
+  .flow .step { flex:1 1 130px; min-width:130px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin:6px; position:relative; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .flow .step b { display:block; font-size:.8em; color:var(--accent); margin-bottom:4px; }
+  .flow .step span { font-size:.82em; color:#444; }
+  .flow .arrow { align-self:center; font-size:1.4em; color:#94a3b8; padding:0 2px; }
+</style>
+</head>
+<body>
+
+<h1>Light-Theme Audit &amp; Fix — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-27 (EOD+12) · <strong>Status:</strong> Approved by user (design "ok") · <strong>Scope:</strong> CSS/colour theming only — zero wiring/flow/logic (cosmetic shell) · <strong>Implementation plan:</strong> TBD (next: writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The project was built <strong>dark-first</strong> for its whole life. With launch imminent, the <strong>light theme</strong> has accumulated whack-a-mole defects: any page or modal still rendering a hardcoded dark colour, or white text on a light surface, looks broken or is outright invisible in light mode (history: V107, V83-followup-11, the EOD+12 chart-button fix). The user wants a <strong>complete sweep of every page and every modal</strong> (App UI) in light theme, fixing everything to be clearly legible — touching <strong>only design CSS/colour, never wiring/flow/logic</strong>.</p>
+
+<div class="section">
+<strong>How the theme system works (recap):</strong>
+<ul>
+  <li><code>data-theme</code> on <code>&lt;html&gt;</code>: <code>dark</code> (default) · <code>light</code> · <code>auto</code> (= system pref).</li>
+  <li>Palette is CSS custom properties (<code>--bg-card</code>, <code>--tx-heading</code>…). But components mostly use <strong>hardcoded Tailwind arbitrary classes</strong> (<code>bg-[#0f0f0f]</code>, <code>text-white</code>, <code>text-gray-300</code>).</li>
+  <li><code>src/index.css</code> (~4005 lines) carries a giant <code>[data-theme="light"],[data-theme="auto"]</code> <strong>override layer</strong> that remaps each hardcoded dark class → its light value.</li>
+  <li><strong>Failure rule:</strong> any hardcoded dark class / white text NOT covered by an override stays dark/invisible on the light surface.</li>
+</ul>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Open this file in a browser — the cells below render the actual light-surface failure modes (left = broken) and their targets (right = fixed AA-legible). This is what the audit hunts for and what "done" looks like.</p>
+
+<div class="mockup">
+  <div class="mockup-label">Failure-mode gallery — broken (left) vs fixed (right), on a real light surface (#f8fafc)</div>
+
+  <h4 style="margin:.4em 0;">FM-A · uncovered dark surface (<code>bg-[#0f0f0f]</code> with no light override)</h4>
+  <div class="ba">
+    <div><div class="cap bad">✗ broken</div>
+      <div class="demobox" style="background:#0f0f0f;color:#e5e7eb;">การ์ดสรุปยอด — กล่องดำลอยบนพื้นสว่าง</div></div>
+    <div><div class="cap good">✓ fixed (override → var(--bg-card))</div>
+      <div class="demobox" style="background:#f8fafc;border:1px solid #e2e8f0;color:#0f172a;">การ์ดสรุปยอด — พื้นสว่าง, เส้นขอบบาง</div></div>
+  </div>
+
+  <h4 style="margin:1em 0 .4em;">FM-B · white text on light surface (<code>text-white</code> — the recurring V107 class)</h4>
+  <div class="ba">
+    <div><div class="cap bad">✗ broken (invisible)</div>
+      <div class="demobox" style="background:#ffffff;color:#ffffff;border:1px solid #e2e8f0;">ชื่อลูกค้า: นางสาว แพรพร — (อ่านไม่ออก)</div></div>
+    <div><div class="cap good">✓ fixed → var(--tx-heading)</div>
+      <div class="demobox" style="background:#ffffff;color:#0f172a;border:1px solid #e2e8f0;">ชื่อลูกค้า: นางสาว แพรพร</div></div>
+  </div>
+
+  <h4 style="margin:1em 0 .4em;">FM-C · low-contrast colour text (<code>text-blue-400</code> #60a5fa ≈ 2.7:1 on white)</h4>
+  <div class="ba">
+    <div><div class="cap bad">✗ borderline (FAIL AA)</div>
+      <div class="demobox" style="background:#fff;color:#60a5fa;border:1px solid #e2e8f0;">ดูรายละเอียด →</div></div>
+    <div><div class="cap good">✓ fixed → blue-700 #1d4ed8 (8.6:1)</div>
+      <div class="demobox" style="background:#fff;color:#1d4ed8;border:1px solid #e2e8f0;">ดูรายละเอียด →</div></div>
+  </div>
+
+  <h4 style="margin:1em 0 .4em;">FM-D · inline-style colour (<code>style={{color:'#fff'}}</code> — class override can't reach → component-level fix)</h4>
+  <div class="ba">
+    <div><div class="cap bad">✗ broken (override misses it)</div>
+      <div class="demobox" style="background:#fff;color:#fff;border:1px solid #e2e8f0;">฿ 13,900 (invisible)</div></div>
+    <div><div class="cap good">✓ fixed → style color var(--tx-heading)</div>
+      <div class="demobox" style="background:#fff;color:#0f172a;border:1px solid #e2e8f0;">฿ 13,900</div></div>
+  </div>
+
+  <h4 style="margin:1em 0 .4em;">FM-E · dark glow/shadow reads muddy on light</h4>
+  <div class="ba">
+    <div><div class="cap bad">✗ heavy dark glow</div>
+      <div class="demobox" style="background:#f8fafc;border:1px solid #e2e8f0;box-shadow:0 0 30px rgba(0,0,0,.8);color:#0f172a;">Panel</div></div>
+    <div><div class="cap good">✓ soft light shadow (var(--shadow-panel))</div>
+      <div class="demobox" style="background:#f8fafc;border:1px solid #e2e8f0;box-shadow:0 4px 16px rgba(0,0,0,.08);color:#0f172a;">Panel</div></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Before / After — a representative modal in light theme</div>
+  <div class="ba">
+    <div style="background:#ffffff;">
+      <div class="cap bad">✗ BEFORE (dark-first leak)</div>
+      <div style="background:#0f0f0f;border:1px solid #222;border-radius:10px;padding:14px;color:#fff;">
+        <div style="font-weight:700;margin-bottom:8px;">สร้าง QR code</div>
+        <div style="background:#141414;border:1px solid #222;border-radius:6px;padding:8px;color:#9ca3af;font-size:.85em;">กรอกชื่อลิงก์…</div>
+        <button style="margin-top:10px;background:#fff;color:#fff;border:none;border-radius:6px;padding:6px 14px;">สร้าง</button>
+      </div>
+      <div style="font-size:.74em;color:#b91c1c;margin-top:6px;">กล่องดำ + ปุ่มขาวบนขาว (อ่าน "สร้าง" ไม่ออก)</div>
+    </div>
+    <div style="background:#f8fafc;">
+      <div class="cap good">✓ AFTER (light, AA-legible)</div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;color:#0f172a;box-shadow:0 4px 16px rgba(0,0,0,.08);">
+        <div style="font-weight:700;margin-bottom:8px;">สร้าง QR code</div>
+        <div style="background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:8px;color:#64748b;font-size:.85em;">กรอกชื่อลิงก์…</div>
+        <button style="margin-top:10px;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 14px;">สร้าง</button>
+      </div>
+      <div style="font-size:.74em;color:#15803d;margin-top:6px;">พื้นสว่าง + ข้อความเข้ม + ปุ่ม CTA สีแบรนด์ ตัวอักษรขาวบนแดง (ผ่าน)</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<p>Per-batch audit→fix→verify pipeline (repeated for B1–B5):</p>
+<div class="flow">
+  <div class="step"><b>1 · GREP</b><span>sweep <code>src/</code> โซน batch หา FM-A..D candidates</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>2 · CLASSIFY</b><span>เทียบกับ override ใน index.css → FM-A/B/C (central) หรือ FM-D (component)</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>3 · FIX</b><span>central: เพิ่ม <code>[data-theme=light],[data-theme=auto]</code> rule · FM-D: สลับค่าสี inline → CSS-var</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>4 · LIVE-VERIFY</b><span>เปิด surface ใน light theme (Chrome MCP/Preview) · screenshot · วัด AA</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>5 · GUARD</b><span>/audit-ui-cultural-a11y + build + vitest ท้าย batch · dark theme regress = 0</span></div>
+</div>
+<p style="font-size:.9em;color:#444;"><strong>Constraint gate (every fix):</strong> diff ต้องเป็น CSS / className / inline-color-value เท่านั้น — ถ้าจะแตะ handler/state/prop/hook/flow = STOP (ผิดกฎ cosmetic-shell).</p>
+
+<h2>Architecture</h2>
+<h3>Fix mechanism — hybrid central-first</h3>
+<ul>
+  <li><strong>FM-A / FM-B / FM-C → central</strong>: append new <code>[data-theme="light"],[data-theme="auto"]</code> rules into the matching labelled section of <code>src/index.css</code>. <strong>Always pair light + auto.</strong> 0 <code>.jsx</code> edits.</li>
+  <li><strong>FM-D → component (only when central can't reach)</strong>: inline <code>style={{…}}</code> / colours computed in JS. Swap the colour value to a theme-aware CSS var (e.g. <code>'#fff'</code> → <code>'var(--tx-heading)'</code>). <strong>Value only — never the surrounding logic.</strong></li>
+  <li><strong>Selector discipline</strong>: prefer narrow selectors; the file already shows <code>!important</code> specificity scars (V107 had to narrow a catch-all). A new broad rule must not flip an intended white-on-accent CTA to dark, or vice-versa.</li>
+  <li><strong>Dark theme untouched</strong>: every change is light/auto-scoped; dark rendering must be byte-identical before/after.</li>
+</ul>
+<h3>Discovery (audit method)</h3>
+<ul>
+  <li>Static <strong>grep sweep</strong> per zone → candidate list, cross-checked vs existing index.css coverage.</li>
+  <li><code>/audit-ui-cultural-a11y</code> (WCAG AA contrast + Thai-culture: no red on names/HN) + <code>/audit</code> (technical) as automated backstops.</li>
+  <li><strong>Live-browser light-theme pass</strong> (Chrome MCP / Claude Preview, per <code>feedback_use_chrome_mcp_first</code> + Rule S): open every page + modal, screenshot, eyeball + measure computed-style contrast → confirm AA (Rule Q-vis: real pixels, not grep alone).</li>
+</ul>
+<h3>Batching (reviewable, Rule N / Rule Q-vis friendly)</h3>
+<table>
+  <tr><th>Batch</th><th>Surfaces</th><th>Expectation</th></tr>
+  <tr><td>B1 App shell</td><td>AdminDashboard, ChatPanel, controls bar, ThemeToggle, OPD ember-band</td><td>moderate</td></tr>
+  <tr><td>B2 Backend shell + tabs</td><td>BackendDashboard, nav, menu/cmd-palette, all backend tabs (master-data / sale / treatment / stock / reports / marketing / settings…)</td><td>highest density (override whack-a-mole lives here)</td></tr>
+  <tr><td>B3 Modals</td><td>every modal across the app (grouped by feature) + tablet-chart editor chrome + ImageLightbox</td><td>largest bucket</td></tr>
+  <tr><td>B4 Patient-facing</td><td>PatientForm, PatientDashboard, ClinicSchedule, public-link pages (sakura-polished)</td><td>few expected</td></tr>
+  <tr><td>B5 Shared components</td><td>DateField, ProductSelectField, StaffSelectField, badges/chips, RoleBadge…</td><td>fixes here cascade everywhere</td></tr>
+</table>
+<p style="font-size:.9em;color:#444;"><strong>Excluded (Q3):</strong> print/document views (SalePrintView, QuotationPrintView, DocumentPrintModal, PrintTemplates) — designed to print on white paper, effectively always-light, no dark variant → separate concern.</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = WCAG AA (4.5:1):</strong> "ชัด" = AA — body text ≥ 4.5:1, large text/icons ≥ 3:1, every interactive element clearly visible. Measurable; backed by <code>/audit-ui-cultural-a11y</code>.</li>
+  <li><strong>Q2 = Hybrid (central-first):</strong> extend the central index.css override layer first (0 .jsx edits); component-level only for FM-D (inline / JS colours).</li>
+  <li><strong>Q3 = App UI, exclude print:</strong> every page + modal of admin + backend + patient-facing; print/document views excluded (always-white paper).</li>
+  <li><strong>Q4 = Full live-browser pass:</strong> grep candidates → open every page + modal in light theme via Chrome MCP/Preview → real-pixel verify + AA-measure. Slowest, most thorough — launch-grade.</li>
+  <li><strong>Hard constraint:</strong> CSS/colour only — zero wiring/flow/logic (cosmetic shell, per <code>feedback_cosmetic_shell_redesign_constraint</code>).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Every App-UI page + modal (admin + backend + patient-facing; print excluded), opened in light theme, has <strong>no invisible/illegible text, icon, button, or border</strong>, and all text meets <strong>AA (4.5:1 body / 3:1 large+icons)</strong>.</li>
+  <li>No leftover dark surface (dark box/panel) on a light background.</li>
+  <li><strong>Dark theme is byte-identical</strong> before/after (zero regression — verified by before/after dark screenshots on touched surfaces).</li>
+  <li>Both <code>light</code> AND <code>auto</code> (=system light) modes render identically.</li>
+  <li>Diff contains <strong>only</strong> CSS rules / className strings / inline colour-value swaps — <strong>no handler/state/prop/hook/flow/logic change</strong> (grep-verifiable).</li>
+  <li>No red on patient names/HN in light theme (Thai culture, rule 04).</li>
+  <li><code>npm run build</code> clean + full vitest (14971+/0) green (FM-D className/inline swaps must not break source-grep/RTL tests, or those tests are corrected to match).</li>
+  <li>Evidence: light-theme screenshots of every fixed surface + <code>/audit-ui-cultural-a11y</code> pass.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>index.css specificity wars (V107 scar):</strong> a new broad override may flip an intended white-on-accent CTA to dark (or the reverse). Mitigation: narrow selectors + live-verify after every batch.</li>
+  <li><strong>FM-D test fragility:</strong> component inline/className swaps can trip source-grep/RTL tests asserting exact classes → run affected tests + full suite at batch end (Rule N exception: this is a broad cross-cutting change).</li>
+  <li><strong>Hard-to-reach modals:</strong> some deep modals need specific data/state to open. Where I can't drive the state, use a TEST fixture or fall back to user L1 hands-on for those few (documented per batch).</li>
+  <li><strong>"auto" mode verification</strong> needs OS light-pref OR forcing <code>prefers-color-scheme: light</code> in devtools during the live pass.</li>
+  <li><strong>Open (confirm in plan):</strong> add a Rule D regression artifact — an override-coverage test that flags dark classes used in components but lacking a light override, to prevent future drift? (Recommended.)</li>
+  <li><strong>No deploy implied:</strong> all work is local + commits await explicit "push"/"deploy" (V18). This ships alongside the existing unpushed EOD+11/EOD+12 frontend stack.</li>
+</ul>
+
+</body>
+</html>

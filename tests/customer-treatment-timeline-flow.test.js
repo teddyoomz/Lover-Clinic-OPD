@@ -88,8 +88,8 @@ describe('TL1: modal shell + a11y', () => {
     expect(SRC).toMatch(/onClick=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/);
   });
 
-  it('TL1.6: ProClinic-fidelity teal #2EC4B6 used for header text + icons', () => {
-    expect(SRC).toMatch(/#2EC4B6/);
+  it('TL1.6: ProClinic-fidelity teal used for header text + icons (light-theme audit 2026-05-27: via var(--accent-teal) — #2EC4B6 in dark, AA-dark teal in light)', () => {
+    expect(SRC).toMatch(/var\(--accent-teal\)/);
     expect(SRC).toMatch(/Timeline การรักษา/);
   });
 

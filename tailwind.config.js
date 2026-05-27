@@ -1,5 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // Light-theme audit (2026-05-27): the app's real theme is the `data-theme`
+  // attribute on <html> (useTheme.js). Default Tailwind darkMode='media' coupled
+  // `dark:` variants to the OS prefers-color-scheme, so on a dark-OS machine the
+  // app's LIGHT theme rendered dark-variant colours (invisible text, AV136 class).
+  // Bind `dark:` to the app theme instead → fires only under [data-theme="dark"].
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",

@@ -78,9 +78,9 @@ export default function TreatmentTimelineModal({
         onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-[var(--bd)] flex items-center gap-3 flex-wrap">
-          <Activity size={20} style={{ color: '#2EC4B6' }} />
+          <Activity size={20} style={{ color: 'var(--accent-teal)' }} />
           <div className="flex-1 min-w-0">
-            <h4 id="timeline-modal-title" className="text-lg font-black text-[var(--tx-heading)] tracking-tight" style={{ color: '#2EC4B6' }}>
+            <h4 id="timeline-modal-title" className="text-lg font-black text-[var(--tx-heading)] tracking-tight" style={{ color: 'var(--accent-teal)' }}>
               Timeline การรักษา
             </h4>
             {customer && (
@@ -123,7 +123,7 @@ export default function TreatmentTimelineModal({
                           onClick={() => { onClose?.(); onEditTreatment(t.id); }}
                           data-testid={`timeline-edit-${t.id}`}
                           className="text-xs font-bold flex items-center gap-1 px-2 py-1 rounded transition-all hover:bg-[var(--bg-hover)]"
-                          style={{ color: '#2EC4B6' }}>
+                          style={{ color: 'var(--accent-teal)' }}>
                           <Edit3 size={11} /> แก้ไขรูป
                         </button>
                       </div>

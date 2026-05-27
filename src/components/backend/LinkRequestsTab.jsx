@@ -338,7 +338,7 @@ export default function LinkRequestsTab() {
                         disabled={isBusy}
                         data-testid={`linked-customer-suspend-${row.customerId}`}
                         className="text-xs flex items-center gap-1 px-3 py-1.5 rounded font-bold disabled:opacity-50"
-                        style={{ color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}
+                        style={{ color: 'var(--accent-amber)', backgroundColor: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}
                       >
                         {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Pause size={12} />}
                         ปิดชั่วคราว
@@ -349,7 +349,7 @@ export default function LinkRequestsTab() {
                         disabled={isBusy}
                         data-testid={`linked-customer-resume-${row.customerId}`}
                         className="text-xs flex items-center gap-1 px-3 py-1.5 rounded font-bold disabled:opacity-50"
-                        style={{ color: '#06C755', backgroundColor: 'rgba(6,199,85,0.15)', border: '1px solid rgba(6,199,85,0.3)' }}
+                        style={{ color: 'var(--accent-line)', backgroundColor: 'rgba(6,199,85,0.15)', border: '1px solid rgba(6,199,85,0.3)' }}
                       >
                         {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
                         เปิดใหม่
@@ -360,7 +360,7 @@ export default function LinkRequestsTab() {
                       disabled={isBusy}
                       data-testid={`linked-customer-unlink-${row.customerId}`}
                       className="text-xs flex items-center gap-1 px-3 py-1.5 rounded font-bold disabled:opacity-50"
-                      style={{ color: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}
+                      style={{ color: 'var(--accent-red)', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}
                     >
                       {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
                       ยกเลิก

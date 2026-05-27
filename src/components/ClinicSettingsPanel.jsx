@@ -196,7 +196,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
 
         {/* Logo — Light Theme */}
         <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2"><ImageIcon size={14} style={{color:'#f59e0b'}}/> โลโก้ธีมสว่าง (Light Theme Logo)</h3>
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2"><ImageIcon size={14} style={{color:'var(--accent-amber)'}}/> โลโก้ธีมสว่าง (Light Theme Logo)</h3>
           <p className="text-[11px] text-gray-600 mb-4">ใช้เวอร์ชัน <span className="text-[var(--tx-heading)] font-bold">ตัวอักษรสีดำ</span> — แสดงบนพื้นหลังสีขาว / สว่าง (ถ้าไม่มีจะใช้โลโก้ธีมมืดแทนพร้อม filter อัตโนมัติ)</p>
 
           <div className="flex gap-2 mb-4">

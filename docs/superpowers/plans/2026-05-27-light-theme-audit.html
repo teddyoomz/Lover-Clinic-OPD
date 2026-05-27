@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Light-Theme Audit &amp; Fix Implementation Plan</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-task:#fafafa; --bg-pre:#f5f5f5; --tx-muted:#666; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.6; color:#222; }
+    h1 { color:#111; border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { color:#111; border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { color:#222; }
+    pre { background:var(--bg-pre); padding:1em; border-radius:6px; overflow-x:auto; font-size:.85em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); padding-left:1em; color:var(--tx-muted); margin:1em 0; background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; }
+    .header-meta { background:var(--bg-meta); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .header-meta p { margin:.4em 0; }
+    .task { border-left:4px solid var(--accent); padding:.8em 1.2em; margin:1.2em 0; background:var(--bg-task); border-radius:0 6px 6px 0; }
+    .step { margin:.6em 0; padding-left:.5em; }
+    .step input[type=checkbox] { margin-right:.6em; transform:scale(1.2); accent-color:var(--accent); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; font-weight:700; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.9em; }
+    th,td { border:1px solid var(--bd); padding:.45em .7em; text-align:left; vertical-align:top; }
+    th { background:var(--bg-meta); }
+    .ba { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .ba > div { border:1px solid #e2e8f0; border-radius:8px; padding:8px; background:#f8fafc; }
+    .cap { font-size:.68em; font-weight:700; text-transform:uppercase; margin-bottom:6px; }
+    .cap.bad { color:#b91c1c; } .cap.good { color:#15803d; }
+    .demobox { padding:8px 10px; border-radius:6px; font-size:.82em; }
+    .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:1em 0; }
+    .flow .step2 { flex:1 1 120px; min-width:120px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:9px 11px; margin:6px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    .flow .step2 b { display:block; font-size:.78em; color:var(--accent); margin-bottom:3px; }
+    .flow .step2 span { font-size:.8em; color:#444; }
+    .flow .arrow { align-self:center; font-size:1.3em; color:#94a3b8; }
+    .warn { background:#fef3c7; border-left:4px solid #d97706; padding:.5em 1em; border-radius:0 6px 6px 0; margin:1em 0; font-size:.92em; }
+  </style>
+</head>
+<body>
+
+<h1>Light-Theme Audit &amp; Fix Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement task-by-task. Steps use HTML checkboxes for tracking.<br>
+  <strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-27-light-theme-audit-design.html</code>
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make every App-UI page and modal clearly legible in light theme (WCAG AA), fixing only design CSS/colour — zero wiring/flow/logic.</p>
+  <p><strong>Architecture:</strong> Discovery-first: a grep + audit + live-browser sweep produces a concrete bug inventory, then a fixed per-batch procedure applies central <code>index.css</code> overrides (FM-A/B/C) and component inline-colour swaps (FM-D), each batch live-verified at the pixel level in light AND auto modes.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite + Tailwind (arbitrary classes) + <code>src/index.css</code> <code>[data-theme]</code> override layer; Chrome MCP / Claude Preview for real-pixel verification; <code>/audit-ui-cultural-a11y</code> + <code>/audit</code> as automated backstops; Vitest.</p>
+  <p><strong>Decisions (locked):</strong> Q1 AA 4.5:1 · Q2 Hybrid central-first · Q3 App UI excl. print · Q4 Full live-browser pass.</p>
+</div>
+
+<div class="warn">
+  <strong>HARD CONSTRAINT (every task):</strong> diff = CSS rule / className string / inline colour-value ONLY. If a fix would require touching a handler / state / prop / hook / flow / data → <strong>STOP</strong> (violates cosmetic-shell, <code>feedback_cosmetic_shell_redesign_constraint</code>). Every light fix is scoped to <code>[data-theme="light"],[data-theme="auto"]</code> (or <code>:root[data-theme="light"]</code>) and must <strong>never regress dark theme</strong>.
+  <br><br>
+  <strong>Commits / deploy:</strong> the executor commits LOCALLY per task (frequent commits). <strong>push + <code>vercel --prod</code> remain gated on explicit user word (V18)</strong> — this work is frontend-only (no rules/storage/cron → no Probe-Deploy-Probe) and ships alongside the existing unpushed EOD+11/EOD+12 stack.
+</div>
+
+<h2>Mockup Design</h2>
+<p>What the audit hunts (left = broken on a real light surface #f8fafc) and the AA-legible target (right). Open this file in a browser to render.</p>
+<div class="mockup">
+  <div class="mockup-label">5 failure modes — broken vs fixed</div>
+  <p style="margin:.2em 0;font-weight:700;font-size:.85em;">FM-A · uncovered dark surface (<code>bg-[#0f0f0f]</code> no light override)</p>
+  <div class="ba">
+    <div><div class="cap bad">✗ broken</div><div class="demobox" style="background:#0f0f0f;color:#e5e7eb;">การ์ดสรุปยอด — กล่องดำบนพื้นสว่าง</div></div>
+    <div><div class="cap good">✓ override → var(--bg-card)</div><div class="demobox" style="background:#f8fafc;border:1px solid #e2e8f0;color:#0f172a;">การ์ดสรุปยอด</div></div>
+  </div>
+  <p style="margin:.7em 0 .2em;font-weight:700;font-size:.85em;">FM-B · white text on light (<code>text-white</code>)</p>
+  <div class="ba">
+    <div><div class="cap bad">✗ invisible</div><div class="demobox" style="background:#fff;color:#fff;border:1px solid #e2e8f0;">นางสาว แพรพร</div></div>
+    <div><div class="cap good">✓ → var(--tx-heading)</div><div class="demobox" style="background:#fff;color:#0f172a;border:1px solid #e2e8f0;">นางสาว แพรพร</div></div>
+  </div>
+  <p style="margin:.7em 0 .2em;font-weight:700;font-size:.85em;">FM-C · low-contrast colour (<code>text-blue-400</code> 2.7:1)</p>
+  <div class="ba">
+    <div><div class="cap bad">✗ FAIL AA</div><div class="demobox" style="background:#fff;color:#60a5fa;border:1px solid #e2e8f0;">ดูรายละเอียด →</div></div>
+    <div><div class="cap good">✓ → blue-700 8.6:1</div><div class="demobox" style="background:#fff;color:#1d4ed8;border:1px solid #e2e8f0;">ดูรายละเอียด →</div></div>
+  </div>
+  <p style="margin:.7em 0 .2em;font-weight:700;font-size:.85em;">FM-D · inline-style colour (component-level value swap)</p>
+  <div class="ba">
+    <div><div class="cap bad">✗ override misses</div><div class="demobox" style="background:#fff;color:#fff;border:1px solid #e2e8f0;">฿ 13,900</div></div>
+    <div><div class="cap good">✓ style color var(--tx-heading)</div><div class="demobox" style="background:#fff;color:#0f172a;border:1px solid #e2e8f0;">฿ 13,900</div></div>
+  </div>
+  <p style="margin:.7em 0 .2em;font-weight:700;font-size:.85em;">FM-E · dark glow muddy on light</p>
+  <div class="ba">
+    <div><div class="cap bad">✗ heavy</div><div class="demobox" style="background:#f8fafc;border:1px solid #e2e8f0;box-shadow:0 0 30px rgba(0,0,0,.8);color:#0f172a;">Panel</div></div>
+    <div><div class="cap good">✓ var(--shadow-panel)</div><div class="demobox" style="background:#f8fafc;border:1px solid #e2e8f0;box-shadow:0 4px 16px rgba(0,0,0,.08);color:#0f172a;">Panel</div></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">The fix patterns (verbatim — selectors come from the inventory)</div>
+<pre><code>/* FM-A / FM-B / FM-C → central, append to the matching labelled section of src/index.css.
+   ALWAYS pair light + auto. */
+[data-theme="light"] .bg-\[#0d0d0d\],
+[data-theme="auto"]  .bg-\[#0d0d0d\]   { background-color: var(--bg-card) !important; }
+
+[data-theme="light"] .text-\[#fff\],
+[data-theme="auto"]  .text-\[#fff\]    { color: var(--tx-heading) !important; }
+
+[data-theme="light"] .text-sky-400,
+[data-theme="auto"]  .text-sky-400     { color: #0369a1 !important; }   /* AA on white */
+
+/* FM-D → component, value-only swap (NO logic change) */
+- &lt;span style={{ color: '#fff' }}&gt;
++ &lt;span style={{ color: 'var(--tx-heading)' }}&gt;</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Overall — discovery → 5 batches → regression guard → final live pass</div>
+  <div class="flow">
+    <div class="step2"><b>T1 DISCOVERY</b><span>grep + audit + triage → inventory artifact</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>T2-T6 BATCHES</b><span>B1 shell · B2 backend tabs · B3 modals · B4 patient · B5 shared</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>T7 GUARD</b><span>override-coverage regression test</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>T8 FINAL</b><span>full live pass + build + vitest + audit + state</span></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Per-batch micro-pipeline (T2–T6)</div>
+  <div class="flow">
+    <div class="step2"><b>GREP</b><span>inventory rows for this zone</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>CLASSIFY</b><span>FM-A/B/C (central) vs FM-D (component)</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>FIX</b><span>index.css override OR inline value swap</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>LIVE-VERIFY</b><span>light + auto, screenshot, AA-measure</span></div>
+    <div class="arrow">→</div>
+    <div class="step2"><b>DARK-REGRESS</b><span>dark unchanged + audit + commit</span></div>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>src/index.css</code></td><td>Modify (primary)</td><td>FM-A/B/C central overrides appended to the matching labelled section (light + auto paired). The bulk of all fixes land here.</td></tr>
+  <tr><td><code>src/components/**</code>, <code>src/pages/**</code> (specific files, discovered)</td><td>Modify (FM-D only)</td><td>Inline-style / JS colour <em>value</em> swaps to CSS vars. NO logic touched. Only the files the inventory flags as FM-D.</td></tr>
+  <tr><td><code>docs/superpowers/plans/2026-05-27-light-theme-inventory.md</code></td><td>Create (T1)</td><td>Discovery artifact: surface × failure-mode × file:line × fix-class. Drives T2–T6.</td></tr>
+  <tr><td><code>tests/light-theme-override-coverage.test.js</code></td><td>Create (T7)</td><td>Regression guard: every dark arbitrary class used in src has a light override (or is on a sanctioned allowlist).</td></tr>
+  <tr><td><code>.agents/active.md</code>, <code>SESSION_HANDOFF.md</code></td><td>Modify (T8)</td><td>State + V-entry for the audit.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ============ TASK 1 ============ -->
+<div class="task">
+  <h3>Task 1: Discovery &amp; bug inventory (no UI change — produces the artifact that drives every fix)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>docs/superpowers/plans/2026-05-27-light-theme-inventory.md</code></li>
+    <li>Read: <code>src/index.css</code> (existing override coverage)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: List every hardcoded dark arbitrary class used in components (FM-A candidates)</strong></label></div>
+<pre><code class="language-bash"># all bg/border/from/via/to arbitrary-hex classes used in app code
+rg -oN "(bg|border|from|via|to|ring|divide)-\[#[0-9a-fA-F]{3,8}\]" src/components src/pages src/App.jsx | sort | uniq -c | sort -rn
+# the dark hexes are #0..#4 leading nibble (e.g. #050505,#0a0a0a,#0f0f0f,#111,#141414,#1a1a1a,#222,#262626,#333,#444)</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: List white/near-white + low-contrast colour text (FM-B / FM-C candidates)</strong></label></div>
+<pre><code class="language-bash"># FM-B (white-ish text)
+rg -nN "text-white|text-\[#(fff|ffffff|FFF|FFFFFF)\]|text-\[white\]|text-gray-(100|200|300)" src/components src/pages | wc -l
+# FM-C (low-contrast colour shades 300/400/500 — many already darkened in index.css)
+rg -oN "text-(blue|cyan|sky|teal|green|emerald|lime|yellow|amber|orange|red|rose|pink|fuchsia|purple|violet|indigo)-(300|400|500)" src/components src/pages | sort | uniq -c | sort -rn</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: List inline-style colours (FM-D — central override can't reach these)</strong></label></div>
+<pre><code class="language-bash">rg -nN "style=\{\{[^}]*(color|background|backgroundColor|borderColor|fill|stroke)[^}]*#[0-9a-fA-F]{3,8}" src/components src/pages
+rg -nN "style=\{\{[^}]*(color|background)[^}]*(white|rgb)" src/components src/pages</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Extract existing light overrides from index.css to diff coverage</strong></label></div>
+<pre><code class="language-bash"># which dark classes ALREADY have a light override (escaped selectors)
+rg -oN "\[data-theme=\"light\"\] \.[A-Za-z0-9\\\\#\[\]./:-]+" src/index.css | sort -u
+# A candidate from Step 1/2 that is NOT in this set is an uncovered FM-A/B/C bug.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Run automated audits for AA + Thai-culture backstop</strong></label></div>
+  <p>Invoke <code>Skill(audit-ui-cultural-a11y)</code> and <code>Skill(audit)</code>. Capture any light-theme contrast / red-on-name findings into the inventory.</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Live triage — open the running app in light theme (Chrome MCP / Claude Preview)</strong></label></div>
+<pre><code class="language-bash">npm run dev   # vite, default http://localhost:5173</code></pre>
+  <p>In the browser, set light theme without depending on the toggle's storage key (all overrides key off the attribute — verified in index.css):</p>
+<pre><code class="language-js">document.documentElement.setAttribute('data-theme','light')   // and 'auto' for auto-mode check</code></pre>
+  <p>Log in (user session / existing auth), walk the top surfaces of each zone, screenshot anything that looks broken. This is triage, not the full pass (that's T8).</p>
+
+  <div class="step"><input type="checkbox" id="t1s7"> <label for="t1s7"><strong>Step 7: Write the inventory</strong></label></div>
+  <p>Create <code>docs/superpowers/plans/2026-05-27-light-theme-inventory.md</code> with a table per batch:</p>
+<pre><code class="language-markdown">| Batch | Surface (file)            | FM | Element / class           | file:line | Fix class        |
+|-------|---------------------------|----|---------------------------|-----------|------------------|
+| B2    | SaleTab.jsx               | A  | bg-[#0d0d0d] card         | 412       | central override |
+| B3    | QuotationFormModal.jsx    | B  | text-white on white modal | 88        | central (or D)   |
+| B5    | RoleBadge.jsx             | D  | style={{color:'#fff'}}    | 33        | component swap   |</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s8"> <label for="t1s8"><strong>Step 8: Commit the inventory (local)</strong></label></div>
+<pre><code class="language-bash">git add docs/superpowers/plans/2026-05-27-light-theme-inventory.md
+git commit -m "docs(light-theme): discovery inventory — surfaces x failure-modes"</code></pre>
+</div>
+
+<!-- ============ TASKS 2-6: per batch ============ -->
+<div class="task">
+  <h3>Tasks 2–6: Fix per batch — B1 app shell · B2 backend tabs · B3 modals · B4 patient-facing · B5 shared</h3>
+  <p><strong>Each batch task repeats the SAME procedure</strong> over its inventory rows. Files: <code>src/index.css</code> (FM-A/B/C) + the specific component files the inventory flags FM-D. One commit per batch.</p>
+
+  <div class="step"><input type="checkbox"> <label><strong>Step 1: For each FM-A/B/C row → append a central override</strong></label></div>
+  <p>Append into the matching labelled section of <code>src/index.css</code> (BACKGROUNDS / TEXT COLORS / BORDERS / SHADOWS…). <strong>Always pair both selectors</strong>, map to the correct token, target AA:</p>
+<pre><code>[data-theme="light"] .&lt;dark-class&gt;,
+[data-theme="auto"]  .&lt;dark-class&gt;  { &lt;prop&gt;: var(--&lt;token&gt;) !important; }
+/* FM-C colour: pick a shade with &gt;= 4.5:1 on white, e.g. *-400 -&gt; *-700 */</code></pre>
+  <p>Token map: dark bg <code>#0f0f0f</code>→<code>--bg-card</code>, <code>#141414</code>→<code>--bg-input</code>, <code>#1a1a1a</code>→<code>--bg-hover</code>; <code>text-white</code>/<code>#fff</code>→<code>--tx-heading</code>; <code>text-gray-300</code>→<code>--tx-secondary</code>; <code>border-[#222]</code>→<code>--bd</code>; dark glow→<code>--shadow-panel</code>/<code>none</code>.</p>
+
+  <div class="step"><input type="checkbox"> <label><strong>Step 2: For each FM-D row → component inline-colour value swap (value only)</strong></label></div>
+<pre><code class="language-diff">- style={{ color: '#fff', ... }}
++ style={{ color: 'var(--tx-heading)', ... }}
+- style={{ background: '#0f0f0f', ... }}
++ style={{ background: 'var(--bg-card)', ... }}</code></pre>
+  <p><strong>Only the colour value changes.</strong> If a value is computed in JS / chosen by a handler → that's logic; leave it and instead theme it via a wrapping class + central override, or flag for user. Do NOT edit the handler.</p>
+
+  <div class="step"><input type="checkbox"> <label><strong>Step 3: Live-verify this batch in light AND auto (Rule Q-vis — real pixels)</strong></label></div>
+  <p>For every surface touched in the batch: in the browser set <code>data-theme="light"</code>, navigate/open it, screenshot, confirm AA visually + via computed style; repeat with <code>data-theme="auto"</code> + emulated <code>prefers-color-scheme: light</code>. Sample contrast at a point:</p>
+<pre><code class="language-js">const el = document.querySelector('SELECTOR');
+const s = getComputedStyle(el);
+console.log(s.color, s.backgroundColor);   // eyeball + compute ratio &gt;= 4.5:1</code></pre>
+
+  <div class="step"><input type="checkbox"> <label><strong>Step 4: Dark-theme regression check</strong></label></div>
+  <p>Set <code>data-theme="dark"</code> on a couple of the touched surfaces, screenshot, confirm dark rendering is unchanged (light fix must be light/auto-scoped only).</p>
+
+  <div class="step"><input type="checkbox"> <label><strong>Step 5: If any FM-D className/inline edit touched a tested component → run its tests</strong></label></div>
+<pre><code class="language-bash">grep -rln "&lt;TouchedComponent&gt;" tests/ | xargs -r npx vitest run</code></pre>
+  <p>Expected: PASS (theme value swaps shouldn't break logic tests; if a source-grep test asserts the old class/value, correct the test to match — note it).</p>
+
+  <div class="step"><input type="checkbox"> <label><strong>Step 6: Audit + commit the batch (local)</strong></label></div>
+<pre><code class="language-bash"># spot-run the a11y audit scoped to the batch, then commit
+git add src/index.css [touched FM-D files]
+git commit -m "fix(light-theme): BN &lt;zone&gt; — AA contrast, no dark leak [cosmetic-shell]"</code></pre>
+  <p><strong>Batch order:</strong> B1 AdminDashboard + ChatPanel + controls bar + ThemeToggle + OPD ember-band → B2 BackendDashboard + nav + menu/cmd-palette + all backend tabs → B3 every modal + tablet-chart editor chrome + ImageLightbox → B4 PatientForm/Dashboard/ClinicSchedule/public-link → B5 DateField/ProductSelectField/StaffSelectField/badges/RoleBadge. (One <code>&lt;div class="task"&gt;</code>-equivalent commit per batch.)</p>
+</div>
+
+<!-- ============ TASK 7 ============ -->
+<div class="task">
+  <h3>Task 7: Override-coverage regression test (Rule D guard against future drift)</h3>
+  <p><strong>Files:</strong> Create <code>tests/light-theme-override-coverage.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the test</strong></label></div>
+<pre><code class="language-js">import { readFileSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
+import { describe, it, expect } from 'vitest';
+
+const css = readFileSync('src/index.css', 'utf8');
+// dark arbitrary classes that MUST have a light override if used in app code
+const DARK_HEX = ['#050505','#0a0a0a','#0f0f0f','#111','#111111','#141414','#1a1a1a','#222','#222222','#262626','#333','#444'];
+// classes intentionally NOT overridden (white text on solid accent bg, etc.)
+const SANCTIONED = new Set([/* fill from inventory, e.g. 'bg-[#1a0000]' hero */]);
+
+function walk(dir){ return readdirSync(dir).flatMap(f=>{const p=join(dir,f);return statSync(p).isDirectory()?walk(p):p;}); }
+const srcFiles = walk('src/components').concat(walk('src/pages'))
+  .filter(f=>/\.(jsx?|tsx?)$/.test(f));
+const used = new Set();
+for (const f of srcFiles) {
+  const t = readFileSync(f,'utf8');
+  for (const m of t.matchAll(/(bg|border|from|via|to)-\[(#[0-9a-fA-F]{3,8})\]/g)) used.add(m[0]);
+}
+
+describe('light-theme override coverage', () => {
+  it('every used dark arbitrary class has a [data-theme=light] override (or is sanctioned)', () => {
+    const missing = [...used].filter(cls => {
+      if (SANCTIONED.has(cls)) return false;
+      const hex = cls.match(/#[0-9a-fA-F]{3,8}/)[0];
+      if (!DARK_HEX.includes(hex)) return false;          // only police DARK hexes
+      const esc = cls.replace(/[#[\]]/g, c => '\\'+c);     // .bg-\[\#0f0f0f\]
+      return !css.includes(`[data-theme="light"] .${esc}`);
+    });
+    expect(missing, `uncovered dark classes:\n${missing.join('\n')}`).toEqual([]);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run it — it surfaces any remaining gaps</strong></label></div>
+<pre><code class="language-bash">npx vitest run tests/light-theme-override-coverage.test.js</code></pre>
+  <p>Expected: any failure lists uncovered dark classes → either fix them (central override, loop back to the right batch) or, if genuinely intentional, add to <code>SANCTIONED</code> with an inline comment justifying. Re-run → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Commit (local)</strong></label></div>
+<pre><code class="language-bash">git add tests/light-theme-override-coverage.test.js src/index.css
+git commit -m "test(light-theme): override-coverage regression guard"</code></pre>
+</div>
+
+<!-- ============ TASK 8 ============ -->
+<div class="task">
+  <h3>Task 8: Final full live pass + verification + state (Q4 mandate)</h3>
+  <p><strong>Files:</strong> Modify <code>.agents/active.md</code>, <code>SESSION_HANDOFF.md</code> (+ a V-entry).</p>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Full live-browser pass — EVERY App-UI page + modal in light theme</strong></label></div>
+  <p>Systematically open every surface (admin + backend tabs + every modal + patient-facing), set <code>data-theme="light"</code>, screenshot, confirm: no invisible/illegible element, AA met, no dark-box leak. Record evidence per surface. Re-spot-check <code>data-theme="auto"</code>. Surfaces needing data/state you can't reach → note for user L1.</p>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Build + full test suite</strong></label></div>
+<pre><code class="language-bash">npm run build            # expect: clean
+npm test -- --run        # expect: 14971+/0 (theme changes shouldn't break; fix any FM-D-touched test)</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Final automated audit</strong></label></div>
+  <p>Invoke <code>Skill(audit-ui-cultural-a11y)</code> → expect AA pass, no red-on-name/HN in light. Confirm the override-coverage test (T7) is green.</p>
+
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Dark-theme global regression confirmation</strong></label></div>
+  <p>Spot-screenshot the main surfaces in <code>data-theme="dark"</code>; confirm byte-identical look vs before (no light rule leaked into dark).</p>
+
+  <div class="step"><input type="checkbox" id="t8s5"> <label for="t8s5"><strong>Step 5: Constraint audit — prove cosmetic-shell</strong></label></div>
+<pre><code class="language-bash"># the whole diff must be CSS / className / inline colour-value only
+git diff --stat &lt;base&gt;..HEAD
+# review src/**/*.jsx hunks: confirm zero handler/state/prop/hook/flow edits
+git diff &lt;base&gt;..HEAD -- 'src/**/*.jsx' | rg "^[+-]" | rg -v "style=|className=|color|background|var\(--|#[0-9a-fA-F]"</code></pre>
+  <p>The last command should return (effectively) nothing — any non-colour +/- line in .jsx is a red flag to review.</p>
+
+  <div class="step"><input type="checkbox" id="t8s6"> <label for="t8s6"><strong>Step 6: Update state + V-entry + commit (local)</strong></label></div>
+  <p>Update <code>.agents/active.md</code> + <code>SESSION_HANDOFF.md</code> with a "Light-Theme Audit" entry (surfaces covered, AA confirmed, dark zero-regress, screenshots). Commit.</p>
+<pre><code class="language-bash">git add .agents/active.md SESSION_HANDOFF.md
+git commit -m "docs: light-theme audit complete — AA across App UI, dark unchanged"</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s7"> <label for="t8s7"><strong>Step 7: STOP — report. Do NOT push/deploy.</strong></label></div>
+  <p>Report completion + evidence. push + <code>vercel --prod</code> await explicit user word (V18); frontend-only so no Probe-Deploy-Probe.</p>
+</div>
+
+<h2>Self-Review (done at write time)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> AA (T1 audit + per-batch verify + T8) · Hybrid central-first (T2-6 Step 1/2) · App-UI excl-print (batch list + File Structure note) · Full live pass (T8 S1) · 5 failure modes (Mockup + T1 greps + T2-6) · regression artifact (T7) · cosmetic-shell (warn box + T8 S5) · both light+auto (T2-6 S3) · dark no-regress (T2-6 S4 + T8 S4) · Thai red-on-name (T1 S5 + T8 S3). ✓ no gaps.</li>
+  <li><strong>Placeholder scan:</strong> the only deferred content is the per-surface fix list, which is intentionally produced by T1 (the inventory) — the fix <em>patterns</em> are shown verbatim. No "TBD/handle edge cases/similar to". ✓</li>
+  <li><strong>Consistency:</strong> FM-A..E + token map + selector pattern + <code>SANCTIONED</code>/inventory references are consistent across Mockup, T1, T2-6, T7. ✓</li>
+</ul>
+
+</body>
+</html>
