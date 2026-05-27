@@ -22,6 +22,10 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   getAllMemberships: (...args) => mockGetAllMemberships(...args),
   getWalletsForCustomerIds: (...args) => mockGetWalletsForCustomerIds(...args),
   listStaffSchedules: (...args) => mockListStaffSchedules(...args),
+  // 2026-05-27 — live cross-device trigger listeners (no-op returning unsub).
+  listenToTreatmentsByDateRange: () => () => {},
+  listenToAllDeposits: () => () => {},
+  listenToAllSales: () => () => {},
 }));
 
 // V64-fix6 (2026-05-09): View also loads treatments for auto-confirm logic

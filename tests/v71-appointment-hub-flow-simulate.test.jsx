@@ -16,6 +16,9 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   getWalletsForCustomerIds: vi.fn(() => Promise.resolve([])),
   listStaffSchedules: vi.fn(() => Promise.resolve([])),
   markAppointmentServiceCompleted: markFn,
+  listenToTreatmentsByDateRange: () => () => {},
+  listenToAllDeposits: () => () => {},
+  listenToAllSales: () => () => {},
 }));
 vi.mock('../src/lib/reportsLoaders.js', () => ({
   loadTreatmentsByDateRange: vi.fn(),

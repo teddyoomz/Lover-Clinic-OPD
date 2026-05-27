@@ -28,6 +28,7 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   getAllCustomers: vi.fn().mockResolvedValue([]), getAllDeposits: vi.fn().mockResolvedValue([]),
   getAllSales: vi.fn().mockResolvedValue([]), getAllMemberships: vi.fn().mockResolvedValue([]),
   getWalletsForCustomerIds: vi.fn().mockResolvedValue([]), listStaffSchedules: vi.fn().mockResolvedValue([]),
+  listenToTreatmentsByDateRange: () => () => {}, listenToAllDeposits: () => () => {}, listenToAllSales: () => () => {},
 }));
 vi.mock('../src/lib/reportsLoaders.js', () => ({ loadTreatmentsByDateRange: vi.fn().mockResolvedValue([]) }));
 vi.mock('../src/components/backend/AppointmentFormModal.jsx', () => ({ default: () => null }));

@@ -30,6 +30,10 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   getAllMemberships: vi.fn().mockResolvedValue([]),
   getWalletsForCustomerIds: vi.fn().mockResolvedValue([]),
   listStaffSchedules: vi.fn().mockResolvedValue([]),
+  // 2026-05-27 — live cross-device trigger listeners (no-op returning unsub).
+  listenToTreatmentsByDateRange: () => () => {},
+  listenToAllDeposits: () => () => {},
+  listenToAllSales: () => () => {},
 }));
 vi.mock('../src/lib/reportsLoaders.js', () => ({
   loadTreatmentsByDateRange: vi.fn().mockResolvedValue([]),

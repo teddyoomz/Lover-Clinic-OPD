@@ -317,6 +317,11 @@ export const listenToAppointmentsByMonth = (...args) => raw.listenToAppointments
 export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
 export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
 export const listenToExamRoomsByBranch = (...args) => raw.listenToExamRoomsByBranch(...args);
+// 2026-05-27 — appointment-page live cross-device trigger listeners. Branch
+// resolution lives inside the raw fns (BS-13 safe-by-default); raw passthrough
+// here so useBranchAwareListener can manage the re-subscribe lifecycle.
+export const listenToTreatmentsByDateRange = (...args) => raw.listenToTreatmentsByDateRange(...args);
+export const listenToAllDeposits = (...args) => raw.listenToAllDeposits(...args);
 // ─── Tablet Chart Editor (2026-05-20) — branch-scoped listeners + writers.
 // Raw passthrough: callers pass branchId explicitly (PC has selectedBranch; tablet
 // page has its branch) + manage re-subscribe via useEffect deps; writers resolve

@@ -3497,6 +3497,36 @@ export function listenToAllSales(opts, onChange, onError) {
 }
 
 /**
+ * Live trigger listener over be_treatments (2026-05-27 — appointment-page live
+ * cross-device). Mirrors loadTreatmentsByDateRange (reportsLoaders.js) —
+ * whole-collection read + client-filter (there's no server range index on
+ * detail.treatmentDate; same cost as the existing one-shot getter). Used by the
+ * appointment page as a CHANGE SIGNAL: any treatment create/edit/delete fires
+ * this → caller bumps a refresh tick → loadAll re-fetches. allBranches:true
+ * mirrors the appointment page's loadAll (V64-fix6 cross-branch auto-confirm).
+ * Returns unsubscribe.
+ *
+ * audit-branch-scope: report — supports {allBranches:true}; safe-by-default
+ * (BS-13) for the branch-scoped path.
+ */
+export function listenToTreatmentsByDateRange(opts, onChange, onError) {
+  const { from = '', to = '', includeCancelled = false } = opts || {};
+  const allBranches = !!(opts && opts.allBranches);
+  const explicitBranch = (opts && typeof opts.branchId === 'string' && opts.branchId) ? opts.branchId : '';
+  const effectiveBranchId = explicitBranch || (allBranches ? '' : resolveSelectedBranchId());
+  // Safe-by-default (BS-13): branch-scoped intent but no resolvable branch → no-op empty.
+  if (!allBranches && !effectiveBranchId) { onChange?.([]); return () => {}; }
+  return onSnapshot(treatmentsCol(), (snap) => {
+    let items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    if (from) items = items.filter((t) => (t?.detail?.treatmentDate || '') >= from);
+    if (to) items = items.filter((t) => (t?.detail?.treatmentDate || '') <= to);
+    if (!allBranches && effectiveBranchId) items = items.filter((t) => t.branchId === effectiveBranchId);
+    if (!includeCancelled) items = items.filter((t) => t?.detail?.status !== 'cancelled');
+    onChange?.(items);
+  }, onError);
+}
+
+/**
  * Real-time listener variant of `getCustomerSales`. Returns unsubscribe.
  * Phase 14.7.H follow-up B (2026-04-26) — closes the staleness gap where
  * a sale created in SaleTab in another tab didn't surface in CustomerDetailView's
@@ -4546,6 +4576,29 @@ export async function getAllDeposits(opts = {}) {
   const list = await _listWithBranch(depositsCol(), opts);
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
+}
+
+/**
+ * Live trigger listener over be_deposits (2026-05-27 — appointment-page live
+ * cross-device). Branch-scoped (BS-13 safe-by-default); used as a CHANGE SIGNAL
+ * by the appointment page (any deposit create/edit/cancel → caller bumps a
+ * refresh tick → loadAll re-fetches the authoritative getAllDeposits). Returns
+ * unsubscribe.
+ */
+export function listenToAllDeposits(opts, onChange, onError) {
+  const allBranches = !!(opts && opts.allBranches);
+  const explicitBranch = (opts && typeof opts.branchId === 'string' && opts.branchId) ? opts.branchId : '';
+  const effectiveBranchId = explicitBranch || (allBranches ? '' : resolveSelectedBranchId());
+  if (!allBranches && !effectiveBranchId) { onChange?.([]); return () => {}; }
+  const useFilter = !allBranches && effectiveBranchId;
+  const q = useFilter
+    ? query(depositsCol(), where('branchId', '==', String(effectiveBranchId)))
+    : query(depositsCol());
+  return onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    onChange?.(list);
+  }, onError);
 }
 
 /** Get single deposit. */

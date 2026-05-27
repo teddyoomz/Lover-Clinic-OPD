@@ -12,10 +12,17 @@ import {
   getAllMemberships,
   getWalletsForCustomerIds,
   listStaffSchedules,
+  // 2026-05-27 — live cross-device trigger listeners (treatments/deposits/sales).
+  // These are SIGNALS only — on fire the component bumps a tick → loadAll re-fetches.
+  listenToTreatmentsByDateRange,
+  listenToAllDeposits,
+  listenToAllSales,
   // V71 (2026-05-15) — markAppointmentServiceCompleted is consumed by AdminDashboard
   // (parent) and passed back to HubView via the onMarkServiceComplete prop. NOT
   // imported here to avoid dead-import code smell.
 } from '../../lib/scopedDataLayer.js';
+import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
+import { thaiTodayISO } from '../../utils.js';
 import {
   applyTabFilter,
   dateRangeForTab,
@@ -110,6 +117,12 @@ export default function AppointmentHubView({
   // mutation. Optimistic local update + revert-on-error is enough; full
   // reconcile happens on next branch switch.
   const [reloadKey] = useState(0);
+
+  // 2026-05-27 — live cross-device: any trigger-listener fire bumps this tick;
+  // an effect re-runs loadAll({silent}). skip-first avoids the mount double-load.
+  const [liveRefreshTick, setLiveRefreshTick] = useState(0);
+  const liveFirstFire = useRef({ tx: true, dep: true, sale: true });
+  const [todayKey, setTodayKey] = useState(() => thaiTodayISO());
   // ① (2026-05-26) — "เพิ่มนัดหมาย" opens the SAME AppointmentFormModal this
   // view already renders for edit (below), in create mode (all 5 types).
   const [creatingAppt, setCreatingAppt] = useState(false);
@@ -139,7 +152,8 @@ export default function AppointmentHubView({
     const past = dateRangeForTab('past', new Date());
     const future = dateRangeForTab('future', new Date());
     return { from: past.from, to: future.to };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayKey]);   // 2026-05-27 — recompute the fetch window on day-rollover (resilience C)
   // Active-tab range — used by handlePrint to label the printed PDF.
   const range = useMemo(() => dateRangeForTab(activeTab, new Date()), [activeTab]);
 
@@ -217,6 +231,76 @@ export default function AppointmentHubView({
     appointmentDataVersionPrev.current = appointmentDataVersion;
     loadAll({ silent: true });
   }, [appointmentDataVersion, loadAll]);
+
+  // ─── 2026-05-27 — LIVE CROSS-DEVICE ──────────────────────────────────────
+  // Any trigger listener fire (treatments / deposits / sales) bumps
+  // liveRefreshTick → loadAll({silent}) re-fetches everything → cards + OPD
+  // stepper update with NO manual refresh (doctor↔admin see each other live).
+  // Mirrors the appointmentDataVersion pattern above. Appointments are already
+  // live via AdminDashboard listenToAppointmentsByMonth → appointmentDataVersion.
+  const liveRefreshTickPrev = useRef(0);
+  useEffect(() => {
+    if (liveRefreshTick === liveRefreshTickPrev.current) return;
+    liveRefreshTickPrev.current = liveRefreshTick;
+    loadAll({ silent: true });
+  }, [liveRefreshTick, loadAll]);
+
+  const bumpLive = useCallback((key) => {
+    if (liveFirstFire.current[key]) { liveFirstFire.current[key] = false; return; } // skip mount fire
+    setLiveRefreshTick((t) => t + 1);
+  }, []);
+  const onTxLive = useCallback(() => bumpLive('tx'), [bumpLive]);
+  const onDepLive = useCallback(() => bumpLive('dep'), [bumpLive]);
+  const onSaleLive = useCallback(() => bumpLive('sale'), [bumpLive]);
+
+  // Treatments trigger — allBranches:true (mirror loadAll; V64-fix6 cross-branch
+  // auto-confirm). allBranches = not branch-scoped → direct useEffect.
+  // audit-branch-scope: listener-direct — allBranches treatments trigger (BS-13 sanctioned exception)
+  useEffect(() => {
+    const unsub = listenToTreatmentsByDateRange(
+      { from: wideRange.from, to: wideRange.to, allBranches: true },
+      onTxLive,
+      () => {},
+    );
+    return () => { try { unsub?.(); } catch { /* defensive */ } };
+  }, [wideRange.from, wideRange.to, onTxLive]);
+
+  // Deposits trigger — branch-scoped: where('branchId','==') is a SINGLE-field
+  // query (auto-indexed) → useBranchAwareListener (auto branchId inject +
+  // re-subscribe on branch switch).
+  useBranchAwareListener(listenToAllDeposits, {}, onDepLive);
+
+  // Sales trigger — allBranches (V66-safe). A branch-scoped sales listener would
+  // be where('saleDate','>=') + where('branchId','==') = COMPOSITE index that
+  // does NOT exist in firestore.indexes.json (listenToAllSales had zero prior
+  // callers) → would throw FAILED_PRECONDITION in the real client. allBranches =
+  // where('saleDate','>=') only = single-field (auto-indexed). As a trigger this
+  // is correct: any sale change → bump → loadAll branch-filters authoritatively.
+  // audit-branch-scope: listener-direct — allBranches sales trigger (index-safe)
+  useEffect(() => {
+    const unsub = listenToAllSales({ allBranches: true }, onSaleLive, () => {});
+    return () => { try { unsub?.(); } catch { /* defensive */ } };
+  }, [onSaleLive]);
+
+  // Resilience (req C) — long-open tab: on resume, roll the day window across
+  // midnight + force a refresh. App.jsx V17 already resyncs onSnapshot listeners
+  // on visibility/online; this complements it for the date-window + a guaranteed
+  // loadAll the moment a backgrounded tab returns. (Not via bumpLive — resume
+  // SHOULD refresh, so it bypasses skip-first.)
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const t = thaiTodayISO();
+      setTodayKey((prev) => (prev !== t ? t : prev));
+      setLiveRefreshTick((x) => x + 1);
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('online', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, []);
 
   // V64-fix4: per-appointment deposit lookup. Lets RowCard show
   // "💰 มัดจำ {amount} — เพื่อ {purpose}" chip when an appointment is

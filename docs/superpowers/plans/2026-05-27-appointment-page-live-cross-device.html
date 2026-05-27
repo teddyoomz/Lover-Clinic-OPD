@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Page Live Cross-Device Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .box { display:inline-block; border:1px solid #cbd5e1; border-radius:6px; padding:0.5em 0.8em; margin:0.3em; background:#f8fafc; font-size:0.85em; }
+    .arrow { color: var(--accent); font-weight:bold; }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Page Live Cross-Device Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline, recommended — tasks are tightly coupled + touch the large backendClient.js / AppointmentHubView.jsx baseline; subagents thrash here per V81/V86). Steps use HTML checkboxes for tracking.<br>
+  <strong>Spec / approved design:</strong> brainstorming Q1=A (Listener-trigger, extend the existing appointmentDataVersion pattern) · Q2=A (treatments listener allBranches:true, mirror current loadAll — preserves V64-fix6 cross-branch auto-confirm; BS-13 sanctioned exception).
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make the appointment-page customer card-list (OPD status stepper + appointment status + deposit/sale chips) update in REAL-TIME cross-device — any device that confirms/cancels/edits an appointment, saves an OPD/treatment, or changes a deposit/sale is reflected on every other device viewing the same page+branch, without a manual refresh, and stays live all day.</p>
+  <p><strong>Architecture:</strong> Listener-trigger. Keep the existing one-shot <code>loadAll</code>. ADD live <code>onSnapshot</code> listeners for treatments + deposits + sales; each fires on a cross-device change → bumps a <code>liveRefreshTick</code> → the existing <code>loadAll({silent:true})</code> re-fetches everything → derived state re-renders. Appointments are already live (AdminDashboard <code>listenToAppointmentsByMonth</code>, unchanged). Resilience via the existing V17 global reconnect (App.jsx visibilitychange/online → disable/enableNetwork) + a day-rollover/resume guard.</p>
+  <p><strong>Tech Stack:</strong> React 19, Firebase Firestore <code>onSnapshot</code>, BSA layers (backendClient → scopedDataLayer → useBranchAwareListener), Vitest, Playwright (2-client L1).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Data shape — new Layer-1 trigger listeners (be_treatments / be_deposits / be_sales)</div>
+  <pre><code>// All three are TRIGGERS: payload optional — the component ignores it and
+// re-runs loadAll. Signature mirrors the existing getters/listeners.
+
+listenToTreatmentsByDateRange({ from, to, branchId?, allBranches? }, onChange, onError)
+   → onSnapshot(treatmentsCol())  // whole collection, mirrors loadTreatmentsByDateRange
+   → client-filter detail.treatmentDate in [from,to] + status!=='cancelled' (+branch if scoped)
+   → onChange(filtered[])  // called as () =&gt; bump
+
+listenToAllDeposits({ branchId?, allBranches? }, onChange, onError)
+   → onSnapshot(depositsCol() [+ where branchId])
+   → onChange(deposits[])
+
+listenToAllSales(opts, onChange, onError)   // ALREADY EXISTS — reused</code></pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Card-list (rendered) — unchanged; only its data source becomes live</div>
+  <div style="border:1px solid #e2e8f0; border-radius:8px; padding:0.8em; background:#fff;">
+    <div style="font-size:0.8em; color:#64748b;">สถานะ OPD</div>
+    <div style="display:flex; gap:1.5em; align-items:center; margin-top:0.4em;">
+      <span style="display:flex; flex-direction:column; align-items:center;"><span style="width:26px;height:26px;border-radius:50%;background:#0d9488;color:#fff;display:flex;align-items:center;justify-content:center;">✓</span><span style="font-size:0.75em;">ซักประวัติ 16:46</span></span>
+      <span style="display:flex; flex-direction:column; align-items:center;"><span style="width:26px;height:26px;border-radius:50%;background:#ea580c;color:#fff;display:flex;align-items:center;justify-content:center;">✓</span><span style="font-size:0.75em;">แพทย์ 16:45</span></span>
+      <span style="display:flex; flex-direction:column; align-items:center;"><span style="width:26px;height:26px;border-radius:50%;border:1px solid #d4b483;color:#a16207;display:flex;align-items:center;justify-content:center;">3</span><span style="font-size:0.75em;">เสร็จ —</span></span>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Cross-device live trigger — doctor saves OPD on Device A → Admin's Device B updates with NO refresh</div>
+  <div>
+    <span class="box">Device A: TFP doctor-save<br>→ write be_treatments</span>
+    <span class="arrow">→</span>
+    <span class="box">Firestore<br>(server)</span>
+    <span class="arrow">→</span>
+    <span class="box">Device B<br>listenToTreatmentsByDateRange<br>onSnapshot fires</span>
+    <span class="arrow">→</span>
+    <span class="box">setLiveRefreshTick(t+1)</span>
+    <span class="arrow">→</span>
+    <span class="box">effect → loadAll({silent})</span>
+    <span class="arrow">→</span>
+    <span class="box">treatmentsByCustomerDate<br>re-derives</span>
+    <span class="arrow">→</span>
+    <span class="box">OPD stepper re-renders ✓</span>
+  </div>
+  <p style="font-size:0.85em; color:#666; margin-top:1em;">Same path for deposits (listenToAllDeposits) + sales (listenToAllSales) + appointments (existing listenToAppointmentsByMonth → appointmentDataVersion). First onSnapshot fire on each subscription is SKIPPED (skip-first ref) to avoid a redundant mount-time double loadAll. Resilience: live onSnapshot doesn't sleep while foreground; on background-suspend, App.jsx V17 (visibilitychange/online → disable/enableNetwork) resyncs all listeners on resume → they re-fire → loadAll. Day-rollover guard recomputes the today window on resume.</p>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li><strong>Modify</strong> <code>src/lib/backendClient.js</code> — add <code>listenToTreatmentsByDateRange</code> + <code>listenToAllDeposits</code> (onSnapshot trigger listeners, mirror existing getter/listener shapes). One responsibility: live read primitives.</li>
+  <li><strong>Modify</strong> <code>src/lib/scopedDataLayer.js</code> — re-export the 2 new listeners (passthrough, matching the existing <code>listenToAllSales</code> line).</li>
+  <li><strong>Modify</strong> <code>src/components/admin/AppointmentHubView.jsx</code> — subscribe the 3 listeners, bump <code>liveRefreshTick</code> → loadAll; add day-rollover/resume guard. (The only component touched. No change to mutations, card rendering, or OPD-stepper derivation.)</li>
+  <li><strong>Create</strong> <code>tests/appointment-live-cross-device.test.js</code> — unit (listener query shape) + source-grep regression (wiring) + Rule I flow-simulate (fire → bump → loadAll).</li>
+  <li><strong>Modify</strong> <code>tests/audit-branch-scope.test.js</code> — add a BS check that the treatments-allBranches listener is annotated + deposits/sales go through useBranchAwareListener.</li>
+  <li><strong>Verify</strong> <code>tests/e2e/appointment-live-cross-device.spec.js</code> — Rule Q L1 two-client (Playwright: device A mutates → device B updates without refresh).</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Add the two new Layer-1 trigger listeners (backendClient.js)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/backendClient.js</code> (add after <code>listenToAllSales</code>, ~line 3497, and after <code>getAllDeposits</code>, ~line 4549)</li>
+    <li>Test: <code>tests/appointment-live-cross-device.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing unit test</strong> for listener shape (query against mocked Firestore captures the right collection + branch where).</label></div>
+<pre><code class="language-js">// tests/appointment-live-cross-device.test.js
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock firebase/firestore so we can capture query/onSnapshot calls.
+const calls = { onSnapshot: [], where: [] };
+vi.mock('firebase/firestore', async (orig) =&gt; {
+  const actual = await orig();
+  return {
+    ...actual,
+    onSnapshot: (q, cb) =&gt; { calls.onSnapshot.push(q); cb({ docs: [] }); return () =&gt; {}; },
+    query: (...a) =&gt; ({ __q: a }),
+    where: (f, op, v) =&gt; { calls.where.push([f, op, v]); return { __w: [f, op, v] }; },
+    getDocs: async () =&gt; ({ docs: [] }),
+  };
+});
+
+beforeEach(() =&gt; { calls.onSnapshot = []; calls.where = []; });
+
+describe('live trigger listeners', () =&gt; {
+  it('listenToTreatmentsByDateRange subscribes onSnapshot + fires onChange', async () =&gt; {
+    const { listenToTreatmentsByDateRange } = await import('../src/lib/backendClient.js');
+    const onChange = vi.fn();
+    const unsub = listenToTreatmentsByDateRange({ from: '2026-05-01', to: '2026-05-31', allBranches: true }, onChange, () =&gt; {});
+    expect(calls.onSnapshot.length).toBe(1);
+    expect(onChange).toHaveBeenCalledTimes(1); // initial fire with [] after client-filter
+    expect(typeof unsub).toBe('function');
+  });
+
+  it('listenToAllDeposits adds branchId where when branch-scoped', async () =&gt; {
+    const { listenToAllDeposits } = await import('../src/lib/backendClient.js');
+    listenToAllDeposits({ branchId: 'BR-1' }, () =&gt; {}, () =&gt; {});
+    expect(calls.where.some(w =&gt; w[0] === 'branchId' &amp;&amp; w[2] === 'BR-1')).toBe(true);
+  });
+
+  it('listenToAllDeposits with allBranches:true adds NO branchId where', async () =&gt; {
+    const { listenToAllDeposits } = await import('../src/lib/backendClient.js');
+    listenToAllDeposits({ allBranches: true }, () =&gt; {}, () =&gt; {});
+    expect(calls.where.some(w =&gt; w[0] === 'branchId')).toBe(false);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → FAIL</strong> (functions not exported).</label></div>
+  <p>Run: <code>npx vitest run tests/appointment-live-cross-device.test.js</code> · Expected: FAIL "listenToTreatmentsByDateRange is not a function".</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement</strong> the two listeners. Add after <code>listenToAllSales</code> (treatments) and after <code>getAllDeposits</code> (deposits). Mirror the existing <code>loadTreatmentsByDateRange</code> filter + <code>listenToAllSales</code> structure. NOTE: <code>treatmentsCol</code>, <code>depositsCol</code>, <code>onSnapshot</code>, <code>query</code>, <code>where</code>, <code>resolveSelectedBranchId</code> are already imported/defined in this file.</label></div>
+<pre><code class="language-js">// ── after listenToAllSales (~line 3497) ──
+/**
+ * Live trigger listener over be_treatments. Mirrors loadTreatmentsByDateRange
+ * (reportsLoaders.js) — whole-collection read + client-filter (no server range
+ * index on detail.treatmentDate). Used by the appointment page as a CHANGE
+ * SIGNAL: any treatment create/edit/delete fires this → caller bumps a refresh
+ * tick → loadAll re-fetches. allBranches:true mirrors the appointment page's
+ * loadAll (V64-fix6 cross-branch auto-confirm). Returns unsubscribe.
+ *
+ * audit-branch-scope: report — supports {allBranches:true}; safe-by-default
+ * (BS-13) for the branch-scoped path.
+ */
+export function listenToTreatmentsByDateRange(opts, onChange, onError) {
+  const { from = '', to = '', includeCancelled = false } = opts || {};
+  const allBranches = !!(opts &amp;&amp; opts.allBranches);
+  const explicitBranch = (opts &amp;&amp; typeof opts.branchId === 'string' &amp;&amp; opts.branchId) ? opts.branchId : '';
+  const effectiveBranchId = explicitBranch || (allBranches ? '' : resolveSelectedBranchId());
+  // Safe-by-default (BS-13): branch-scoped intent but no resolvable branch → no-op empty.
+  if (!allBranches &amp;&amp; !effectiveBranchId) { onChange?.([]); return () =&gt; {}; }
+  return onSnapshot(treatmentsCol(), (snap) =&gt; {
+    let items = snap.docs.map((d) =&gt; ({ ...d.data(), id: d.id }));
+    if (from) items = items.filter((t) =&gt; (t?.detail?.treatmentDate || '') &gt;= from);
+    if (to) items = items.filter((t) =&gt; (t?.detail?.treatmentDate || '') &lt;= to);
+    if (!allBranches &amp;&amp; effectiveBranchId) items = items.filter((t) =&gt; t.branchId === effectiveBranchId);
+    if (!includeCancelled) items = items.filter((t) =&gt; t?.detail?.status !== 'cancelled');
+    onChange?.(items);
+  }, onError);
+}
+
+// ── after getAllDeposits (~line 4549) ──
+/**
+ * Live trigger listener over be_deposits. Mirrors getAllDeposits branch scope.
+ * Used by the appointment page as a CHANGE SIGNAL. Returns unsubscribe.
+ */
+export function listenToAllDeposits(opts, onChange, onError) {
+  const allBranches = !!(opts &amp;&amp; opts.allBranches);
+  const explicitBranch = (opts &amp;&amp; typeof opts.branchId === 'string' &amp;&amp; opts.branchId) ? opts.branchId : '';
+  const effectiveBranchId = explicitBranch || (allBranches ? '' : resolveSelectedBranchId());
+  if (!allBranches &amp;&amp; !effectiveBranchId) { onChange?.([]); return () =&gt; {}; }
+  const useFilter = !allBranches &amp;&amp; effectiveBranchId;
+  const q = useFilter
+    ? query(depositsCol(), where('branchId', '==', String(effectiveBranchId)))
+    : query(depositsCol());
+  return onSnapshot(q, (snap) =&gt; {
+    const list = snap.docs.map((d) =&gt; ({ ...d.data(), id: d.id }));
+    list.sort((a, b) =&gt; (b.createdAt || '').localeCompare(a.createdAt || ''));
+    onChange?.(list);
+  }, onError);
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → PASS.</strong></label></div>
+  <p>Run: <code>npx vitest run tests/appointment-live-cross-device.test.js</code> · Expected: PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/backendClient.js tests/appointment-live-cross-device.test.js
+git commit -m "feat(appt): add live trigger listeners for treatments + deposits (cross-device)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Re-export the new listeners through scopedDataLayer (Layer 2)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/scopedDataLayer.js</code> (next to line 317 where <code>listenToAllSales</code> is re-exported).</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Add source-grep test</strong> to the test file (append).</label></div>
+<pre><code class="language-js">import { readFileSync } from 'node:fs';
+describe('scopedDataLayer re-exports (Task 2)', () =&gt; {
+  const SDL = readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+  it('re-exports listenToTreatmentsByDateRange + listenToAllDeposits', () =&gt; {
+    expect(SDL).toContain('listenToTreatmentsByDateRange');
+    expect(SDL).toContain('listenToAllDeposits');
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL.</strong></label></div>
+  <p>Run: <code>npx vitest run tests/appointment-live-cross-device.test.js</code> · Expected: FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement</strong> — add the two passthrough re-exports next to <code>listenToAllSales</code> (line 317). Match the existing one-liner style.</label></div>
+<pre><code class="language-js">export const listenToAllSales = (...args) =&gt; raw.listenToAllSales(...args);
+export const listenToHolidays = (...args) =&gt; raw.listenToHolidays(...args);
+export const listenToExamRoomsByBranch = (...args) =&gt; raw.listenToExamRoomsByBranch(...args);
+// V-live (2026-05-27) — appointment-page live cross-device trigger listeners.
+export const listenToTreatmentsByDateRange = (...args) =&gt; raw.listenToTreatmentsByDateRange(...args);
+export const listenToAllDeposits = (...args) =&gt; raw.listenToAllDeposits(...args);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run → PASS.</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/scopedDataLayer.js tests/appointment-live-cross-device.test.js
+git commit -m "feat(appt): re-export live trigger listeners through scopedDataLayer"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Wire the 3 listeners + day-rollover guard into AppointmentHubView</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/admin/AppointmentHubView.jsx</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add imports</strong> at the top (the listeners from scopedDataLayer, the BSA hook, thaiTodayISO).</label></div>
+<pre><code class="language-js">import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
+import { listenToTreatmentsByDateRange, listenToAllDeposits, listenToAllSales } from '../../lib/scopedDataLayer.js';
+import { thaiTodayISO } from '../../utils.js';
+// (merge listenToAllSales into the existing scopedDataLayer import line if one exists)</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Add the tick state + skip-first refs + day-rollover state</strong> (near the other useState, ~line 95-118).</label></div>
+<pre><code class="language-js">// V-live (2026-05-27) — cross-device live: any listener fire bumps this tick;
+// an effect re-runs loadAll({silent}). skip-first avoids the mount double-load.
+const [liveRefreshTick, setLiveRefreshTick] = useState(0);
+const liveFirstFire = useRef({ tx: true, dep: true, sale: true });
+const [todayKey, setTodayKey] = useState(() =&gt; thaiTodayISO());</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Make wideRange depend on todayKey</strong> so the fetch window follows "today" across midnight (line ~138).</label></div>
+<pre><code class="language-js">const wideRange = useMemo(() =&gt; {
+  const past = dateRangeForTab('past', new Date());
+  const future = dateRangeForTab('future', new Date());
+  return { from: past.from, to: future.to };
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [todayKey]);   // was [] — recompute on day-rollover</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Add the live-trigger effect + subscriptions</strong> (after the existing appointmentDataVersion effect, ~line 219). Bump-coalescing mirrors the existing version effects.</label></div>
+<pre><code class="language-js">// Trigger: any live listener fire → silent reload. Coalesces bursts (React batches setState).
+const liveRefreshTickPrev = useRef(0);
+useEffect(() =&gt; {
+  if (liveRefreshTick === liveRefreshTickPrev.current) return;
+  liveRefreshTickPrev.current = liveRefreshTick;
+  loadAll({ silent: true });
+}, [liveRefreshTick, loadAll]);
+
+const bumpLive = useCallback((key) =&gt; {
+  if (liveFirstFire.current[key]) { liveFirstFire.current[key] = false; return; } // skip mount fire
+  setLiveRefreshTick((t) =&gt; t + 1);
+}, []);
+const onTxLive = useCallback(() =&gt; bumpLive('tx'), [bumpLive]);
+const onDepLive = useCallback(() =&gt; bumpLive('dep'), [bumpLive]);
+const onSaleLive = useCallback(() =&gt; bumpLive('sale'), [bumpLive]);
+
+// Treatments: allBranches:true (Q2 — mirror loadAll; V64-fix6). Direct useEffect.
+// audit-branch-scope: listener-direct — allBranches trigger, BS-13 sanctioned exception.
+useEffect(() =&gt; {
+  const unsub = listenToTreatmentsByDateRange(
+    { from: wideRange.from, to: wideRange.to, allBranches: true },
+    onTxLive, () =&gt; {},
+  );
+  return () =&gt; { try { unsub?.(); } catch { /* defensive */ } };
+}, [wideRange.from, wideRange.to, onTxLive]);
+
+// Deposits + Sales: branch-scoped → useBranchAwareListener (auto branchId inject + re-subscribe on switch).
+useBranchAwareListener(listenToAllDeposits, {}, onDepLive);
+useBranchAwareListener(listenToAllSales, {}, onSaleLive);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Add the resume / day-rollover guard</strong> (after the subscriptions). On tab-resume or reconnect, recompute todayKey + force a refresh (belt-and-suspenders with App.jsx V17).</label></div>
+<pre><code class="language-js">// Resilience (req C) — long-open tab: refresh + roll the day window on resume.
+// App.jsx V17 already resyncs onSnapshot listeners on visibility/online; this
+// also rolls wideRange across midnight + forces a loadAll so a backgrounded tab
+// is current the moment it returns.
+useEffect(() =&gt; {
+  const refresh = () =&gt; {
+    if (document.visibilityState !== 'visible') return;
+    const t = thaiTodayISO();
+    setTodayKey((prev) =&gt; (prev !== t ? t : prev));
+    setLiveRefreshTick((x) =&gt; x + 1);
+  };
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('online', refresh);
+  return () =&gt; {
+    document.removeEventListener('visibilitychange', refresh);
+    window.removeEventListener('online', refresh);
+  };
+}, []);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s6"> <label for="t3s6"><strong>Step 6: Build → clean.</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean (catches import / syntax errors).</p>
+
+  <div class="step"><input type="checkbox" id="t3s7"> <label for="t3s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubView.jsx
+git commit -m "feat(appt): live cross-device card-list — treatments/deposits/sales listeners + day-rollover guard"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Source-grep regression + Rule I flow-simulate + audit-branch-scope</h3>
+  <p><strong>Files:</strong> Modify <code>tests/appointment-live-cross-device.test.js</code> + <code>tests/audit-branch-scope.test.js</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Add source-grep + flow-simulate tests.</strong></label></div>
+<pre><code class="language-js">describe('AppointmentHubView live wiring (Task 4)', () =&gt; {
+  const SRC = readFileSync('src/components/admin/AppointmentHubView.jsx', 'utf8');
+  it('subscribes all 3 live listeners', () =&gt; {
+    expect(SRC).toContain('listenToTreatmentsByDateRange(');
+    expect(SRC).toContain('useBranchAwareListener(listenToAllDeposits');
+    expect(SRC).toContain('useBranchAwareListener(listenToAllSales');
+  });
+  it('treatments listener is allBranches:true + annotated listener-direct', () =&gt; {
+    expect(SRC).toContain('allBranches: true');
+    expect(SRC).toContain('audit-branch-scope: listener-direct');
+  });
+  it('every live fire routes through bumpLive → setLiveRefreshTick → loadAll({silent})', () =&gt; {
+    expect(SRC).toContain('setLiveRefreshTick');
+    expect(SRC).toContain("loadAll({ silent: true })");
+  });
+  it('skip-first guard exists (no mount double-load)', () =&gt; {
+    expect(SRC).toContain('liveFirstFire');
+  });
+  it('day-rollover guard: wideRange depends on todayKey + visibility refresh', () =&gt; {
+    expect(SRC).toContain('}, [todayKey]);');
+    expect(SRC).toContain("addEventListener('visibilitychange'");
+  });
+});
+
+// Rule I flow-simulate — fire → skip-first → bump → loadAll (pure mirror of the wiring).
+describe('flow-simulate: listener fire → loadAll (Rule I)', () =&gt; {
+  it('first fire skipped, second fire triggers reload', () =&gt; {
+    const first = { tx: true };
+    let tick = 0;
+    const bump = (k) =&gt; { if (first[k]) { first[k] = false; return; } tick += 1; };
+    bump('tx'); // mount fire — skipped
+    expect(tick).toBe(0);
+    bump('tx'); // real cross-device change
+    expect(tick).toBe(1);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Add BS check</strong> to <code>tests/audit-branch-scope.test.js</code> (so the allBranches treatments listener stays sanctioned + deposits/sales stay branch-aware).</label></div>
+<pre><code class="language-js">it('BS — AppointmentHubView treatments listener is sanctioned listener-direct; deposits/sales via useBranchAwareListener', () =&gt; {
+  const src = readFileSync('src/components/admin/AppointmentHubView.jsx', 'utf8');
+  // allBranches treatments listener MUST carry the annotation
+  expect(src).toMatch(/audit-branch-scope: listener-direct[\s\S]*listenToTreatmentsByDateRange/);
+  // deposits + sales MUST be branch-aware (not direct)
+  expect(src).toContain('useBranchAwareListener(listenToAllDeposits');
+  expect(src).toContain('useBranchAwareListener(listenToAllSales');
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Run targeted + audit → PASS.</strong></label></div>
+  <p>Run: <code>npx vitest run tests/appointment-live-cross-device.test.js tests/audit-branch-scope.test.js</code> · Expected: PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/appointment-live-cross-device.test.js tests/audit-branch-scope.test.js
+git commit -m "test(appt): source-grep + flow-simulate + BS audit for live cross-device wiring"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Full verification — suite + build + Rule Q 2-client L1</h3>
+  <p><strong>Files:</strong> Create <code>tests/e2e/appointment-live-cross-device.spec.js</code> (optional if 2-client harness is feasible; otherwise the live 2-tab manual L1 below).</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Full suite + build</strong> (Rule N — this is a multi-file feature/wiring change → full suite at batch end).</label></div>
+  <p>Run: <code>npm test -- --run</code> then <code>npm run build</code> · Expected: 0 new fails, build clean. Fix any V21-class source-grep tests that locked the old AppointmentHubView shape.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Rule Q L1 — 2-client real-browser (GOLD STANDARD for cross-device).</strong> Open the appointment page in TWO authenticated browser contexts (same branch). In context A: (a) confirm an appointment, (b) cancel an appointment, (c) save an OPD/treatment via TFP. After EACH, observe context B updates the card/stepper WITHOUT a manual refresh (allow ~1-2s for server round-trip + silent loadAll). Then background context B's tab ~30s, foreground it, change something in A → confirm B catches up on resume (resilience C).</label></div>
+  <p>This is the verification that actually proves the user's requirement. Capture a screenshot of context B updating after a context-A change. (Per Rule Q-vis — look at the rendered result.)</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Final commit + handoff doc update.</strong></label></div>
+<pre><code class="language-bash">git add -A
+git commit -m "test(appt): full-suite green + Rule Q 2-client L1 evidence for live cross-device"</code></pre>
+</div>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Device A confirms/cancels/edits an appointment → Device B (same page+branch) reflects it with no manual refresh. (Already worked; must still pass.)</li>
+  <li>Device A (doctor) saves OPD/treatment → Device B (admin) OPD stepper updates with no refresh. <strong>(The core gap being fixed.)</strong></li>
+  <li>Device A changes a deposit/sale → Device B card chips update with no refresh.</li>
+  <li>A tab left open all day stays live; after background-suspend it catches up on resume (no manual refresh, listener does not die).</li>
+  <li>No change to mutation logic, card rendering, OPD-stepper derivation, or business rules — purely added live subscriptions.</li>
+  <li>Full suite green, build clean, <code>/audit-branch-scope</code> green.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Read cost:</strong> <code>listenToTreatmentsByDateRange</code> reads the whole <code>be_treatments</code> collection (mirrors the existing <code>loadTreatmentsByDateRange</code> one-shot — no new index, consistent). The listener only re-fires on the delta after the initial read, and each fire triggers one silent <code>loadAll</code> (the "reads มากขึ้นเล็กน้อย" trade the user accepted). If the collection grows very large, a future optimization is to bound the listener by a top-level <code>createdAt</code> window (single-field auto-index). Flagged, not implemented.</li>
+  <li><strong>Redundant double-load on the saving device:</strong> the saving device gets both its existing same-session bump (treatmentRefreshKey / appointmentDataVersion) AND its own listener fire → up to 2 silent <code>loadAll</code>s. Harmless (idempotent silent re-fetch). Not deduped to keep the change minimal.</li>
+  <li><strong>Branch-switch re-fire:</strong> useBranchAwareListener re-subscribes deposits/sales on branch switch; the new subscription's initial fire bumps the tick (skip-first is per-mount, not per-resubscribe) → one extra silent loadAll on switch. Harmless (loadAll already re-runs on branch switch via its own effect).</li>
+  <li><strong>No commit/deploy without explicit authorization</strong> (V18). This plan implements + tests locally; deploy is a separate user-authorized step.</li>
+</ul>
+
+</body>
+</html>
