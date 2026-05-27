@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-27 EOD+13 — Light-Theme Audit (WCAG AA, App UI) COMPLETE + deep automated-scanner pass (7 surfaces). LOCAL, NOT committed/pushed/deployed."
-status: "Light-theme audit done + deep-verified. 7 surfaces scanned clean (per-page contrast scanner) + global fixes proven. full vitest 14975/0 (last full run; 1 prior=flake). build clean ×6. NOT committed — await explicit 'commit'/'push'/'deploy' (V18). Brand-red decision pending."
+updated_at: "2026-05-28 EOD+13 — Light-Theme Audit (WCAG AA, App UI) + brand-red darken (#b91c1c) COMMITTED + PUSHED + DEPLOYED to prod + prod-verified."
+status: "SHIPPED. Light-theme audit + brand-red red-700 #b91c1c (strict AA) committed (a4731775 light-theme + 9042934a Rule-S docs), pushed, vercel --prod LIVE + verified ON PROD (--accent-red #b91c1c, .text-red-400 rgb(185,28,28)). full vitest 14976/0, build clean. Remaining: SESSION_HANDOFF archival (clean turn) + user L1 on 6 unscanned surfaces."
 branch: "master"
-last_commit: "762a89df (EOD+12 chart docs) — ALL light-theme work UNCOMMITTED on top of working tree"
-tests: "full vitest 14975/0 (678 files); T7 override-coverage 4/0; build clean ×6. (green-500/600 edit after last full run = CSS-only, build-confirmed.)"
+last_commit: "9042934a (Rule S timing docs) on top of a4731775 (light-theme + brand-red). Deployed + prod-verified."
+tests: "full vitest 14976/0 (678 files); T7 override-coverage 5/0 (incl. strict-AA brand-red guard); build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8f6b7ced LIVE — EOD+11 + EOD+12 + light-theme NOT deployed"
+production_commit: "9042934a LIVE (deployed 2026-05-28) — EOD+11 appt-live + EOD+12 chart + light-theme + brand-red all shipped"
 firestore_rules_version: "UNCHANGED — CSS/theme-config only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
 ---
 
@@ -28,17 +28,17 @@ Goal: every App-UI page+modal WCAG AA in light theme. **CSS/colour/theme-config 
 - Dark theme NO regression (customer-detail dark screenshot post-config).
 - The deep scan (user's "ตรวจหมดจริงๆเหรอ" push — justified) surfaced teal/muted/green/dark: classes that eyeballing missed. All fixed.
 
-## ⚠ Pending decision (brand colour — NOT auto-changed)
-Brand red `#dc2626` (`text-red-400`, 261 uses) = **4.37:1 on tinted cards** (4.5 on white). Always on appropriate red (delete/weekend/error), NOT names. Keep brand red (≈AA) OR bump → red-700 #b91c1c (strict AA, darkens brand red app-wide) — **user's call**.
+## ✅ Brand-red decision (RESOLVED 2026-05-28)
+User chose **darken → red-700 `#b91c1c`** (strict AA). Done in `.text-red-400` (index.css 608) + `--accent-red` light (4093). Verified real browser: 6.47:1 white, rgb(185,28,28); legible on white + tinted card. Other red shades already #b91c1c. Strict-AA regression guard added to T7 (5/0). Deployed + prod-verified.
 
 ## ⚠ HONEST scope gap
 Scanner ran on 7 surfaces. **stock / master-data / treatment-form / chat / settings / deep modals NOT individually scanned** — backend collapsed-section + frontend drawer nav resisted programmatic clicks in-session. They use the SAME now-fixed global classes (FM-A/C + alert-box + dark: + teal/muted/green all global) → covered by the global fixes + **need user L1 spot-check**. dev server UP at localhost:5173 (Browser 1, light) for L1.
 
-## Next action (USER-TRIGGERED)
-Decide brand-red → `commit` → `push` → `vercel --prod` (frontend+theme-config only; no rules/storage/cron → no Probe-Deploy-Probe). Await word (V18).
+## Next action
+DONE this turn: brand-red darken + commit (a4731775 + 9042934a) + push + vercel --prod LIVE + prod-verified. Remaining: (1) SESSION_HANDOFF archival (277KB>200KB) in a dedicated clean turn — add this session's block then; (2) user L1 spot-check the 6 unscanned surfaces (stock/master-data/treatment-form/chat/settings/deep-modals) on prod light theme.
 
 ## Outstanding
-- commit/push/deploy await word (covers EOD+11 appt-live + EOD+12 chart + light-theme).
-- brand-red #dc2626 decision · in-app L1 on the 6 unscanned surfaces.
-- V-entry + SESSION_HANDOFF finalize at commit (⚠ SESSION_HANDOFF 266KB over 200KB cap — archive first).
-- 2 pre-existing Rule S doc edits (CLAUDE.md, rules/01) uncommitted (yours).
+- ✅ commit/push/deploy DONE (EOD+11 appt-live + EOD+12 chart + light-theme + brand-red shipped; prod 9042934a LIVE + prod-verified).
+- ✅ brand-red decision (darkened #b91c1c) + ✅ 2 Rule S doc edits committed (9042934a).
+- ⏳ SESSION_HANDOFF archival (277KB>200KB) — dedicated clean turn; add this session's block there.
+- ⏳ user L1 spot-check 6 unscanned surfaces on prod light theme.

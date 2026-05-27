@@ -4,11 +4,11 @@
 Dark-first project is launching → audited the LIGHT theme across the App UI for WCAG **AA (4.5:1)** legibility and fixed every contrast/invisible-text failure. **CSS / colour / theme-config ONLY — zero wiring/flow/logic** (per user directive "ยุ่งกับแค่สีดีไซน์ css ห้ามยุ่งกับ wiring flow logic เด็ดขาด เป็นแค่การปรับตีม"). Brainstorm-locked: AA · Hybrid central-first · App-UI (exclude print/doc) · full live-browser pass. After a representative-sample "done" claim, the user pushed "ตรวจหมดจริงๆเหรอ" → I built an automated per-page contrast scanner that found 3 more real classes eyeballing missed (vindicated the push). LOCAL, UNCOMMITTED.
 
 ## Current State (5 bullets)
-- master HEAD `ac4f9eea` (EOD+12 docs); **light-theme work UNCOMMITTED** on working tree; prod UNCHANGED `8f6b7ced`.
+- master HEAD `9042934a` (Rule S docs) on `a4731775` (light-theme+brand-red); **COMMITTED + PUSHED + DEPLOYED**; prod `9042934a` LIVE (was 8f6b7ced) + prod-verified.
 - Diff surface = `src/index.css` (central override sweep block) + `tailwind.config.js` (1-line `darkMode`) + 14 inline-colour swaps in 5 `.jsx` + 1 NEW test + 1 test fixup. NO firestore.rules/storage/data/cron → frontend+theme-config (no Probe-Deploy-Probe).
 - **Verified (Rule Q-vis, real browser, measured)**: per-page contrast scanner CLEAN on **7 surfaces** (sale · reports · promotions · finance[synthetic] · appointment-hub · customer-detail · frontend-appt). darkMode fix proven BOTH directions. Dark theme NO regression.
 - full vitest **14975/0** (678 files; 1 prior "fail" = non-reproduced flake) · build clean ×6 · T7 4/0.
-- **⚠ Pending USER decision**: brand-red `#dc2626` keep (≈AA) vs darken red-700 (strict AA). **⚠ Honest gap**: 6 surfaces (stock/master-data/treatment-form/chat/settings/deep-modals) NOT individually scanned (nav resisted clicks) — covered by global fixes + need user L1.
+- **✅ Brand-red RESOLVED**: user chose darken → red-700 `#b91c1c` (strict AA); shipped + prod-verified (6.47:1 white, rgb(185,28,28)). **⚠ Honest gap (unchanged)**: 6 surfaces (stock/master-data/treatment-form/chat/settings/deep-modals) NOT individually scanned — covered by global monotonic-safe fixes + need user L1 on prod light theme.
 
 ## Architecture understood
 Light theme = a giant `[data-theme="light"],[data-theme="auto"]` override layer in `src/index.css` that remaps hardcoded dark Tailwind classes → light values (theme = `data-theme` attr on `<html>`, `useTheme.js`, `THEME_KEY='app-theme'`). Failure mode = any uncovered hardcoded dark class, OR light-pastel text on a light surface → invisible / sub-AA.
@@ -22,9 +22,11 @@ Light theme = a giant `[data-theme="light"],[data-theme="auto"]` override layer 
 - **tailwind darkMode root-fix (USER-APPROVED "Global config")**: `darkMode: ['selector','[data-theme="dark"]']` — was unset (=media) so `dark:` (82 uses/15 files) coupled to OS prefers-color-scheme → light theme on a dark-OS machine rendered dark-variant colours (invisible finance/wallet). **AV136 class**, fixed globally.
 - NEW `tests/light-theme-override-coverage.test.js` (T7, 4 tests) + TL1.6 fixup (`#2EC4B6`→`var(--accent-teal)`).
 
-## Commits
-NONE — light-theme work intentionally UNCOMMITTED (await explicit "commit" + brand-red decision, V18).
-This session's only writes-to-be-committed are the handoff docs (active.md + SESSION_HANDOFF.md + this checkpoint) — committed LOCAL-only, NOT pushed (V18; push would send the unpushed EOD+11 appt-live + EOD+12 chart stack too).
+## Commits (2026-05-28 EOD+13 ship — user authorized "Deploy to prod now")
+- `a4731775` style(theme): light-theme WCAG-AA audit + brand-red red-700 #b91c1c (12 files)
+- `9042934a` docs(rules): Rule S TIMING reversal (CLAUDE.md + rules/01)
+- (+ handoff commit: active.md + this checkpoint)
+PUSHED origin/master + `vercel --prod` LIVE (alias lover-clinic-app.vercel.app) + prod-verified (--accent-red #b91c1c). Bundled the previously-unpushed EOD+11 appt-live + EOD+12 chart stack into this push.
 
 ## Files Touched (light-theme work — uncommitted)
 - `src/index.css` (central override sweep block, labeled "LIGHT-THEME AUDIT 2026-05-27")
