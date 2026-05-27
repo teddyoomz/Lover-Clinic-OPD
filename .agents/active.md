@@ -9,7 +9,17 @@ production_commit: "9042934a LIVE (2026-05-28) — EOD+11 appt-live + EOD+12 cha
 firestore_rules_version: "UNCHANGED — CSS/theme-config only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
 ---
 
-# Active Context — Light-theme audit + brand-red (SHIPPED 2026-05-28)
+# Active Context — V124 light-theme invisibility + appt real-time (IN PROGRESS 2026-05-28)
+
+## 🔧 V124 (in progress) — /systematic-debugging, 2 bug classes
+- **Bug A (light-theme invisibility)** — user: finance/deposit "มองไม่เห็นอะไรเลย" + date-strip "มองไม่ค่อยเห็น". Root causes + fixes in `src/index.css` (CSS-only, cosmetic shell):
+  - bg-tint selectors `[class*="bg-{c}-{700..950}/"]` also matched the `dark:bg-...` variant → clobbered solid `bg-{c}-600 text-white` badges to pale → white-on-pale INVISIBLE (~1.05:1). Fix: `:not([class*=":bg-..."])` on all 136 selectors (script `scripts/fix-light-theme-bg-tint-dark-clobber.mjs`).
+  - gray-600→`--tx-muted`, gray-700→`--tx-heading` (were `--tx-faint` #94a3b8, 2.45:1 — inverted hierarchy).
+  - orange-500 → #c2410c (was #ea580c, 3.4:1).
+  - date-strip SELECTED tab: label `text-sky-200`→`text-white` + bg-sky-700/600 descendant white-restore (was 1.0/3.01:1); count badge bg-sky-500→sky-600. `-400` shade completed uniformly (FM-C gaps).
+- **Bug B (appt real-time)** — `AppointmentCalendarView.jsx`: month-strip counts used one-shot `getAppointmentsByMonth` → stale until refresh. Fix → `listenToAppointmentsByMonth` (onSnapshot = cross-device per-branch). Covers all 6 appointment sub-tabs. Day-grid was already live.
+- Verified: build clean · T7 11/0 + audit-branch-scope 117/0 + appointment cluster 63/0 · full vitest 14980/2 (2 = THIS active.md V-marker meta-check, now resolved).
+- PENDING: real-browser pixel verify (finance badges visible + date-strip selected tab + Bug B real-time write→live) + deploy (user authorized "แล้วค่อย deploy").
 
 ## State
 - master `3605f284` pushed · prod `9042934a` LIVE @ lover-clinic-app.vercel.app + prod-verified (--accent-red #b91c1c, .text-red-400 rgb(185,28,28)).

@@ -93,3 +93,56 @@ describe('light-theme override coverage (audit 2026-05-27)', () => {
     expect(css).toMatch(/--accent-red:\s*#b91c1c/); // light/auto value (dark keeps #ef4444)
   });
 });
+
+describe('light-theme + appointment realtime fixes (2026-05-28)', () => {
+  it('bg-tint selectors guard against dark:/variant-prefixed classes (:not) — fixes invisible white-on-pale badges (finance/deposit)', () => {
+    // Bug: [class*="bg-amber-900/"] also matched the DARK-VARIANT class
+    // `dark:bg-amber-900/30`, clobbering a solid `bg-amber-600 text-white` badge's
+    // bg to amber-50 → white text invisible (~1.05:1). Fix appends
+    // :not([class*=":bg-{c}-{shade}/"]) so colon-prefixed variants are excluded.
+    const notCount = (css.match(/:not\(\[class\*=":bg-[a-z]+-(?:700|800|900|950)\/"\]\)/g) || []).length;
+    expect(notCount).toBe(136); // 17 colors × 4 shades × 2 themes
+    expect(css).toMatch(/\[class\*="bg-amber-900\/"\]:not\(\[class\*=":bg-amber-900\/"\]\)/);
+  });
+
+  it('gray hierarchy de-inverted: gray-600 → --tx-muted, gray-700 → --tx-heading (were --tx-faint, sub-AA)', () => {
+    expect(css).toMatch(/\.text-gray-600\s*\{\s*color:\s*var\(--tx-muted\)\s*!important/);
+    expect(css).toMatch(/\.text-gray-700\s*\{\s*color:\s*var\(--tx-heading\)\s*!important/);
+    // neither gray-600 nor gray-700 should map to the placeholder-faint token anymore
+    expect(css).not.toMatch(/\.text-gray-600\s*\{\s*color:\s*var\(--tx-faint\)/);
+    expect(css).not.toMatch(/\.text-gray-700\s*\{\s*color:\s*var\(--tx-faint\)/);
+  });
+
+  it('orange-500 text → orange-700 #c2410c (was #ea580c orange-600, 3.4:1 sub-AA)', () => {
+    // assert the DECLARATION (not the comment, which mentions the old #ea580c)
+    expect(css).toMatch(/\.text-orange-500\s*\{\s*color:\s*#c2410c/);
+    expect(css).not.toMatch(/\.text-orange-500\s*\{\s*color:\s*#ea580c/);
+  });
+
+  it('-400 shade completed uniformly (FM-C coverage was uneven: blue/cyan/indigo/violet/etc had no -400 remap)', () => {
+    for (const [c, hex] of [['blue', '#1d4ed8'], ['cyan', '#0e7490'], ['indigo', '#4338ca'], ['violet', '#6d28d9'], ['fuchsia', '#a21caf']]) {
+      expect(css, `text-${c}-400 should be AA-dark`).toMatch(new RegExp(`\\.text-${c}-400[\\s\\S]{0,90}${hex}`));
+    }
+  });
+
+  it('-600 colored TEXT shade → -700 (AA): finance status text (amber/teal/etc) was sub-AA', () => {
+    for (const [c, hex] of [['amber', '#b45309'], ['teal', '#0f766e'], ['orange', '#c2410c'], ['green', '#15803d']]) {
+      expect(css, `text-${c}-600 should be AA-dark`).toMatch(new RegExp(`\\.text-${c}-600[\\s\\S]{0,90}${hex}`));
+    }
+  });
+
+  it('date-strip selected tab: bg-sky-700/600 descendant white-restore present (label+number are child divs)', () => {
+    expect(css).toMatch(/\[class\*="bg-sky-700"\]\s+\.text-white/);
+    expect(css).toMatch(/\[class\*="bg-sky-600"\]\s+\.text-white/);
+  });
+
+  it('AppointmentCalendarView month strip uses LIVE listener (real-time), not one-shot getter', () => {
+    const c = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
+    expect(c).toMatch(/listenToAppointmentsByMonth/);            // imported + used
+    // the month-count useEffect must subscribe (return unsub), not call the one-shot getter
+    expect(c).not.toMatch(/getAppointmentsByMonth\s*\(/);        // no remaining call (only comment mentions)
+    expect(c).toMatch(/setMonthAppts\(grouped\)/);              // groups flat listener output
+    // selected-day label fixed off text-sky-200 (which matched the bg in light theme)
+    expect(c).not.toMatch(/isSel \? 'text-sky-200'/);
+  });
+});

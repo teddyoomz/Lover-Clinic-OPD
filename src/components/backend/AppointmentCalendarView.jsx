@@ -24,12 +24,13 @@ import {
   CalendarDays, CalendarX,
 } from 'lucide-react';
 // audit-branch-scope: listener-direct — listenToAppointmentsByDate +
-// listenToScheduleByDay use positional args incompatible with the
-// useBranchAwareListener (object-arg) contract; kept as direct
-// useEffect with branchId in deps. listenToHolidays migrated to hook
-// below (Phase BSA Task 8, 2026-05-04).
+// listenToAppointmentsByMonth + listenToScheduleByDay use positional args
+// incompatible with the useBranchAwareListener (object-arg) contract; kept
+// as direct useEffect with branchId in deps. listenToHolidays migrated to
+// hook below (Phase BSA Task 8, 2026-05-04).
 import {
-  getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listenToHolidays,
+  getAppointmentsByDate, listenToAppointmentsByDate, listenToAppointmentsByMonth,
+  listenToHolidays,
   listenToScheduleByDay, listDoctors,
   // Phase 15.7-sexies (2026-04-28) — delete from calendar modal
   deleteBackendAppointment,
@@ -372,13 +373,36 @@ export default function AppointmentCalendarView({
     [selectedDate, holidays],
   );
 
-  // ── Load month appointment counts (for mini calendar) ──
-  // Phase BS — pass selectedBranchId so the dot map only counts appointments
-  // for the current branch. Re-runs when admin switches branch.
+  // ── Load month appointment counts (mini-calendar dots + week-strip counts) ──
+  // 2026-05-28 — switched one-shot getAppointmentsByMonth → onSnapshot
+  // listenToAppointmentsByMonth. The month aggregation drives the week-strip
+  // count badges + mini-calendar dots; pre-fix it was a one-shot getter that
+  // only re-ran on month/branch change, so a booking made on ANOTHER device
+  // never updated the strip until the admin pressed refresh (user report
+  // 2026-05-28: "bar ... ไม่ update real time ต้องกด refresh ก่อน"). The day
+  // grid was already live via listenToAppointmentsByDate; this closes the
+  // month-aggregation gap so EVERY device viewing this branch sees the strip
+  // update simultaneously (Firestore pushes writes to all onSnapshot
+  // subscribers; where('branchId') scopes per-branch). Re-subscribes on
+  // month/branch switch via deps. The listener emits a FLAT array — group
+  // into {iso:[...]} to preserve the prior getter's shape that monthAppts
+  // consumers (week strip line ~777, mini-cal line ~724) expect.
   useEffect(() => {
-    getAppointmentsByMonth(monthStr, { branchId: selectedBranchId })
-      .then(setMonthAppts)
-      .catch(() => setMonthAppts({}));
+    const unsub = listenToAppointmentsByMonth(
+      monthStr,
+      { branchId: selectedBranchId },
+      (flat) => {
+        const grouped = {};
+        for (const a of (flat || [])) {
+          if (!a || !a.date) continue;
+          if (!grouped[a.date]) grouped[a.date] = [];
+          grouped[a.date].push(a);
+        }
+        setMonthAppts(grouped);
+      },
+      () => setMonthAppts({}),
+    );
+    return () => unsub?.();
   }, [monthStr, selectedBranchId]);
 
   // ── Load day appointments (for time grid) ──
@@ -677,14 +701,16 @@ export default function AppointmentCalendarView({
     setFormMode({ mode: 'edit', appt });
   };
 
-  // Refresh both month dot map + day grid after a save.
-  const refreshAfterSave = useCallback(async () => {
+  // Close the form after a save. Data refresh is automatic now that BOTH the
+  // day grid (listenToAppointmentsByDate) AND the month strip / mini-cal
+  // (listenToAppointmentsByMonth) are live onSnapshot listeners — a local
+  // save surfaces within ~1s, and so do remote saves from other devices.
+  // (2026-05-28 — dropped the redundant one-shot getAppointmentsByMonth
+  // re-fetch the month listener now supersedes.)
+  const refreshAfterSave = useCallback(() => {
     setFormMode(null);
-    await loadDay(selectedDate);
-    getAppointmentsByMonth(monthStr, { branchId: selectedBranchId })
-      .then(setMonthAppts)
-      .catch(() => {});
-  }, [loadDay, selectedDate, monthStr, selectedBranchId]);
+    loadDay(selectedDate);
+  }, [loadDay, selectedDate]);
 
   // Selected date info
   const selD = parseDate(selectedDate);
@@ -779,10 +805,15 @@ export default function AppointmentCalendarView({
                 return (
                   <button key={wd.date} onClick={() => { setSelectedDate(wd.date); setCalMonth({year:parseDate(wd.date).getFullYear(), month:parseDate(wd.date).getMonth()}); }}
                     className={`py-2.5 text-center transition-all relative ${isSel ? 'bg-sky-700 text-white' : isToday ? 'bg-[var(--bg-elevated)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-                    <div className={`text-xs font-bold ${isSel ? 'text-sky-200' : isWe ? 'text-red-400' : 'text-[var(--tx-muted)]'}`}>{wd.label}</div>
+                    {/* 2026-05-28 — selected label was text-sky-200; in light theme the
+                        FM-C remap darkened sky-200 → #0369a1 which MATCHED the bg-sky-700
+                        selected bg → invisible (1.0:1). Use text-white (kept light on the
+                        dark tab via the index.css bg-sky-700 descendant white-restore). */}
+                    <div className={`text-xs font-bold ${isSel ? 'text-white' : isWe ? 'text-red-400' : 'text-[var(--tx-muted)]'}`}>{wd.label}</div>
                     <div className={`text-sm font-bold ${isSel ? 'text-white' : isToday ? 'text-sky-400' : isWe ? 'text-red-400' : 'text-[var(--tx-heading)]'}`}>{wd.dayNum}/{wd.monthNum}</div>
                     {count > 0 && (
-                      <span className={`absolute top-1 right-1 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${isSel ? 'bg-white text-sky-700' : 'bg-sky-500 text-white'}`}>{count}</span>
+                      /* 2026-05-28 — count badge bg-sky-500 (white text 2.77:1) → bg-sky-600 (4.1:1) */
+                      <span className={`absolute top-1 right-1 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${isSel ? 'bg-white text-sky-700' : 'bg-sky-600 text-white'}`}>{count}</span>
                     )}
                   </button>
                 );
