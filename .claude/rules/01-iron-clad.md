@@ -377,9 +377,13 @@ User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ c
 - Inspecting layout / responsive / dark-mode / computed styles on the deployed OR local app.
 - Building a temp probe page that mounts a REAL component to drive its real lifecycle (delete it after — never commit).
 
-**When Rule S does NOT apply — TIMING (2026-05-22, user directive "ไม่ต้องใช้ Chrome MCP ตอนถามกับตอนแพลน … นาน … ให้ใช้ตอนทดสอบ ตรวจสอบ inspect บลาๆ อย่างอื่นเท่านั้น")**: Chrome MCP / Claude Preview are for the **test / verify / inspect / debug** phase ONLY. Do **NOT** spin them up during the **ask** (brainstorming clarifying questions) or **plan** (writing-plans) stages — they are slow ("นาน") and premature while the design is still being decided. During design Q&A, show visuals the lightweight way — AskUserQuestion `preview` mockups, or write the HTML mockup into the spec for the user to open — **NOT** by driving a live browser. Reach for the real browser only once there is something built to TEST / a rendered result to VERIFY / a live page to INSPECT.
+**TIMING — when to spin up a live browser (CURRENT policy, 2026-05-26 EOD+6):**
 
-**Reaffirmed 2026-05-26** (user directive: "ตอนถาม ถ้าเกี่ยวกับการ Design มึงต้องใช้ visual companion เสมอ … แค่มึงไม่ต้องใช้ chrome mcp ตรวจสอบ visual companion มันเสียเวลา ถ้ามีอะไรที่เร็วกว่าก็ให้ใช้ตรวจสอบแทน ในเฟสนี้ถึงตอนเขียนแพลน"): design topics MUST use the Visual Companion FROM the question stage — but **do NOT open Chrome MCP / Claude Preview to "verify" that a companion mockup renders** during ask→plan. The `AskUserQuestion` `preview` IS the verification — the user sees it inline; no separate browser check is needed. Use the fastest inline method available (inline preview / HTML in the spec); a live browser is only for the test/verify/inspect stage. This applies across the whole ask→plan phase, every design brainstorm.
+- **DESIGN topics** (UI / layout / styling / theming / visual flow) → **USE the Visual Companion in a LIVE browser FROM the Asking-Scope (clarifying-questions) stage**, and keep using it through plan-writing. Render real mockups in the browser (Chrome MCP preferred per `feedback_use_chrome_mcp_first.md`; Claude Preview fallback) and SHOW them — both themes + real states — WHILE asking the design questions. The speed cost is accepted for design: seeing real rendered pixels early produces better decisions + catches theme / layout / contrast problems before any code. **User directive (verbatim, 2026-05-26 EOD+6): "แก้กฎให้ใช้ visual companion และ live browser ตั้งแต่ Asking Scope ถ้าเกี่ยวกับการ Design".**
+- **NON-design topics** (pure requirements / scope / conceptual / A-B-C tradeoffs) → live browser NOT needed at ask/plan; text-only / `AskUserQuestion` previews are fine. The speed concern ("นาน") stands for non-visual work.
+- **Always**: temp probe pages → delete after, never commit; verify rendered PIXELS, not the object model (V66); sanity-check the harness (viewport / rAF / dpr) before trusting a measurement.
+
+**History (superseded for design):** the 2026-05-22 + earlier-2026-05-26 directives said "no live browser at ask/plan — slow; lightweight `AskUserQuestion` previews / HTML-in-spec only." The 2026-05-26 EOD+6 directive **REVERSES that for DESIGN topics** (live browser from Asking-Scope onward); the no-live-browser-at-ask/plan rule now applies to **non-design** ask/plan only.
 
 **How**:
 - Chrome MCP needs the Chrome extension connected; if it isn't, ASK the user to connect it (don't silently fall back to a weaker tier).
@@ -391,7 +395,7 @@ User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ c
 - ❌ Claiming "verified" from a ref / object-model inspection when a real-browser pixel check was feasible — Rule Q + Rule S make it feasible, so use it.
 - ❌ Asking "may I use Chrome to test?" every turn — it is pre-authorized; just use it.
 - ❌ Leaving a temp probe page committed — delete probe HTML/JSX after debugging.
-- ❌ Driving Chrome MCP / Claude Preview during brainstorming questions or plan-writing — slow + premature; it belongs to the test/verify/inspect stage (2026-05-22).
+- ❌ Driving Chrome MCP / Claude Preview during **non-design** brainstorming questions or plan-writing — slow + premature for non-visual work. (DESIGN topics DO use the live browser from the Asking-Scope stage — 2026-05-26 EOD+6 reversal.)
 
 **Lesson lock**: real-browser viewing/testing is now a first-class, always-available tool. Reach for it whenever "does the user actually SEE this work?" is the question — that's the only verification that doesn't lie (Rule Q).
 
