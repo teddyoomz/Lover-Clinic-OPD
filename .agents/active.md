@@ -9,17 +9,17 @@ production_commit: "9042934a LIVE (2026-05-28) — EOD+11 appt-live + EOD+12 cha
 firestore_rules_version: "UNCHANGED — CSS/theme-config only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
 ---
 
-# Active Context — V124 light-theme invisibility + appt real-time (IN PROGRESS 2026-05-28)
+# Active Context — V124 light-theme invisibility + appt real-time (SHIPPED+DEPLOYED+verified 2026-05-28)
 
-## 🔧 V124 (in progress) — /systematic-debugging, 2 bug classes
-- **Bug A (light-theme invisibility)** — user: finance/deposit "มองไม่เห็นอะไรเลย" + date-strip "มองไม่ค่อยเห็น". Root causes + fixes in `src/index.css` (CSS-only, cosmetic shell):
-  - bg-tint selectors `[class*="bg-{c}-{700..950}/"]` also matched the `dark:bg-...` variant → clobbered solid `bg-{c}-600 text-white` badges to pale → white-on-pale INVISIBLE (~1.05:1). Fix: `:not([class*=":bg-..."])` on all 136 selectors (script `scripts/fix-light-theme-bg-tint-dark-clobber.mjs`).
-  - gray-600→`--tx-muted`, gray-700→`--tx-heading` (were `--tx-faint` #94a3b8, 2.45:1 — inverted hierarchy).
-  - orange-500 → #c2410c (was #ea580c, 3.4:1).
-  - date-strip SELECTED tab: label `text-sky-200`→`text-white` + bg-sky-700/600 descendant white-restore (was 1.0/3.01:1); count badge bg-sky-500→sky-600. `-400` shade completed uniformly (FM-C gaps).
-- **Bug B (appt real-time)** — `AppointmentCalendarView.jsx`: month-strip counts used one-shot `getAppointmentsByMonth` → stale until refresh. Fix → `listenToAppointmentsByMonth` (onSnapshot = cross-device per-branch). Covers all 6 appointment sub-tabs. Day-grid was already live.
-- Verified: build clean · T7 11/0 + audit-branch-scope 117/0 + appointment cluster 63/0 · full vitest 14980/2 (2 = THIS active.md V-marker meta-check, now resolved).
-- PENDING: real-browser pixel verify (finance badges visible + date-strip selected tab + Bug B real-time write→live) + deploy (user authorized "แล้วค่อย deploy").
+## ✅ V124 + V124-fix2 — /systematic-debugging, 2 bug classes — SHIPPED + DEPLOYED + prod-verified
+- master `d106a5cd` (77757f67 V124 + d106a5cd V124-fix2) · prod `d106a5cd` LIVE @ lover-clinic-app.vercel.app · full vitest **14983/0** · build clean · tree clean.
+- **Bug A (light-theme invisibility)** — user: finance/deposit "มองไม่เห็นอะไรเลย" + date-strip "มองไม่ค่อยเห็น". `src/index.css` (CSS-only, cosmetic shell):
+  - bg-tint selectors `[class*="bg-{c}-{700..950}/"]` also matched the `dark:bg-...` variant → clobbered solid `bg-{c}-600 text-white` badges to pale → white-on-pale INVISIBLE (~1.05:1). **v1** used `:not([class*=":bg-..."])` but that over-excluded base+`hover:` elements (stock ปรับ/เพิ่ม/แก้ไข → 3.64:1 regression, caught post-deploy). **v2 (d106a5cd)** = BASE-match `[class*=" bg-X/"] + [class^="bg-X/"]` (136 sels) — fires for base tint despite variants, skips dark:-only badges. Scripts: fix-light-theme-bg-tint-{dark-clobber,v2-base-match}.mjs.
+  - gray-600→`--tx-muted`, gray-700→`--tx-heading` (were `--tx-faint` #94a3b8 — inverted). orange-500→#c2410c. `-400` + `-600` colored-text shades completed to AA-dark (FM-C gaps; fixed text-amber-600 "ยังไม่นัด"/text-teal-600 name).
+  - date-strip SELECTED tab: label `text-sky-200`→`text-white` + bg-sky-700/600 descendant white-restore (was 1.0/3.01:1 invisible); count badge bg-sky-500→sky-600.
+- **Bug B (appt real-time)** — `AppointmentCalendarView.jsx` month-strip used one-shot `getAppointmentsByMonth` → stale until refresh → `listenToAppointmentsByMonth` (onSnapshot = cross-device per-branch). Covers all 6 backend appt sub-tabs. Day-grid was already live.
+- **VERIFIED on REAL deployed prod (Rule Q-vis + L2)**: stock 0 fails (regression fixed) · finance badges all VISIBLE + ส่งลิ้งค์/ยังไม่นัด/name AA · date-strip selected tab white-on-blue readable · **Bug B real-time: node admin-SDK write→date-strip 2→3 LIVE no-refresh, delete→3→2 LIVE** (cross-process/per-branch). T7 12/0 · BS-F 21/0.
+- **Remaining (honest)**: 3 finance white-on-{c}-600 SOLID badges (ลูกค้าจอง 3.19 / ดูลิ้งค์ 3.77 / 🎯) = VISIBLE + meet WCAG 3:1 UI-component bar (branded solid, same as dark theme); strict-4.5-AA would need tint+dark-text redesign — flagged, not done. treatment-form still not individually scanned (deep PHI nav).
 
 ## State
 - master `3605f284` pushed · prod `9042934a` LIVE @ lover-clinic-app.vercel.app + prod-verified (--accent-red #b91c1c, .text-red-400 rgb(185,28,28)).
