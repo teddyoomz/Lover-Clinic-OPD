@@ -14,10 +14,16 @@ Wrap session into 3 files in ≤ 5k tokens.
 
 ## Steps
 
-1. **Gather** (1 bash call):
+1. **Gather** (1 bash call) — git ONLY, **NEVER run tests**:
    ```
-   git log --oneline -5; git status --short; npx vitest run 2>&1 | tail -3
+   git log --oneline -5; git status --short
    ```
+   - **DO NOT run `vitest` / `npm test` / the full suite here.** Reuse the test
+     count from the session's OWN last run (you already ran what was needed this
+     session). If nothing ran, write the field as "not re-run this session" —
+     never trigger a run just to fill it.
+   - User directive (2026-05-27, verbatim): "session end ไม่ต้องรันเทสอะไรแล้ว
+     โดยเฉพาะ Full suite ... กูเพิ่งรันไป ไม่ต้องเทสอะไรทั้งสิ้น".
 
 2. **Edit `.agents/active.md`** (Write OK — small file):
    - Frontmatter: updated_at, status, branch, last_commit, tests, production_url, production_commit, firestore_rules_version
@@ -62,6 +68,7 @@ Wrap session into 3 files in ≤ 5k tokens.
 
 ## Anti-patterns (BLOCKING)
 
+- **NEVER run tests during session-end** — no `vitest`, no `npm test`, and ESPECIALLY not the full suite. The session already ran what it needed; re-running wastes 90s+ and the user explicitly forbade it (2026-05-27). The `tests:` field REUSES the last known result — it is NOT a reason to run anything.
 - NEVER `Write` a full handoff/active when `Edit` of one section suffices.
 - NEVER duplicate V-entry detail in active.md AND checkpoint AND handoff — pick ONE (checkpoint), link from others.
 - NEVER rewrite older session blocks — they're frozen.

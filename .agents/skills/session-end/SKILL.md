@@ -7,6 +7,14 @@ description: Wrap up the current session in ≤ 1.5k LLM tokens via the Capsule 
 
 LLM writes ~30 lines of JSON. Script writes ~300 lines of markdown across 5 files. Total: 1 bash + 1 Write + 0-2 wiki page Writes + 1 bash. Done.
 
+> 🚫 **NO TESTS DURING SESSION-END (user directive, 2026-05-27)**: `brief.sh` /
+> `apply.mjs` here pre-compute "git+tests" and the apply step "runs vitest
+> internally" — that is FORBIDDEN. session-end must NEVER run `vitest` / `npm
+> test` / the full suite. Reuse the session's last-known test count. If this
+> Capsule+Propagate variant is ever activated, its brief.sh + apply.mjs MUST be
+> changed to SKIP the test run (git/SHA pre-compute only). The session already
+> ran what it needed; re-running wastes 90s+ and the user explicitly forbade it.
+
 ## The pattern
 
 ```
