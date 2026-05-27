@@ -3514,7 +3514,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         <div className={selectedHistoryTreatmentId ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
 
           {/* ════ LEFT PANEL ════ */}
-          <div className="space-y-4">
+          {/* 2026-05-27 — flex-col (was space-y-4) so the teal vitals-save button can
+              mt-auto bottom-pin and row-align with the purple doctor-save button.
+              gap-4 keeps the same 16px inter-section spacing space-y-4 gave; the only
+              behavioural delta is the button bottom-pin. Cosmetic — no logic touched.
+              Root cause (real-browser measured): block left column vs flex right column
+              handled the trailing mb-3 differently → ~12px button offset. */}
+          <div className="flex flex-col gap-4">
             {/* Doctor / Assistants / Date */}
             <FormSection isDark={isDark}>
               <SectionHeader icon={Stethoscope} title="ข้อมูลการรักษา" isDark={isDark} accent={accent} />
@@ -3627,7 +3633,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 ลงบันทึกแพทย์ แต่ time stamp ก็จะอัพเดทตามการแก้ไขล่าสุด เหมือนกัน
                 ทุกปุ่มบันทึก". Was gated on !isEdit; now always shown so staff
                 can re-edit vitals at any time. Each click updates vitalsignsRecordedAt. */}
-            <div className="mb-3">
+            {/* mt-auto bottom-pins this teal button to the grid-stretched left-column
+                bottom so it row-aligns with the purple doctor-save button (the right
+                column already flex-bottom-pins via the OPD-card flex-1). Mirrors the
+                right column; replaces the old block-column stray-mb-3 offset. */}
+            <div className="mb-3 mt-auto">
               <button
                 type="button"
                 onClick={() => handleSubmit('vitals')}
