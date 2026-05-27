@@ -127,12 +127,16 @@ describe('BS-F.7 — UI consumers pass branchId for branch-scoped fetch', () => 
     expect(src).toMatch(/getAllSales\(\{\s*branchId:\s*BRANCH_ID\s*\}\)/);
   });
 
-  it('AppointmentTab passes branchId:selectedBranchId', () => {
+  it('AppointmentTab passes branchId:selectedBranchId to the month listener', () => {
     const src = readFileSync(
       resolve(__dirname, '../src/components/backend/AppointmentCalendarView.jsx'),
       'utf-8',
     );
-    expect(src).toMatch(/getAppointmentsByMonth\([^,]+,\s*\{\s*branchId:\s*selectedBranchId\s*\}\)/);
+    // 2026-05-28 V124: month-strip switched from one-shot getAppointmentsByMonth
+    // → onSnapshot listenToAppointmentsByMonth (real-time, cross-device). branchId
+    // scoping preserved (the BS-F intent). day-grid stays listenToAppointmentsByDate.
+    expect(src).toMatch(/listenToAppointmentsByMonth\([^,]+,\s*\{\s*branchId:\s*selectedBranchId\s*\}/);
+    expect(src).not.toMatch(/getAppointmentsByMonth\s*\(/); // one-shot getter fully removed from this consumer
   });
 
   it('FinanceMasterTab passes branchId:selectedBranchId to listExpenses', () => {

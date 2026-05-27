@@ -73,10 +73,13 @@ describe('light-theme override coverage (audit 2026-05-27)', () => {
     }
   });
 
-  it('FM-A/alert-box: dark colour bg TINTS lightened in light (substring rule present)', () => {
-    expect(css).toMatch(/\[class\*="bg-emerald-900\/"\]/);
-    expect(css).toMatch(/\[class\*="bg-blue-900\/"\]/);
-    expect(css).toMatch(/\[class\*="bg-red-900\/"\]/);
+  it('FM-A/alert-box: dark colour bg TINTS lightened in light (base-match rule present)', () => {
+    // 2026-05-28 V124 v2: selectors now match the BASE utility with a leading
+    // space ([class*=" bg-X/"]) instead of the bare substring ([class*="bg-X/"]),
+    // so dark:/hover: variants don't trigger the remap (see the v2 guard below).
+    expect(css).toMatch(/\[class\*=" bg-emerald-900\/"\]/);
+    expect(css).toMatch(/\[class\*=" bg-blue-900\/"\]/);
+    expect(css).toMatch(/\[class\*=" bg-red-900\/"\]/);
   });
 
   it('FM-D: theme-aware accent vars defined with AA-dark light values', () => {
@@ -95,14 +98,21 @@ describe('light-theme override coverage (audit 2026-05-27)', () => {
 });
 
 describe('light-theme + appointment realtime fixes (2026-05-28)', () => {
-  it('bg-tint selectors guard against dark:/variant-prefixed classes (:not) — fixes invisible white-on-pale badges (finance/deposit)', () => {
+  it('bg-tint selectors match the BASE utility only (space/start-preceded) — not dark:/hover: variants', () => {
     // Bug: [class*="bg-amber-900/"] also matched the DARK-VARIANT class
     // `dark:bg-amber-900/30`, clobbering a solid `bg-amber-600 text-white` badge's
-    // bg to amber-50 → white text invisible (~1.05:1). Fix appends
-    // :not([class*=":bg-{c}-{shade}/"]) so colon-prefixed variants are excluded.
-    const notCount = (css.match(/:not\(\[class\*=":bg-[a-z]+-(?:700|800|900|950)\/"\]\)/g) || []).length;
-    expect(notCount).toBe(136); // 17 colors × 4 shades × 2 themes
-    expect(css).toMatch(/\[class\*="bg-amber-900\/"\]:not\(\[class\*=":bg-amber-900\/"\]\)/);
+    // bg to amber-50 → white text invisible (~1.05:1).
+    // v1 (:not) over-excluded elements with base + variant (e.g. stock buttons
+    // `bg-orange-900/20 hover:bg-orange-900/40`) → regressed them. v2 fix matches
+    // the BASE utility: [class*=" bg-X/"] (space) + [class^="bg-X/"] (start), so a
+    // base tint fires regardless of variants, while dark:-ONLY badges stay solid.
+    const spaceCount = (css.match(/\[class\*=" bg-[a-z]+-(?:700|800|900|950)\/"\]/g) || []).length;
+    const startCount = (css.match(/\[class\^="bg-[a-z]+-(?:700|800|900|950)\/"\]/g) || []).length;
+    expect(spaceCount).toBe(136); // 17 colors × 4 shades × 2 themes
+    expect(startCount).toBe(136);
+    // the over-broad :not form must be gone
+    expect(css).not.toMatch(/:not\(\[class\*=":bg-[a-z]+-(?:700|800|900|950)\/"\]\)/);
+    expect(css).toMatch(/\[class\*=" bg-amber-900\/"\], \[data-theme="light"\] \[class\^="bg-amber-900\/"\]/);
   });
 
   it('gray hierarchy de-inverted: gray-600 → --tx-muted, gray-700 → --tx-heading (were --tx-faint, sub-AA)', () => {
