@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Pencil, Circle, Minus, Type, Eraser, Undo2, Redo2, Check, Trash2, MousePointer, Loader2 } from 'lucide-react';
 import { serializeFabricCanvas, isObjectLevelReeditable } from '../lib/tabletChartTools.js';
 import { uploadChartImage } from '../lib/chartImageStorage.js';
@@ -266,7 +267,15 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
 
   const btnCls = (active) => `p-1.5 rounded-lg transition-all ${active ? 'bg-teal-500 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200'}`;
 
-  return (
+  // V123 (2026-05-27) — createPortal to document.body. Same trap class as AV117:
+  // ChartCanvas is a `fixed inset-0` overlay rendered INSIDE TFP (itself a
+  // `fixed inset-0` overlay with transient entry transforms). A transformed/
+  // filtered ancestor becomes the containing block for this `fixed` element →
+  // the editor was bounded to an ancestor BOX (user: "ไม่หลุดจาก box ตัวเอง")
+  // for a frame, then snapped full-screen when the transform cleared = the
+  // inline→fullscreen FLASH. Portaling under <body> removes ALL ancestor
+  // containing-blocks → full-screen from frame 1, no flash. AV143 enforces.
+  return createPortal(
     <div className="fixed inset-0 z-[95] flex flex-col bg-white">
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-3 py-2 border-b bg-gray-50 flex-wrap">
@@ -310,6 +319,7 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
         {loading && <div className="absolute text-gray-400 text-sm">กำลังโหลด...</div>}
         <canvas ref={canvasElRef} className="shadow-lg" />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

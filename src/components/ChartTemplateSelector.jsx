@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, FileImage, Upload, Plus, Pencil, Check, ArrowUp, ArrowDown, Trash2, Lock, Unlock } from 'lucide-react';
 import { defaultChartTemplates, chartCategories } from '../data/chartTemplates.js';
 import { debugLog } from '../lib/debugLog.js';
@@ -277,7 +278,11 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
   // The backdrop div itself has NO onClick — close requires the X button (line 290) or ESC.
   // The inner X button's onClick={onClose} sits within the test's 6-line lookahead window
   // from the backdrop, so we mark this site as a sanctioned NO-onClick-on-backdrop case.
-  return (
+  // V123 (2026-05-27) — createPortal to document.body (AV143). Same trap class
+  // as AV117: this `fixed inset-0` modal is rendered inside TFP's `fixed inset-0`
+  // overlay; a transformed/filtered ancestor would bound it to an ancestor box
+  // instead of the viewport. Portal → always viewport-centered, no flash.
+  return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / ESC).
     <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60">
       <div className="w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col bg-[var(--bg-elevated)] border border-[var(--bd)]"
@@ -403,6 +408,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

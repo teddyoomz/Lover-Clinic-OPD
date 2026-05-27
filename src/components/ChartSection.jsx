@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Plus, Edit3, Trash2, FileImage, Maximize2, X } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Edit3, Trash2, FileImage, Maximize2 } from 'lucide-react';
 import ChartTemplateSelector from './ChartTemplateSelector.jsx';
 import ChartCanvas from './ChartCanvas.jsx';
 import PcPairingModal from './tablet-chart/PcPairingModal.jsx';
+import ImageLightbox from './ImageLightbox.jsx';
 import { useChartEditSession } from '../hooks/useChartEditSession.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import { auth } from '../firebase.js';
@@ -180,60 +180,17 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
         />
       )}
 
-      {/* 2026-05-22 EOD+2 — Fullscreen lightbox for chart image (mirror canonical
-          Lightbox in TreatmentReadOnlyMirror.jsx; AV78 lightbox-explicit-exception
-          since click-anywhere-closes IS expected UX for fullscreen image viewers). */}
+      {/* 2026-05-27 (V123) — chart fullscreen view now uses the shared, portaled
+          ImageLightbox (extracted from the former inner ChartLightbox). AV78
+          lightbox-explicit-exception; AV117 portal mandate enforced inside the
+          shared component. */}
       {lightboxIdx >= 0 && charts[lightboxIdx]?.dataUrl && (
-        <ChartLightbox
+        <ImageLightbox
           src={charts[lightboxIdx].dataUrl}
           label={`Chart ${lightboxIdx + 1}`}
           onClose={() => setLightboxIdx(-1)}
         />
       )}
     </>
-  );
-}
-
-// 2026-05-22 EOD+2 — Canonical lightbox shape (mirror TreatmentReadOnlyMirror.jsx Lightbox).
-// ESC + click-anywhere closes. crossOrigin='anonymous' so Storage URLs load without taint
-// (Storage bucket CORS=['*'] set by V81-saga). z-[110] = above TFP modal at z-80.
-function ChartLightbox({ src, label, onClose }) {
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose?.(); }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  if (!src) return null;
-  // V117 (2026-05-23) — createPortal to document.body. AV117.
-  // audit-anti-vibe-code: AV78 lightbox-explicit-exception — fullscreen image viewer.
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85"
-      onClick={onClose}
-      role="dialog"
-      aria-label={label || 'ดูรูปใหญ่'}
-    >
-      <div className="relative max-w-[95vw] max-h-[95vh] p-2" onClick={e => e.stopPropagation()}>
-        <img
-          src={src}
-          alt={label || 'Chart'}
-          crossOrigin="anonymous"
-          className="max-w-[95vw] max-h-[90vh] object-contain rounded shadow-2xl bg-white"
-        />
-        <button
-          onClick={onClose}
-          className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition shadow-lg"
-          aria-label="ปิด"
-        >
-          <X size={18} />
-        </button>
-        {label && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-xs bg-black/60 px-3 py-1 rounded">
-            {label}
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body
   );
 }

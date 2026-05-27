@@ -2952,9 +2952,11 @@ This rule pairs with AV114 (mobile gates) — AV117 is the structural fix, AV114
 - `src/components/staffchat/StaffChatPdfOverlay.jsx` — PDF preview viewer in staff chat.
 - `src/components/backend/TreatmentReadOnlyMirror.jsx` — inner `function Lightbox` for treatment image zoom.
 - `src/components/backend/TreatmentReadOnlyPanel.jsx` — inner `function Lightbox` for timeline image zoom.
-- `src/components/ChartSection.jsx` — inner `function ChartLightbox` for chart fullscreen view.
+- `src/components/ImageLightbox.jsx` — shared portaled fullscreen image viewer, consumed by ChartSection chart-view + TreatmentFormPage treatment/lab "ดูรูปใหญ่" images (extracted 2026-05-27 / V123 from the former `ChartSection.ChartLightbox`; the chart-view + treatment-images now share ONE portaled component — Rule of 3).
 
 Adding a 6th fullscreen lightbox requires explicit AV117 entry update + the new file must implement portal-mount via createPortal(jsx, document.body). Test G1 hard-locks the count = 5; adding a 6th lightbox without updating the classifier fails the test.
+
+**Companion**: AV143 (V123, 2026-05-27) covers the fullscreen chart OVERLAYS — `ChartCanvas` editor + `ChartTemplateSelector` + `PcPairingModal` — same trap class but explicit-close (AV78) editors/modals, not click-to-close viewers. AV117 = viewers; AV143 = editors/modals.
 
 **Why portal is the canonical fix** (not "find the ancestor with transform and remove it"):
 - Bullet-proof: works regardless of ancestor CSS evolution.
@@ -3402,3 +3404,20 @@ A "whole-system / full" backup whose scope is a HARDCODED collection list (`UNIV
 **Source-grep regression**: `tests/v122-backup-parallel-and-completeness.test.js` (group E completeness contract). Real-prod proof: `scripts/e2e-whole-system-backup-restore-v122.mjs` asserts ALL 65 live collections captured + money/counter collections present.
 
 **Cross-link**: `classifyCollectionCategory` + `FULL_SCOPE_COLLECTION_DENYLIST` (wholeSystemBackupCore.js) · AV138 (hardcoded-registry-drift family) · AV141 (the timeout facet — adding the 28 omitted collections would worsen the timeout if not also parallelized; both fixed together in V122).
+
+### AV143 — Fullscreen chart overlays (editor / template-selector / pairing-modal) MUST createPortal to document.body (V123, 2026-05-27)
+
+Origin: user-reported `/systematic-debugging` bug 2026-05-27 — clicking "แก้ไข Chart" in TFP flashed the chart editor INLINE inside an ancestor box ("ไม่หลุดจาก box ตัวเอง") for a frame, then snapped full-screen ("เหมือนมีการซ้อนกัน"). `ChartCanvas` (`fixed inset-0 z-95`) renders INSIDE `TreatmentFormPage` (itself a `fixed inset-0` overlay). A transformed/filtered/animated ancestor in the TFP subtree (transient entry transform) became the containing block for the editor's `position:fixed` → bounded to the ancestor box, not the viewport → the inline→fullscreen flash. The static TFP ancestor chain has NO persistent transform — the trap is transient (settles a frame after mount), hence a flash rather than a permanent mislayout.
+
+**Class-of-bug**: identical to AV117 (fullscreen overlay trapped by a containing-block ancestor) but for EDITORS + MODALS (explicit-close UX, AV78), not the click-anywhere-to-close VIEWERS. AV117 covers the lightboxes/viewers; AV143 covers the chart editor + the two chart modals.
+
+**Rule**: every fullscreen chart overlay rendered inside TFP/ChartSection MUST createPortal to document.body — import `createPortal` from `'react-dom'` + wrap the entire return JSX in `return createPortal(<jsx>, document.body)`. Portal escapes ALL ancestor containing-blocks → full-screen/centered from frame 1, no flash. (Per AV117's "Why portal is the canonical fix": the fix is the portal, NOT "find + remove the ancestor transform" — works regardless of ancestor CSS evolution + bypasses any future transform added to the chain.)
+
+**Sanctioned consumer list (closed set of 3)**:
+- `src/components/ChartCanvas.jsx` — fullscreen chart drawing editor (`fixed inset-0 z-95`).
+- `src/components/ChartTemplateSelector.jsx` — chart template picker modal (`fixed inset-0 z-92`).
+- `src/components/tablet-chart/PcPairingModal.jsx` — "PC vs tablet" edit-target choice modal (`fixed inset-0 z-120`).
+
+Adding a 4th fullscreen chart overlay requires an AV143 entry update + createPortal. Test `tests/v123-chart-overlay-portal.test.js` (SG1-SG3 + classifier G1-G3) hard-locks the set = 3.
+
+**Cross-link**: AV117 (the viewer/lightbox sibling — `ImageLightbox` is now the shared portaled viewer used by ChartSection chart-view + TFP treatment/lab images) · V123 entry in `.claude/rules/00-session-start.md` § 2 · `tests/v123-chart-overlay-portal.test.js`.

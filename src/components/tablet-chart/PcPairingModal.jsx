@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import TabletReadyList from './TabletReadyList.jsx';
 
 // props: branchId, phase ('choose'|'waiting'|'failed'), error, onEditHere,
@@ -6,7 +7,10 @@ import TabletReadyList from './TabletReadyList.jsx';
 // AV78: the backdrop does NOT close — only the explicit ปิด / ยกเลิก buttons do.
 export default function PcPairingModal({ branchId, phase, error, onEditHere, onSendToTablet, onCancel, onRetry, onClose }) {
   const [picked, setPicked] = useState(null);
-  return (
+  // V123 (2026-05-27) — createPortal to document.body (AV143). Same trap class
+  // as AV117: rendered inside ChartSection → TFP `fixed inset-0`; portal keeps
+  // the choice modal viewport-centered regardless of ancestor transforms.
+  return createPortal(
     <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center">
       <div className="bg-neutral-900 text-neutral-100 rounded-xl p-5 w-[360px] max-w-[92vw]" onClick={e => e.stopPropagation()}>
         {phase === 'choose' && (<>
@@ -33,6 +37,7 @@ export default function PcPairingModal({ branchId, phase, error, onEditHere, onS
           <button data-testid="failed-retry" onClick={onRetry} className="border border-neutral-600 rounded px-4 py-2">ลองใหม่</button>
         </div>)}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

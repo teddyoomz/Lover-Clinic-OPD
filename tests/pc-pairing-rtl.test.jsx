@@ -36,8 +36,11 @@ describe('PcPairingModal (T7)', () => {
   });
   it('PP4 backdrop click does NOT close (AV78)', () => {
     const onClose = vi.fn();
-    const { container } = render(<PcPairingModal branchId="BR-x" phase="choose" onEditHere={noop} onSendToTablet={noop} onCancel={noop} onRetry={noop} onClose={onClose} />);
-    fireEvent.click(container.firstChild); // the backdrop
+    render(<PcPairingModal branchId="BR-x" phase="choose" onEditHere={noop} onSendToTablet={noop} onCancel={noop} onRetry={noop} onClose={onClose} />);
+    // V123 — PcPairingModal now portals to document.body (AV143); the backdrop
+    // no longer lives under the render container, so query it from the document.
+    const backdrop = document.querySelector('.fixed.inset-0');
+    fireEvent.click(backdrop); // the backdrop
     expect(onClose).not.toHaveBeenCalled();
   });
   it('PP5 waiting → cancel calls onCancel', () => {

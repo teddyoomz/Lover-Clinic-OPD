@@ -7,7 +7,7 @@ import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip,
-         AlertCircle, ClipboardCheck, Calendar, Activity } from 'lucide-react';
+         AlertCircle, ClipboardCheck, Calendar, Activity, Maximize2 } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 // V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
 // runtime data fetches now go through scopedDataLayer.js (be_* canonical).
@@ -24,6 +24,7 @@ import { deleteTreatmentBlob } from '../lib/chartImageStorage.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
+import ImageLightbox from './ImageLightbox.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import EditAttributionModal from './backend/EditAttributionModal.jsx';
@@ -653,6 +654,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // 2026-05-25 — in-flight blob uploads (photos / lab images / PDFs go to Firebase
   // Storage on add). Save is gated while >0 so we never persist a half-uploaded blob.
   const [pendingUploads, setPendingUploads] = useState(0);
+  // 2026-05-27 (V123) — "ดูรูปใหญ่" fullscreen view for treatment + lab images
+  // (single src; the shared portaled ImageLightbox self-gates on empty string).
+  const [imageLightboxSrc, setImageLightboxSrc] = useState('');
 
   // Lab items
   const [labItems, setLabItems] = useState([]);
@@ -3801,12 +3805,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     {images.map((img, idx) => (
                       <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-[#333] group">
                         <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                        {/* 2026-05-27 (V123) — view-large button (mirror Chart's Maximize2).
+                            bg-white/90 + dark icon: theme-stable. `text-white` is remapped
+                            dark by index.css:404 in light theme UNLESS on a colored bg
+                            (the exception list excludes bg-black) → a white icon on bg-black
+                            renders BLACK/invisible in light theme. White button = visible in both. */}
+                        <button type="button" onClick={() => setImageLightboxSrc(img.dataUrl)}
+                          aria-label={`ดูรูปใหญ่ที่ ${idx + 1}`} title="ดูรูปใหญ่"
+                          className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white/90 text-gray-700 shadow hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Maximize2 size={10} />
+                        </button>
                         <button onClick={() => {
                             removeTreatmentBlob(img?.storagePath);
                             setImages(prev => prev.filter((_, i) => i !== idx));
                           }}
                           aria-label={`ลบรูปที่ ${idx + 1}`}
-                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/90 text-red-500 shadow hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <X size={10} />
                         </button>
                       </div>
@@ -3815,6 +3829,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 )}
               </div>
             ))}
+            {/* 2026-05-27 (V123) — shared portaled lightbox for treatment + lab
+                image "ดูรูปใหญ่" buttons (mirror the Chart fullscreen view). */}
+            <ImageLightbox src={imageLightboxSrc} label="รูปภาพการรักษา" onClose={() => setImageLightboxSrc('')} />
           </FormSection>
 
           {/* ── Lab Items ────────────────────────────────────────────────── */}
@@ -3902,13 +3919,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         {lab.images.map((img, ii) => (
                           <div key={ii} className="relative aspect-square rounded overflow-hidden border border-[#333] group">
                             <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                            {/* 2026-05-27 (V123) — view-large button (mirror Chart's Maximize2);
+                                white bg + dark icon = theme-stable (see treatment-image note). */}
+                            <button type="button" onClick={() => setImageLightboxSrc(img.dataUrl)}
+                              aria-label={`ดูรูป Lab ใหญ่ที่ ${ii + 1}`} title="ดูรูปใหญ่"
+                              className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/90 text-gray-700 shadow hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Maximize2 size={8} /></button>
                             <button onClick={() => {
                                 const removed = labItems[li]?.images?.[ii];
                                 removeTreatmentBlob(removed?.storagePath);
                                 setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l));
                               }}
                               aria-label={`ลบรูป Lab ที่ ${ii + 1}`}
-                              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
+                              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white/90 text-red-500 shadow hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
                           </div>
                         ))}
                       </div>

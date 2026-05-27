@@ -26,7 +26,7 @@
 //   2. src/components/staffchat/StaffChatPdfOverlay.jsx
 //   3. src/components/backend/TreatmentReadOnlyMirror.jsx (inner Lightbox)
 //   4. src/components/backend/TreatmentReadOnlyPanel.jsx (inner Lightbox)
-//   5. src/components/ChartSection.jsx (inner ChartLightbox)
+//   5. src/components/ImageLightbox.jsx (shared; V123 extraction of ChartSection.ChartLightbox)
 //
 // AV117 enforces — adding a 6th fullscreen lightbox without createPortal
 // fails the source-grep regression.
@@ -40,7 +40,7 @@ const FILES = [
   'src/components/staffchat/StaffChatPdfOverlay.jsx',
   'src/components/backend/TreatmentReadOnlyMirror.jsx',
   'src/components/backend/TreatmentReadOnlyPanel.jsx',
-  'src/components/ChartSection.jsx',
+  'src/components/ImageLightbox.jsx',
 ];
 
 const SRC = Object.fromEntries(
@@ -79,8 +79,8 @@ describe('V117.SG — fullscreen lightboxes use createPortal (AV117)', () => {
     expect(s).toMatch(/V117 \(2026-05-23\)/);
   });
 
-  it('SG5 — ChartSection inner ChartLightbox uses createPortal', () => {
-    const s = SRC['src/components/ChartSection.jsx'];
+  it('SG5 — ImageLightbox (shared, V123 extraction of ChartLightbox) uses createPortal', () => {
+    const s = SRC['src/components/ImageLightbox.jsx'];
     expect(s).toMatch(/^import\s+\{\s*createPortal\s*\}\s+from\s+['"]react-dom['"];/m);
     expect(s).toMatch(/return createPortal\(/);
     expect(s).toMatch(/V117 \(2026-05-23\)/);
@@ -118,7 +118,7 @@ describe('V117.AV — AV117 invariant + anti-regression', () => {
     expect(av).toMatch(/StaffChatPdfOverlay/);
     expect(av).toMatch(/TreatmentReadOnlyMirror/);
     expect(av).toMatch(/TreatmentReadOnlyPanel/);
-    expect(av).toMatch(/ChartSection.*ChartLightbox/);
+    expect(av).toMatch(/ImageLightbox/);
   });
 });
 
@@ -147,8 +147,8 @@ describe('V117.G — class-of-bug classifier (Rule P Tier 2)', () => {
       portalled: true,
     },
     {
-      file: 'src/components/ChartSection.jsx',
-      role: 'chart-viewer',
+      file: 'src/components/ImageLightbox.jsx',
+      role: 'image-viewer',
       portalled: true,
     },
   ];
