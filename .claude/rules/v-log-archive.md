@@ -2431,3 +2431,33 @@ Two distinct bugs, one class:
 - (g) **"อัพเดทโครงสร้างเยอะ" was the user's correct instinct** — every feature since V81 added collections + Storage + data; none updated the backup scope, and growth crossed the timeout cap. Backup scope + capacity must be re-checked whenever the schema/data footprint grows. AV141/AV142 + dynamic enumeration make it self-maintaining.
 
 **Status**: V122 DEPLOYED 2026-05-27 (commits `f6e861f7` backup + `0805da87` frontend; pushed + `vercel --prod` → `lover-clinic-app.vercel.app`). **L2-VERIFIED LIVE (the definitive 504-relief proof)**: the deployed `/api/admin/whole-system-backup-export` returned **HTTP 200 in 38.1s** (was 504 @ 300.7s pre-fix) — `manual-20260527-0049`, **4783 docs · 409 auth users · 0 failedCollections · 0 failedStorage**, valid manifestHash. The 300s timeout is gone; NO_MANIFEST fixed; the 28 omitted collections now captured; the stale 87min lock was auto-overwritten. The 03:00 cron now produces complete backups. Files: `src/lib/wholeSystemBackupCore.js` · `api/admin/_lib/wholeSystemBackupExecutor.js` · `api/admin/_lib/wholeSystemRestoreExecutor.js` · `api/admin/whole-fleet-customer-restore.js` · `vercel.json` · `tests/v122-backup-parallel-and-completeness.test.js` (NEW) · 5 V21 test fixups · `scripts/{diag-whole-system-backup-failure,diag-whole-system-backup-timing,diag-trigger-whole-system-backup,e2e-whole-system-backup-restore-v122}.mjs` (NEW) · audit-anti-vibe-code AV141+AV142. **Optional follow-up**: the 5 pre-fix broken NO_MANIFEST folders (auto-20260522..26 + manual-20260524) are litter — auto-* clean via 5-day retention; manual-20260524 needs manual delete if desired.
+
+---
+
+### V125 — 2026-05-28 EOD+1 — Treatment-form light-theme WCAG-AA: inline-accent helper + arbitrary-hex CTA white-restore (follow-up to V124)
+
+`/session-start → "Outstanding ทำเลย"`. After re-proving 3 outstanding L1 items live (appt real-time strip 2→3 / 3→2 cross-process per-branch; chart relay PC-side pairing modal + accurate "no tablet" presence), the treatment-form light-theme L1 contrast scan FOUND **19 light-theme AA fails that V124's class-based `[data-theme=light]` CSS overrides could not reach** — the one major surface V124 never individually scanned. `/systematic-debugging` (root cause from inline-style inspection, not class) before any fix.
+
+#### Root cause (2 classes)
+- **Class 1 — inline `style={{color:'#…500'}}` accents have no class for V124 CSS to match.** `TreatmentFormPage` `SectionHeader`/`ActionBtn` + ~12 inline accent spans + `ChartSection` + `TreatmentTimeline` set their accent via the raw Tailwind -500/-400 HEX inline. V124's `[data-theme="light"] .text-{c}-500 { … }` rules match CLASS utilities ONLY → inline styles stayed at the vibrant -500 shade in light → sub-AA on a light bg (worst: yellow-500 1.87:1, amber-500 2.08:1, cyan-500 2.43:1).
+- **Class 2 — arbitrary-hex CTA `bg-[#7c3aed] text-white`.** V124's blanket `.text-white → --tx-heading` darken (index.css:408) hit the doctor-note "บันทึกสำหรับแพทย์" save button (violet bg) → dark slate text on violet = 3.05:1. The V124 white-restore block (index.css:509-542) matched only Tailwind `bg-{c}-` classes, NOT arbitrary hex → the button fell through to the darken.
+
+#### Fix
+- **NEW `src/lib/themeAccent.js` `aaAccent(hex, isDark)`** + `LIGHT_AA_ACCENT` map (-500/-400 → -700 AA-dark, all 16 hue families). Deepens a known accent hex to its -700 family shade IN LIGHT ONLY (hue preserved → design identity kept); pass-through in dark (vibrant -500 already AA on dark — V124 "dark untouched"); unknown/empty input passes through (safe — only ever returns a DARKER same-family shade). Every mapped target ≥ 4.5:1 on white (T7 AA-math verified).
+- Wired into TFP `SectionHeader` (`const a = aaAccent(accent, isDark)`) + `ActionBtn` (`const c = aaAccent(color, isDark)`) + 12 inline spans + `ChartSection` + `TreatmentTimeline` (2 hardcoded green-500/teal-500 accents).
+- **Class 2**: index.css white-restore for the arbitrary hex `.bg-[#7c3aed].text-white → #fff` (light/auto) → white-on-#7c3aed = 5.2:1 AA + matches the button's `text-white` design intent. Teal sibling `bg-[#2EC4B6]` (7.76) + LINE-green `bg-[#06C755]` (7.67) left as DARK text (intentionally NOT white-restored — dark-on-bright is MORE accessible there; restoring white would FAIL ~2.2).
+
+#### Verification (Rule Q / Q-vis)
+- T7 (`tests/light-theme-override-coverage.test.js`) 20/0: AA-math (every mapped target ≥4.5 on white) + source-grep (no raw inline color hex remains in TFP; ≥12 aaAccent wraps; TreatmentTimeline routed; violet white-restore present + teal NOT).
+- **Post-deploy re-scan on the LIVE deployed build** (gold standard, V124-fix2 pattern): treatment form light = 0 accent fails (1372 els) + sale/finance tab 0 (2186 els, no regression) + appt view 0 + zoom (violet now white, headers deepened, teal correctly dark).
+- full vitest 14990 pass + 1 known flake (phase15.5b global.fetch-leak, 51/0 isolated); build clean.
+
+#### Files
+`src/lib/themeAccent.js` (NEW) · `src/components/TreatmentFormPage.jsx` · `src/components/ChartSection.jsx` · `src/components/TreatmentTimeline.jsx` · `src/index.css` · `tests/light-theme-override-coverage.test.js`. Commit `f56bfa9b`; DEPLOYED `vercel --prod` (frontend-only; no rules/storage/data/cron → no Probe-Deploy-Probe).
+
+#### Lessons
+- (a) **Inline `style={{color}}` accents need a JS helper** — V124's class-based CSS can't reach them; that's WHY the treatment form was uncovered despite V124's blanket class sweep. The "which colors are set inline vs class" question determines which fix mechanism applies.
+- (b) **Helper deepens to -700 keeping hue** ("ดัน AA เต็ม" full-AA, design identity preserved); dark untouched (pass-through when isDark) — mirrors V124's "deepen light only".
+- (c) **White-on-color vs dark-on-color is a per-color decision** — violet → white-restore (5.2 AA); teal/LINE-green → keep DARK (7.7 AA; white would FAIL). Never blanket-restore white on every colored bg.
+- (d) **Verify the REAL deployed build, not just inject-simulate** (V124-fix2 lesson — partial inject-preview missed a stock regression). The post-deploy LIVE re-scan is the gold standard.
+- (e) **PatientForm deferred** — its bespoke `isDark?dark:light` brand colors (pink/rose) need a DESIGN pass, not a mechanical aaAccent wrap → closed in the V126 follow-up (brainstorm Q1=B curated / Q2=B-i rose-harmonized / Q3=Selective; reuse aaAccent + NEW `.pf-req` asterisk class + `acLight = aaAccent(ac,isDark)` for the dynamic clinic accent).
