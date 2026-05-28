@@ -26,7 +26,7 @@ import {
  * is valid HTML (interactive-content-in-button is illegal). Thai-culture:
  * name + HN never red.
  */
-export function AppointmentAgendaView({ appts, onSelect, resolveRoom }) {
+export function AppointmentAgendaView({ appts, onSelect, resolveRoom, getHoverProps = () => ({}) }) {
   const sorted = useMemo(
     () => [...(appts || [])].sort((a, b) =>
       String(a.startTime || '').localeCompare(String(b.startTime || '')),
@@ -58,6 +58,7 @@ export function AppointmentAgendaView({ appts, onSelect, resolveRoom }) {
             tabIndex={0}
             onClick={select}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } }}
+            {...getHoverProps(appt)}
             data-testid={`appt-agenda-card-${key}`}
             className="text-left rounded-xl bg-[var(--bg-input)] border border-[var(--bd-strong)] border-l-[3px] p-3 hover:shadow-lg transition-all cursor-pointer"
             style={{ borderLeftColor: st.accent }}

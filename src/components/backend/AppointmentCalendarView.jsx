@@ -47,6 +47,8 @@ import AppointmentFormModal from './AppointmentFormModal.jsx';
 import DepositAwareCancelDialog from '../admin/DepositAwareCancelDialog.jsx';
 import AppointmentDetailPopover from './AppointmentDetailPopover.jsx';
 import AppointmentAgendaView from './AppointmentAgendaView.jsx';
+import useApptHoverPeek from '../../hooks/useApptHoverPeek.js';
+import AppointmentHoverPeek from './AppointmentHoverPeek.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock). Used in the appt grid cell
@@ -291,6 +293,8 @@ export default function AppointmentCalendarView({
   // read-only detail popover first; แก้ไข inside it routes to the edit modal.
   const [detailAppt, setDetailAppt] = useState(null);
   const openDetail = useCallback((appt) => setDetailAppt(appt), []);
+  // V127 — desktop hover peek-card (additive; click→modal + touch unchanged).
+  const { peek, getHoverProps, closePeek } = useApptHoverPeek();
   // Calendar-density (2026-05-20) — below `lg` (mobile/tablet) default to the
   // chronological agenda (the 2D room×time grid forces 2-axis scroll on a
   // phone); ≥lg default to the grid. viewModeOverride (null | 'grid' |
@@ -914,7 +918,7 @@ export default function AppointmentCalendarView({
              the SAME typedDayAppts the grid uses (no refetch); room labels
              resolve via effectiveRoom; card tap → openDetail (popover). */
           <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }} data-testid="appt-agenda-wrapper">
-            <AppointmentAgendaView appts={typedDayAppts} resolveRoom={effectiveRoom} onSelect={openDetail} />
+            <AppointmentAgendaView appts={typedDayAppts} resolveRoom={effectiveRoom} onSelect={openDetail} getHoverProps={getHoverProps} />
           </div>
         ) : (
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
@@ -1013,8 +1017,9 @@ export default function AppointmentCalendarView({
                             <div
                               role="button"
                               tabIndex={0}
-                              onClick={() => openDetail(appt)}
+                              onClick={() => { closePeek(); openDetail(appt); }}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(appt); } }}
+                              {...getHoverProps(appt)}
                               className={`absolute left-0.5 right-0.5 top-0.5 rounded-lg px-2 ${isShortBlock ? 'py-0' : 'py-1'} text-left overflow-hidden transition-all hover:ring-2 hover:ring-sky-400 hover:shadow-lg z-[5] ${st.bg} border border-[var(--bd)]/40 cursor-pointer shadow-sm`}
                               style={{
                                 height: span * SLOT_H - 4,
@@ -1118,7 +1123,8 @@ export default function AppointmentCalendarView({
                                     return (
                                       <button
                                         key={dup.appointmentId || dup.id || di}
-                                        onClick={(e) => { e.stopPropagation(); openDetail(dup); }}
+                                        onClick={(e) => { e.stopPropagation(); closePeek(); openDetail(dup); }}
+                                        {...getHoverProps(dup)}
                                         className={`text-[9px] px-1 py-0.5 rounded border ${dupSt.bg} border-[var(--bd)]/50 truncate max-w-[120px]`}
                                         title={`ซ้ำ #${di + 2}: ${dup.customerName || '-'}`}
                                         data-testid="appt-collision-dupe"
@@ -1276,6 +1282,9 @@ export default function AppointmentCalendarView({
           onEdit={() => { const a = detailAppt; setDetailAppt(null); openEdit(a); }}
           onClose={() => setDetailAppt(null)}
         />
+      )}
+      {peek && (
+        <AppointmentHoverPeek appt={peek.appt} rect={peek.rect} roomName={effectiveRoom(peek.appt)} doctorMap={doctorMap} />
       )}
     </div>
   );

@@ -1,23 +1,19 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Pencil } from 'lucide-react';
-import PhoneLink from '../PhoneLink.jsx';
-import {
-  resolveAssistantNames,
-  getApptStatusMeta,
-  apptDisplayName,
-  apptPhoneValue,
-  apptTimeRange,
-} from '../../lib/appointmentDisplay.js';
+import AppointmentDetailBody from './AppointmentDetailBody.jsx';
 
 /**
- * AppointmentDetailPopover — read-only quick-view for one appointment.
+ * AppointmentDetailPopover — read-only quick-view for one appointment (click).
  *
  * Calendar-density (2026-05-20) — the grid block + agenda card open THIS
  * popover (not the edit modal directly) so admin sees full details at any
  * cell density. แก้ไข → onEdit (the existing edit modal); 📞 → tap-to-call.
  *
- * Props: appt, roomName, doctorMap, onEdit, onClose.
+ * V127 (2026-05-28): the field block is extracted to the shared
+ * <AppointmentDetailBody variant="modal" /> so the hover peek-card
+ * (AppointmentHoverPeek) renders identical fields with zero drift. This
+ * component keeps the modal chrome only (backdrop + close + แก้ไข).
  *
  * AV98 (V80): portal to document.body so a transformed ancestor (V86 glow
  * card) can't confine this fixed overlay.
@@ -33,13 +29,6 @@ export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, on
 
   if (!appt) return null;
 
-  const st = getApptStatusMeta(appt.status);
-  const phone = apptPhoneValue(appt);
-  const hn = appt.customerHN || appt.hnId || '';
-  const assistants = resolveAssistantNames(appt, doctorMap);
-  // HN · time · room — only the present bits, joined with · (HN non-red).
-  const metaBits = [hn, apptTimeRange(appt), roomName].filter(Boolean).join(' · ');
-
   return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-3 bg-black/50 backdrop-blur-sm"
@@ -47,56 +36,20 @@ export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, on
     >
       {/* AV78: no onClick on the backdrop — explicit close only. */}
       <div
-        className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl p-4"
+        className="relative w-full max-w-sm rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-base font-bold text-[var(--tx-heading)] leading-tight" data-testid="appt-detail-name">
-            {apptDisplayName(appt)}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            data-testid="appt-detail-close"
-            aria-label="ปิด"
-            className="w-7 h-7 rounded-lg hover:bg-[var(--bg-hover)] flex items-center justify-center text-[var(--tx-muted)] flex-shrink-0"
-          >
-            <X size={14} />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          data-testid="appt-detail-close"
+          aria-label="ปิด"
+          className="absolute top-3 right-3 w-7 h-7 rounded-lg hover:bg-[var(--bg-hover)] flex items-center justify-center text-[var(--tx-muted)]"
+        >
+          <X size={14} />
+        </button>
 
-        {metaBits && (
-          <div className="text-xs text-[var(--tx-muted)] mt-0.5" data-testid="appt-detail-meta">{metaBits}</div>
-        )}
-
-        {phone && (
-          <PhoneLink
-            value={phone}
-            data-testid="appt-detail-phone"
-            className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-red-600 dark:text-red-300"
-          >
-            📞 {phone}
-          </PhoneLink>
-        )}
-
-        {appt.appointmentTo && (
-          <div className="mt-1 text-sm text-emerald-600 dark:text-emerald-300" data-testid="appt-detail-service">
-            🎯 {appt.appointmentTo}
-          </div>
-        )}
-
-        <div className="mt-1 text-xs text-[var(--tx-muted)]" data-testid="appt-detail-doctor">
-          👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}{assistants.length ? ` · + ${assistants.join(', ')}` : ''}
-        </div>
-
-        <div className="mt-2">
-          <span
-            className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.text}`}
-            data-testid="appt-detail-status"
-          >
-            ● {st.label}
-          </span>
-        </div>
+        <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="modal" />
 
         <div className="mt-3 flex justify-end gap-2">
           <button

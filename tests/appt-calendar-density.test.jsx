@@ -24,7 +24,7 @@ describe('appt-calendar-density · T3 popover wiring', () => {
   });
 
   it('T3.3 primary block click/keydown opens the popover (openDetail, NOT openEdit)', () => {
-    expect(SRC).toMatch(/onClick=\{\(\) => openDetail\(appt\)\}/);
+    expect(SRC).toMatch(/onClick=\{\(\) => \{ closePeek\(\); openDetail\(appt\); \}\}/); // V127: + closePeek (dismiss hover peek); openDetail behavior preserved
     expect(SRC).toMatch(/e\.preventDefault\(\); openDetail\(appt\);/);
     // anti-regression: the old direct-to-edit primary block click is gone
     expect(SRC).not.toMatch(/onClick=\{\(\) => openEdit\(appt\)\}/);
@@ -62,7 +62,7 @@ describe('appt-calendar-density · T4 span=1 single-line cell + rollup', () => {
   });
 
   it('T4.4 dupe rollup pills open the popover (openDetail, not openEdit)', () => {
-    expect(SRC).toMatch(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); openDetail\(dup\); \}\}/);
+    expect(SRC).toMatch(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); closePeek\(\); openDetail\(dup\); \}\}/); // V127: + closePeek
     expect(SRC).not.toMatch(/openEdit\(dup\)/);
   });
 
@@ -92,6 +92,6 @@ describe('appt-calendar-density · T6 responsive switch + toggle', () => {
 
   it('T6.4 render gated on effectiveView; agenda branch fed by typedDayAppts + effectiveRoom + openDetail', () => {
     expect(SRC).toMatch(/\{effectiveView === 'agenda' \? \(/);
-    expect(SRC).toMatch(/<AppointmentAgendaView appts=\{typedDayAppts\} resolveRoom=\{effectiveRoom\} onSelect=\{openDetail\} \/>/);
+    expect(SRC).toMatch(/<AppointmentAgendaView appts=\{typedDayAppts\} resolveRoom=\{effectiveRoom\} onSelect=\{openDetail\} getHoverProps=\{getHoverProps\} \/>/); // V127: + getHoverProps (hover peek)
   });
 });

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Hover-Detail Peek Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.88em; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Hover-Detail Peek Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline) or subagent-driven-development. Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-05-28-appt-hover-detail-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Hovering an appointment card (desktop mouse) shows an anchored XL peek-card with all present details — without clicking — on the calendar grid + its agenda variant (covers every appointment calendar sub-tab via the shared <code>AppointmentCalendarView</code>); theme-aware in both light + dark; click/touch unchanged.</p>
+  <p><strong>Architecture:</strong> NEW <code>useApptHoverPeek</code> hook (hover-intent, desktop-only) + extract a shared <code>AppointmentDetailBody</code> (modal + peek both render it — no field drift) + NEW portal-anchored <code>AppointmentHoverPeek</code> (XL, theme-aware). Wire into <code>AppointmentCalendarView</code> grid cells + <code>AppointmentAgendaView</code>. The existing click→<code>AppointmentDetailPopover</code> modal is untouched.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Tailwind + <code>data-theme</code> CSS vars, <code>createPortal</code>, Vitest + RTL. <strong>Rule K</strong> work-first/test-last. <strong>Rule N</strong> targeted-then-full. <strong>Rule Q-vis</strong> live light+dark scan. No deploy without the word (V18). No rules/storage/data/cron → no Probe-Deploy-Probe.</p>
+</div>
+
+<h2>Scope note (Hub rows)</h2>
+<p>The exploration found <code>AppointmentHubRowCard</code> (admin Hub) ALREADY renders full details inline (header / finance / detail / OPD-footer / action buttons) and does NOT use <code>AppointmentDetailPopover</code> or receive <code>doctorMap</code>/<code>roomName</code>. A hover-peek there would duplicate already-visible info + need new data plumbing. <strong>This plan scopes hover-peek to the COMPACT calendar surfaces (grid + agenda)</strong> — the cards that hide detail until clicked (the user's screenshot). Hub-row hover-peek is flagged at handoff for an explicit user decision (recommended: skip — redundant).</p>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">XL anchored peek — LIGHT (floats beside hovered grid pill, no backdrop)</div>
+  <div style="font-family:system-ui;background:#fff;padding:16px;border-radius:10px">
+    <div style="background:#fff5f7;border-left:3px solid #ea580c;border-radius:8px;padding:7px 10px;font-size:12px;color:#1f2937;width:230px">● นาย ประหยัด เกตุดี</div>
+    <div style="margin-top:6px;margin-left:24px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.15);padding:20px;width:345px">
+      <div style="font-weight:800;color:#0f172a;font-size:17px">นาย ประหยัด เกตุดี</div>
+      <div style="font-size:14px;color:#64748b;margin-top:4px">HN 0188 · 16:00-16:30 · ห้องช็อคเวฟ</div>
+      <div style="font-size:14px;color:#b91c1c;font-weight:700;margin-top:9px">📞 089-xxx-xxxx</div>
+      <div style="font-size:14px;color:#047857;margin-top:5px">🎯 ช็อคเวฟ6/6+พบแพทย์</div>
+      <div style="font-size:13px;color:#64748b;margin-top:5px">👨‍⚕️ นพ.สมชาย · +ผู้ช่วย สมหญิง</div>
+      <div style="font-size:13px;color:#64748b;margin-top:5px">🔁 นัดซ้ำรายสัปดาห์</div>
+      <div style="margin-top:10px"><span style="font-size:12px;font-weight:700;background:#dcfce7;color:#15803d;padding:4px 12px;border-radius:99px">● ยืนยันแล้ว</span> <span style="font-size:12px;background:#f1f5f9;color:#475569;padding:4px 12px;border-radius:99px">นัดปกติ</span></div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:9px;text-align:right">คลิกเพื่อแก้ไข</div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">XL anchored peek — DARK (same fields, --bg-card/--tx-* + V124 AA tokens)</div>
+  <div style="font-family:system-ui;background:#0a0a0a;padding:16px;border-radius:10px">
+    <div style="background:rgba(220,38,38,.08);border-left:3px solid #f97316;border-radius:8px;padding:7px 10px;font-size:12px;color:#e5e7eb;width:230px">● นาย ประหยัด เกตุดี</div>
+    <div style="margin-top:6px;margin-left:24px;background:#161616;border:1px solid #2a2a2a;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.55);padding:20px;width:345px">
+      <div style="font-weight:800;color:#fff;font-size:17px">นาย ประหยัด เกตุดี</div>
+      <div style="font-size:14px;color:#9ca3af;margin-top:4px">HN 0188 · 16:00-16:30 · ห้องช็อคเวฟ</div>
+      <div style="font-size:14px;color:#fca5a5;font-weight:700;margin-top:9px">📞 089-xxx-xxxx</div>
+      <div style="font-size:14px;color:#6ee7b7;margin-top:5px">🎯 ช็อคเวฟ6/6+พบแพทย์</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:5px">👨‍⚕️ นพ.สมชาย · +ผู้ช่วย สมหญิง</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:5px">🔁 นัดซ้ำรายสัปดาห์</div>
+      <div style="margin-top:10px"><span style="font-size:12px;font-weight:700;background:rgba(34,197,94,.2);color:#6ee7b7;padding:4px 12px;border-radius:99px">● ยืนยันแล้ว</span> <span style="font-size:12px;background:#1f2937;color:#cbd5e1;padding:4px 12px;border-radius:99px">นัดปกติ</span></div>
+      <div style="font-size:11px;color:#6b7280;margin-top:9px;text-align:right">คลิกเพื่อแก้ไข</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Interaction / state — peek is additive; click/touch unchanged</div>
+  <table>
+    <tr><th>Event</th><th>Handler → state</th></tr>
+    <tr><td><code>pointerEnter</code> (<code>pointerType==='mouse'</code>) on a card</td><td><code>getHoverProps.onPointerEnter</code> → start 150ms timer (captures <code>currentTarget.getBoundingClientRect()</code>)</td></tr>
+    <tr><td>timer elapses, still hovering</td><td><code>setPeek({appt, rect})</code> → portal <code>&lt;AppointmentHoverPeek&gt;</code> renders anchored beside <code>rect</code> (flip/clamp on-screen)</td></tr>
+    <tr><td><code>pointerLeave</code> the card</td><td>clear open-timer; start 80ms close-grace → <code>setPeek(null)</code></td></tr>
+    <tr><td><code>scroll</code> / <code>resize</code> while open</td><td><code>setPeek(null)</code> (re-hover re-opens)</td></tr>
+    <tr><td><code>click</code> the card (any device)</td><td>existing <code>onClick={()=&gt;openDetail(appt)}</code> → modal (UNCHANGED). On open, <code>setPeek(null)</code> so peek + modal never co-exist.</td></tr>
+    <tr><td>touch tap (no <code>mouse</code> pointer)</td><td>guard rejects → peek never opens → tap = click → modal (today's behavior)</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td>NEW <code>src/hooks/useApptHoverPeek.js</code></td><td>Hover-intent controller: <code>{ peek, getHoverProps, closePeek }</code>. Desktop-only (<code>pointerType==='mouse'</code>), 150ms open / 80ms close grace, captures anchor rect, dismiss on scroll/resize.</td></tr>
+  <tr><td>NEW <code>src/components/backend/AppointmentDetailBody.jsx</code></td><td>Shared read-only field block (name, HN·time·room, phone, service, doctor+assistants, status) + extras when present (appointment type chip via <code>resolveAppointmentTypeLabel</code>, recurring, deposit). <code>variant: 'modal'|'peek'</code>.</td></tr>
+  <tr><td>NEW <code>src/components/backend/AppointmentHoverPeek.jsx</code></td><td>Portal-anchored XL card (no backdrop), positions from rect (flip/clamp), renders <code>&lt;AppointmentDetailBody variant="peek"&gt;</code>, theme-aware via CSS vars.</td></tr>
+  <tr><td>MODIFY <code>src/components/backend/AppointmentDetailPopover.jsx</code></td><td>Render <code>&lt;AppointmentDetailBody variant="modal"&gt;</code> inside existing chrome (backdrop + close + แก้ไข). Behavior-preserving + gains the same extras.</td></tr>
+  <tr><td>MODIFY <code>src/components/backend/AppointmentCalendarView.jsx</code></td><td>Call hook; spread <code>getHoverProps(appt)</code> on grid cell (L1013) + dup cell (L1121); render <code>&lt;AppointmentHoverPeek&gt;</code> near the popover (L1271); pass <code>getHoverProps</code> to <code>&lt;AppointmentAgendaView&gt;</code> (L917).</td></tr>
+  <tr><td>MODIFY <code>src/components/backend/AppointmentAgendaView.jsx</code></td><td>Accept <code>getHoverProps</code> prop; spread on the card (L55).</td></tr>
+  <tr><td>MODIFY <code>tests/...</code> (NEW <code>tests/appt-hover-peek.test.jsx</code>)</td><td>Hook unit + RTL flow (mouse→peek, leave→dismiss, touch→no-peek, click→modal) + source-grep + AVxx.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>useApptHoverPeek</code> hook</h3>
+  <p><strong>Files:</strong> Create <code>src/hooks/useApptHoverPeek.js</code> · Test <code>tests/appt-hover-peek.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the hook</strong></label></div>
+<pre><code class="language-js">import { useState, useRef, useEffect, useCallback } from 'react';
+
+// Desktop-only hover-intent controller for the appointment peek.
+// pointerType==='mouse' guard → never fires on touch (iPad taps → click → modal).
+export function useApptHoverPeek({ openDelay = 150, closeGrace = 80 } = {}) {
+  const [peek, setPeek] = useState(null); // { appt, rect } | null
+  const openT = useRef(null);
+  const closeT = useRef(null);
+
+  const clearTimers = () => {
+    if (openT.current) { clearTimeout(openT.current); openT.current = null; }
+    if (closeT.current) { clearTimeout(closeT.current); closeT.current = null; }
+  };
+  const closePeek = useCallback(() => { clearTimers(); setPeek(null); }, []);
+
+  const getHoverProps = useCallback((appt) => ({
+    onPointerEnter: (e) => {
+      if (e.pointerType !== 'mouse') return;          // touch/pen → ignore
+      const el = e.currentTarget;
+      if (closeT.current) { clearTimeout(closeT.current); closeT.current = null; }
+      if (openT.current) clearTimeout(openT.current);
+      openT.current = setTimeout(() => {
+        openT.current = null;
+        setPeek({ appt, rect: el.getBoundingClientRect() });
+      }, openDelay);
+    },
+    onPointerLeave: (e) => {
+      if (e.pointerType !== 'mouse') return;
+      if (openT.current) { clearTimeout(openT.current); openT.current = null; }
+      if (closeT.current) clearTimeout(closeT.current);
+      closeT.current = setTimeout(() => { closeT.current = null; setPeek(null); }, closeGrace);
+    },
+  }), [openDelay, closeGrace]);
+
+  // Dismiss on scroll / resize while open (avoids stale anchor position).
+  useEffect(() => {
+    if (!peek) return undefined;
+    const onMove = () => closePeek();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [peek, closePeek]);
+
+  useEffect(() => () => clearTimers(), []); // unmount cleanup
+
+  return { peek, getHoverProps, closePeek };
+}
+
+export default useApptHoverPeek;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Unit test (hook behavior)</strong></label> — in <code>tests/appt-hover-peek.test.jsx</code></div>
+<pre><code class="language-jsx">import { renderHook, act } from '@testing-library/react';
+import { vi } from 'vitest';
+import useApptHoverPeek from '../src/hooks/useApptHoverPeek.js';
+
+const mouseEvt = (over = {}) => ({ pointerType: 'mouse', currentTarget: { getBoundingClientRect: () => ({ left: 10, top: 20, right: 110, bottom: 60, width: 100, height: 40 }) }, ...over });
+
+it('H1: mouse enter (after delay) opens peek with appt + rect; leave closes', () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useApptHoverPeek({ openDelay: 150, closeGrace: 80 }));
+  const appt = { appointmentId: 'A1' };
+  act(() => { result.current.getHoverProps(appt).onPointerEnter(mouseEvt()); });
+  act(() => { vi.advanceTimersByTime(150); });
+  expect(result.current.peek?.appt).toBe(appt);
+  expect(result.current.peek?.rect.left).toBe(10);
+  act(() => { result.current.getHoverProps(appt).onPointerLeave({ pointerType: 'mouse' }); vi.advanceTimersByTime(80); });
+  expect(result.current.peek).toBe(null);
+  vi.useRealTimers();
+});
+
+it('H2: touch pointer never opens the peek', () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useApptHoverPeek());
+  act(() => { result.current.getHoverProps({ appointmentId: 'A1' }).onPointerEnter(mouseEvt({ pointerType: 'touch' })); vi.advanceTimersByTime(500); });
+  expect(result.current.peek).toBe(null);
+  vi.useRealTimers();
+});
+
+it('H3: closePeek clears immediately', () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useApptHoverPeek());
+  act(() => { result.current.getHoverProps({ id: 'x' }).onPointerEnter(mouseEvt()); vi.advanceTimersByTime(150); });
+  expect(result.current.peek).not.toBe(null);
+  act(() => { result.current.closePeek(); });
+  expect(result.current.peek).toBe(null);
+  vi.useRealTimers();
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Run</strong></label></div>
+  <p>Run: <code>npx vitest run tests/appt-hover-peek.test.jsx -t "H1|H2|H3"</code> → H1-H3 PASS.</p>
+</div>
+
+<div class="task">
+  <h3>Task 2: Extract <code>AppointmentDetailBody</code> + refactor the modal</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/AppointmentDetailBody.jsx</code> · Modify <code>src/components/backend/AppointmentDetailPopover.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Create the shared body</strong></label> — lift the read-only fields out of the modal (currently AppointmentDetailPopover.jsx:36-99) + add extras-when-present. Keep the SAME testids the modal tests assert (<code>appt-detail-name</code>, <code>-meta</code>, <code>-phone</code>, <code>-service</code>, <code>-doctor</code>, <code>-status</code>).</div>
+<pre><code class="language-jsx">import React from 'react';
+import PhoneLink from '../PhoneLink.jsx';
+import { resolveAppointmentTypeLabel } from '../../lib/appointmentTypes.js';
+import {
+  resolveAssistantNames, getApptStatusMeta, apptDisplayName,
+  apptPhoneValue, apptTimeRange,
+} from '../../lib/appointmentDisplay.js';
+
+// Shared read-only detail block for an appointment. variant:
+//   'modal' → phone is a tappable PhoneLink (existing AppointmentDetailPopover)
+//   'peek'  → phone is plain bold text + a faint "คลิกเพื่อแก้ไข" hint (hover peek)
+// All fields render only when present (Thai-culture: name/HN never red).
+export default function AppointmentDetailBody({ appt, roomName, doctorMap, variant = 'modal' }) {
+  if (!appt) return null;
+  const st = getApptStatusMeta(appt.status);
+  const phone = apptPhoneValue(appt);
+  const hn = appt.customerHN || appt.hnId || '';
+  const assistants = resolveAssistantNames(appt, doctorMap);
+  const metaBits = [hn, apptTimeRange(appt), roomName].filter(Boolean).join(' · ');
+  const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);
+  const recurring = appt.recurring || appt.isRecurring;        // present-guard
+  const depositAmt = appt.depositAmount;                        // present-guard (absent on calendar appts → omitted)
+  const isPeek = variant === 'peek';
+
+  return (
+    &lt;&gt;
+      &lt;div className="text-base font-bold text-[var(--tx-heading)] leading-tight" data-testid="appt-detail-name"&gt;
+        {apptDisplayName(appt)}
+      &lt;/div&gt;
+      {metaBits &amp;&amp; &lt;div className="text-xs text-[var(--tx-muted)] mt-0.5" data-testid="appt-detail-meta"&gt;{metaBits}&lt;/div&gt;}
+      {phone &amp;&amp; (isPeek
+        ? &lt;div className="mt-2 text-sm font-bold text-red-600 dark:text-red-300" data-testid="appt-detail-phone"&gt;📞 {phone}&lt;/div&gt;
+        : &lt;PhoneLink value={phone} data-testid="appt-detail-phone" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-red-600 dark:text-red-300"&gt;📞 {phone}&lt;/PhoneLink&gt;)}
+      {appt.appointmentTo &amp;&amp; &lt;div className="mt-1 text-sm text-emerald-600 dark:text-emerald-300" data-testid="appt-detail-service"&gt;🎯 {appt.appointmentTo}&lt;/div&gt;}
+      &lt;div className="mt-1 text-xs text-[var(--tx-muted)]" data-testid="appt-detail-doctor"&gt;
+        👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}{assistants.length ? ` · + ${assistants.join(', ')}` : ''}
+      &lt;/div&gt;
+      {recurring &amp;&amp; &lt;div className="mt-1 text-xs text-[var(--tx-muted)]" data-testid="appt-detail-recurring"&gt;🔁 นัดซ้ำ&lt;/div&gt;}
+      {depositAmt != null &amp;&amp; &lt;div className="mt-1 text-xs text-[var(--tx-muted)]" data-testid="appt-detail-deposit"&gt;💰 มัดจำ {Number(depositAmt).toLocaleString('th-TH')} บ.&lt;/div&gt;}
+      &lt;div className="mt-2 flex items-center gap-1.5 flex-wrap"&gt;
+        &lt;span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.text}`} data-testid="appt-detail-status"&gt;● {st.label}&lt;/span&gt;
+        {typeLabel &amp;&amp; &lt;span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--tx-muted)]" data-testid="appt-detail-type"&gt;{typeLabel}&lt;/span&gt;}
+      &lt;/div&gt;
+      {isPeek &amp;&amp; &lt;div className="mt-2 text-[10px] text-[var(--tx-faint)] text-right"&gt;คลิกเพื่อแก้ไข&lt;/div&gt;}
+    &lt;/&gt;
+  );
+}</code></pre>
+  <p><em>Verify field names before finalizing: grep the appt shape for the recurring + deposit field — <code>grep -nE "recurring|isRecurring|depositAmount" src/lib/appointmentDisplay.js src/components/backend/AppointmentCalendarView.jsx</code>. If a name differs, use the real one; if neither exists on calendar appts, the present-guard simply omits it (correct — "when present").</em></p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Refactor the modal to use the body</strong></label> — replace AppointmentDetailPopover.jsx:53-99 (the name + meta + phone + service + doctor + status block) with the header row + <code>&lt;AppointmentDetailBody variant="modal" appt={appt} roomName={roomName} doctorMap={doctorMap} /&gt;</code>. Keep the existing portal/backdrop/close-button/แก้ไข chrome + the X close in the header.</div>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Build + run the modal's existing tests</strong></label></div>
+  <p>Run: <code>npm run build</code> (clean) + <code>npx vitest run -t "AppointmentDetailPopover"</code> (existing tests still green — testids preserved). If a test asserts the exact field ORDER, adjust the body to match.</p>
+</div>
+
+<div class="task">
+  <h3>Task 3: <code>AppointmentHoverPeek</code> (portal, anchored, XL, theme-aware)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/AppointmentHoverPeek.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write the peek</strong></label></div>
+<pre><code class="language-jsx">import React, { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import AppointmentDetailBody from './AppointmentDetailBody.jsx';
+
+const PEEK_W = 345;   // XL (user-chosen)
+const GAP = 10;
+
+// Anchored, portal-rendered, NO-backdrop hover peek. Positions beside `rect`,
+// flips left / clamps to viewport. Theme-aware via --bg-card / --bd.
+export default function AppointmentHoverPeek({ appt, rect, roomName, doctorMap }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ left: -9999, top: -9999 });
+
+  useLayoutEffect(() => {
+    if (!rect || !ref.current) return;
+    const h = ref.current.offsetHeight || 0;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let left = rect.right + GAP;
+    if (left + PEEK_W > vw - 8) left = Math.max(8, rect.left - PEEK_W - GAP); // flip left
+    left = Math.min(left, vw - PEEK_W - 8);
+    let top = rect.top;
+    if (top + h > vh - 8) top = Math.max(8, vh - h - 8);                       // clamp up
+    setPos({ left, top });
+  }, [rect, appt]);
+
+  if (!appt || !rect) return null;
+  return createPortal(
+    &lt;div
+      ref={ref}
+      data-testid="appt-hover-peek"
+      className="fixed z-[190] rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl"
+      style={{ left: pos.left, top: pos.top, width: PEEK_W, padding: 20, pointerEvents: 'none' }}
+    &gt;
+      &lt;AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="peek" /&gt;
+    &lt;/div&gt;,
+    document.body,
+  );
+}</code></pre>
+  <p><em>Note: <code>pointerEvents: 'none'</code> so the peek never steals the mouse from the card underneath (it's read-only — keeps hover-leave detection on the card simple + flicker-free).</em></p>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean.</p>
+</div>
+
+<div class="task">
+  <h3>Task 4: Wire into the calendar grid + agenda</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/AppointmentCalendarView.jsx</code> + <code>src/components/backend/AppointmentAgendaView.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Hook + import in AppointmentCalendarView</strong></label> — add near the other hooks (after L293 <code>openDetail</code>):</div>
+<pre><code class="language-js">// top imports
+import useApptHoverPeek from '../../hooks/useApptHoverPeek.js';
+import AppointmentHoverPeek from './AppointmentHoverPeek.jsx';
+// inside the component, after openDetail (L293):
+const { peek, getHoverProps, closePeek } = useApptHoverPeek();</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Spread hover props on the grid cell (L1013) + dup cell (L1121)</strong></label></div>
+<pre><code class="language-jsx">// L1013 cell — add the spread (keep onClick/onKeyDown):
+&lt;div
+  role="button"
+  tabIndex={0}
+  onClick={() =&gt; { closePeek(); openDetail(appt); }}
+  onKeyDown={(e) =&gt; { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(appt); } }}
+  {...getHoverProps(appt)}
+  className={/* unchanged */}
+  style={/* unchanged */}&gt;
+// L1121 dup-cell onClick: closePeek() before openDetail(dup); spread getHoverProps(dup) too.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Render the peek + pass props to AgendaView</strong></label></div>
+<pre><code class="language-jsx">// L917 — pass hover props down to the agenda variant:
+&lt;AppointmentAgendaView appts={typedDayAppts} resolveRoom={effectiveRoom} onSelect={openDetail} getHoverProps={getHoverProps} /&gt;
+// near the popover (after L1278 close of {detailAppt && ...}):
+{peek &amp;&amp; (
+  &lt;AppointmentHoverPeek appt={peek.appt} rect={peek.rect} roomName={effectiveRoom(peek.appt)} doctorMap={doctorMap} /&gt;
+)}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: AppointmentAgendaView — accept + spread the prop</strong></label></div>
+<pre><code class="language-jsx">// signature: add getHoverProps (default no-op so other callers are safe)
+export default function AppointmentAgendaView({ appts, resolveRoom, onSelect, getHoverProps = () =&gt; ({}) }) { ... }
+// the card (L55): add the spread (keep onClick=select):
+&lt;div key={key} role="button" tabIndex={0} onClick={select} onKeyDown={/* unchanged */} {...getHoverProps(appt)} data-testid={`appt-agenda-card-${key}`} className={/* unchanged */} style={/* unchanged */}&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean.</p>
+</div>
+
+<div class="task">
+  <h3>Task 5: Tests (RTL flow + source-grep + AVxx) + verify</h3>
+  <p><strong>Files:</strong> <code>tests/appt-hover-peek.test.jsx</code> (extend) · <code>audit-anti-vibe-code</code> SKILL.md (NEW AVxx)</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: RTL flow test</strong></label> — mount the real <code>AppointmentDetailBody</code> + <code>AppointmentHoverPeek</code> with a fixture appt; assert fields render + variant differences.</div>
+<pre><code class="language-jsx">import { render, screen } from '@testing-library/react';
+import AppointmentDetailBody from '../src/components/backend/AppointmentDetailBody.jsx';
+
+const APPT = { appointmentId:'A1', customerName:'นาย ประหยัด เกตุดี', customerHN:'0188', startTime:'16:00', endTime:'16:30', doctorName:'นพ.สมชาย', appointmentTo:'ช็อคเวฟ6/6', status:'confirmed', appointmentType:'no-deposit-booking' };
+
+it('F1: peek body shows name/meta/service/doctor/status + click-hint; phone is plain (not a link)', () => {
+  render(&lt;AppointmentDetailBody appt={APPT} roomName="ห้องช็อคเวฟ" doctorMap={{}} variant="peek" /&gt;);
+  expect(screen.getByTestId('appt-detail-name')).toHaveTextContent('ประหยัด');
+  expect(screen.getByTestId('appt-detail-meta')).toHaveTextContent('0188');
+  expect(screen.getByTestId('appt-detail-service')).toHaveTextContent('ช็อคเวฟ');
+  expect(screen.getByTestId('appt-detail-status')).toBeInTheDocument();
+  expect(screen.getByText('คลิกเพื่อแก้ไข')).toBeInTheDocument();
+});
+it('F2: modal variant renders the same fields (consistency)', () => {
+  render(&lt;AppointmentDetailBody appt={APPT} roomName="" doctorMap={{}} variant="modal" /&gt;);
+  expect(screen.getByTestId('appt-detail-name')).toBeInTheDocument();
+  expect(screen.queryByText('คลิกเพื่อแก้ไข')).toBeNull(); // no hint in modal
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Source-grep guards</strong></label></div>
+<pre><code class="language-jsx">import { readFileSync } from 'node:fs';
+const cal = readFileSync('src/components/backend/AppointmentCalendarView.jsx','utf8');
+const agenda = readFileSync('src/components/backend/AppointmentAgendaView.jsx','utf8');
+const peek = readFileSync('src/components/backend/AppointmentHoverPeek.jsx','utf8');
+const hook = readFileSync('src/hooks/useApptHoverPeek.js','utf8');
+
+it('SG1: hook is desktop-only (pointerType mouse guard)', () => {
+  expect(hook).toMatch(/pointerType !== 'mouse'/);
+});
+it('SG2: peek is portal + no-backdrop + reuses the shared body', () => {
+  expect(peek).toMatch(/createPortal/);
+  expect(peek).toMatch(/AppointmentDetailBody/);
+  expect(peek).not.toMatch(/bg-black\/\d/); // no dimmed backdrop
+});
+it('SG3: both calendar surfaces wired + click closes peek; modal flow intact', () => {
+  expect(cal).toMatch(/useApptHoverPeek/);
+  expect(cal).toMatch(/getHoverProps\(appt\)/);
+  expect(cal).toMatch(/AppointmentHoverPeek/);
+  expect(cal).toMatch(/closePeek\(\); openDetail\(appt\)/);
+  expect(agenda).toMatch(/getHoverProps\(appt\)/);
+  // existing modal still rendered on click
+  expect(cal).toMatch(/AppointmentDetailPopover/);
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: NEW AVxx invariant</strong></label> — add to <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code>: "Appointment hover-peek MUST reuse <code>AppointmentDetailBody</code> (not its own field copy — no modal/peek drift), be portal-rendered with NO backdrop, and be desktop-only (<code>pointerType==='mouse'</code>). Sanctioned consumers: the calendar grid + agenda only." Add a presence test (SG4) asserting the AVxx text exists.</div>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Run targeted + full</strong></label></div>
+  <p>Run: <code>npx vitest run tests/appt-hover-peek.test.jsx</code> (all green) → then <code>npm run build</code> + <code>npx vitest run</code> (Rule N batch-end; full suite green, 1 known phase15.5b flake acceptable).</p>
+</div>
+
+<div class="task">
+  <h3>Task 6: Live-browser verify (Rule S / Q-vis) — both themes</h3>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Render the calendar with appointments</strong></label> — start dev server; reach the backend appointment calendar (admin) OR mount <code>AppointmentHoverPeek</code> + <code>AppointmentDetailBody</code> in a temp probe with a fixture appt + a fake rect.</div>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Hover a grid card (real mouse pointer)</strong></label> — peek appears beside it after ~150ms with all fields; move away → dismisses; move between adjacent cards → no flicker.</div>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Both themes</strong></label> — set <code>data-theme="light"</code> then <code>"dark"</code>; scan the peek's computed text colors (≥ AA on the card bg) + screenshot each. Confirm click still opens the modal + (simulated) touch pointer does NOT open the peek.</div>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Report + await commit/deploy word (V18)</strong></label></div>
+</div>
+
+<h2>Self-Review</h2>
+<table>
+  <tr><th>Spec requirement</th><th>Task</th></tr>
+  <tr><td>Anchored peek-card on hover (Q1=A)</td><td>T3 (peek) + T1 (hook)</td></tr>
+  <tr><td>Keep click→modal; peek desktop-hover-only; touch unchanged (Q2=A)</td><td>T1 (pointerType guard) + T4 (click closes peek, modal intact)</td></tr>
+  <tr><td>All present fields incl. type/recurring/deposit-when-present (Q3=A)</td><td>T2 (shared body extras)</td></tr>
+  <tr><td>XL size (~345px / 17px heading / 20px pad)</td><td>T3 (PEEK_W=345, padding 20)</td></tr>
+  <tr><td>Both themes, on-brand</td><td>T2/T3 (CSS vars + status SSOT) + T6 (live scan)</td></tr>
+  <tr><td>Portal (not clipped) + flip/clamp on-screen</td><td>T3</td></tr>
+  <tr><td>Every appointment calendar table/tab</td><td>T4 (shared AppointmentCalendarView covers all sub-tabs) + Agenda. Hub = flagged at handoff.</td></tr>
+  <tr><td>Tests + AVxx + build + suite + live</td><td>T5 + T6</td></tr>
+</table>
+<p><strong>Type/name consistency:</strong> <code>useApptHoverPeek</code> → <code>{ peek, getHoverProps, closePeek }</code>; <code>AppointmentDetailBody({appt,roomName,doctorMap,variant})</code>; <code>AppointmentHoverPeek({appt,rect,roomName,doctorMap})</code> — used identically across T1-T5. No drift.</p>
+<p><strong>Placeholder scan:</strong> the only "verify the field name" step (T2 recurring/deposit) is an explicit grep with a defined fallback (present-guard omits if absent) — not an unresolved TODO.</p>
+
+</body>
+</html>

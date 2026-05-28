@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Hover-Detail Peek Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Hover-Detail Peek Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-28 (EOD+2) · <strong>Status:</strong> Approved by user (Q1=A, Q2=A, Q3=A) · <strong>Plan:</strong> docs/superpowers/plans/2026-05-28-appt-hover-detail.html (to follow)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>In the backend appointment calendars/tables, seeing an appointment's full details today requires <strong>clicking</strong> the card (opens the centered <code>AppointmentDetailPopover</code> modal). The user wants <strong>hovering</strong> a card to show ALL details too — "ไม่จำเป็นต้องคลิ๊กเข้าไปอย่างเดียว" — across <strong>every appointment table in every tab</strong>, and it must be clearly readable + on-brand in <strong>both light and dark themes</strong>.</p>
+<p>An <code>AppointmentDetailPopover</code> (click-opened, centered modal) already exists and is theme-aware (CSS vars + <code>appointmentDisplay</code> status SSOT). This feature adds an <strong>anchored hover "peek" card</strong> that reuses the same detail fields, leaving the click→modal flow untouched.</p>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Anchored hover peek — LIGHT theme (floats beside the hovered calendar pill, no backdrop dim)</div>
+  <div style="font-family:system-ui;background:linear-gradient(0deg,#fff,#fff);padding:16px;border-radius:10px;position:relative">
+    <div style="background:#fff5f7;border-left:3px solid #ea580c;border-radius:8px;padding:7px 10px;font-size:12px;color:#1f2937;width:230px">● นาย ประหยัด เกตุดี &nbsp;<span style="color:#92400e">🎯 ช็อคเวฟ6/6+พบแพทย์</span></div>
+    <div style="margin-top:6px;margin-left:24px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.15);padding:20px;width:345px">
+      <div style="font-weight:800;color:#0f172a;font-size:17px">นาย ประหยัด เกตุดี</div>
+      <div style="font-size:14px;color:#64748b;margin-top:4px">HN 0188 · 16:00-16:30 · ห้องช็อคเวฟ</div>
+      <div style="font-size:14px;color:#b91c1c;font-weight:700;margin-top:9px">📞 089-xxx-xxxx</div>
+      <div style="font-size:14px;color:#047857;margin-top:5px">🎯 ช็อคเวฟ6/6+พบแพทย์</div>
+      <div style="font-size:13px;color:#64748b;margin-top:5px">👨‍⚕️ นพ.สมชาย · +ผู้ช่วย สมหญิง</div>
+      <div style="font-size:13px;color:#64748b;margin-top:5px">💰 มัดจำ 500 บ. · 🔁 นัดซ้ำรายสัปดาห์</div>
+      <div style="margin-top:10px"><span style="font-size:12px;font-weight:700;background:#dcfce7;color:#15803d;padding:4px 12px;border-radius:99px">● ยืนยันแล้ว</span> <span style="font-size:12px;background:#f1f5f9;color:#475569;padding:4px 12px;border-radius:99px">นัดปกติ</span></div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:9px;text-align:right">คลิกเพื่อแก้ไข</div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Anchored hover peek — DARK theme (same fields, themed via --bg-card / --tx-* + V124 AA tokens)</div>
+  <div style="font-family:system-ui;background:#0a0a0a;padding:16px;border-radius:10px;position:relative">
+    <div style="background:rgba(220,38,38,.08);border-left:3px solid #f97316;border-radius:8px;padding:7px 10px;font-size:12px;color:#e5e7eb;width:230px">● นาย ประหยัด เกตุดี</div>
+    <div style="margin-top:6px;margin-left:24px;background:#161616;border:1px solid #2a2a2a;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.55);padding:20px;width:345px">
+      <div style="font-weight:800;color:#fff;font-size:17px">นาย ประหยัด เกตุดี</div>
+      <div style="font-size:14px;color:#9ca3af;margin-top:4px">HN 0188 · 16:00-16:30 · ห้องช็อคเวฟ</div>
+      <div style="font-size:14px;color:#fca5a5;font-weight:700;margin-top:9px">📞 089-xxx-xxxx</div>
+      <div style="font-size:14px;color:#6ee7b7;margin-top:5px">🎯 ช็อคเวฟ6/6+พบแพทย์</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:5px">👨‍⚕️ นพ.สมชาย · +ผู้ช่วย สมหญิง</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:5px">💰 มัดจำ 500 บ. · 🔁 นัดซ้ำรายสัปดาห์</div>
+      <div style="margin-top:10px"><span style="font-size:12px;font-weight:700;background:rgba(34,197,94,.2);color:#6ee7b7;padding:4px 12px;border-radius:99px">● ยืนยันแล้ว</span> <span style="font-size:12px;background:#1f2937;color:#cbd5e1;padding:4px 12px;border-radius:99px">นัดปกติ</span></div>
+      <div style="font-size:11px;color:#6b7280;margin-top:9px;text-align:right">คลิกเพื่อแก้ไข</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Hover (desktop mouse) → peek · Click/tap → existing modal (unchanged) · Touch → no hover</div>
+  <table>
+    <tr><th>Trigger</th><th>What happens</th></tr>
+    <tr><td><code>pointerenter</code> with <code>pointerType === 'mouse'</code> on a card</td><td>start ~150ms hover-intent timer</td></tr>
+    <tr><td>timer fires (still hovering)</td><td>read card <code>getBoundingClientRect()</code> → portal-render <code>&lt;AppointmentHoverPeek&gt;</code> anchored beside the card (flip to stay on-screen); NO backdrop dim</td></tr>
+    <tr><td><code>pointerleave</code> the card</td><td>clear timer + dismiss peek (short ~80ms grace to avoid flicker)</td></tr>
+    <tr><td>scroll / window resize while open</td><td>dismiss peek (re-hover to re-open — simplest, no reposition churn)</td></tr>
+    <tr><td><code>click</code> the card (any device)</td><td>existing onClick → opens <code>AppointmentDetailPopover</code> modal (with แก้ไข). UNCHANGED.</td></tr>
+    <tr><td>touch tap (iPad — no hover)</td><td><code>pointerType !== 'mouse'</code> → peek never fires → tap = click → modal (today's behavior)</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>DRY via a shared detail body</strong> (avoids modal/peek field drift — the V12 multi-reader lesson):</p>
+<ul>
+  <li><strong>NEW <code>src/components/backend/AppointmentDetailBody.jsx</code></strong> — extract the read-only field block currently inline in <code>AppointmentDetailPopover</code> (name, HN·time·room meta, phone, service/appointmentTo, doctor+assistants, status) AND ADD the Q3 extras when present: appointment type chip, deposit (มัดจำ), recurring (นัดซ้ำ). Takes a <code>variant: 'modal' | 'peek'</code> prop — <code>modal</code> renders phone as a tappable <code>PhoneLink</code>; <code>peek</code> renders phone as plain bold text (read-only) + a faint "คลิกเพื่อแก้ไข" hint. Same fields, same theme classes (CSS vars + <code>appointmentDisplay</code> status SSOT + V124 AA text tokens).</li>
+  <li><strong><code>AppointmentDetailPopover.jsx</code></strong> — refactored to render <code>&lt;AppointmentDetailBody variant="modal" /&gt;</code> inside its existing modal chrome (backdrop + close + แก้ไข). Behavior identical; now also shows the extras (consistent with the peek).</li>
+  <li><strong>NEW <code>src/components/backend/AppointmentHoverPeek.jsx</code></strong> — anchored, <code>createPortal(..., document.body)</code> (AV98 — escape transformed ancestors + calendar overflow), positioned from the anchor rect (prefer right/below; flip if off-screen), NO backdrop, renders <code>&lt;AppointmentDetailBody variant="peek" /&gt;</code>. Themed via <code>bg-[var(--bg-card)] border-[var(--bd)]</code> → both themes automatically.</li>
+  <li><strong>NEW <code>src/hooks/useApptHoverPeek.js</code></strong> — shared hover-intent controller (open delay ~150ms, close grace ~80ms, desktop-only <code>pointerType === 'mouse'</code> guard, tracks <code>{appt, rect}</code>). Returns <code>getHoverProps(appt) → { onPointerEnter, onPointerLeave }</code> + the peek state. One controller per surface so behavior is identical (Rule of 3).</li>
+</ul>
+<p><strong>Wire into the appointment surfaces (the "ทุกตาราง ทุก tab"):</strong></p>
+<table>
+  <tr><th>Surface</th><th>File:line</th><th>Wire</th></tr>
+  <tr><td>Calendar grid cells (week/day)</td><td><code>AppointmentCalendarView.jsx</code> ~L1013-1027</td><td>spread <code>getHoverProps(appt)</code> on each cell block; render <code>&lt;AppointmentHoverPeek&gt;</code> once near the grid root</td></tr>
+  <tr><td>Agenda cards (mobile/tablet list)</td><td><code>AppointmentAgendaView.jsx</code> ~L55-63</td><td>same (note: tablet is touch → peek won't fire; harmless)</td></tr>
+  <tr><td>Hub row cards (today/upcoming/past/missed)</td><td><code>AppointmentHubRowCard.jsx</code> ~L73+</td><td>same — hover the row → peek</td></tr>
+  <tr><td>Deposit-panel inline appt (create-form)</td><td><code>DepositPanel.jsx</code></td><td>OUT OF SCOPE — a create-form sub-section, not a table of existing appointments</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Anchored peek-card on hover (not hover-opens-the-centered-modal, not enriched native title).</li>
+  <li><strong>Q2 = A:</strong> Keep the click→modal flow exactly; peek is a desktop-hover-only enhancement. Touch (iPad) has no hover → tap opens the modal as today (graceful — peek guarded to <code>pointerType === 'mouse'</code>).</li>
+  <li><strong>Q3 = A:</strong> Peek shows ALL present fields — the modal's set + appointment type / deposit / recurring WHEN present (omit when empty, no noise). The shared body means the modal gains the same extras (consistent).</li>
+  <li><strong>Theme (user emphasis):</strong> reuse the proven CSS-var + <code>appointmentDisplay</code> status SSOT + V124 AA text-token styling → readable + on-brand in BOTH themes. Verified by a live light+dark scan.</li>
+  <li><strong>Peek size = XL:</strong> ~345px wide · heading 17px · field 14px · sub 13px · status/type chips 12px · padding 20px · radius 14px (user chose XL from a live M/L/XL real-size comparison). Near a viewport edge the peek flips/clamps to stay fully on-screen.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Hovering an appointment card with a MOUSE (desktop) on each surface (Calendar grid, Agenda, Hub rows) shows the anchored peek with all present fields after ~150ms; moving the mouse away dismisses it; no flicker between adjacent cards.</li>
+  <li>Click/tap behavior is UNCHANGED on every device — still opens <code>AppointmentDetailPopover</code> with the แก้ไข action; touch never triggers the peek (no double-surface).</li>
+  <li>The peek renders correctly + readably in BOTH light and dark themes (live scan: text ≥ AA on the card bg; status/type chips on-brand; no invisible text) — and the modal still does too after the body extraction.</li>
+  <li>The peek is portal-rendered (not clipped by the calendar's overflow or a transformed ancestor) and flips to stay on-screen near a viewport edge.</li>
+  <li>Tests: source-grep (peek uses shared body + portal + pointerType=mouse guard; all 3 surfaces wired) + an RTL/flow test (mouse pointerenter → peek appears with fields; pointerleave → dismiss; touch pointerenter → no peek; click → modal) + NEW AVxx invariant. <code>npm run build</code> clean + full vitest green.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Flicker between adjacent cells:</strong> the ~80ms close-grace + open-delay tuning addresses it; verify live on the dense day-grid.</li>
+  <li><strong>Body extraction touches the proven modal:</strong> refactor must be behavior-preserving (same fields/testids) + the existing modal tests must stay green; the extras are additive (render only when present).</li>
+  <li><strong>Tablet (touch) gets no peek:</strong> intended (no hover on touch) — tap→modal remains the path. Not a regression.</li>
+  <li><strong>Existing modal uses <code>dark:</code> variants</strong> (e.g. <code>text-red-300</code>) which are OS-coupled, but V124's <code>[data-theme]</code> <code>!important</code> overrides win → AA in both themes. The shared body inherits this; the live scan confirms.</li>
+</ul>
+
+</body>
+</html>
