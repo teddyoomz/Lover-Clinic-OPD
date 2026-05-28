@@ -234,3 +234,76 @@ describe('V125 — theme-aware accent helper (light-theme AA for inline accents)
     expect(tl).not.toMatch(/color: '#14b8a6'/);
   });
 });
+
+// V126 (2026-05-28 EOD+1 follow-up) — PatientForm light-theme AA (B-i Selective).
+// V124 already deepens every Tailwind text-{c} CLASS; the customer-facing intake form
+// ALSO set ~10 accents via INLINE style={{color:'#hex'}} that no class could reach (the
+// V125 class-of-bug, never wired into PatientForm) + a dynamic clinic accent `ac` with
+// no AA guard. Fix = aaAccent for the inline/dynamic accents + a shared .pf-req asterisk
+// class (rose-600 light / ember-red dark). Per Q1=B / Q2=B-i / Q3=Selective: rose-harmonize
+// the BROKEN sites; KEEP orange-emergency / blue-custom / red-critical semantic zones
+// (already AA via V124); decorative pinks/gradients + LINE-green button UNTOUCHED.
+describe('V126 — PatientForm light-theme AA (B-i Selective)', () => {
+  const pf = readFileSync('src/pages/PatientForm.jsx', 'utf8');
+  const contrastWhite = (hex) => 1.05 / (lum(hex) + 0.05);
+  const contrastDark = (hex) => (lum(hex) + 0.05) / (lum('#0a0a0a') + 0.05);
+
+  it('PF-1: section-header orange (emergency + HRT) routes through aaAccent', () => {
+    expect((pf.match(/aaAccent\('#f97316', isDark\)/g) || []).length).toBeGreaterThanOrEqual(4);
+    // accentO definition keeps #f97316 in the DARK branch only (decorative gradient — AA on dark)
+    expect(pf).toMatch(/const accentO = isDark \? '#f97316' : '#ea580c'/);
+  });
+
+  it('PF-2: HeartPulse medical icon routes through aaAccent', () => {
+    expect(pf).toMatch(/<HeartPulse[^>]*aaAccent\('#ef4444', isDark\)/);
+  });
+
+  it('PF-3: light-branch literals use AA-dark, rose-harmonized values', () => {
+    expect(pf).toMatch(/isDark \? '#ef4444' : '#be185d'/);  // back-button → pink-700
+    expect(pf).toMatch(/isDark \? '#4b5563' : '#64748b'/);  // cancel → slate-500
+    expect(pf).toMatch(/isLightHero \? '#1d4ed8'/);         // caption → blue-700 (blue zone kept)
+    expect(pf).toMatch(/isDark \? accentO : '#c2410c'/);    // success greeting → orange-700
+    expect(pf).toMatch(/isDark \? '#555' : '#6b7280'/);     // state-screen icons → gray-500
+  });
+
+  it('PF-4: no LIGHT-branch raw sub-AA accent remains (pink-500/blue-500/gray-400/aaa)', () => {
+    expect(pf).not.toMatch(/: '#ec4899' \}/);            // back-btn light pink-500 gone
+    expect(pf).not.toMatch(/isLightHero \? '#3b82f6'/);  // caption light blue-500 gone
+    expect(pf).not.toMatch(/: '#94a3b8'/);               // cancel light gray-400 gone
+    expect(pf).not.toMatch(/: '#aaa'/);                  // state-icon light gray gone
+  });
+
+  it('PF-5: acLight defined + wired to dynamic-accent sites', () => {
+    expect(pf).toMatch(/const acLight = aaAccent\(ac, isDark\)/);
+    expect((pf.match(/acLight/g) || []).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('PF-6: asterisks unified to .pf-req (no span text-red-600/#ef4444 asterisk remains)', () => {
+    expect(pf).not.toMatch(/<span className="text-red-600">\*/);
+    expect(pf).not.toMatch(/<span style=\{\{color:\s*'#ef4444'[^}]*\}\}>\*/);
+    expect((pf.match(/className="pf-req">\*/g) || []).length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('PF-7: every PatientForm light accent target >= 4.5:1 on white (AA)', () => {
+    const sub = [];
+    for (const hex of ['#c2410c', '#b91c1c', '#be185d', '#1d4ed8', '#e11d48', '#64748b']) {
+      const cr = contrastWhite(hex);
+      if (cr < 4.5) sub.push(`${hex} = ${cr.toFixed(2)}`);
+    }
+    expect(sub, `sub-AA on white:\n${sub.join('\n')}`).toEqual([]);
+  });
+
+  it('PF-8: .pf-req rose-600 AA on white + ember-red visible on dark', () => {
+    expect(contrastWhite('#e11d48')).toBeGreaterThanOrEqual(4.5); // light asterisk rose-600
+    expect(contrastDark('#ef4444')).toBeGreaterThanOrEqual(4.5);  // dark asterisk ember-red on #0a0a0a
+  });
+
+  it('PF-9: .pf-req class defined (ember-red base, rose-600 light)', () => {
+    expect(css).toMatch(/\.pf-req\s*\{\s*color:\s*#ef4444/);
+    expect(css).toMatch(/\[data-theme="light"\]\s*\.pf-req\s*\{\s*color:\s*#e11d48/);
+  });
+
+  it('PF-10: LINE-green button (#06C755) kept as brand exception (sanctioned, white-on-green)', () => {
+    expect(pf).toMatch(/backgroundColor: '#06C755'/);
+  });
+});

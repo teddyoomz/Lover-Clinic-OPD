@@ -1206,6 +1206,13 @@ html.theme-transitioning *::after {
   margin-bottom: 7px;
 }
 
+/* ── Required-field asterisk — V126 B-i: rose in light (AA 4.7:1), ember-red in dark ── */
+.pf-req { color: #ef4444; }
+:root[data-theme="light"] .pf-req { color: #e11d48; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-req { color: #e11d48; }
+}
+
 /* ── Input — premium bordered ── */
 .pf-input {
   width: 100%;

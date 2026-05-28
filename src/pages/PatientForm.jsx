@@ -14,6 +14,7 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import DateField from '../components/DateField.jsx';
 import thaiAddressDB from '../data/thai-address-db.js';
+import { aaAccent } from '../lib/themeAccent.js';
 
 export default function PatientForm({ db, appId, user, sessionId, isSimulation, suppressNotif, onBack, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
@@ -417,6 +418,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   };
 
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  const acLight = aaAccent(ac, isDark); // V126 — pink-700 in light (white-on AA), ac unchanged in dark
 
   const LanguageToggle = () => (
     <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
@@ -425,9 +427,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
         {/* EOD+7 fix2 — inline color (highest specificity, no Tailwind JIT/override risk):
             inactive = light-red on dark / dark-rose on light → clearly readable in both themes. */}
         <button type="button" onClick={() => setLanguage('th')} className="px-3 py-2 text-xs font-bold transition-colors"
-          style={{ color: language === 'th' ? '#ffffff' : (isDark ? '#fca5a5' : '#9f1239'), backgroundColor: language === 'th' ? (isDark ? '#dc2626' : '#ec4899') : 'transparent' }}>TH</button>
+          style={{ color: language === 'th' ? '#ffffff' : (isDark ? '#fca5a5' : '#9f1239'), backgroundColor: language === 'th' ? (isDark ? '#dc2626' : '#be185d') : 'transparent' }}>TH</button>
         <button type="button" onClick={() => setLanguage('en')} className="px-3 py-2 text-xs font-bold transition-colors"
-          style={{ color: language === 'en' ? '#ffffff' : (isDark ? '#fca5a5' : '#9f1239'), backgroundColor: language === 'en' ? (isDark ? '#dc2626' : '#ec4899') : 'transparent' }}>EN</button>
+          style={{ color: language === 'en' ? '#ffffff' : (isDark ? '#fca5a5' : '#9f1239'), backgroundColor: language === 'en' ? (isDark ? '#dc2626' : '#be185d') : 'transparent' }}>EN</button>
       </div>
     </div>
   );
@@ -440,10 +442,10 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     return (
       <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <LanguageToggle />
-        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#aaa' }}><AlertCircle size={36} /></div>
+        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#6b7280' }}><AlertCircle size={36} /></div>
         <h2 className="text-xl font-bold mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
         <p className="mb-8 text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
-        {isSimulation && <button onClick={onBack} className="font-bold text-sm flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#ef4444' : '#ec4899' }}><ArrowLeft size={18} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
+        {isSimulation && <button onClick={onBack} className="font-bold text-sm flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#ef4444' : '#be185d' }}><ArrowLeft size={18} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
       </div>
     );
   }
@@ -461,7 +463,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       <div className="w-full max-w-xl mx-auto p-6 pt-16 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <LanguageToggle />
         <div className="p-8 sm:p-10 rounded-2xl" style={{ background: isDark ? '#0a0a0a' : '#ffffff', border: `1px solid ${isDark ? '#1a1a1a' : '#e5e7eb'}` }}>
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#aaa' }}><Lock size={28} /></div>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#6b7280' }}><Lock size={28} /></div>
           <h2 className="text-xl font-bold mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Closed' : 'คิวถูกปิดแล้ว'}</h2>
           <p className="mb-8 text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This session has been closed by the clinic. Please contact the clinic for a new QR Code.' : 'คลินิกได้ปิดคิวนี้แล้ว กรุณาติดต่อคลินิกเพื่อขอ QR Code ใหม่'}</p>
           {isSimulation && <button onClick={onBack} className="text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
@@ -530,7 +532,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   <p className="text-sm font-black" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
                     {language === 'en' ? 'Add LINE Official' : 'เพิ่มเพื่อน LINE Official'}
                   </p>
-                  <p className="text-xs font-bold uppercase tracking-widest" style={{ color: isDark ? accentO : '#ea580c' }}>
+                  <p className="text-xs font-bold uppercase tracking-widest" style={{ color: isDark ? accentO : '#c2410c' }}>
                     {language === 'en' ? '🔔 Important Step' : '🔔 ขั้นตอนสำคัญ'}
                   </p>
                 </div>
@@ -573,7 +575,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
             <Edit3 size={15} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
           </button>
           {isSimulation && (
-            <button onClick={onBack} className="py-3 text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#4b5563' : '#94a3b8' }}>
+            <button onClick={onBack} className="py-3 text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#4b5563' : '#64748b' }}>
               <ArrowLeft size={15} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
             </button>
           )}
@@ -634,11 +636,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
             <div style={{ display: 'flex', background: heroGlass, border: `1px solid ${isLightHero ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.22)'}`, borderRadius: '8px', overflow: 'hidden' }}>
               <button type="button" onClick={() => setLanguage('th')}
-                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'th' ? '#fff' : (isLightHero ? '#475569' : 'rgba(255,255,255,0.78)'), backgroundColor: language === 'th' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'th' ? '#fff' : (isLightHero ? '#475569' : 'rgba(255,255,255,0.78)'), backgroundColor: language === 'th' ? acLight : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
                 TH
               </button>
               <button type="button" onClick={() => setLanguage('en')}
-                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'en' ? '#fff' : (isLightHero ? '#475569' : 'rgba(255,255,255,0.78)'), backgroundColor: language === 'en' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'en' ? '#fff' : (isLightHero ? '#475569' : 'rgba(255,255,255,0.78)'), backgroundColor: language === 'en' ? acLight : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
                 EN
               </button>
             </div>
@@ -664,7 +666,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
             {getHeaderTitle()}
           </h1>
           {isCustom && customTemplate?.description && (
-            <p style={{ color: isLightHero ? '#3b82f6' : 'rgba(147,197,253,0.9)', fontSize: '13px', marginTop: '8px', maxWidth: '80%', margin: '8px auto 0' }}>{customTemplate.description}</p>
+            <p style={{ color: isLightHero ? '#1d4ed8' : 'rgba(147,197,253,0.9)', fontSize: '13px', marginTop: '8px', maxWidth: '80%', margin: '8px auto 0' }}>{customTemplate.description}</p>
           )}
 
           {/* Session pill */}
@@ -681,13 +683,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           
           <section className={`pf-section ${isCustom ? 'blue' : 'accent'}`}>
             <div className={sectionHeaderClass}>
-              <User size={16} style={{color: isCustom ? '#3b82f6' : ac, flexShrink: 0}}/>
+              <User size={16} style={{color: isCustom ? '#1d4ed8' : acLight, flexShrink: 0}}/>
               {language === 'en' ? 'Patient Information' : 'ข้อมูลผู้ป่วย'}
             </div>
             <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="w-full sm:w-1/3">
-                  <label className={labelClass}>{language === 'en' ? 'Title' : 'คำนำหน้า'} <span className="text-red-600">*</span></label>
+                  <label className={labelClass}>{language === 'en' ? 'Title' : 'คำนำหน้า'} <span className="pf-req">*</span></label>
                   <select name="prefix" value={formData.prefix || ''} onChange={handleInputChange} required className={inputClass}>
                     <option value="นาย">{language === 'en' ? 'Mr.' : 'นาย'}</option>
                     <option value="นาง">{language === 'en' ? 'Mrs.' : 'นาง'}</option>
@@ -698,7 +700,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </select>
                 </div>
                 <div className="w-full sm:w-2/3">
-                  <label className={labelClass}>{language === 'en' ? 'First Name' : 'ชื่อจริง'} <span className="text-red-600">*</span></label>
+                  <label className={labelClass}>{language === 'en' ? 'First Name' : 'ชื่อจริง'} <span className="pf-req">*</span></label>
                   <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'First Name (English only)' : 'ชื่อจริง (ภาษาไทยเท่านั้น)'} className={inputClass}/>
                 </div>
               </div>
@@ -706,14 +708,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               <div className="flex flex-col sm:flex-row gap-4">
                 {(!isFollowUp && !isCustom) && (
                   <div className="w-full sm:w-1/2">
-                    <label className={labelClass}>{language === 'en' ? 'Last Name' : 'นามสกุล'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Last Name' : 'นามสกุล'} <span className="pf-req">*</span></label>
                     <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Last Name (English only)' : 'นามสกุล (ภาษาไทยเท่านั้น)'} className={inputClass}/>
                   </div>
                 )}
                 
                 {(isFollowUp || isCustom) && (
                   <div className="w-full sm:w-1/2">
-                    <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="pf-req">*</span></label>
                     <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ปี'} className={`${inputClass} bg-blue-950/20 border-blue-900/50 text-blue-400 font-bold text-center text-xl`} />
                   </div>
                 )}
@@ -732,7 +734,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 
                 {(isFollowUp || isCustom) && (
                    <div className="w-full sm:w-1/2">
-                    <label className={labelClass}>{language === 'en' ? 'Date' : 'วันที่บันทึก'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Date' : 'วันที่บันทึก'} <span className="pf-req">*</span></label>
                     {/* UC3: use DateField (dd/mm/yyyy พ.ศ.) not native mm/dd/yyyy. */}
                     <DateField
                       value={formData.assessmentDate || ''}
@@ -745,7 +747,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
                 {(!isFollowUp && !isCustom) && (
                   <div className="w-full sm:w-1/2">
-                    <label className={labelClass}>{language === 'en' ? 'Gender' : 'เพศ'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Gender' : 'เพศ'} <span className="pf-req">*</span></label>
                     <select name="gender" value={formData.gender || ''} onChange={handleInputChange} required className={inputClass}>
                       <option value="" disabled>-- {language === 'en' ? 'Select' : 'เลือก'} --</option>
                       <option value="ชาย">{language === 'en' ? 'Male' : 'ชาย'}</option>
@@ -759,7 +761,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               {(!isFollowUp && !isCustom) && (
                 <div>
                   <label className={labelClass}>
-                    {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'} <span className="text-red-600">*</span>
+                    {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'} <span className="pf-req">*</span>
                   </label>
                   <input
                     type="text"
@@ -782,7 +784,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 <>
                   <div className="flex flex-col gap-4">
                     <div className="w-full">
-                      <label className={labelClass}>{language === 'en' ? 'Date of Birth (CE)' : 'วันเกิด (พ.ศ.)'} <span className="text-red-600">*</span></label>
+                      <label className={labelClass}>{language === 'en' ? 'Date of Birth (CE)' : 'วันเกิด (พ.ศ.)'} <span className="pf-req">*</span></label>
                       <div className="flex flex-wrap sm:flex-nowrap gap-3">
                         <select name="dobDay" value={formData.dobDay || ''} onChange={handleDobChange} required className={`${inputClass} flex-1 sm:w-1/3 min-w-[80px] text-center px-2`}>
                           <option value="" disabled>{language === 'en' ? 'Day' : 'วัน'}</option>
@@ -799,7 +801,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       </div>
                     </div>
                     <div className="w-full">
-                      <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="text-red-600">*</span></label>
+                      <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="pf-req">*</span></label>
                       <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ระบุเป็นตัวเลข'} className={`${inputClass} bg-red-950/20 border-red-900/50 text-red-500 font-bold text-center text-xl`} />
                     </div>
                   </div>
@@ -818,21 +820,21 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     <textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows="2" placeholder={language === 'en' ? 'House No, Street, Soi, Road' : 'บ้านเลขที่, ซอย, ถนน'} className={inputClass + " resize-none transition-shadow"}></textarea>
                   </div>
                   <div>
-                    <label className={labelClass}>{language === 'en' ? 'Province' : 'จังหวัด'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Province' : 'จังหวัด'} <span className="pf-req">*</span></label>
                     <select name="province" value={formData.province || ''} onChange={handleInputChange} required className={inputClass}>
                       <option value="" disabled>{language === 'en' ? '-- Select Province --' : '-- เลือกจังหวัด --'}</option>
                       {Object.keys(thaiAddressDB).map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>{language === 'en' ? 'District' : 'อำเภอ/เขต'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'District' : 'อำเภอ/เขต'} <span className="pf-req">*</span></label>
                     <select name="district" value={formData.district || ''} onChange={handleInputChange} required className={inputClass} disabled={!formData.province}>
                       <option value="" disabled>{language === 'en' ? '-- Select District --' : '-- เลือกอำเภอ/เขต --'}</option>
                       {formData.province && thaiAddressDB[formData.province] && Object.keys(thaiAddressDB[formData.province]).map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>{language === 'en' ? 'Sub-district' : 'ตำบล/แขวง'} <span className="text-red-600">*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Sub-district' : 'ตำบล/แขวง'} <span className="pf-req">*</span></label>
                     <select name="subDistrict" value={formData.subDistrict || ''} onChange={handleInputChange} required className={inputClass} disabled={!formData.district}>
                       <option value="" disabled>{language === 'en' ? '-- Select Sub-district --' : '-- เลือกตำบล/แขวง --'}</option>
                       {formData.province && formData.district && thaiAddressDB[formData.province]?.[formData.district] && Object.keys(thaiAddressDB[formData.province][formData.district]).map(sd => <option key={sd} value={sd}>{sd}</option>)}
@@ -896,7 +898,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className={labelClass}>{language === 'en' ? 'Phone Number' : 'เบอร์โทรศัพท์'} <span className="text-red-600">*</span></label>
+                      <label className={labelClass}>{language === 'en' ? 'Phone Number' : 'เบอร์โทรศัพท์'} <span className="pf-req">*</span></label>
                       <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-[var(--tx-secondary)] hover:text-white transition-colors">
                         <input type="checkbox" name="isInternationalPhone" checked={!!formData.isInternationalPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-blue-600 bg-black border-[var(--bd-stronger)] focus:ring-blue-500" />
                         {language === 'en' ? 'Intl. Number' : 'เบอร์ชาวต่างชาติ'}
@@ -918,23 +920,23 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
           {(!isFollowUp && !isCustom) && (
             <section className="pf-section orange">
-              <div className={sectionHeaderClass} style={{color: '#f97316'}}>
-                <AlertCircle size={16} style={{color:'#f97316', flexShrink:0}}/>
+              <div className={sectionHeaderClass} style={{color: aaAccent('#f97316', isDark)}}>
+                <AlertCircle size={16} style={{color: aaAccent('#f97316', isDark), flexShrink:0}}/>
                 {language === 'en' ? 'Emergency Contact' : 'บุคคลติดต่อฉุกเฉิน'}
               </div>
               <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
                 <div>
-                  <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Contact Name' : 'ชื่อผู้ติดต่อ'} <span className="text-red-600">*</span></label>
+                  <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Contact Name' : 'ชื่อผู้ติดต่อ'} <span className="pf-req">*</span></label>
                   <input type="text" name="emergencyName" value={formData.emergencyName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Full Name' : 'ชื่อ-สกุล'} className={`${inputClass} bg-[var(--bg-card)] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="w-full sm:w-1/2">
-                    <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Relationship' : 'ความสัมพันธ์'} <span className="text-red-600">*</span></label>
+                    <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Relationship' : 'ความสัมพันธ์'} <span className="pf-req">*</span></label>
                     <input type="text" name="emergencyRelation" value={formData.emergencyRelation || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'e.g., Father, Spouse' : 'เช่น บิดา, คู่สมรส'} className={`${inputClass} bg-[var(--bg-card)] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
                   </div>
                   <div className="w-full sm:w-1/2">
                     <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-bold text-orange-500 tracking-wide">{language === 'en' ? 'Phone Number' : 'เบอร์โทร'} <span className="text-red-600">*</span></label>
+                      <label className="block text-sm font-bold text-orange-500 tracking-wide">{language === 'en' ? 'Phone Number' : 'เบอร์โทร'} <span className="pf-req">*</span></label>
                       <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-orange-600/50 hover:text-orange-400 transition-colors">
                         <input type="checkbox" name="isInternationalEmergencyPhone" checked={!!formData.isInternationalEmergencyPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-orange-600 bg-black border-[var(--bd-stronger)] focus:ring-orange-500" />
                         {language === 'en' ? 'Intl.' : 'เบอร์ต่างชาติ'}
@@ -1010,7 +1012,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 <div className={sectionHeaderClass}>
                   <Activity size={16} style={{color: ac, flexShrink:0}}/>
                   {language === 'en' ? 'Chief Complaint / Visit Reason' : 'สาเหตุที่มาพบแพทย์'}
-                  <span style={{color: '#ef4444', marginLeft: 2}}>*</span>
+                  <span className="pf-req">*</span>
                 </div>
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
                   {visitReasonOptions.map(reason => {
@@ -1032,10 +1034,10 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
                 {isHrtMode && (
                   <div className="pf-section orange animate-fade-up" style={{marginTop:'12px'}}>
-                    <div className={sectionHeaderClass} style={{color:'#f97316', marginBottom:'14px'}}>
-                      <span style={{width:3,height:12,background:'#f97316',borderRadius:2,flexShrink:0}}/>
+                    <div className={sectionHeaderClass} style={{color: aaAccent('#f97316', isDark), marginBottom:'14px'}}>
+                      <span style={{width:3,height:12,background: aaAccent('#f97316', isDark),borderRadius:2,flexShrink:0}}/>
                       {language === 'en' ? 'HRT Goals' : 'เป้าหมายการเสริมฮอร์โมน'}
-                      <span style={{color:'#ef4444',marginLeft:2}}>*</span>
+                      <span className="pf-req">*</span>
                     </div>
                     <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
                       {hrtGoalOptions.map(goal => {
@@ -1044,7 +1046,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                           <div key={goal.value} className="group">
                             <label className={`pf-reason-card${isGoalSelected ? ' selected' : ''}`} style={{}}>
                               <input type="checkbox" checked={isGoalSelected} onChange={() => handleGoalToggle(goal.value)} style={{display:'none'}} />
-                              <div className="pf-reason-check" style={isGoalSelected ? {background:'#f97316',borderColor:'#f97316'} : {}}>
+                              <div className="pf-reason-check" style={isGoalSelected ? {background: aaAccent('#f97316', isDark),borderColor: aaAccent('#f97316', isDark)} : {}}>
                                 {isGoalSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                               </div>
                               <span className="pf-reason-text">{language === 'en' ? goal.en : goal.th}</span>
@@ -1078,12 +1080,12 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
               <section className="pf-section red">
                 <div className={sectionHeaderClass}>
-                  <HeartPulse size={16} style={{color:'#ef4444', flexShrink:0}}/>
+                  <HeartPulse size={16} style={{color: aaAccent('#ef4444', isDark), flexShrink:0}}/>
                   {language === 'en' ? 'Medical History' : 'ประวัติทางการแพทย์'}
                 </div>
                 <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                   <div>
-                    <label className={labelClass}>{language === 'en' ? 'Drug / Food Allergies' : 'ประวัติการแพ้ยา และ อาหาร'} <span style={{color:'#ef4444'}}>*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Drug / Food Allergies' : 'ประวัติการแพ้ยา และ อาหาร'} <span className="pf-req">*</span></label>
                     <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
                       <label className={`pf-radio-card${formData.hasAllergies === 'ไม่มี' ? ' selected-no' : ''}`}>
                         <input type="radio" name="hasAllergies" value="ไม่มี" checked={formData.hasAllergies === 'ไม่มี'} onChange={handleInputChange} style={{display:'none'}} required/>
@@ -1100,7 +1102,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </div>
 
                   <div>
-                    <label className={labelClass}>{language === 'en' ? 'Underlying Diseases' : 'โรคประจำตัว'} <span style={{color:'#ef4444'}}>*</span></label>
+                    <label className={labelClass}>{language === 'en' ? 'Underlying Diseases' : 'โรคประจำตัว'} <span className="pf-req">*</span></label>
                     <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
                       <label className={`pf-radio-card${formData.hasUnderlying === 'ไม่มี' ? ' selected-no' : ''}`}>
                         <input type="radio" name="hasUnderlying" value="ไม่มี" checked={formData.hasUnderlying === 'ไม่มี'} onChange={handleInputChange} style={{display:'none'}} required/>
@@ -1316,7 +1318,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               <div className={sectionHeaderClass}>
                 <Globe size={16} style={{color: ac, flexShrink:0}}/>
                 {language === 'en' ? 'How Did You Find Us?' : 'ท่านรู้จักคลินิกได้อย่างไร?'}
-                <span style={{color:'#ef4444', marginLeft:2}}>*</span>
+                <span className="pf-req">*</span>
               </div>
               <p style={{fontSize:'12px', color:'var(--tx-muted)', marginBottom:'14px'}}>{language === 'en' ? 'Select all that apply' : 'เลือกได้มากกว่า 1 ช่องทาง'}</p>
               <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
@@ -1346,7 +1348,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           {/* ── Submit CTA ── */}
           <div style={{display:'flex', flexDirection:'column', gap:'10px', paddingTop:'8px'}}>
             <button type="submit" disabled={isSubmitting} className="pf-submit"
-              style={{background: isEditing ? '#2563eb' : ac, boxShadow: isEditing ? '0 4px 20px rgba(37,99,235,0.35)' : `0 4px 20px rgba(${acRgb},0.35)`}}>
+              style={{background: isEditing ? '#2563eb' : acLight, boxShadow: isEditing ? '0 4px 20px rgba(37,99,235,0.35)' : `0 4px 20px rgba(${acRgb},0.35)`}}>
               {isSubmitting
                 ? <><div className="spinner" style={{borderTopColor:'#fff', borderColor:'rgba(255,255,255,0.2)'}}/> {language === 'en' ? 'Submitting...' : 'กำลังบันทึก...'}</>
                 : <><CheckCircle2 size={20}/> {isEditing ? (language === 'en' ? 'Confirm Update' : 'ยืนยันการแก้ไขข้อมูล') : (language === 'en' ? 'Submit' : 'ส่งข้อมูล')}</>}

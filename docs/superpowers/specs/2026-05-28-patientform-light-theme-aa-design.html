@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PatientForm Light-Theme WCAG-AA (B-i Selective) Design Spec</title>
+  <style>
+    :root { --accent: #be185d; --bd: #e5e5e5; --bg-meta: #fdf2f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .fail { color: #b91c1c; font-weight: 700; }
+    .pass { color: #047857; font-weight: 700; }
+    .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; border: 1px solid rgba(0,0,0,0.15); margin-right: 4px; }
+  </style>
+</head>
+<body>
+
+<h1>PatientForm Light-Theme WCAG-AA — B-i Selective</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-28 (EOD+1 follow-up) · <strong>Status:</strong> Approved by user (Q1=B, Q2=B-i, Q3=Selective) · <strong>Plan:</strong> docs/superpowers/plans/2026-05-28-patientform-light-theme-aa.html (to follow)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><code>src/pages/PatientForm.jsx</code> is the <strong>customer-facing intake form</strong> (anon-auth public route <code>?session=</code> / <code>?patient=</code>). It was the one major surface V125 deferred ("needs a DESIGN pass, NOT a mechanical aaAccent wrap") because its colors are a deliberate pink/rose brand expressed via bespoke <code>isDark ? darkHex : lightHex</code> inline styles.</p>
+<p>V124's class-based <code>[data-theme="light"]</code> overrides already deepen <strong>every Tailwind <code>text-{color}-{300..600}</code> class</strong> to its AA-dark shade (index.css ~4093–4341), and the <code>.pf-*</code> CSS classes + V107 form-element safety net cover inputs/labels/submit. <strong>What still fails AA are the ~7 INLINE <code>style={{color:'#hex'}}</code> accents that no class can reach</strong> (the exact V125 class-of-bug, never wired into PatientForm) plus the dynamic clinic accent <code>ac = cs.accentColor</code> (no AA guard → if a clinic picks pink-500 the white-on-accent submit/toggle is 3.3:1).</p>
+<p><strong>Goal:</strong> zero sub-AA color in PatientForm light theme, in a way that <em>harmonizes with the pink/rose hero</em> (B-i) while <em>keeping the existing per-section semantic zones</em> (orange=emergency, blue=custom, red=medical-critical — all already AA via V124) (Selective). Dark theme: zero change (V124 lesson).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">BEFORE — light theme, the inline-hex bypass (sub-AA)</div>
+  <div style="font-family:system-ui;background:linear-gradient(180deg,#fdf2f8,#fff5f7 30%,#fff);padding:18px;border-radius:10px;max-width:360px">
+    <div style="background:#fff;border-radius:10px;padding:14px;border:1px solid #fce7f3">
+      <div style="color:#f97316;font-size:12px;font-weight:800">&#9888; เป้าหมายในการดูแล (orange-500 inline · <span class="fail">2.9:1</span>)</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">ชื่อ <span style="color:#ef4444">*</span> (red-500 inline · <span class="fail">3.76:1</span>)</div>
+      <p style="font-size:11px;color:#3b82f6;margin:6px 0 0">caption (blue-500 inline · <span class="fail">3.7:1</span>)</p>
+      <div style="margin-top:12px;padding:11px;background:#ec4899;color:#fff;border-radius:10px;text-align:center;font-weight:800;font-size:13px">ส่งข้อมูล — white on dynamic ac=pink-500 (<span class="fail">3.3:1</span>)</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">AFTER — B-i Selective (every accent ≥ 4.5:1, rose-harmonized, semantic zones kept)</div>
+  <div style="font-family:system-ui;background:linear-gradient(180deg,#fdf2f8,#fff5f7 30%,#fff);padding:18px;border-radius:10px;max-width:360px">
+    <div style="background:#fff;border-radius:10px;padding:14px;border:1px solid #fce7f3">
+      <div style="color:#c2410c;font-size:12px;font-weight:800">&#9888; เป้าหมายในการดูแล (orange-700 · <span class="pass">5.0:1</span> · orange zone kept)</div>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">ชื่อ <span style="color:#e11d48">*</span> (rose-600 .pf-req · <span class="pass">4.7:1</span>)</div>
+      <p style="font-size:11px;color:#1d4ed8;margin:6px 0 0">caption (blue-700 · <span class="pass">7.0:1</span> · blue/custom zone kept)</p>
+      <div style="margin-top:12px;padding:11px;background:linear-gradient(135deg,#ec4899,#db2777,#be185d);color:#fff;border-radius:10px;text-align:center;font-weight:800;font-size:13px">ส่งข้อมูล — white on acLight=pink-700 (<span class="pass">4.6:1</span>)</div>
+    </div>
+    <p style="font-size:10px;color:#9f1239;margin:10px 0 0;font-weight:700">↑ rose-dominant + per-section zones (orange/blue/red) deepened to their own AA shade.</p>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Color resolution — which layer fixes which color (no overlap)</div>
+  <table>
+    <tr><th>Color source in PatientForm</th><th>Who handles it</th><th>Light result</th></tr>
+    <tr><td>Tailwind <code>text-{c}-{300..600}</code> class (asterisk red-600, emergency orange-500, custom blue-400, medical red/pink)</td><td>V124 class overrides (index.css) — <strong>already done</strong></td><td class="pass">-700 AA, semantic zone preserved</td></tr>
+    <tr><td><code>.pf-input / .pf-label / .pf-submit / select / textarea</code></td><td>V107 + <code>.pf-*</code> light CSS — <strong>already done</strong></td><td class="pass">AA (submit gradient → pink-700)</td></tr>
+    <tr><td>INLINE <code>style={{color:'#f97316'/'#ef4444'/'#3b82f6'/'#94a3b8'/'#aaa'}}</code> (~7)</td><td><strong>V125-class bug — THIS spec fixes</strong> (deepen each to AA, rose-harmonized)</td><td class="pass">AA</td></tr>
+    <tr><td>Dynamic <code>ac = cs.accentColor</code> as white-text BG (submit L1349, lang-toggle L637/641) + as icon (L684)</td><td><strong>THIS spec</strong>: derive <code>acLight = aaAccent(ac, isDark)</code></td><td class="pass">pink-700 (AA) in light, ac unchanged in dark</td></tr>
+    <tr><td>Decorative: hero gradient, top 1px strip, soft-pink card bg, faint borders, selected-state tints</td><td>UNCHANGED (decorative, not text — AA N/A)</td><td>—</td></tr>
+    <tr><td>LINE "เพิ่มเพื่อน" button <code>bg #06C755</code> + white text (L555)</td><td>KEPT — LINE brand standard (sanctioned exception; large bold button)</td><td>brand</td></tr>
+  </table>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Dynamic-accent flow (the one new runtime path)</div>
+  <pre>cs.accentColor (e.g. '#ec4899' pink-500, clinic-configured)
+        │
+        ▼
+  const isDark = theme==='dark' || (theme==='auto' && OS-dark)
+        │
+        ▼
+  const acLight = aaAccent(ac, isDark)      ← reuse src/lib/themeAccent.js (V125)
+        │                                      dark  → ac unchanged  (#ec4899, AA on dark)
+        │                                      light → #be185d pink-700 (white-on = 4.6:1 AA)
+        ▼
+  submit bg / lang-toggle active bg / patient-info icon  → acLight
+        (white text now AA in light; dark identical to today)</pre>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>Reuse, don't reinvent.</strong> V125 already shipped <code>src/lib/themeAccent.js</code> <code>aaAccent(hex, isDark)</code> whose <code>LIGHT_AA_ACCENT</code> map already contains every shade this fix needs (pink-500→#be185d, rose-500→#be123c, orange-500→#c2410c, red-500→#b91c1c, blue-500→#1d4ed8, etc.). No new helper, no new map entries.</p>
+<ul>
+  <li><strong>Inline accent fixes</strong> — replace each broken inline hex with its deepened light value (wrapped through <code>aaAccent(hex, isDark)</code> where the value should stay vibrant in dark, or a flat light-only hex where the dark branch already differs).</li>
+  <li><strong>Asterisks</strong> — introduce ONE shared class <code>.pf-req</code> in index.css (theme-aware: light <code>#e11d48</code> rose-600 = 4.7:1; dark <code>#fb7185</code> rose-400, AA on dark). Replace all <code>&lt;span&gt;</code> asterisks (both <code>className="text-red-600"</code> and inline <code>#ef4444</code>) → <code>className="pf-req"</code>. Asterisks are a single uniform functional marker (NOT a semantic zone), so unifying them is in-scope for "Selective" + delivers the rose asterisk approved in Q2. Input <code>accent-color</code> classes (radio/checkbox <code>text-red-600</code>) are NOT touched.</li>
+  <li><strong>Dynamic <code>ac</code></strong> — add <code>const acLight = aaAccent(ac, isDark)</code> near the existing <code>ac</code> definition (PatientForm.jsx:20). Point the white-text-on-accent backgrounds (submit L1349 non-editing branch, lang-toggle L637/641) + the ac-as-foreground icon (L684) at <code>acLight</code>. The <code>isEditing</code> blue-600 <code>#2563eb</code> branch is already AA — untouched.</li>
+  <li><strong>Decorative</strong> — hero gradient, top strip, card backgrounds, soft tints, faint borders all UNCHANGED (V124 lesson: only deepen text/foreground, leave decoration).</li>
+</ul>
+
+<h2>Fix Inventory (exact sites)</h2>
+<table>
+  <tr><th>#</th><th>Site (PatientForm.jsx)</th><th>Before (light)</th><th>After (light)</th><th>Note</th></tr>
+  <tr><td>1</td><td>L1035/1036 HRT-goal header + strip <code>'#f97316'</code></td><td><span class="swatch" style="background:#f97316"></span>orange-500 <span class="fail">2.9</span></td><td><span class="swatch" style="background:#c2410c"></span>orange-700 <span class="pass">5.0</span></td><td><code>aaAccent('#f97316',isDark)</code> — keeps orange zone</td></tr>
+  <tr><td>2</td><td>L1013/1038/1086/1103/1319 asterisks <code>'#ef4444'</code> + L690…937 <code>text-red-600</code> asterisks</td><td><span class="swatch" style="background:#ef4444"></span>red-500 <span class="fail">3.76</span> / red-700</td><td><span class="swatch" style="background:#e11d48"></span>rose-600 <span class="pass">4.7</span></td><td>NEW <code>.pf-req</code> shared class (Q2 rose asterisk)</td></tr>
+  <tr><td>3</td><td>L446 back-button text <code>isDark?'#ef4444':'#ec4899'</code></td><td><span class="swatch" style="background:#ec4899"></span>pink-500 <span class="fail">3.3</span></td><td><span class="swatch" style="background:#be185d"></span>pink-700 <span class="pass">4.6</span></td><td>light branch → <code>#be185d</code></td></tr>
+  <tr><td>4</td><td>L576 cancel link <code>isDark?'#4b5563':'#94a3b8'</code></td><td><span class="swatch" style="background:#94a3b8"></span>gray-400 <span class="fail">2.84</span></td><td><span class="swatch" style="background:#64748b"></span>slate-500 <span class="pass">5.4</span></td><td>match form muted token</td></tr>
+  <tr><td>5</td><td>L667 customTemplate caption <code>isLightHero?'#3b82f6':…</code></td><td><span class="swatch" style="background:#3b82f6"></span>blue-500 <span class="fail">3.7</span></td><td><span class="swatch" style="background:#1d4ed8"></span>blue-700 <span class="pass">7.0</span></td><td>keeps blue/custom zone</td></tr>
+  <tr><td>6</td><td>L684 patient-info icon <code>isCustom?'#3b82f6':ac</code></td><td>blue-500 / ac</td><td>blue-700 / <code>acLight</code></td><td>custom→#1d4ed8; default→acLight</td></tr>
+  <tr><td>7</td><td>L1081 HeartPulse icon <code>'#ef4444'</code></td><td><span class="swatch" style="background:#ef4444"></span>red-500 <span class="fail">3.76</span></td><td><span class="swatch" style="background:#b91c1c"></span>red-700 <span class="pass">5.9</span></td><td><code>aaAccent</code> — keeps red-critical zone</td></tr>
+  <tr><td>8</td><td>L533 success "USE LINE" greeting <code>isDark?accentO:'#ea580c'</code></td><td><span class="swatch" style="background:#ea580c"></span>orange-600 <span class="fail">3.8</span></td><td><span class="swatch" style="background:#c2410c"></span>orange-700 <span class="pass">5.0</span></td><td>light branch → <code>#c2410c</code></td></tr>
+  <tr><td>9</td><td>L443/464 state-screen icon <code>isDark?'#555':'#aaa'</code></td><td><span class="swatch" style="background:#aaa"></span>#aaa <span class="fail">2.3</span></td><td><span class="swatch" style="background:#6b7280"></span>gray-500 <span class="pass">4.7</span></td><td>large decorative icon, deepen for visibility</td></tr>
+  <tr><td>10</td><td>L1349 submit bg <code>isEditing?'#2563eb':ac</code> + L637/641 lang-toggle active bg <code>ac</code></td><td>white on pink-500 <span class="fail">3.3</span></td><td>white on <code>acLight</code> pink-700 <span class="pass">4.6</span></td><td><code>#2563eb</code> editing branch already AA</td></tr>
+  <tr><td>—</td><td>L555 LINE button <code>bg #06C755</code> white text</td><td>2.94</td><td>KEPT</td><td>LINE brand standard (sanctioned exception — large bold button; mirrors V125 leaving LINE-green)</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = B:</strong> Curated brand-cohesive light palette (not a mechanical aaAccent wrap, not failures-only minimal-touch).</li>
+  <li><strong>Q2 = B-i:</strong> Pink/rose-harmonized flavor (rose-toned structural accents + pink gradient submit), over semantic-preserving (B-ii) or warm-clay (B-iii).</li>
+  <li><strong>Q3 = Selective:</strong> Fix the ~7 broken inline-hex sites + dynamic <code>ac</code>; KEEP the orange-emergency / blue-custom / red-critical semantic zones (already AA via V124). NOT a full ~50-site monochrome-rose refactor.</li>
+  <li><strong>Dynamic accent (locked, flagged for review):</strong> <code>acLight = aaAccent(ac, isDark)</code> — reuse V125 helper. Standard Tailwind clinic picks are all in the map; a truly custom non-standard hex would pass through unchanged (documented Risk below).</li>
+  <li><strong>LINE green (locked):</strong> <code>#06C755</code> button kept as the LINE brand standard (sanctioned exception, like V125 left teal/LINE-green).</li>
+  <li><strong>Dark theme:</strong> zero change (V124/V125 lesson — deepen light only).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Live-browser scan (Rule S / Q-vis) of the rendered PatientForm in <strong>light theme</strong>, across all 5 states (intake form, success, session-closed, session-expired, invalid-link) → <strong>0 text/foreground AA fails</strong> on white/near-white backgrounds (the V125 gold-standard: scan the REAL build, not just inject-simulate).</li>
+  <li>With <code>cs.accentColor = '#ec4899'</code> (pink-500 default) → submit button bg + active lang-toggle render <code>#be185d</code> (pink-700) in light; white text ≥ 4.5:1.</li>
+  <li>All required asterisks render one consistent rose-600 <code>#e11d48</code> (light) — no red/rose mismatch between inline and className sites.</li>
+  <li>Per-section semantic zones still distinguishable in light: emergency=orange-700, custom-questions=blue-700, medical-critical=red-700, hero/submit=pink/rose.</li>
+  <li><strong>Dark theme pixel-identical to today</strong> (regression guard — every change is light-branch-only or <code>aaAccent</code> pass-through in dark).</li>
+  <li>T7 (<code>tests/light-theme-override-coverage.test.js</code>) extended: source-grep that no raw sub-AA inline hex (<code>#f97316</code>/<code>#ef4444</code>/<code>#3b82f6</code> as <code>color:</code>) remains in PatientForm.jsx light branches; AA-math asserts every mapped target ≥ 4.5 on white; <code>.pf-req</code> AA both themes; <code>acLight</code> wiring present.</li>
+  <li><code>npm run build</code> clean; full vitest green (no regression).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Non-standard clinic accent:</strong> <code>aaAccent</code> passes through a hex not in <code>LIGHT_AA_ACCENT</code> unchanged → a clinic that sets <code>cs.accentColor</code> to an odd non-Tailwind hex could still be sub-AA on the submit/toggle. LoverClinic's accent IS pink-500 (in the map). Mitigation if it ever matters: add a runtime contrast-clamp to <code>aaAccent</code> (HSL-darken until ≥4.5) — deferred, out of scope (YAGNI for a single-clinic accent today).</li>
+  <li><strong>Asterisk unification touches ~16 spans:</strong> low-risk (single uniform marker), but it is the largest single edit. The <code>.pf-req</code> class isolates it; input <code>accent-color</code> classes are deliberately left alone.</li>
+  <li><strong>Live-scan friction:</strong> the form needs a session token or simulation entry to render. Plan will use the dev server + a real prod patient-link (Rule R read-only) OR admin simulation mode for the verification scan; static analysis already enumerated the fixes above.</li>
+  <li><strong>L555 LINE button</strong> stays 2.94:1 by brand decision — documented, not a defect.</li>
+</ul>
+
+</body>
+</html>

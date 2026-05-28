@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PatientForm Light-Theme AA (B-i Selective) Implementation Plan</title>
+  <style>
+    :root { --accent: #be185d; --bd: #e5e5e5; --bg-meta: #fdf2f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.88em; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>PatientForm Light-Theme AA (B-i Selective) Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline, recommended for this single-file cosmetic stream) or superpowers:subagent-driven-development. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-28-patientform-light-theme-aa-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make every text/foreground color in <code>PatientForm.jsx</code> light theme ≥ WCAG-AA (4.5:1), pink/rose-harmonized, keeping per-section semantic zones; dark theme unchanged.</p>
+  <p><strong>Architecture:</strong> Reuse V125's <code>aaAccent(hex,isDark)</code> (src/lib/themeAccent.js — map already has every needed shade). Fix the ~10 INLINE <code>style={{color}}</code> accents that bypass V124's class overrides; derive <code>acLight = aaAccent(ac, isDark)</code> for the dynamic clinic accent; add ONE shared <code>.pf-req</code> asterisk class. Decorative pinks/gradients + the LINE-green button + all V124-handled Tailwind classes are UNTOUCHED.</p>
+  <p><strong>Tech Stack:</strong> React 19, Tailwind, CSS custom-props in src/index.css, Vitest. <strong>Rule K</strong> (work-first, test-last): source edits Tasks 1–4 → tests Task 5 → verify Task 6. <strong>Rule N</strong>: targeted tests during, full suite at batch end. <strong>No deploy</strong> without explicit word (V18).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Light theme — AFTER (B-i Selective). Rose-dominant, semantic zones kept, all ≥4.5:1</div>
+  <div style="font-family:system-ui;background:linear-gradient(180deg,#fdf2f8,#fff5f7 30%,#fff);padding:18px;border-radius:10px;max-width:380px">
+    <div style="background:#fff;border-radius:10px;padding:14px;border:1px solid #fce7f3;margin-bottom:10px">
+      <div style="color:#c2410c;font-size:12px;font-weight:800">&#9888; ผู้ติดต่อฉุกเฉิน <span style="font-weight:400;color:#9ca3af">(emergency = orange-700, zone kept)</span></div>
+    </div>
+    <div style="background:#fff;border-radius:10px;padding:14px;border:1px solid #fce7f3;margin-bottom:10px">
+      <div style="color:#be123c;font-size:12px;font-weight:800">&#10084; ประวัติสุขภาพ &nbsp; ชื่อ <span style="color:#e11d48">*</span> <span style="font-weight:400;color:#9ca3af">(header rose-700, asterisk rose-600 .pf-req)</span></div>
+      <div style="color:#b91c1c;font-size:11px;margin-top:6px">&#128293; อาการวิกฤต <span style="font-weight:400;color:#9ca3af">(critical = red-700, zone kept)</span></div>
+    </div>
+    <button style="width:100%;padding:13px;background:linear-gradient(135deg,#ec4899,#db2777,#be185d);color:#fff;border-radius:12px;border:none;font-weight:800;font-size:14px;box-shadow:0 4px 20px rgba(236,72,153,0.35)">✓ ส่งข้อมูล &nbsp;<span style="font-weight:400;opacity:.85">(white on acLight=pink-700, 4.6:1)</span></button>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Dynamic accent — the one new runtime path</div>
+  <pre>cs.accentColor  (e.g. '#ec4899' pink-500, clinic-configured)
+      │   ac = cs.accentColor          (PatientForm.jsx:20, unchanged)
+      ▼
+  isDark = theme==='dark' || (theme==='auto' && OS-dark)   (L419, exists)
+      ▼
+  acLight = aaAccent(ac, isDark)        ← NEW (1 line, after L419)
+      │      dark  → ac unchanged       (#ec4899 — AA on dark surface)
+      │      light → '#be185d' pink-700 (white-on = 4.6:1 AA)
+      ▼
+  submit bg (L1349) · hero lang-toggle active bg (L637/641) ·
+  LanguageToggle active bg (L428/430) · patient-info icon (L684)
+</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Static inline-hex accents — deepen-in-light, dark via aaAccent pass-through OR pre-existing dark branch</div>
+  <table>
+    <tr><th>Accent</th><th>Light fix</th><th>Dark</th></tr>
+    <tr><td>section headers <code>#f97316</code> (emergency L921/922, HRT L1035/1036/1047)</td><td><code>aaAccent('#f97316',isDark)</code> → #c2410c</td><td>#f97316 (pass-through)</td></tr>
+    <tr><td>HeartPulse icon <code>#ef4444</code> (L1081)</td><td><code>aaAccent('#ef4444',isDark)</code> → #b91c1c</td><td>#ef4444 (pass-through)</td></tr>
+    <tr><td>back-btn <code>isDark?'#ef4444':'#ec4899'</code> (L446)</td><td>light branch → #be185d</td><td>#ef4444 (unchanged)</td></tr>
+    <tr><td>cancel link <code>isDark?'#4b5563':'#94a3b8'</code> (L576)</td><td>light branch → #64748b</td><td>#4b5563 (unchanged)</td></tr>
+    <tr><td>customTemplate caption <code>isLightHero?'#3b82f6':…</code> (L667)</td><td>light branch → #1d4ed8</td><td>rgba(147,197,253,.9) (unchanged)</td></tr>
+    <tr><td>patient-info icon <code>isCustom?'#3b82f6':ac</code> (L684)</td><td>#1d4ed8 / acLight</td><td>#3b82f6 / ac</td></tr>
+    <tr><td>success greeting <code>isDark?accentO:'#ea580c'</code> (L533)</td><td>light branch → #c2410c</td><td>accentO #f97316 (unchanged)</td></tr>
+    <tr><td>state-screen icon <code>isDark?'#555':'#aaa'</code> (L443, L464)</td><td>light branch → #6b7280</td><td>#555 (unchanged)</td></tr>
+    <tr><td>asterisks (all <code>&lt;span&gt;</code>: <code>text-red-600</code> + inline <code>#ef4444</code>)</td><td><code>.pf-req</code> → #e11d48 rose-600</td><td><code>.pf-req</code> → #ef4444 (ember red, matches dark identity)</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/index.css</code></td><td>ADD <code>.pf-req</code> asterisk class (3 rules: base ember-red, light rose-600, auto-OS-light rose-600), near the <code>.pf-label</code> block (~L1207)</td></tr>
+  <tr><td><code>src/pages/PatientForm.jsx</code></td><td>IMPORT <code>aaAccent</code>; define <code>acLight</code>; wire ~5 dynamic-accent sites; fix ~10 inline-hex accent sites; swap ~16 asterisk spans → <code>className="pf-req"</code></td></tr>
+  <tr><td><code>tests/light-theme-override-coverage.test.js</code></td><td>EXTEND T7: PatientForm source-grep (no raw sub-AA inline hex remains) + AA-math on mapped targets + <code>.pf-req</code> AA both themes + acLight wiring presence</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Foundation — <code>.pf-req</code> class + <code>aaAccent</code> import + <code>acLight</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/index.css</code> (near <code>.pf-label</code> ~L1207)</li>
+    <li>Modify: <code>src/pages/PatientForm.jsx</code> (import ~top; <code>acLight</code> after L419)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Add <code>.pf-req</code> to index.css</strong> (after the <code>.pf-label</code> block, before <code>.pf-input</code>)</label></div>
+<pre><code class="language-css">/* ── Required-field asterisk — V126 B-i: rose in light (AA 4.7:1), ember-red in dark ── */
+.pf-req { color: #ef4444; }                         /* dark/ember default (matches dark identity) */
+:root[data-theme="light"] .pf-req { color: #e11d48; } /* rose-600 — 4.7:1 on white (AA) */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-req { color: #e11d48; }
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Import <code>aaAccent</code> in PatientForm.jsx</strong></label></div>
+  <p>Find the existing import of <code>hexToRgb</code> (or the utils import block near the top) and add the themeAccent import on its own line:</p>
+<pre><code class="language-js">import { aaAccent } from '../lib/themeAccent.js';</code></pre>
+  <p>(Verify relative path: PatientForm.jsx is in <code>src/pages/</code>, themeAccent.js is <code>src/lib/</code> → <code>../lib/themeAccent.js</code>.)</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Define <code>acLight</code> immediately after the <code>isDark</code> line (L419)</strong></label></div>
+<pre><code class="language-js">  const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  const acLight = aaAccent(ac, isDark); // V126 — pink-700 in light (white-on AA), ac unchanged in dark</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Verify</strong></label></div>
+  <p>Run: <code>npm run build</code> → expect clean (import resolves, no syntax error). Grep: <code>grep -n "acLight\|pf-req\|aaAccent" src/pages/PatientForm.jsx</code> → import + acLight present.</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong> (only if a commit checkpoint is authorized — else batch at end)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: Asterisks → <code>.pf-req</code></h3>
+  <p><strong>Files:</strong> <code>src/pages/PatientForm.jsx</code></p>
+  <p>Two span shapes wrap a required-asterisk <code>*</code>. Replace BOTH with <code>&lt;span className="pf-req"&gt;*&lt;/span&gt;</code>. Do NOT touch <code>text-red-600</code> on <code>&lt;input&gt;</code> (radio/checkbox accent — different element).</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Enumerate</strong></label></div>
+  <p>Run: <code>grep -nE "&lt;span[^&gt;]*&gt;\*&lt;/span&gt;" src/pages/PatientForm.jsx</code> — expect ~16 matches (className text-red-600 variant at ~L690/701/709/716/735/748/762/785/802/821/828/835/899/927/932/937 + inline #ef4444 variant at ~L1013/1038/1086/1103/1319).</p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Replace the className variant</strong></label></div>
+  <p>Edit each <code>&lt;span className="text-red-600"&gt;*&lt;/span&gt;</code> → <code>&lt;span className="pf-req"&gt;*&lt;/span&gt;</code>. (Use Edit <code>replace_all</code> on the exact string <code>&lt;span className="text-red-600"&gt;*&lt;/span&gt;</code> if it is byte-identical across sites.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Replace the inline-hex variant</strong></label></div>
+  <p>The inline ones vary (<code>style={{color:'#ef4444'}}</code>, <code>style={{color:'#ef4444', marginLeft:2}}</code>, <code>style={{color:'#ef4444',marginLeft:2}}</code>). For EACH, replace the whole span with <code>&lt;span className="pf-req"&gt;*&lt;/span&gt;</code> (the <code>.pf-req</code> class supplies color; the dropped 2px left-margin is within whitespace noise and JSX already has a leading space before most asterisks).</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Verify none remain</strong></label></div>
+  <p>Run: <code>grep -nE "&lt;span[^&gt;]*(text-red-600|#ef4444)[^&gt;]*&gt;\*" src/pages/PatientForm.jsx</code> → expect <strong>0 matches</strong>. Then <code>grep -c 'className="pf-req"' src/pages/PatientForm.jsx</code> → expect ~16.</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean.</p>
+</div>
+
+<div class="task">
+  <h3>Task 3: Dynamic accent wiring → <code>acLight</code></h3>
+  <p><strong>Files:</strong> <code>src/pages/PatientForm.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Hero lang-toggle active bg (L637, L641)</strong></label></div>
+<pre><code class="language-js">// before:  backgroundColor: language === 'th' ? ac : 'transparent'
+// after:   backgroundColor: language === 'th' ? acLight : 'transparent'
+// (and the EN button L641: language === 'en' ? acLight : 'transparent')</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Submit button bg (L1349)</strong></label></div>
+<pre><code class="language-js">// before:  style={{background: isEditing ? '#2563eb' : ac, boxShadow: isEditing ? '0 4px 20px rgba(37,99,235,0.35)' : `0 4px 20px rgba(${acRgb},0.35)`}}
+// after:   style={{background: isEditing ? '#2563eb' : acLight, boxShadow: isEditing ? '0 4px 20px rgba(37,99,235,0.35)' : `0 4px 20px rgba(${acRgb},0.35)`}}
+// (#2563eb editing branch already AA; boxShadow uses acRgb — decorative glow, leave)</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: <code>LanguageToggle</code> component active bg (L428, L430)</strong></label></div>
+<pre><code class="language-js">// before:  backgroundColor: language === 'th' ? (isDark ? '#dc2626' : '#ec4899') : 'transparent'
+// after:   backgroundColor: language === 'th' ? (isDark ? '#dc2626' : '#be185d') : 'transparent'
+// (and EN button L430 the same. inactive text '#9f1239' rose-800 already AA — leave)</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Patient-info section icon (L684)</strong></label></div>
+<pre><code class="language-js">// before:  &lt;User size={16} style={{color: isCustom ? '#3b82f6' : ac, flexShrink: 0}}/&gt;
+// after:   &lt;User size={16} style={{color: isCustom ? '#1d4ed8' : acLight, flexShrink: 0}}/&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Build + grep</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. <code>grep -n "acLight" src/pages/PatientForm.jsx</code> → ≥5 usages (1 def + ≥4 wiring).</p>
+</div>
+
+<div class="task">
+  <h3>Task 4: Static inline-hex accent fixes</h3>
+  <p><strong>Files:</strong> <code>src/pages/PatientForm.jsx</code>. Each is an exact string Edit.</p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Section headers <code>#f97316</code> → <code>aaAccent('#f97316', isDark)</code></strong></label></div>
+<pre><code class="language-js">// Emergency header (L921):  style={{color: '#f97316'}}            → style={{color: aaAccent('#f97316', isDark)}}
+// Emergency icon  (L922):   style={{color:'#f97316', flexShrink:0}} → style={{color: aaAccent('#f97316', isDark), flexShrink:0}}
+// HRT header (L1035): style={{color:'#f97316', marginBottom:'14px'}} → style={{color: aaAccent('#f97316', isDark), marginBottom:'14px'}}
+// HRT strip  (L1036): background:'#f97316'  → background: aaAccent('#f97316', isDark)
+// HRT selected pill (L1047): {background:'#f97316',borderColor:'#f97316'} → {background: aaAccent('#f97316', isDark), borderColor: aaAccent('#f97316', isDark)}</code></pre>
+  <p>(Grep first: <code>grep -n "#f97316" src/pages/PatientForm.jsx</code> to get exact current strings — edit each.)</p>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: HeartPulse icon (L1081)</strong></label></div>
+<pre><code class="language-js">// before:  &lt;HeartPulse size={16} style={{color:'#ef4444', flexShrink:0}}/&gt;
+// after:   &lt;HeartPulse size={16} style={{color: aaAccent('#ef4444', isDark), flexShrink:0}}/&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Light-branch literal swaps (back-btn / cancel / caption / greeting / state-icons)</strong></label></div>
+<pre><code class="language-js">// back-button (L446):  color: isDark ? '#ef4444' : '#ec4899'  → color: isDark ? '#ef4444' : '#be185d'
+// cancel link (L576):  color: isDark ? '#4b5563' : '#94a3b8'  → color: isDark ? '#4b5563' : '#64748b'
+// customTemplate caption (L667): isLightHero ? '#3b82f6' : 'rgba(147,197,253,0.9)' → isLightHero ? '#1d4ed8' : 'rgba(147,197,253,0.9)'
+// success greeting (L533): color: isDark ? accentO : '#ea580c'  → color: isDark ? accentO : '#c2410c'
+// state-screen icon (L443): color: isDark ? '#555' : '#aaa'  → color: isDark ? '#555' : '#6b7280'
+// state-screen icon (L464): color: isDark ? '#555' : '#aaa'  → color: isDark ? '#555' : '#6b7280'  (2nd occurrence)</code></pre>
+  <p>(L443/L464 are byte-identical — Edit needs unique context; include the surrounding <code>background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#aaa'</code> string and use replace_all since both are the same line content, OR edit each with its distinct wrapper.)</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Verify no raw sub-AA inline hex remains in light branches</strong></label></div>
+  <p>Run: <code>grep -nE "color:\s*'#(f97316|ec4899|94a3b8|aaa|3b82f6)'" src/pages/PatientForm.jsx</code> — every remaining hit must be a DARK branch (<code>isDark ? '#xxx' : …</code>) OR wrapped in <code>aaAccent(</code>. Manually confirm 0 LIGHT-branch raw hits. <code>#ea580c</code>: only the decorative <code>accentO</code> gradient (L500) may remain.</p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean.</p>
+</div>
+
+<div class="task">
+  <h3>Task 5: Tests — extend T7</h3>
+  <p><strong>Files:</strong> <code>tests/light-theme-override-coverage.test.js</code></p>
+  <p>Add a <code>describe('T7-PF — PatientForm light-theme AA (V126)')</code> block.</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Source-grep guards</strong> (read PatientForm.jsx as text)</label></div>
+<pre><code class="language-js">import { readFileSync } from 'node:fs';
+const PF = readFileSync('src/pages/PatientForm.jsx', 'utf8');
+
+// no LIGHT-branch raw sub-AA hex (every #f97316/#ef4444 accent goes through aaAccent or is a dark branch)
+it('PF-1: section-header orange routes through aaAccent', () => {
+  // the two inline section headers + strip + pill use aaAccent('#f97316', isDark)
+  expect((PF.match(/aaAccent\('#f97316', ?isDark\)/g) || []).length).toBeGreaterThanOrEqual(4);
+});
+it('PF-2: HeartPulse icon routes through aaAccent', () => {
+  expect(PF).toMatch(/aaAccent\('#ef4444', ?isDark\)/);
+});
+it('PF-3: back-button + cancel + caption + greeting + state-icons use AA light literals', () => {
+  expect(PF).toMatch(/isDark \? '#ef4444' : '#be185d'/);   // back-btn
+  expect(PF).toMatch(/isDark \? '#4b5563' : '#64748b'/);   // cancel
+  expect(PF).toMatch(/isLightHero \? '#1d4ed8'/);          // caption
+  expect(PF).toMatch(/isDark \? accentO : '#c2410c'/);     // greeting
+  expect(PF).toMatch(/isDark \? '#555' : '#6b7280'/);      // state icon
+});
+it('PF-4: no LIGHT-branch raw pink-500/blue-500/gray-400 accent remains', () => {
+  // these hexes must only appear as a dark branch or inside aaAccent / rgba decoration
+  expect(PF).not.toMatch(/: '#ec4899'/);   // pink-500 as a value (light back-btn fixed)
+  expect(PF).not.toMatch(/isLightHero \? '#3b82f6'/);
+  expect(PF).not.toMatch(/: '#94a3b8'/);
+});
+it('PF-5: acLight defined + wired', () => {
+  expect(PF).toMatch(/const acLight = aaAccent\(ac, ?isDark\)/);
+  expect((PF.match(/acLight/g) || []).length).toBeGreaterThanOrEqual(5);
+});
+it('PF-6: asterisks unified to .pf-req (no span text-red-600/#ef4444 asterisk remains)', () => {
+  expect(PF).not.toMatch(/&lt;span className="text-red-600"&gt;\*/);
+  expect(PF).not.toMatch(/&lt;span style=\{\{color:\s*'#ef4444'[^}]*\}\}&gt;\*/);
+  expect((PF.match(/className="pf-req"/g) || []).length).toBeGreaterThanOrEqual(14);
+});</code></pre>
+  <p><em>(Note: in the real test file use literal <code>&lt;span&gt;</code> as <code>&lt;span&gt;</code> in the JS string, not HTML-escaped — the escaping above is only for this HTML plan doc.)</em></p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: AA-math guards</strong> (reuse the file's existing contrast helper)</label></div>
+<pre><code class="language-js">// Using the existing contrastOnWhite() helper already in this test file (T7):
+it('PF-7: every PatientForm light accent target ≥ 4.5:1 on white', () => {
+  for (const hex of ['#c2410c', '#b91c1c', '#be185d', '#1d4ed8', '#e11d48', '#64748b', '#c2410c']) {
+    expect(contrastOnWhite(hex)).toBeGreaterThanOrEqual(4.5);
+  }
+});
+it('PF-8: .pf-req rose-600 AA on white + ember-red AA on dark', () => {
+  expect(contrastOnWhite('#e11d48')).toBeGreaterThanOrEqual(4.5);   // 4.7
+  expect(contrastOnDark('#ef4444')).toBeGreaterThanOrEqual(4.5);    // ember red on #0a0a0a
+});</code></pre>
+  <p>If <code>contrastOnDark</code> doesn't exist, add a 4-line helper mirroring <code>contrastOnWhite</code> against <code>#0a0a0a</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: <code>.pf-req</code> CSS present in index.css</strong></label></div>
+<pre><code class="language-js">const CSS = readFileSync('src/index.css', 'utf8');
+it('PF-9: .pf-req class defined light + dark', () => {
+  expect(CSS).toMatch(/\.pf-req\s*\{\s*color:\s*#ef4444/);
+  expect(CSS).toMatch(/\[data-theme="light"\]\s*\.pf-req\s*\{\s*color:\s*#e11d48/);
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Run T7</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/light-theme-override-coverage.test.js</code> → all PASS (existing T7 + new PF-1..PF-9).</p>
+</div>
+
+<div class="task">
+  <h3>Task 6: Verify — build + suite + live-browser scan (Rule S / Q-vis)</h3>
+  <p><strong>Files:</strong> none (verification only)</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Build + full suite</strong> (Rule N batch-end)</label></div>
+  <p>Run: <code>npm run build</code> (clean) + <code>npm test -- --run</code> (green; the 1 known phase15.5b global.fetch-leak flake is acceptable — passes 51/0 isolated).</p>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Render PatientForm in light theme</strong></label></div>
+  <p>Start dev server (<code>preview_start</code>). Reach the form via admin simulation mode OR a real prod patient-link (Rule R, read-only — find one customer's <code>patientLinkToken</code>). Set <code>data-theme="light"</code> (<code>document.documentElement.setAttribute('data-theme','light')</code> via preview_eval, or the in-form theme toggle).</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Run the inline-accent + class-color AA scanner (V124/V125 technique)</strong></label></div>
+<pre><code class="language-js">// preview_eval: walk every element, compute getComputedStyle(el).color vs its
+// effective background, flag any text/icon &lt; 4.5:1 (large/bold &lt; 3:1). Report fails
+// with {tag, text, color, bg, ratio}. Expect: 0 fails on the intake form.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Scan the other 4 states</strong></label></div>
+  <p>Success screen, session-closed, session-expired, invalid-link (drive via simulation / fake token). Each → 0 AA fails. Screenshot the form + success for the record (Q-vis: look at the pixels).</p>
+
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: Dark-theme regression spot-check</strong></label></div>
+  <p>Flip <code>data-theme="dark"</code> → confirm asterisks render ember-red, accents render vibrant (pass-through), no visual change vs pre-V126. Screenshot.</p>
+
+  <div class="step"><input type="checkbox" id="t6s6"> <label for="t6s6"><strong>Step 6: Report + (await user) commit/deploy</strong></label></div>
+  <p>Summarize: fails-before vs 0-after, screenshots, suite/build status. <strong>Do NOT commit or deploy without the explicit word this turn (V18).</strong></p>
+</div>
+
+<h2>Self-Review</h2>
+<table>
+  <tr><th>Spec requirement</th><th>Task</th></tr>
+  <tr><td>~10 inline-hex accents deepened to AA, rose-harmonized</td><td>T3 (dynamic) + T4 (static)</td></tr>
+  <tr><td>Asterisks unified to rose-600 (.pf-req), consistent</td><td>T1 (class) + T2 (swap)</td></tr>
+  <tr><td>Dynamic <code>ac</code> → acLight (pink-700 light, unchanged dark)</td><td>T1 (def) + T3 (wire)</td></tr>
+  <tr><td>Semantic zones kept (orange/blue/red already AA via V124)</td><td>NOT touched (verified by T4 grep — only inline-hex headers deepened to same orange-700)</td></tr>
+  <tr><td>Decorative pinks + LINE-green kept</td><td>NOT touched (no task edits them)</td></tr>
+  <tr><td>Dark theme unchanged</td><td>every fix is light-branch / aaAccent pass-through / .pf-req dark=ember — T6 Step 5 regression check</td></tr>
+  <tr><td>T7 extended (grep + AA-math + .pf-req + acLight)</td><td>T5</td></tr>
+  <tr><td>Live-browser 5-state scan = 0 fails (gold standard)</td><td>T6</td></tr>
+  <tr><td>build clean + full suite green</td><td>T6 Step 1</td></tr>
+</table>
+<p><strong>Type/name consistency:</strong> <code>aaAccent</code> (existing export), <code>acLight</code> (new const), <code>.pf-req</code> (new class) — used identically across T1–T5. No drift.</p>
+<p><strong>Placeholder scan:</strong> every step has exact strings/commands. No TBD/TODO.</p>
+
+</body>
+</html>
