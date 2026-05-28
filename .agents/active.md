@@ -1,33 +1,30 @@
 ---
-updated_at: "2026-05-28 EOD+4 — 4-feature batch (V128 + V129) DONE + verified, UNCOMMITTED + held (no deploy)."
-status: "WORKING TREE held — 17 modified + 7 new files (feature code NOT committed). Docs committed this EOD. Awaiting user commit+deploy word."
+updated_at: "2026-05-28 EOD+5 — V130 (createdBy + responsive table) + V131/V131-bis (HN canonical, fill-height, clickable name, cursor/caret) SHIPPED + DEPLOYED + prod-verified."
+status: "All deployed + live. Working tree CLEAN. prod LIVE = c070123d."
 branch: "master"
-last_commit: "EOD+4 docs commit (this). Code HEAD still 10e28ed4 (V127 docs). Feature batch = uncommitted working tree."
-tests: "NO full re-run at session-end (per rule). Last FULL suite 15039/0 (pre-lightbox+reports-sale). Targeted since, all GREEN: lightbox-family 104/0 · v128 7/0 · v129 12/0. build clean. Full re-run pending at deploy."
+last_commit: "c070123d (V131 + V131-bis). EOD docs commit on top."
+tests: "NO re-run at session-end (per rule). Last FULL suite this session 15106 pass + 1 isolated flake (staff-chat-lightbox-cached-image-race 200-iter stress, 7/0 isolated, unrelated). Build clean. V130 12/0 · V131 (hn 16 + appt 6) · V131-bis 7/0 all GREEN."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "26fb5789 (V127) LIVE — none of this session's 4 features deployed yet."
-firestore_rules_version: "UNCHANGED — all 4 fixes are frontend/lib only (no rules/storage/data/cron → no Probe-Deploy-Probe)."
+production_commit: "c070123d LIVE (vercel --prod, aliased) — V128/V129/V130/V131/V131-bis all live."
+firestore_rules_version: "UNCHANGED — entire session frontend/lib/CSS only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
 ---
 
-# Active Context — 4-feature batch (V128 + V129) — UNCOMMITTED + HELD (2026-05-28 EOD+4)
+# Active Context — V130 + V131/V131-bis SHIPPED + DEPLOYED (2026-05-28 EOD+5)
 
 ## State
-- **Feature code UNCOMMITTED** in working tree (17 M + 7 ??). Held per user "ยัง deploy ไม่ได้ มีงานถัดไป". Only agent-docs committed this EOD.
-- 4 fixes, each per-feature-verified (Rule Q L1/L2). Full vitest re-run + commit + deploy = ONE batch when user says.
-- All frontend/lib only → no Probe-Deploy-Probe; combined `vercel --prod` covers all 4.
+- Earlier session deployed the held V128/V129/V130 batch (commit bd925fe8). Then V131 + V131-bis shipped + deployed (c070123d). prod LIVE = c070123d, working tree clean.
+- Two `/brainstorming → spec → writing-plans → executing-plans` cycles (V130) + four `/systematic-debugging` rounds (V131 HN + table-height + appt-name + caret browsing).
+- Caret-browsing root cause = browser F7 (user-confirmed); app can't toggle the browser setting but hides the caret app-wide via caret-color (same visible result).
 
-## What this session shipped (all uncommitted — see checkpoint)
-- **V128 appt phone** — hover-peek + detail-modal show the LINKED customer's phone. Write-chokepoint (`_resolveAppointmentCustomerPhone`, backendClient create+update) + render live-resolve (`useResolvedApptPhone` hook + `apptPhoneValue||resolvedPhone`). L2 real-prod: 78 linked + 45 temp = 0 blank. AV145.
-- **V128 calendar auto-height** — `AppointmentCalendarView` fixed `SLOT_H=22` → dynamic `slotH` (computeApptSlotHeight, fills viewport, clamp 22–46). Grid fills any desktop. AV in v128 test.
-- **V128.lb staff-chat lightbox** — full-screen (`width/height:100%` of `w-full h-full` wrapper, object-contain UPSCALES small imgs; was max-w-4xl 896px) + zoom + **drag-to-pan** (clamped) + wheel-zoom. Real-browser (Chrome MCP) verified: fill + zoom + pan. AV146.
-- **V129 reports-sale** — `tab=reports-sale` พนักงานขาย + ผู้ทำรายการ resolve via `resolveSellerName(listAllSellers)` (aggregator + SaleReportTab + SaleDetailModal). L2 real-prod: `-` count 38→0. createdBy never written → ผู้ทำรายการ = resolved first seller. AV147.
-- Diag/verify scripts kept (Rule R): diag-appt-phone, verify-v128-appt-phone, diag-sale-report-seller-creator, verify-v129-…
-- Detail: `.agents/sessions/2026-05-28-v128-v129-batch.md`.
+## What this session shipped (detail → checkpoint 2026-05-28-v130-v131-reports-caret.md)
+- **V130** — sale `createdBy` true-capture (createBackendSale chokepoint `_resolveSaleCreatedBy`; AV149) + reports-sale compact + reachable-scroll table (AV148) + Rule-M backfill script (held). 
+- **V131** — HN class-of-bug: canonical `resolveCustomerHN` (reads `hn_no`) across 6 files; report blank-HN 6→0, CustomerDetailView HN badge restored (AV150). Table fills viewport height. Appt-modal name clickable → customer tab (AV151).
+- **V131-bis** — `body{cursor:default}` (mouse arrow) + `html{caret-color:transparent}` + inputs restored (hides caret-browsing `|` everywhere except inputs; copy preserved; AV152).
+- All L2/real-browser verified (HN on real prod; caret/cursor computed-style on live prod build).
 
 ## Next action
-Idle / await user. When user says "commit"/"deploy": run FULL `npm test -- --run` → commit feature batch → `vercel --prod` (frontend-only, no Probe-Deploy-Probe).
+Idle / await user.
 
 ## Outstanding user-triggered actions
-- **Commit + deploy the 4-feature batch** (held; full suite first).
-- L1 hands-on on real admin (auth-gated): appt hover-peek phone · calendar fill on 2K · staff-chat lightbox · reports-sale columns.
-- (optional) V129: capture a TRUE `createdBy` at sale-write time if ผู้ทำรายการ should differ from the seller.
+- **V130 backfill `--apply`** (`scripts/v130-backfill-sale-created-by.mjs`) — 49 legacy sales' createdBy = first seller (tagged). OPTIONAL (display already shows first-seller fallback). Needs explicit authorization (Rule M).
+- L1 hands-on (auth-gated): create sale logged-in → ผู้ทำรายการ = you; reports-sale HN + fill-height on a Windows-scaled screen; appt-modal clickable name; (with F7 on) caret hidden except inputs.
