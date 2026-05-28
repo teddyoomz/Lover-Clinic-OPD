@@ -5,9 +5,9 @@ import {
   aggregateRevenueByProcedure,
   flattenRevenueLines,
   buildRevenueColumns,
-} from '../src/lib/revenueAnalysisAggregator.js';
-import { assertReconcile } from '../src/lib/reportsUtils.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/revenueAnalysisAggregator.js';
+import { assertReconcile } from '../../src/lib/reportsUtils.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 
 const FIX_COURSES = [
   { id: 'C100', name: 'Hugel ทั่วหน้า', procedure_type_name: 'ไม่ระบุ', category_name: 'Botox' },
@@ -186,13 +186,33 @@ describe('grouping by procedureType × category × course × promotion', () => {
 /* ─── AR5 — Reconciliation ───────────────────────────────────────────────── */
 
 describe('AR5 — totals reconcile to row sums', () => {
-  it('lineTotal + paidAmount + deposit + wallet all reconcile', () => {
+  // V134 (2026-05-28): rows are GROSS per course (no per-line deposit/wallet/refund
+  // split). Only row-summable revenue keys (lineTotal, qty) reconcile to rows;
+  // deposit/wallet/refund + net paidAmount are SALE-LEVEL footer summaries.
+  it('V134: row-summable keys (lineTotal, qty) reconcile to row sums', () => {
     const out = aggregateRevenueByProcedure(SALES, FIX_COURSES, APRIL);
-    const errs = assertReconcile(out, ['lineTotal', 'paidAmount', 'depositApplied', 'walletApplied', 'refundAmount']);
+    const errs = assertReconcile(out, ['lineTotal', 'qty']);
     expect(errs).toEqual([]);
   });
 
-  it('lineTotal − deposit − wallet − refund = paidAmount (total)', () => {
+  it('V134: per-row deductions are 0 + paid = gross (lineTotal); no manufactured fractions', () => {
+    const out = aggregateRevenueByProcedure(SALES, FIX_COURSES, APRIL);
+    for (const r of out.rows) {
+      expect(r.depositApplied).toBe(0);
+      expect(r.walletApplied).toBe(0);
+      expect(r.refundAmount).toBe(0);
+      expect(r.paidAmount).toBe(r.lineTotal); // gross per course
+    }
+  });
+
+  it('V134: footer deposit total = Σ sale billing (sale-level summary, conserved)', () => {
+    const out = aggregateRevenueByProcedure(SALES, FIX_COURSES, APRIL);
+    // INV-2 112.40 + INV-3 10183.67 + INV-6 2000 = 12296.07 ; wallet INV-3 9900
+    expect(out.totals.depositApplied).toBeCloseTo(112.40 + 10183.67 + 2000, 2);
+    expect(out.totals.walletApplied).toBeCloseTo(9900, 2);
+  });
+
+  it('lineTotal − deposit − wallet − refund = paidAmount (net footer total)', () => {
     const out = aggregateRevenueByProcedure(SALES, FIX_COURSES, APRIL);
     const calc = out.totals.lineTotal - out.totals.depositApplied - out.totals.walletApplied - out.totals.refundAmount;
     expect(Math.abs(calc - out.totals.paidAmount)).toBeLessThan(0.1); // allow rounding <1 sat

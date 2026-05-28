@@ -209,7 +209,10 @@ export function RadialBars({
   size = 260,
   gap = 4,
   maxBarWidth = 14,
-  palette = ['#06b6d4','#10b981','#8b5cf6','#f59e0b','#ec4899','#14b8a6','#6366f1','#84cc16','#f97316','#0ea5e9','#d946ef','#22c55e'],
+  // V133-bis (2026-05-28): max-distinct + warm/cool-interleaved so the top-10
+  // adjacent bars never read as the same hue (old set had cyan/teal/sky +
+  // emerald/lime/green + violet/indigo near-duplicates).
+  palette = ['#22d3ee','#f97316','#a855f7','#84cc16','#ec4899','#3b82f6','#facc15','#ef4444','#14b8a6','#d946ef','#10b981','#f59e0b'],
   onBarClick,
   title = '',
   formatValue = (v) => v.toLocaleString('th-TH'),
@@ -218,29 +221,17 @@ export function RadialBars({
   const [hoverIdx, setHoverIdx] = useState(null);
   useEffect(() => { const t = setTimeout(() => setMounted(true), 30); return () => clearTimeout(t); }, []);
 
-  const cx = size / 2, cy = size / 2;
-  const count = Math.min(data.length, 10); // cap at 10 for visual clarity
-  const maxValue = data.length > 0 ? Math.max(...data.map(d => Number(d.value) || 0), 1) : 1;
-  const maxR = size / 2 - 20; // leave padding for labels
-  const innerR = Math.max(20, maxR - count * (maxBarWidth + gap));
-
-  const items = useMemo(() => data.slice(0, count).map((d, i) => {
-    const val = Math.max(0, Number(d.value) || 0);
-    const pct = val / maxValue;
-    const r = innerR + (count - 1 - i) * (maxBarWidth + gap) + maxBarWidth / 2;
-    return {
-      ...d,
-      idx: i,
-      value: val,
-      pct,
-      radius: r,
-      color: d.color || palette[i % palette.length],
-    };
-  }), [data, count, maxValue, innerR, maxBarWidth, gap, palette]);
-
-  // Each bar is an arc from 135° start, sweep = pct * 270°
-  const startDeg = 135;
-  const maxSweep = 270;
+  // V133 (2026-05-28): share-of-TOTAL semantics (match FancyDonut) — arc sweep +
+  // legend % = value/total (sum ≤ 100%), NOT value/max (the old code summed to
+  // ~279% across 10 categories). Bar thickness derives from the radius budget so
+  // `count` bars ALWAYS fit inside the SVG (fixed maxBarWidth made 10 bars
+  // overflow the viewBox → the distorted spiral). See AV154.
+  const startDeg = 135, maxSweep = 270;
+  const layout = useMemo(
+    () => computeRadialBarLayout(data, { size, gap, maxBarWidth, maxSweep, palette }),
+    [data, size, gap, maxBarWidth, maxSweep, palette]
+  );
+  const { cx, cy, barWidth, items } = layout;
 
   return (
     <div className="flex flex-col items-center" data-testid="radial-bars">
@@ -257,14 +248,14 @@ export function RadialBars({
               d={trackPath}
               fill="none"
               stroke="rgba(255,255,255,0.05)"
-              strokeWidth={maxBarWidth}
+              strokeWidth={barWidth}
               strokeLinecap="round"
             />
           );
         })}
         {/* Bars */}
         {items.map(it => {
-          const sweepNow = mounted ? maxSweep * it.pct : 0;
+          const sweepNow = mounted ? it.sweepDeg : 0;
           const barPath = arcLinePath(cx, cy, it.radius, startDeg, startDeg + sweepNow);
           const isHover = hoverIdx === it.idx;
           return (
@@ -277,7 +268,7 @@ export function RadialBars({
                 d={barPath || 'M 0 0'}
                 fill="none"
                 stroke={it.color}
-                strokeWidth={maxBarWidth}
+                strokeWidth={barWidth}
                 strokeLinecap="round"
                 opacity={hoverIdx !== null && !isHover ? 0.4 : 1}
                 style={{
@@ -289,7 +280,7 @@ export function RadialBars({
                 d={arcLinePath(cx, cy, it.radius, startDeg, startDeg + maxSweep)}
                 fill="none"
                 stroke="transparent"
-                strokeWidth={maxBarWidth + 6}
+                strokeWidth={barWidth + 6}
                 strokeLinecap="round"
                 style={{ pointerEvents: 'stroke' }}
               />
@@ -309,7 +300,7 @@ export function RadialBars({
             </text>
             <text x={cx} y={cy + 30} textAnchor="middle"
               style={{ fill: 'var(--tx-muted)', fontSize: 10, fontVariantNumeric: 'tabular-nums' }}>
-              {(items[hoverIdx].pct * 100).toFixed(1)}% ของสูงสุด
+              {(items[hoverIdx].share * 100).toFixed(1)}% ของยอดรวม
             </text>
           </g>
         )}
@@ -343,7 +334,7 @@ export function RadialBars({
               <span className="w-2.5 h-2.5 rounded flex-shrink-0" style={{ background: it.color }} />
               <span className="truncate text-[var(--tx-secondary)]">{it.label}</span>
               <span className="ml-auto tabular-nums text-[var(--tx-muted)] text-[10px]">
-                {(it.pct * 100).toFixed(0)}%
+                {(it.share * 100).toFixed(0)}%
               </span>
             </button>
           );
@@ -413,4 +404,54 @@ function arcLinePath(cx, cy, r, startDeg, endDeg) {
   const p1 = polarToCartesian(cx, cy, r, startDeg);
   const p2 = polarToCartesian(cx, cy, r, endDeg);
   return `M ${p1.x} ${p1.y} A ${r} ${r} 0 ${large} 1 ${p2.x} ${p2.y}`;
+}
+
+/**
+ * Pure layout for RadialBars (V133, 2026-05-28; arc-scale refined V133-bis). Two
+ * concerns the old inline code got wrong once >1 category was shown (see AV154):
+ *   1. LEGEND % (the number) = value / TOTAL (Σ ≤ 1) — NOT value/max. value/max
+ *      made the legend %s sum to ~279% across 10 bars. Matches FancyDonut.
+ *   2. ARC LENGTH (the visual bar) = value / MAX → the biggest fills the ring
+ *      (sweep = maxSweep) and the rest scale DOWN relative to it, so the chart
+ *      looks FULL, not sparse. (V133 first used share-of-total for the sweep too
+ *      → tiny arcs + lots of empty track = "ดูโล่ง"; V133-bis splits them.)
+ *      This is the standard radial-bar convention: bar = relative magnitude,
+ *      label = true proportion.
+ *   3. Bar thickness derives from the radius budget — `count` concentric bars
+ *      spread across [innerRFloor, maxR] so they ALWAYS fit the SVG (fixed
+ *      maxBarWidth made ~6+ bars overflow the viewBox → the distorted spiral).
+ * Data is assumed pre-sorted desc by the caller; i=0 (biggest) sits outermost.
+ * @returns {{cx,cy,count,total,maxVal,maxR,innerRFloor,band,barWidth,items}}
+ *   items[i]: { ...d, idx, value, share (of total), fillFraction (of max), sweepDeg, radius, color }
+ */
+export function computeRadialBarLayout(data, { size = 260, gap = 4, maxBarWidth = 14, maxSweep = 270, palette = [] } = {}) {
+  const cx = size / 2, cy = size / 2;
+  const list = Array.isArray(data) ? data : [];
+  const count = Math.min(list.length, 10); // cap at 10 for visual clarity
+  const shown = list.slice(0, count);
+  const vals = shown.map(d => Math.max(0, Number(d?.value) || 0));
+  const total = vals.reduce((s, v) => s + v, 0);
+  const maxVal = vals.length ? Math.max(...vals) : 0; // for bar-fill scaling
+  const maxR = size / 2 - 20;                    // outer bound (label padding)
+  const innerRFloor = Math.max(16, maxR * 0.28); // center hole for the label
+  const band = count > 0 ? (maxR - innerRFloor) / count : 0;
+  const barWidth = count > 0 ? Math.max(3, Math.min(maxBarWidth, band - gap)) : maxBarWidth;
+  const safePalette = palette.length ? palette : ['#06b6d4'];
+  const items = shown.map((d, i) => {
+    const value = vals[i];
+    const share = total > 0 ? value / total : 0;          // legend % (of total, Σ ≤ 1)
+    const fillFraction = maxVal > 0 ? value / maxVal : 0;  // arc length (of max → biggest = full bar)
+    const radius = maxR - band * (i + 0.5);                // i=0 (biggest) outermost
+    return {
+      ...d,
+      idx: i,
+      value,
+      share,
+      fillFraction,
+      sweepDeg: fillFraction * maxSweep,                   // biggest fills the ring; rest scale down
+      radius,
+      color: d?.color || safePalette[i % safePalette.length],
+    };
+  });
+  return { cx, cy, count, total, maxVal, maxR, innerRFloor, band, barWidth, items };
 }

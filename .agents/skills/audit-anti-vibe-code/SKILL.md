@@ -3523,3 +3523,43 @@ TWO related "stray text-cursor" concerns, both fixed in `index.css`, both leavin
 **Lesson (Rule Q-honest)**: the mouse I-beam (cursor) and the caret-browsing caret (caret-color) are DIFFERENT things — an initial diag that only measured `cursor` (and on the wrong page) wrongly concluded "mouse I-beam, not a caret." The caret-browsing caret is NOT reproducible in a clean test browser + is NOT fixable by `cursor` — only `caret-color` (or the user's F7). Verify caret issues with the user (they have the browser state) when a clean browser can't reproduce.
 
 **Grep**: `index.css` must contain `body { cursor: default; }` + `html { caret-color: transparent; }` + the input `cursor`/`caret-color` restore rules; must NOT add a global `body`/`html` `user-select: none` (would break copy). **Cross-link**: `tests/v131-bis-app-cursor.test.js`.
+
+### AV153 — Course category / procedure-type / name read via canonical-first resolvers, never a hardcoded legacy field from a raw be_courses doc (V132, 2026-05-28)
+
+`be_courses` (the live source, edited via CourseFormModal) stores `courseCategory` / `procedureType` / `courseName`. Older `master_data` shapes use `category_name` / `procedure_type_name`; the `beCourseToMasterShape` adapter emits `category` + `course_category`. Any consumer that joins to a **raw** be_courses doc (via `listCourses()`) and reads a HARDCODED legacy field (e.g. `category_name || category`) silently gets `''` → renders "ไม่ระบุ". This is the V49/V131 canonical→legacy shape-mismatch class. V132 surfaced it in `reports-revenue`: every หมวดหมู่ cell + the category filter dropdown showed "ไม่ระบุ" despite 380/385 prod courses having a real `courseCategory` (31 distinct). (procedureType happened to resolve because the read already had a `|| procedureType` canonical fallback — which is exactly why ONLY category broke.)
+
+**Rule**: read a course's category / procedure-type / display-name ONLY via `src/lib/courseDisplayResolvers.js` (`resolveCourseCategory` / `resolveCourseProcedureType` / `resolveCourseDisplayName`), which try the canonical field FIRST then legacy fallbacks. Reading the live free-text `courseCategory` (no hardcoded enum) means **any category/type added in the future surfaces automatically** in every reader — the explicit user requirement.
+
+**Classifier** (all course-category/type readers from raw be_courses):
+- `src/lib/revenueAnalysisAggregator.js` `resolveCourseMaster` + `buildCourseIndex` — FIXED V132 (canonical resolvers).
+- `src/components/backend/reports/RevenueAnalysisTab.jsx` `typeOptions` + `categoryOptions` — FIXED V132.
+- `src/components/backend/SaleTab.jsx:669` `shape.course_category || c.courseCategory` — already canonical-first (working reference; sanctioned).
+- `category_name` / `procedure_type_name` in PromotionTab/PromotionFormModal/promotionValidation/crossBranchImportAdapters/promotions — **promotions** collection where those ARE the canonical fields (not this class; sanctioned).
+- `category_name`/`category` in beProductToMasterShape / TreatmentFormPage:1661 / SaleTab:593 — **products** collection (not courses; not this class).
+
+**Grep**: `revenueAnalysisAggregator.js` + `RevenueAnalysisTab.jsx` must import from `courseDisplayResolvers.js` and must NOT contain `doc?.category_name || doc?.category` or `c?.category_name || c?.category` (bare legacy course read). **Cross-link**: `tests/v132-revenue-course-category-canonical.test.js`.
+
+### AV154 — Radial/proportion charts: legend % = share-of-TOTAL (Σ ≤ 100%) · arc LENGTH = value/max (full look) · radii fit the SVG (V133 + V133-bis, 2026-05-28)
+
+Two SEPARATE quantities — keep them distinct (standard radial-bar convention: bar = relative magnitude, label = true proportion):
+1. **LEGEND % (the number)** = `value / total` (Σ ≤ 100%), NEVER `value/max`. V133 bug: `RadialBars` rendered `val/maxValue` as the legend "%" → 10 categories summed to ~279% (masked until V132 surfaced >1 real category). Reference `FancyDonut` does it right (`pct = val/total`).
+2. **ARC LENGTH (the visual bar)** = `value / max` → biggest fills the ring; the rest scale DOWN relative to it, so the chart looks FULL, not sparse. V133 first used share-of-total for the sweep too → tiny arcs + empty track ("ดูโล่ง"); V133-bis split them (`fillFraction = value/max` for the sweep; `share = value/total` for the legend).
+3. **Geometry**: a chart that stacks `count` concentric bars MUST derive bar thickness from the radius budget (`band = (maxR − innerRFloor)/count`), never a fixed `maxBarWidth` — fixed width made `count×(maxBarWidth+gap)` exceed the radius for ~6+ bars → radii overflowed the viewBox → a distorted spiral.
+
+**Rule**: radial chart geometry goes through the pure `computeRadialBarLayout` — exposes `share` (value/total, for legend/hover) AND `fillFraction`+`sweepDeg` (value/max, for the arc); bar thickness fits the radius budget; biggest (i=0) outermost. Reference convention: `FancyDonut` (share-of-total slices).
+
+**Classifier** (proportion-chart components):
+- `FancyDonut` — `pct = val/total`, fixed inner/outer radius (no per-count stacking) — correct reference.
+- `RadialBars` via `computeRadialBarLayout` — FIXED V133/V133-bis (legend=share-of-total, arc=value/max, fit-to-radius).
+- `ProgressBullet` — single KPI bullet; `value/max` is intentional (a target gauge) — sanctioned, not this class.
+- `AreaSparkline` — time series, no % legend — n/a.
+
+**Grep**: `FancyCharts.jsx` must contain `export function computeRadialBarLayout` + `it.share` (legend) + `fillFraction`/`sweepDeg` (arc); must NOT contain `const pct = val / maxValue` (the old legend bug). **Cross-link**: `tests/v133-radial-bars-share-of-total.test.js`.
+
+### AV155 — Revenue-by-procedure report: GROSS per course row · deductions are sale-level FOOTER summaries (no per-line split → no manufactured fractions) (V134, 2026-05-28)
+
+A per-course revenue report MUST NOT proportionally split a SALE-level deposit/wallet/refund across course lines for per-row display — that turns a round deposit (e.g. 1,000) into fractions per course (500 / 62.89 / 437.11) the user never entered, which then sum across sales into alarming decimals (4,941.35). V134 (user decision, real-prod Rule R confirmed: money was already conserved — 8,000 = 8,000 — but the fractions were report-manufactured). Fix: rows show GROSS per course (`paidAmount = lineTotal`, deposit/wallet/refund = 0 → rendered "-"); deductions are summed ONCE per sale at the FOOTER (sale-level summary, scoped to sales whose lines survive the filter — no double-count, no leak); `totals.paidAmount` = NET (gross − deductions). `flattenRevenueLines` still exposes per-line shares for callers that want proportional attribution — the report just doesn't use them per row.
+
+**Rule**: `aggregateRevenueByProcedure` rows carry only row-summable revenue (qty, lineTotal, paid=gross); deposit/wallet/refund/net are footer summaries. AR5 reconcile is scoped to `lineTotal`+`qty` (NOT deposit/wallet/refund/paidAmount — those are sale-level summaries by design).
+
+**Grep**: `revenueAnalysisAggregator.js` must NOT contain `cur.depositApplied += ln.depositShare` / `cur.paidAmount += ln.paidShare` (per-line attribution to rows); must contain `survivingSaleIds` + `grossPaid`. **Cross-link**: `tests/v134-revenue-deposit-footer-summary.test.js` + `tests/extended/phase10-revenue.test.js` (extended-only).

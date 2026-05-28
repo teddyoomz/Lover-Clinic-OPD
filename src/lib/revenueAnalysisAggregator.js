@@ -26,10 +26,16 @@
 //   Same for walletApplied + refundAmount.
 
 import { roundTHB, dateRangeFilter, sortBy, proportional } from './reportsUtils.js';
+// V132 (2026-05-28): canonical-first course resolvers. listCourses() returns RAW
+// be_courses docs (courseCategory / procedureType / courseName) — reading the
+// legacy `category_name || category` here made every หมวดหมู่ row "ไม่ระบุ".
+// These resolvers read the live canonical field first so real + FUTURE
+// categories/types surface automatically (no hardcoded enum). See AV153.
+import { resolveCourseCategory, resolveCourseProcedureType, resolveCourseDisplayName } from './courseDisplayResolvers.js';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
-/** Resolve course master doc (procedure_type_name + category_name + fallback name). */
+/** Resolve course master doc → canonical-first procedureType / category / name. */
 function resolveCourseMaster(courseId, courseName, courseIndex) {
   if (!courseId && !courseName) return {
     procedureType: 'ไม่ระบุ',
@@ -40,20 +46,22 @@ function resolveCourseMaster(courseId, courseName, courseIndex) {
   const byName = !byId && courseName ? courseIndex.get(`NAME:${courseName}`) : null;
   const doc = byId || byName || null;
   return {
-    procedureType: (doc?.procedure_type_name || doc?.procedureType || 'ไม่ระบุ').trim() || 'ไม่ระบุ',
-    category: (doc?.category_name || doc?.category || 'ไม่ระบุ').trim() || 'ไม่ระบุ',
-    name: doc?.name || courseName || '-',
+    procedureType: resolveCourseProcedureType(doc) || 'ไม่ระบุ',
+    category: resolveCourseCategory(doc) || 'ไม่ระบุ',
+    name: resolveCourseDisplayName(doc) || courseName || '-',
   };
 }
 
-/** Build course master lookup map — keyed by id AND by NAME:name for fallback. */
+/** Build course master lookup map — keyed by id AND by NAME:<courseName> for
+ *  fallback. V132: name-key uses canonical courseName (raw be_courses has no
+ *  `name`), so the name-fallback join actually works for raw docs. */
 function buildCourseIndex(courses) {
   const idx = new Map();
   if (!Array.isArray(courses)) return idx;
   for (const c of courses) {
     const id = String(c?.id || c?.proClinicId || '');
     if (id) idx.set(id, c);
-    const name = (c?.name || '').trim();
+    const name = resolveCourseDisplayName(c);
     if (name) idx.set(`NAME:${name}`, c);
   }
   return idx;
@@ -160,9 +168,28 @@ export function aggregateRevenueByProcedure(sales, courses, filters = {}) {
 
   const lines = flattenRevenueLines(inRange, courseIndex);
 
-  // Group by (procedureType, category, courseId-or-name, promotionName)
+  // V134 (2026-05-28): per-course rows show the GROSS course amount. The old code
+  // attributed each sale's deposit/wallet/refund PROPORTIONALLY across course lines
+  // (ln.depositShare etc.) → a round sale-level deposit (e.g. 1,000) turned into
+  // fractions per course (500 / 62.89 / 437.11) that the user never entered.
+  // Per user decision: do NOT split per course — keep deductions as a sale-level
+  // FOOTER summary + net them into totals.paidAmount. flattenRevenueLines still
+  // exposes the per-line shares for any caller that wants proportional attribution;
+  // this report simply does not use them per row. See AV155.
+
+  // Filter at the LINE level first so the footer deduction total can be scoped to
+  // exactly the sales whose lines survive the filter (no double-count, no leak).
+  const q = (searchText || '').trim().toLowerCase();
+  const fLines = lines.filter(ln => {
+    if (procedureType !== 'all' && ln.procedureType !== procedureType) return false;
+    if (category !== 'all' && ln.category !== category) return false;
+    if (q && !`${ln.courseName} ${ln.promotionName}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Group surviving lines by (procedureType, category, courseId-or-name, promotionName)
   const groups = new Map();
-  for (const ln of lines) {
+  for (const ln of fLines) {
     const key = `${ln.procedureType}|${ln.category}|${ln.courseId || ln.courseName}|${ln.promotionName}`;
     const cur = groups.get(key) || {
       procedureType: ln.procedureType,
@@ -172,69 +199,62 @@ export function aggregateRevenueByProcedure(sales, courses, filters = {}) {
       promotionName: ln.promotionName,
       qty: 0,
       lineTotal: 0,
-      depositApplied: 0,
-      walletApplied: 0,
-      refundAmount: 0,
-      paidAmount: 0,
     };
     cur.qty += ln.qty;
     cur.lineTotal += ln.lineTotal;
-    cur.depositApplied += ln.depositShare;
-    cur.walletApplied += ln.walletShare;
-    cur.refundAmount += ln.refundShare;
-    cur.paidAmount += ln.paidShare;
     groups.set(key, cur);
   }
 
-  // To array + round each field (AR4 boundary)
-  let rows = [...groups.values()].map(g => ({
-    ...g,
-    qty: Math.round(g.qty * 100) / 100, // qty may be fractional (e.g. 2.5 courses)
-    lineTotal: roundTHB(g.lineTotal),
-    depositApplied: roundTHB(g.depositApplied),
-    walletApplied: roundTHB(g.walletApplied),
-    refundAmount: roundTHB(g.refundAmount),
-    paidAmount: roundTHB(g.paidAmount),
-  }));
+  // To array + round (AR4 boundary). Rows are GROSS: paidAmount = lineTotal;
+  // deposit/wallet/refund = 0 per row (deductions live at the footer only).
+  let rows = [...groups.values()].map(g => {
+    const lineTotal = roundTHB(g.lineTotal);
+    return {
+      ...g,
+      qty: Math.round(g.qty * 100) / 100, // qty may be fractional (e.g. 2.5 courses)
+      lineTotal,
+      depositApplied: 0,
+      walletApplied: 0,
+      refundAmount: 0,
+      paidAmount: lineTotal,
+    };
+  });
 
-  // Filters
-  if (procedureType !== 'all') {
-    rows = rows.filter(r => r.procedureType === procedureType);
-  }
-  if (category !== 'all') {
-    rows = rows.filter(r => r.category === category);
-  }
-  const q = (searchText || '').trim().toLowerCase();
-  if (q) {
-    rows = rows.filter(r => {
-      const hay = `${r.courseName} ${r.promotionName}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }
+  // Sort: lineTotal (= gross paidAmount) desc
+  rows = sortBy(rows, r => r.lineTotal, 'desc');
 
-  // Sort: paidAmount desc primary, lineTotal desc secondary
-  rows = sortBy(rows, r => r.paidAmount, 'desc');
-
-  // Totals
-  let qtySum = 0, ltSum = 0, depSum = 0, walSum = 0, refSum = 0, paidSum = 0;
-  for (const r of rows) {
-    qtySum += r.qty;
-    ltSum += r.lineTotal;
-    depSum += r.depositApplied;
-    walSum += r.walletApplied;
-    refSum += r.refundAmount;
-    paidSum += r.paidAmount;
+  // Sale-level deduction footer summary (V134): sum each surviving sale's billing
+  // ONCE (a sale appears once even if it has several course lines). Scoped to the
+  // sales whose lines survived the filter so footer reconciles with the shown rows.
+  const survivingSaleIds = new Set(fLines.map(ln => ln.saleId).filter(Boolean));
+  let depSum = 0, walSum = 0, refSum = 0;
+  for (const s of inRange) {
+    if (!s || s.status === 'cancelled') continue;            // AR3
+    const sid = s.saleId || s.id || '';
+    if (!survivingSaleIds.has(sid)) continue;
+    depSum += roundTHB(Number(s?.billing?.depositApplied) || 0);
+    walSum += roundTHB(Number(s?.billing?.walletApplied) || 0);
+    refSum += roundTHB(Number(s?.billing?.refundAmount || s?.refundAmount) || 0);
   }
 
-  // Pie-chart data (type / category share of paidAmount)
+  // Row-summable totals (qty, lineTotal). Deductions are the sale-level summary;
+  // paidAmount(total) = NET = lineTotal − deductions (the bottom line).
+  let qtySum = 0, ltSum = 0;
+  for (const r of rows) { qtySum += r.qty; ltSum += r.lineTotal; }
+  const grossLineTotal = roundTHB(ltSum);
+  const depositApplied = roundTHB(depSum);
+  const walletApplied = roundTHB(walSum);
+  const refundAmount = roundTHB(refSum);
+  const netPaid = roundTHB(grossLineTotal - depositApplied - walletApplied - refundAmount);
+
+  // Chart data: share of GROSS course revenue per type / category.
   const typeTotals = new Map();
   const categoryTotals = new Map();
   for (const r of rows) {
-    typeTotals.set(r.procedureType, (typeTotals.get(r.procedureType) || 0) + r.paidAmount);
-    categoryTotals.set(r.category, (categoryTotals.get(r.category) || 0) + r.paidAmount);
+    typeTotals.set(r.procedureType, (typeTotals.get(r.procedureType) || 0) + r.lineTotal);
+    categoryTotals.set(r.category, (categoryTotals.get(r.category) || 0) + r.lineTotal);
   }
-  const roundedPaidSum = roundTHB(paidSum);
-  const pct = (v) => roundedPaidSum > 0 ? roundTHB((v / roundedPaidSum) * 100) : 0;
+  const pct = (v) => grossLineTotal > 0 ? roundTHB((v / grossLineTotal) * 100) : 0;
   const typeSummary = [...typeTotals.entries()]
     .map(([type, amount]) => ({ type, paidAmount: roundTHB(amount), pct: pct(amount) }))
     .sort((a, b) => b.paidAmount - a.paidAmount);
@@ -247,11 +267,12 @@ export function aggregateRevenueByProcedure(sales, courses, filters = {}) {
     totals: {
       count: rows.length,
       qty: Math.round(qtySum * 100) / 100,
-      lineTotal: roundTHB(ltSum),
-      depositApplied: roundTHB(depSum),
-      walletApplied: roundTHB(walSum),
-      refundAmount: roundTHB(refSum),
-      paidAmount: roundedPaidSum,
+      lineTotal: grossLineTotal,
+      depositApplied,
+      walletApplied,
+      refundAmount,
+      paidAmount: netPaid,           // NET = gross − deductions (the footer bottom line)
+      grossPaid: grossLineTotal,     // gross course revenue (= Σ row.paidAmount)
     },
     meta: {
       totalLines: lines.length,

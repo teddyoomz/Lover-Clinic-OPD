@@ -25,6 +25,9 @@ import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
 // V52 (BS-1 + BS-11): listCourses via scopedDataLayer (auto-injects branchId).
 import { listCourses } from '../../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
+// V132: canonical-first course resolvers — dropdowns read be_courses.courseCategory
+// / procedureType so real + future categories/types populate the filters. See AV153.
+import { resolveCourseCategory, resolveCourseProcedureType } from '../../../lib/courseDisplayResolvers.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
@@ -90,7 +93,7 @@ export default function RevenueAnalysisTab({ clinicSettings, theme }) {
   const typeOptions = useMemo(() => {
     const set = new Set(['ไม่ระบุ']);
     for (const c of courses) {
-      const t = (c?.procedure_type_name || c?.procedureType || '').trim();
+      const t = resolveCourseProcedureType(c);
       if (t) set.add(t);
     }
     return [{ v: 'all', t: 'ทุกประเภทหัตถการ' }, ...[...set].sort().map(t => ({ v: t, t }))];
@@ -99,7 +102,7 @@ export default function RevenueAnalysisTab({ clinicSettings, theme }) {
   const categoryOptions = useMemo(() => {
     const set = new Set(['ไม่ระบุ']);
     for (const c of courses) {
-      const cat = (c?.category_name || c?.category || '').trim();
+      const cat = resolveCourseCategory(c);
       if (cat) set.add(cat);
     }
     return [{ v: 'all', t: 'ทุกหมวดหมู่' }, ...[...set].sort().map(c => ({ v: c, t: c }))];
@@ -164,7 +167,11 @@ export default function RevenueAnalysisTab({ clinicSettings, theme }) {
         />
         <MobileSortBar sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
         <RevenueMobileList rows={sortedRows} />
+        <RevenueMobileTotals totals={out.totals} />
         <RevenueDesktopTable rows={sortedRows} totals={out.totals} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+        <p className="text-[10px] text-[var(--tx-muted)] px-1 leading-relaxed">
+          * แต่ละคอร์สแสดง<span className="font-bold text-[var(--tx-secondary)]">ยอดเต็ม</span> — มัดจำ / Wallet / คืนเงิน สรุปหักรวมที่แถวล่างสุด (= ยอดชำระเงินสุทธิ)
+        </p>
       </div>
     </ReportShell>
   );
@@ -373,6 +380,31 @@ function RevenueMobileList({ rows }) {
   );
 }
 
+/** V134: mobile has no <tfoot> — show the same gross + deduction summary + net. */
+function RevenueMobileTotals({ totals }) {
+  if (!totals || totals.count === 0) return null;
+  const hasDeduction = totals.depositApplied > 0 || totals.walletApplied > 0 || totals.refundAmount > 0;
+  return (
+    <div className="lg:hidden rounded-xl border-2 border-[var(--bd)] bg-[var(--bg-hover)] p-3.5" data-testid="revenue-mobile-totals">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-[var(--tx-muted)] font-bold">ยอดรวม ({totals.count.toLocaleString('th-TH')} รายการ)</span>
+        <span className="font-bold tabular-nums text-[var(--tx-primary)]">{fmtMoney(totals.lineTotal)}</span>
+      </div>
+      {hasDeduction && (
+        <div className="mt-1.5 pt-1.5 border-t border-[var(--bd)] flex flex-wrap gap-x-3 gap-y-0.5 justify-end text-[10px] text-[var(--tx-muted)]">
+          {totals.depositApplied > 0 && <span>−มัดจำ <span className="text-[var(--tx-secondary)] font-bold tabular-nums">{fmtMoney(totals.depositApplied)}</span></span>}
+          {totals.walletApplied > 0 && <span>−Wallet <span className="text-[var(--tx-secondary)] font-bold tabular-nums">{fmtMoney(totals.walletApplied)}</span></span>}
+          {totals.refundAmount > 0 && <span>−คืน <span className="text-rose-400 font-bold tabular-nums">{fmtMoney(totals.refundAmount)}</span></span>}
+        </div>
+      )}
+      <div className="mt-1.5 pt-1.5 border-t border-[var(--bd)] flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold">ยอดชำระเงินสุทธิ</span>
+        <span className="text-base font-black tabular-nums text-emerald-400">{fmtMoney(totals.paidAmount)} ฿</span>
+      </div>
+    </div>
+  );
+}
+
 function SortHeader({ sortKey, currentKey, currentDir, onSort, align = 'left', children }) {
   const isActive = currentKey === sortKey;
   const Arrow = isActive ? (currentDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
@@ -430,7 +462,7 @@ function RevenueDesktopTable({ rows, totals, sortKey, sortDir, onSort }) {
         </tbody>
         <tfoot className="bg-[var(--bg-hover)] font-bold text-[var(--tx-primary)] border-t-2 border-[var(--bd)] sticky bottom-0 z-[5]" data-testid="revenue-report-footer">
           <tr>
-            <td colSpan={4} className="px-3 py-2">รวม {totals.count.toLocaleString('th-TH')} รายการ</td>
+            <td colSpan={4} className="px-3 py-2">รวม {totals.count.toLocaleString('th-TH')} รายการ · <span className="text-[var(--tx-muted)] font-normal">ยอดชำระเงิน = สุทธิหลังหักมัดจำ/Wallet/คืนเงิน</span></td>
             <td className="px-3 py-2 text-right tabular-nums">{totals.qty}</td>
             <td className="px-3 py-2 text-right tabular-nums" data-testid="footer-linetotal">{fmtMoney(totals.lineTotal)}</td>
             <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(totals.depositApplied)}</td>
