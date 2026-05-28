@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>reports-sale: true createdBy + responsive table — Implementation Plan (V130)</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; font-weight:700; }
+    .flowbox { display:inline-block; border:1px solid var(--bd); border-radius:6px; padding:6px 10px; background:#fff; font-size:0.85em; margin:2px 0; }
+    .arrow { color: var(--accent); font-weight:700; padding:0 6px; }
+    table { border-collapse: collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:0.5em 0.8em; text-align:left; vertical-align:top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>reports-sale: true <code>createdBy</code> + responsive table — Implementation Plan (V130)</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute task-by-task via superpowers:executing-plans (INLINE — subagents autocompact-thrash on this baseline per V81/V86/Tablet-Chart). Steps use checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Capture the real acting user as <code>createdBy</code> on every sale (ผู้ทำรายการ), and make the reports-sale table fit Windows-scaled screens via compact density + a height-capped, reachable horizontal scroll.</p>
+  <p><strong>Architecture:</strong> Item 1 = one write-chokepoint resolver in <code>createBackendSale</code> (mirror V108) + report fallback chain + Rule-M backfill. Item 2 = CSS-only change to <code>SaleReportTable</code> (compact + <code>max-h</code> scroll region); shells unchanged (already correct, AV148 regression-guard).</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Firebase client SDK, Tailwind 3.4, Vitest. No firestore.rules/storage/index/cron → no Probe-Deploy-Probe.</p>
+  <p><strong>Spec:</strong> docs/superpowers/specs/2026-05-28-reports-sale-createdby-and-responsive-table-design.html (diagnosis-corrected, real-browser verified).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Item 1 · be_sales new fields (data shape)</div>
+  <pre>be_sales/{saleId} {
+  ...existing...
+  createdById:    "STF-1042"   // staffId (resolvable via listAllSellers); '' if non-staff/none
+  createdByName:  "กวางตุ้ง"     // resolved NAME snapshot at write
+  createdBySource:"staff"      // 'staff' | 'auth' | 'none' | 'caller' | 'first-seller-backfill'
+}</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Item 2 · reports-sale table AFTER — compact + height-capped (max-h-[70vh]) reachable scroll</div>
+  <div style="border:1px solid #333;border-radius:8px;background:#0f0f0f;color:#e5e5e5;max-height:120px;overflow:auto">
+    <table style="border-collapse:collapse;font-size:10px;min-width:1180px">
+      <thead style="position:sticky;top:0;background:#171717"><tr>
+        <th style="padding:4px 6px;color:#888;white-space:nowrap">วันที่</th><th style="padding:4px 6px;color:#888">เลขที่ขาย</th><th style="padding:4px 6px;color:#888">HN</th><th style="padding:4px 6px;color:#888">ลูกค้า</th><th style="padding:4px 6px;color:#888">ปท.</th><th style="padding:4px 6px;color:#888">รายละเอียด</th><th style="padding:4px 6px;color:#888">พนง.ขาย</th><th style="padding:4px 6px;color:#888;text-align:right">สุทธิ</th><th style="padding:4px 6px;color:#888">ผู้ทำรายการ</th>
+      </tr></thead>
+      <tbody>
+        <tr><td style="padding:4px 6px;white-space:nowrap">27/05/26</td><td style="padding:4px 6px">INV-…0004</td><td style="padding:4px 6px">LC-…111</td><td style="padding:4px 6px">วศิน เข็มทอง</td><td style="padding:4px 6px">คอร์ส</td><td style="padding:4px 6px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ขลิบเลเซอร์ (ไม่ดม…</td><td style="padding:4px 6px">กวางตุ้ง</td><td style="padding:4px 6px;text-align:right">15,900</td><td style="padding:4px 6px">กวางตุ้ง</td></tr>
+        <tr><td style="padding:4px 6px;white-space:nowrap" colspan="9">… ↕ inner vertical scroll · ⟷ horizontal scrollbar sits at the BOTTOM of this capped box (always reachable)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:0.8em;color:var(--tx-muted)">Compact padding/min-w + truncated รายละเอียด/ช่องทาง; the box caps at ~70vh so both scrollbars stay in view. Sticky header pinned to the box top.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Item 1 · WRITE → READ</div>
+  <div>
+    <span class="flowbox">createBackendSale(data)</span><span class="arrow">→</span>
+    <span class="flowbox">_resolveSaleCreatedBy</span><span class="arrow">→</span>
+    <span class="flowbox">caller-override | auth.currentUser→be_staff(firebaseUid) | displayName/email | none</span><span class="arrow">→</span>
+    <span class="flowbox">stamp createdById/Name/Source</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flowbox">report row.createdBy</span><span class="arrow">=</span>
+    <span class="flowbox">createdByName</span><span class="arrow">||</span>
+    <span class="flowbox">resolveSellerName(createdById)</span><span class="arrow">||</span>
+    <span class="flowbox">legacy createdBy</span><span class="arrow">||</span>
+    <span class="flowbox">resolveSellerName(sellers[0])</span><span class="arrow">||</span> <span class="flowbox">'-'</span>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Item 2 · containment (verified — already contained; change = reachable scroll)</div>
+  <div>
+    <span class="flowbox">shell &lt;main min-w-0 overflow-x-hidden&gt;</span><span class="arrow">→</span>
+    <span class="flowbox">overflow-auto wrapper (already scrolls in-panel)</span><span class="arrow">+ max-h-[70vh]</span><span class="arrow">→</span>
+    <span class="flowbox">h-scrollbar reachable + sticky thead/tfoot pin to box</span>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>NEW <code>_resolveSaleCreatedBy</code>; stamp 3 fields in <code>createBackendSale</code>.</td></tr>
+  <tr><td><code>src/lib/saleReportAggregator.js</code></td><td><code>buildSaleReportRow</code> createdBy fallback chain + carry <code>createdBySource</code>.</td></tr>
+  <tr><td><code>src/components/backend/reports/SaleReportTab.jsx</code></td><td><code>SaleReportTable</code>: compact + <code>max-h</code> scroll region + truncate 2 cols.</td></tr>
+  <tr><td><code>scripts/v130-backfill-sale-created-by.mjs</code></td><td>NEW Rule-M backfill (legacy createdBy = first seller, source-tagged).</td></tr>
+  <tr><td><code>scripts/verify-v130-sale-created-by.mjs</code></td><td>NEW Rule-Q L2 — real-prod create + read-back.</td></tr>
+  <tr><td><code>tests/v130-sale-created-by.test.js</code></td><td>aggregator chain unit + resolver/createBackendSale source-grep + AV149.</td></tr>
+  <tr><td><code>tests/v130-reports-sale-responsive.test.js</code></td><td>SaleReportTab compact+max-h source-grep + both shells retain min-w-0 + AV148.</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>AV148 + AV149.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Item 1 — capture true createdBy (resolver + chokepoint + report chain)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> (near <code>_resolveSaleCustomerIdentity</code> :3209 + <code>createBackendSale</code> :3226); Modify <code>src/lib/saleReportAggregator.js</code> (<code>buildSaleReportRow</code> :178-182); Test <code>tests/v130-sale-created-by.test.js</code>.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1.1: Add <code>_resolveSaleCreatedBy</code> after <code>_resolveSaleCustomerIdentity</code>.</strong></div>
+<pre><code class="language-javascript">/** V130 (2026-05-28) — capture the TRUE acting user at sale-write (ผู้ทำรายการ).
+ *  Mirror of _resolveSaleCustomerIdentity (V108) at the createBackendSale
+ *  chokepoint → all 7 callers covered. Resolves logged-in staff via
+ *  be_staff WHERE firebaseUid == uid (listenToUserPermissions pattern :9987).
+ *  createdBySource is an honesty tag. Non-fatal — failure → empty → report
+ *  falls back to first-seller. AV149 locks this. */
+async function _resolveSaleCreatedBy(data) {
+  const explicitId   = data && typeof data.createdById   === 'string' ? data.createdById.trim()   : '';
+  const explicitName = data && typeof data.createdByName === 'string' ? data.createdByName.trim() : '';
+  if (explicitId || explicitName) {
+    return { createdById: explicitId, createdByName: explicitName, createdBySource: data.createdBySource || 'caller' };
+  }
+  try {
+    const u = auth?.currentUser;
+    if (!u || !u.uid) return { createdById: '', createdByName: '', createdBySource: 'none' };
+    const snap = await getDocs(query(staffCol(), where('firebaseUid', '==', u.uid), limit(1)));
+    const d = snap.docs[0];
+    if (d) {
+      const s = d.data() || {};
+      return { createdById: d.id, createdByName: (s.name || '').trim(), createdBySource: 'staff' };
+    }
+    return { createdById: '', createdByName: (u.displayName || u.email || '').trim(), createdBySource: 'auth' };
+  } catch {
+    return { createdById: '', createdByName: '', createdBySource: 'none' };
+  }
+}</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1.2: Stamp in <code>createBackendSale</code> (after the V108 _ident line).</strong></div>
+<pre><code class="language-javascript">const _ident   = await _resolveSaleCustomerIdentity(data);
+const _creator = await _resolveSaleCreatedBy(data); // V130
+await setDoc(saleDoc(finalId), {
+  saleId: finalId,
+  branchId: _resolveBranchIdForWrite(data), // V102
+  ..._normalizeSaleData(data),
+  customerName: _ident.customerName, // V108
+  customerHN: _ident.customerHN,     // V108
+  createdById: _creator.createdById,       // V130
+  createdByName: _creator.createdByName,   // V130
+  createdBySource: _creator.createdBySource, // V130
+  status: data.status || 'active',
+  createdAt: now,
+  updatedAt: now,
+});</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1.3: Update <code>buildSaleReportRow</code> createdBy derivation (saleReportAggregator.js).</strong></div>
+<pre><code class="language-javascript">// V130 — "ผู้ทำรายการ": prefer the TRUE captured creator (snapshot createdByName),
+// then live-resolve createdById via the seller lookup, then legacy createdBy,
+// then the FIRST seller resolved (legacy fallback), then '-'.
+createdBy:
+  (typeof s.createdByName === 'string' &amp;&amp; s.createdByName.trim()) ||
+  resolveSellerName({ id: s.createdById }, sellerLookup) ||
+  (typeof s.createdBy === 'string' &amp;&amp; s.createdBy.trim()) ||
+  resolveSellerName(Array.isArray(s.sellers) ? s.sellers[0] : null, sellerLookup) ||
+  '-',
+createdBySource: s.createdBySource || '',</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1.4: Write unit + source-grep tests</strong> in <code>tests/v130-sale-created-by.test.js</code>:</div>
+  <ul>
+    <li>Unit (pure, via <code>buildSaleReportRow</code>): snapshot wins; createdById live-resolves via lookup; legacy createdBy used; first-seller fallback; '-' when nothing; <code>createdBySource</code> carried.</li>
+    <li>Source-grep <code>backendClient.js</code>: <code>_resolveSaleCreatedBy</code> exists, has the 4 branches (caller/staff/auth/none), createBackendSale stamps <code>createdById/createdByName/createdBySource</code>.</li>
+    <li>Source-grep <code>SKILL.md</code>: AV149 present.</li>
+  </ul>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1.5: Run targeted tests</strong> — <code>npm test -- --run tests/v130-sale-created-by.test.js</code> → PASS. Also re-run <code>tests/v129-sale-report-seller-creator-resolve.test.js</code> (touches same aggregator) → PASS.</div>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1.6: Add AV149</strong> to <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (createBackendSale MUST stamp createdById/Name/Source; report fallback chain locked).</div>
+</div>
+
+<div class="task">
+  <h3>Task 2: Item 1 — Rule-M backfill + Rule-Q L2 verify scripts</h3>
+  <p><strong>Files:</strong> Create <code>scripts/v130-backfill-sale-created-by.mjs</code>, <code>scripts/verify-v130-sale-created-by.mjs</code>. (Pattern: copy <code>scripts/verify-v129-sale-report-seller-creator.mjs</code> + the existing Rule-M backfill template.)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 2.1:</strong> Backfill (two-phase, default dry-run; <code>--apply</code>): scan be_sales missing both createdById &amp; createdByName; resolve sellers[0] → name via be_staff/be_doctors; stamp <code>createdByName</code> + <code>createdById = sellers[0]?.id || ''</code> + <code>createdBySource:'first-seller-backfill'</code> + <code>_v130BackfilledAt</code>; idempotent; audit doc <code>be_admin_audit/v130-…</code>. Canonical path <code>artifacts/{APP_ID}/public/data/be_sales</code>; PEM <code>split('\\n').join('\n')</code>; invocation guard.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2.2:</strong> Verify (L2, READ + a TEST-SALE- write via the real client path): create a TEST-prefixed sale through <code>createBackendSale</code>-shaped write while signed in as a staff token; read back; assert <code>createdById/createdByName/createdBySource='staff'</code>; assert <code>aggregateSaleReport</code> resolves the name. Cleanup.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2.3:</strong> Run backfill <strong>dry-run</strong> on real prod (Rule R env already authorized) → capture count. Do NOT <code>--apply</code> yet (await user authorization for the data mutation, per Rule M).</div>
+</div>
+
+<div class="task">
+  <h3>Task 3: Item 2 — compact + reachable-scroll SaleReportTable (CSS-only)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/reports/SaleReportTab.jsx</code> (<code>SaleReportTable</code> :397-483); Test <code>tests/v130-reports-sale-responsive.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 3.1: Height-cap + keep overflow-auto</strong> — wrapper (:407): <code>hidden lg:block overflow-auto …</code> → <code>hidden lg:block max-h-[70vh] overflow-auto …</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3.2: Compact</strong> — table (:408) <code>min-w-[1400px]</code> → <code>min-w-[1180px]</code>; all <code>px-2 py-2</code> in th/td/tfoot → <code>px-1.5 py-1</code> (keep <code>text-xs</code> = 12px Thai-readable floor).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3.3: Truncate the 2 long text columns</strong> — add helper <code>const isTruncatable = (key) =&gt; key === 'itemsSummary' || key === 'paymentChannels';</code>; in the default cell render, when truncatable wrap display in <code>&lt;span className="block max-w-[180px] truncate" title={String(display ?? '')}&gt;{display}&lt;/span&gt;</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3.4: Tests</strong> in <code>tests/v130-reports-sale-responsive.test.js</code>: source-grep SaleReportTab for <code>max-h-[70vh]</code> + <code>min-w-[1180px]</code> + <code>px-1.5 py-1</code> + <code>isTruncatable</code>; AV148 regression — read <code>nav/BackendNav.jsx</code> + <code>shell/BackendShellNew.jsx</code>, assert both <code>&lt;main&gt;</code> contain <code>min-w-0</code>; assert <code>SaleMobileList</code> still present (mobile untouched); AV148 in SKILL.md.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3.5: Run</strong> <code>npm test -- --run tests/v130-reports-sale-responsive.test.js</code> → PASS.</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: Verification (Rule Q / Rule S) + batch hold</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 4.1:</strong> <code>npm run build</code> → clean.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4.2: Full suite</strong> — <code>npm test -- --run</code> → all green (note any known flake). (Rule N: full run because this touches a shared aggregator + adds fields.)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4.3: Rule S real-browser (Chrome MCP)</strong> — render the compact + <code>max-h-[70vh]</code> SaleReportTable at a scaled (~1200px) viewport; confirm: horizontal scrollbar reachable within the box, sticky header pins to box top, no page overflow, Thai readable. Screenshot. (Temp probe → delete; never commit.)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4.4: Rule Q L2</strong> — run <code>node scripts/verify-v130-sale-created-by.mjs</code> → PASS; run backfill dry-run (Step 2.3) → capture count.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4.5: HOLD</strong> — do NOT commit/deploy. Report results; the work joins the held V128/V129 batch until the user says commit/deploy. Backfill <code>--apply</code> awaits explicit user authorization (Rule M).</div>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> Item 1 (createdById/Name/Source + chain + backfill + AV149) → T1/T2/T1.6. Item 2 (compact + max-h reachable scroll, shells unchanged + AV148) → T3. Verification (build/full-suite/Chrome MCP/L2) → T4. All spec sections mapped.</li>
+  <li><strong>Placeholders:</strong> none — resolver, stamp, and aggregator chain shown in full; CSS edits exact; scripts reference existing templates (verify-v129) so no invented APIs.</li>
+  <li><strong>Type/name consistency:</strong> <code>createdById</code>/<code>createdByName</code>/<code>createdBySource</code> identical across resolver, createBackendSale, aggregator, tests, backfill. <code>resolveSellerName</code> already imported in aggregator (:16). <code>auth</code>/<code>staffCol</code>/<code>query</code>/<code>where</code>/<code>limit</code>/<code>getDocs</code> all already used in backendClient.</li>
+</ul>
+
+</body>
+</html>

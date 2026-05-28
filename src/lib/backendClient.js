@@ -11,7 +11,7 @@ import { storagePrefixForMessage } from './staffChatRetentionCore.js';
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
 import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } from './chartEditSessionCore.js';
-import { resolveCustomerDisplayName, resolveCustomerHN } from './customerDisplayName.js';
+import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
 // in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson). Same
@@ -2041,6 +2041,25 @@ export function buildAppointmentSlotKeys(input, intervalMin = SLOT_INTERVAL_MIN)
   return keys;
 }
 
+/** V128 — resolve a LINKED customer's phone for denorm on the appointment doc.
+ *  AppointmentFormModal sends customerName/HN + customerPhoneTemp (pick-later)
+ *  but NEVER customerPhone → linked appts showed blank phone in the hover card
+ *  (apptPhoneValue) + search + print. Mirror of V108 _resolveSaleCustomerIdentity:
+ *  trust a non-empty caller value; resolve from be_customers ONLY when empty +
+ *  customerId set; missing/unreadable customer → '' (apptPhoneValue then falls
+ *  back to customerPhoneTemp). Idempotent + non-fatal. AV145 locks this. */
+async function _resolveAppointmentCustomerPhone(data) {
+  let phone = (data && typeof data.customerPhone === 'string') ? data.customerPhone.trim() : '';
+  const cid = data && data.customerId;
+  if (cid && !phone) {
+    try {
+      const snap = await getDoc(customerDoc(cid));
+      if (snap.exists()) phone = resolveCustomerPhone(snap.data());
+    } catch { /* non-fatal — leave blank, customerPhoneTemp fallback */ }
+  }
+  return phone || '';
+}
+
 /** Create a new backend appointment.
  *
  * Audit P1 (2026-04-26 AP1): server-side last-mile collision check before
@@ -2127,9 +2146,16 @@ export async function createBackendAppointment(data) {
       console.warn(`[createBackendAppointment] auto-stamping branchId=${resolvedBranchId} (caller did not provide). appointmentId=${appointmentId}`);
     }
   }
+  // V128 — write-chokepoint: denorm the linked customer's phone (mirror V108).
+  const _v128CustomerPhone = await _resolveAppointmentCustomerPhone(persistData);
   const apptPayload = {
     appointmentId,
     ...persistData,
+    // V128 — linked customer's phone (apptPhoneValue reads customerPhone first).
+    // Writers historically sent only customerPhoneTemp (pick-later) → linked appts
+    // blank in the hover card + search + print. Resolved from be_customers when
+    // caller-empty ('' for pick-later w/o customerId → customerPhoneTemp fallback).
+    customerPhone: _v128CustomerPhone,
     // OVERWRITE branchId (after spread) so any caller-passed empty string
     // gets replaced with the resolved value. Falls back to null only if
     // resolveSelectedBranchId() also returns falsy — that case fails the
@@ -2296,8 +2322,25 @@ export async function updateBackendAppointment(appointmentId, data) {
     if (snap.exists()) oldData = snap.data();
   } catch { /* best-effort */ }
 
+  // V128 — write-chokepoint (mirror V108/V112): denorm the linked customer's
+  // phone when the doc has none. Writers never sent customerPhone (only
+  // customerPhoneTemp for pick-later) → linked appts blank in the hover card.
+  // Resolve from be_customers ONLY when BOTH the caller patch AND the existing
+  // doc lack a phone + customerId is resolvable. Resolved '' → field untouched
+  // (never clobber). Non-fatal.
+  let _v128UpdPhone = '';
+  try {
+    const cid = (data && data.customerId) || (oldData && oldData.customerId) || '';
+    const callerPhone = (data && typeof data.customerPhone === 'string') ? data.customerPhone.trim() : '';
+    const existingPhone = (oldData && typeof oldData.customerPhone === 'string') ? oldData.customerPhone.trim() : '';
+    if (cid && !callerPhone && !existingPhone) {
+      _v128UpdPhone = await _resolveAppointmentCustomerPhone({ customerId: cid });
+    }
+  } catch { /* non-fatal */ }
+
   await updateDoc(appointmentDoc(appointmentId), {
     ...data,
+    ...(_v128UpdPhone ? { customerPhone: _v128UpdPhone } : {}),
     updatedAt: new Date().toISOString(),
   });
 
@@ -3180,6 +3223,41 @@ async function _resolveSaleCustomerIdentity(data) {
   return { customerName: customerName || '', customerHN: customerHN || '' };
 }
 
+/** V130 (2026-05-28) — capture the TRUE acting user at sale-write (ผู้ทำรายการ).
+ *  Mirror of _resolveSaleCustomerIdentity (V108) at the createBackendSale
+ *  chokepoint so ALL callers (TFP auto-sale ×2, CustomerDetailView ×3,
+ *  SaleTab form, online-sale) get it from one guard. Resolves the logged-in
+ *  staff via `be_staff WHERE firebaseUid == uid` (the listenToUserPermissions
+ *  pattern) — be_staff doc IDs are staffId (STF-XXX); the auth uid lives in
+ *  the `firebaseUid` field. createdBySource is an honesty tag so a real
+ *  capture is distinguishable from a backfilled guess (V129-followup / V113
+ *  spirit). Non-fatal: any failure → empty → the report falls back to the
+ *  first seller at read time. AV149 locks this. */
+async function _resolveSaleCreatedBy(data) {
+  // 1) explicit caller override wins verbatim (e.g. attribute to a specific actor).
+  const explicitId   = data && typeof data.createdById   === 'string' ? data.createdById.trim()   : '';
+  const explicitName = data && typeof data.createdByName === 'string' ? data.createdByName.trim() : '';
+  if (explicitId || explicitName) {
+    return { createdById: explicitId, createdByName: explicitName, createdBySource: data.createdBySource || 'caller' };
+  }
+  try {
+    const u = auth?.currentUser;
+    if (!u || !u.uid) return { createdById: '', createdByName: '', createdBySource: 'none' };
+    // 2) staff doc by firebaseUid (NOT by doc id — V30 lesson).
+    const snap = await getDocs(query(staffCol(), where('firebaseUid', '==', u.uid), limit(1)));
+    const d = snap.docs[0];
+    if (d) {
+      const s = d.data() || {};
+      return { createdById: d.id, createdByName: (s.name || '').trim(), createdBySource: 'staff' };
+    }
+    // 3) signed-in but not a be_staff member (owner gmail / non-staff admin).
+    return { createdById: '', createdByName: (u.displayName || u.email || '').trim(), createdBySource: 'auth' };
+  } catch {
+    // 4) no user / unreadable → empty; report falls back to first seller.
+    return { createdById: '', createdByName: '', createdBySource: 'none' };
+  }
+}
+
 export async function createBackendSale(data) {
   const saleId = await generateInvoiceNumber();
   const now = new Date().toISOString();
@@ -3189,12 +3267,16 @@ export async function createBackendSale(data) {
   // V108: resolve customer name/HN from be_customers when caller passes empty.
   // Set AFTER the _normalizeSaleData spread so resolved values win.
   const _ident = await _resolveSaleCustomerIdentity(data);
+  const _creator = await _resolveSaleCreatedBy(data); // V130
   await setDoc(saleDoc(finalId), {
     saleId: finalId,
     branchId: _resolveBranchIdForWrite(data), // V102
     ..._normalizeSaleData(data),
     customerName: _ident.customerName, // V108
     customerHN: _ident.customerHN,     // V108
+    createdById: _creator.createdById,         // V130 — true creator (staffId)
+    createdByName: _creator.createdByName,     // V130 — resolved name snapshot
+    createdBySource: _creator.createdBySource, // V130 — 'staff'|'auth'|'none'|'caller'
     status: data.status || 'active',
     createdAt: now,
     updatedAt: now,

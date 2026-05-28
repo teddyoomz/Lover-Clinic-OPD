@@ -117,7 +117,11 @@ describe('Phase 15.7-septies — customer link opens new browser tab', () => {
       // Search for a div with role="button" + tabIndex={0} + onKeyDown handler.
       // Calendar-density (2026-05-20) — block click now opens the read-only
       // detail popover (openDetail); แก้ไข inside it routes to the edit modal.
-      expect(TabSrc).toMatch(/role="button"\s+tabIndex=\{0\}\s+onClick=\{\(\)\s*=>\s*openDetail\(appt\)\}/);
+      // V127 (2026-05-28) added `closePeek();` before openDetail in the onClick
+      // body (hover-peek dismiss on click) — match the core div-role-button +
+      // tabIndex + onClick→openDetail intent leniently so the closePeek prefix
+      // (or future body tweaks) don't re-break this stale lock.
+      expect(TabSrc).toMatch(/role="button"\s+tabIndex=\{0\}\s+onClick=\{[\s\S]{0,80}openDetail\(appt\)/);
       expect(TabSrc).toMatch(/onKeyDown=\{[\s\S]{0,200}openDetail\(appt\)/);
     });
 

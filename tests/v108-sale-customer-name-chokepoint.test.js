@@ -14,7 +14,10 @@ const skill = readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8
 const helperStart = bc.indexOf('async function _resolveSaleCustomerIdentity');
 const helper = bc.slice(helperStart, helperStart + 900);
 const createStart = bc.indexOf('export async function createBackendSale');
-const createFn = bc.slice(createStart, createStart + 800);
+// V130 (2026-05-28) widened 800 → 1100: createBackendSale gained the
+// _resolveSaleCreatedBy call + createdById/createdByName/createdBySource stamps,
+// pushing the V108 customerName/HN lines past the old window.
+const createFn = bc.slice(createStart, createStart + 1100);
 const loadOptStart = saleTab.indexOf('const loadOptions = useCallback');
 const loadOptFn = saleTab.slice(loadOptStart, loadOptStart + 1300);
 

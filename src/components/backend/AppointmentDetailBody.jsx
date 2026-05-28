@@ -26,11 +26,14 @@ import {
  * type-less appt shows no chip). recurring / deposit are present-guarded —
  * they're absent on calendar appts today and simply omit (Q3=A "when present").
  */
-export default function AppointmentDetailBody({ appt, roomName, doctorMap, variant = 'modal' }) {
+export default function AppointmentDetailBody({ appt, roomName, doctorMap, variant = 'modal', resolvedPhone = '' }) {
   if (!appt) return null;
 
   const st = getApptStatusMeta(appt.status);
-  const phone = apptPhoneValue(appt);
+  // V128 — apptPhoneValue (customerPhone denorm OR customerPhoneTemp pick-later)
+  // wins; resolvedPhone is the live-resolved fallback the container supplies for
+  // legacy linked appts whose doc has no denormalized phone.
+  const phone = apptPhoneValue(appt) || resolvedPhone || '';
   const hn = appt.customerHN || appt.hnId || '';
   const assistants = resolveAssistantNames(appt, doctorMap);
   const metaBits = [hn, apptTimeRange(appt), roomName].filter(Boolean).join(' · ');

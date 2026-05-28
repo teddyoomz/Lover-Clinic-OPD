@@ -47,7 +47,10 @@ describe('appt-calendar-density · T3 popover wiring', () => {
 
 describe('appt-calendar-density · T4 span=1 single-line cell + rollup', () => {
   it('T4.1 derives isShortBlock + nameSizeCls from span', () => {
-    expect(SRC).toMatch(/const isShortBlock = span === 1/);
+    // V128.cal (2026-05-28) — isShortBlock is now slotH-derived (was `span === 1`):
+    // with the dynamic row height a 1-slot block can be tall, so "short" = a
+    // rendered block under 28px. nameSizeCls unchanged.
+    expect(SRC).toMatch(/const isShortBlock = span \* slotH - 4 < 28/);
     expect(SRC).toMatch(/const nameSizeCls = isShortBlock \? 'text-\[11px\] leading-\[18px\]' : 'text-sm leading-tight'/);
   });
 

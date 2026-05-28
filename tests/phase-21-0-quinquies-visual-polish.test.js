@@ -20,8 +20,11 @@ const DP  = readFileSync('src/components/backend/DepositPanel.jsx', 'utf8');
 const ADJS = readFileSync('src/lib/appointmentDisplay.js', 'utf8');
 
 describe('Phase 21.0-quinquies — Calendar grid visual polish', () => {
-  test('Q1 SLOT_H bumped to 22 (was 18) for breathing room', () => {
-    expect(ACV).toMatch(/const SLOT_H = 22;/);
+  test('Q1 row-height floor = MIN_SLOT_H 22 (V128.cal — dynamic slotH clamps to this floor)', () => {
+    // V128.cal (2026-05-28) — fixed SLOT_H replaced by a dynamic slotH that
+    // fills the viewport (computeApptSlotHeight); 22 is preserved as the floor.
+    expect(ACV).toMatch(/const MIN_SLOT_H = 22;/);
+    expect(ACV).toMatch(/computeApptSlotHeight/);
   });
 
   test('Q2 STATUSES palette exposes per-status `accent` color (4px left-border)', () => {
@@ -91,9 +94,9 @@ describe('Phase 21.0-sexies — Occupied cells skip top border', () => {
   });
 
   test('S2 row wrapper itself does NOT carry the row border (moved to cells)', () => {
-    // The row wrapper is `<div key={time} className="flex" style={{ height: SLOT_H }}>`
-    // — note: NO border-t-* class on the wrapper.
-    expect(ACV).toMatch(/<div key=\{time\} className="flex" style=\{\{ height: SLOT_H \}\}>/);
+    // The row wrapper is `<div key={time} className="flex" style={{ height: slotH }}>`
+    // (V128.cal — dynamic slotH; was SLOT_H) — note: NO border-t-* class on the wrapper.
+    expect(ACV).toMatch(/<div key=\{time\} className="flex" style=\{\{ height: slotH \}\}>/);
   });
 
   test('S3 time-label cell carries cellBorderCls (always visible)', () => {

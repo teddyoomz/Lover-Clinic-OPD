@@ -20,7 +20,7 @@ import AppointmentDetailBody from './AppointmentDetailBody.jsx';
  * AV78 (V83): backdrop click does NOT close — explicit close only
  * (X / ปิด / ESC). Thai-culture: name + HN never red.
  */
-export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, onClose }) {
+export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, onClose, resolvedPhone = '' }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
@@ -49,7 +49,7 @@ export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, on
           <X size={14} />
         </button>
 
-        <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="modal" />
+        <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="modal" resolvedPhone={resolvedPhone} />
 
         <div className="mt-3 flex justify-end gap-2">
           <button

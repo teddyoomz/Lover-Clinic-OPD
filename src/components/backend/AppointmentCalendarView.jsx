@@ -18,7 +18,7 @@
 // listeners on branch switch). Locks appointmentType on AppointmentFormModal
 // when admin creates a new appt from this view (lockedAppointmentType prop).
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, User,
   CalendarDays, CalendarX,
@@ -48,6 +48,7 @@ import DepositAwareCancelDialog from '../admin/DepositAwareCancelDialog.jsx';
 import AppointmentDetailPopover from './AppointmentDetailPopover.jsx';
 import AppointmentAgendaView from './AppointmentAgendaView.jsx';
 import useApptHoverPeek from '../../hooks/useApptHoverPeek.js';
+import useResolvedApptPhone from '../../hooks/useResolvedApptPhone.js';
 import AppointmentHoverPeek from './AppointmentHoverPeek.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
@@ -114,13 +115,26 @@ const CAL_HEADERS = ['จ','อ','พ','พฤ','ศ','ส','อา'];
 // as APPT_STATUSES (single source, Rule of 3: shared with popover + agenda).
 const STATUSES = APPT_STATUSES;
 const ROOMS_CACHE_KEY = 'appt-rooms-seen'; // localStorage: cumulative room list across month nav (read by AppointmentFormModal)
-// Phase 19.0 (2026-05-06) — SLOT_H halved to 18 (was 36 per 30-min); 15-min
-// canonical TIME_SLOTS imported from staffScheduleValidation.
-// Phase 21.0-quinquies (2026-05-06 EOD) — bumped to 22 for breathing room
-// (user feedback: "ตารางเราแม่งโคตรจะไม่สวยดูยาก ลายตา"). Each appointment
-// block now has more vertical room for the customer name + purpose chip
-// + doctor/assistant rows. Total grid pixel-height = 56 rows × 22 = 1232px.
-const SLOT_H = 22; // px per 15-min slot
+// Phase 19.0 (2026-05-06) — 15-min canonical TIME_SLOTS from staffScheduleValidation.
+// Phase 21.0-quinquies — 22px row for breathing room.
+// V128.cal (2026-05-28) — these are now the FLOOR + CEILING. The grid computes a
+// DYNAMIC per-15-min row height (slotH) that grows to fill the viewport on tall
+// desktop screens (2K+) via computeApptSlotHeight + a useLayoutEffect measure.
+// User report: "จอ 2K ตารางนัดดูเล็กมาก ... ขยายให้พอดีความสูงจอ รองรับทุกขนาดหน้าจอ".
+const MIN_SLOT_H = 22; // px floor per 15-min slot (preserves current density on laptops)
+const MAX_SLOT_H = 46; // px ceiling (avoid absurdly tall rows on very large screens)
+
+/**
+ * V128.cal — pure: distribute available vertical px among the visible time rows,
+ * clamped to [min, max]. Exported for unit tests (Rule P Tier 2). availPx =
+ * viewport height remaining below the grid's top edge; rowCount = visible slots.
+ */
+export function computeApptSlotHeight(availPx, rowCount, min = MIN_SLOT_H, max = MAX_SLOT_H) {
+  const rows = Math.max(1, Math.floor(Number(rowCount)) || 1);
+  const raw = Math.floor((Number(availPx) || 0) / rows);
+  if (!Number.isFinite(raw)) return min;
+  return Math.max(min, Math.min(max, raw));
+}
 
 // AP3: clinic is Thailand (Asia/Bangkok, UTC+7, no DST). `new Date()` + the
 // local-getters below would be fine for admins in Thailand but drift for
@@ -295,6 +309,11 @@ export default function AppointmentCalendarView({
   const openDetail = useCallback((appt) => setDetailAppt(appt), []);
   // V127 — desktop hover peek-card (additive; click→modal + touch unchanged).
   const { peek, getHoverProps, closePeek } = useApptHoverPeek();
+  // V128 — live-resolve the linked customer's phone for the peek + popover
+  // (covers the legacy appts that predate the write-chokepoint). Cached per
+  // customerId; returns '' immediately when apptPhoneValue already has a value.
+  const peekPhone = useResolvedApptPhone(peek?.appt);
+  const detailPhone = useResolvedApptPhone(detailAppt);
   // Calendar-density (2026-05-20) — below `lg` (mobile/tablet) default to the
   // chronological agenda (the 2D room×time grid forces 2-axis scroll on a
   // phone); ≥lg default to the grid. viewModeOverride (null | 'grid' |
@@ -579,6 +598,28 @@ export default function AppointmentCalendarView({
     }),
     [selectedDate, cs?.openHoursMonFri, cs?.openHoursSatSun, typedDayAppts],
   );
+
+  // V128.cal (2026-05-28) — dynamic row height so the grid fills the viewport on
+  // tall desktop screens (2K+). Measures the rows-wrapper top edge, takes the
+  // remaining viewport height, divides by the visible-row count, clamps. Recomputes
+  // on window resize + view/date/row-count change. Grid-only (agenda is a card
+  // list). Blocks stay correctly positioned — their pixel math uses the SAME slotH.
+  const gridRowsRef = useRef(null);
+  const [slotH, setSlotH] = useState(MIN_SLOT_H);
+  const visibleRowCount = visibleTime.slots.length;
+  useLayoutEffect(() => {
+    if (effectiveView !== 'grid') return undefined;
+    const recompute = () => {
+      const el = gridRowsRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const avail = window.innerHeight - top - 24; // bottom breathing room
+      setSlotH(computeApptSlotHeight(avail, visibleRowCount));
+    };
+    recompute();
+    window.addEventListener('resize', recompute);
+    return () => window.removeEventListener('resize', recompute);
+  }, [effectiveView, visibleRowCount, selectedDate]);
 
   const rooms = useMemo(() => {
     // Phase 18.0 — column set = master rooms ONLY (sorted by sortOrder
@@ -957,7 +998,7 @@ export default function AppointmentCalendarView({
                   its top border, eliminating the horizontal stripes that
                   showed through the translucent status-bg. User report:
                   "ลูกค้าลากคิวยาว ... เอาเส้นขาวๆในพื้นที่สีส้มออกไปปป". */}
-              <div className="relative">
+              <div className="relative" ref={gridRowsRef}>
                 {/* V53 (BS-12) — visibleTime.slots derived from per-branch
                     openHours; auto-expanded when legacy appts fall outside. */}
                 {visibleTime.slots.map((time) => {
@@ -975,7 +1016,7 @@ export default function AppointmentCalendarView({
                     ? 'text-[var(--tx-secondary)] font-bold'
                     : 'text-[var(--tx-muted)]/70';
                   return (
-                  <div key={time} className="flex" style={{ height: SLOT_H }}>
+                  <div key={time} className="flex" style={{ height: slotH }}>
                     <div className={`w-[60px] flex-shrink-0 text-xs text-right pr-2 pt-0.5 font-mono ${labelCls} ${cellBorderCls}`}>{time}</div>
                     {rooms.map(room => {
                       // Phase 15.7-bis — O(1) lookup, array-valued so duplicates render.
@@ -992,7 +1033,7 @@ export default function AppointmentCalendarView({
                         // single line (py-0 + 11px) that fits without clipping
                         // the name. AppointmentSlotMeta is already span>1-gated,
                         // so span=1 is name-only. span>=2 keeps the roomy card.
-                        const isShortBlock = span === 1;
+                        const isShortBlock = span * slotH - 4 < 28;
                         const nameSizeCls = isShortBlock ? 'text-[11px] leading-[18px]' : 'text-sm leading-tight';
                         // V53 (BS-12) — flag this appt's startTime as "outside
                         // current branch open hours" so admin sees an orange
@@ -1004,7 +1045,7 @@ export default function AppointmentCalendarView({
                         // visible line). Subsequent rows under the block are
                         // rendered borderless via the `occupied` branch below.
                         return (
-                          <div key={room} className={`flex-1 ${_colMinClass} border-l border-[var(--bd)]/30 px-0.5 relative ${cellBorderCls}`} style={{ height: SLOT_H }}>
+                          <div key={room} className={`flex-1 ${_colMinClass} border-l border-[var(--bd)]/30 px-0.5 relative ${cellBorderCls}`} style={{ height: slotH }}>
                             {/* Phase 15.7-septies (2026-04-29) — switched
                                 outer <button> to <div role="button"> so we
                                 can NEST a real <a target="_blank"> on the
@@ -1022,7 +1063,7 @@ export default function AppointmentCalendarView({
                               {...getHoverProps(appt)}
                               className={`absolute left-0.5 right-0.5 top-0.5 rounded-lg px-2 ${isShortBlock ? 'py-0' : 'py-1'} text-left overflow-hidden transition-all hover:ring-2 hover:ring-sky-400 hover:shadow-lg z-[5] ${st.bg} border border-[var(--bd)]/40 cursor-pointer shadow-sm`}
                               style={{
-                                height: span * SLOT_H - 4,
+                                height: span * slotH - 4,
                                 // Phase 21.0-quinquies — 4px status-color left
                                 // border + soft inset shadow so the block reads
                                 // as a card. status accent (orange/sky/emerald/red)
@@ -1116,7 +1157,7 @@ export default function AppointmentCalendarView({
                                 pills directly under the primary, so admin can edit each.
                                 Sits inside the same cell so visual rhythm stays. */}
                             {dupCount > 0 && (
-                              <div className="absolute left-0.5 right-0.5 z-[6] pointer-events-none" style={{ top: span * SLOT_H + 1 }}>
+                              <div className="absolute left-0.5 right-0.5 z-[6] pointer-events-none" style={{ top: span * slotH + 1 }}>
                                 <div className="flex flex-wrap gap-0.5 pointer-events-auto">
                                   {apptList.slice(1).map((dup, di) => {
                                     const dupSt = STATUSES.find(s => s.value === dup.status) || STATUSES[0];
@@ -1156,7 +1197,7 @@ export default function AppointmentCalendarView({
                         <div key={room}
                           onClick={() => !occupied && openCreate(selectedDate, time, room === UNASSIGNED_ROOM ? '' : room)}
                           className={`flex-1 ${_colMinClass} border-l border-[var(--bd)]/30 ${occupied ? '' : `${cellBorderCls} cursor-pointer hover:bg-sky-900/5`}`}
-                          style={{ height: SLOT_H }} />
+                          style={{ height: slotH }} />
                       );
                     })}
                   </div>
@@ -1279,12 +1320,13 @@ export default function AppointmentCalendarView({
           appt={detailAppt}
           roomName={effectiveRoom(detailAppt)}
           doctorMap={doctorMap}
+          resolvedPhone={detailPhone}
           onEdit={() => { const a = detailAppt; setDetailAppt(null); openEdit(a); }}
           onClose={() => setDetailAppt(null)}
         />
       )}
       {peek && (
-        <AppointmentHoverPeek appt={peek.appt} rect={peek.rect} roomName={effectiveRoom(peek.appt)} doctorMap={doctorMap} />
+        <AppointmentHoverPeek appt={peek.appt} rect={peek.rect} roomName={effectiveRoom(peek.appt)} doctorMap={doctorMap} resolvedPhone={peekPhone} />
       )}
     </div>
   );

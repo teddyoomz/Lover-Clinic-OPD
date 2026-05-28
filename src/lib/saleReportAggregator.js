@@ -13,6 +13,7 @@
 // Reconciles via assertReconcile (AR5): footer.x === sum(rows[*].x).
 
 import { roundTHB, dateRangeFilter } from './reportsUtils.js';
+import { resolveSellerName } from './documentFieldAutoFill.js';
 
 /* ─── Source-shape derivers ──────────────────────────────────────────────── */
 
@@ -54,10 +55,15 @@ function deriveItemSummary(sale) {
   return `${all[0]}, ${all[1]} อีก ${all.length - 2}`;
 }
 
-/** "พนักงานขาย" — sellers[].name joined. */
-function deriveSellersLabel(sale) {
+/** "พนักงานขาย" — sellers[].name joined, RESOLVED via the staff/doctor lookup.
+ *  V129 (2026-05-28): the denormalized `sellers[].name` is empty on most sales
+ *  (only `sellers[].id` like "STAFF-…" is stored — 38/49 on real prod) → the
+ *  report showed "-" while SaleTab/SalePrintView resolve the name via
+ *  resolveSellerName(seller, listAllSellers). Pass the same lookup here so the
+ *  report matches. Never leaks the numeric/opaque id (resolveSellerName V22 lock). */
+function deriveSellersLabel(sale, sellerLookup = null) {
   const sellers = Array.isArray(sale?.sellers) ? sale.sellers : [];
-  return sellers.map(s => (s?.name || '').trim()).filter(Boolean).join(', ') || '-';
+  return sellers.map(s => resolveSellerName(s, sellerLookup)).filter(Boolean).join(', ') || '-';
 }
 
 /** "ช่องทางชำระเงิน" — payment.channels[].name joined for paid/split sales.
@@ -115,7 +121,7 @@ function deriveInsuranceClaim(sale, claimsBySaleId = null) {
  *   denormalized values (legacy sales pre-2026-04-19 fix where the
  *   treatment-page auto-sale wrote customerHN: '').
  */
-export function buildSaleReportRow(sale, customerLookup = null, claimsBySaleId = null) {
+export function buildSaleReportRow(sale, customerLookup = null, claimsBySaleId = null, sellerLookup = null) {
   const s = sale || {};
   const billing = s.billing || {};
   const payment = s.payment || {};
@@ -158,7 +164,7 @@ export function buildSaleReportRow(sale, customerLookup = null, claimsBySaleId =
     saleType: deriveSaleType(s),
     saleTypeKey: deriveSaleTypeKey(s),
     itemsSummary: deriveItemSummary(s),
-    sellersLabel: deriveSellersLabel(s),
+    sellersLabel: deriveSellersLabel(s, sellerLookup),
     netTotal,
     depositApplied,
     walletApplied,
@@ -169,7 +175,21 @@ export function buildSaleReportRow(sale, customerLookup = null, claimsBySaleId =
     outstandingAmount,
     paymentStatus: payment.status || 'unpaid',
     paymentStatusLabel: STATUS_LABEL[payment.status] || 'ค้างชำระ',
-    createdBy: s.createdBy || (Array.isArray(s.sellers) && s.sellers[0]?.name) || '-',
+    // "ผู้ทำรายการ" — V130 (2026-05-28) captures the TRUE acting user at
+    // sale-write (createBackendSale chokepoint). Fallback chain: the captured
+    // NAME snapshot (createdByName) → live-resolve the captured staffId
+    // (createdById) via the seller lookup → legacy denormalized `createdBy`
+    // → the FIRST seller resolved (legacy sales pre-V130, V129 behavior) → '-'.
+    // resolveSellerName never leaks a raw id (V22 lock).
+    createdBy:
+      (typeof s.createdByName === 'string' && s.createdByName.trim()) ||
+      resolveSellerName({ id: s.createdById }, sellerLookup) ||
+      (typeof s.createdBy === 'string' && s.createdBy.trim()) ||
+      resolveSellerName(Array.isArray(s.sellers) ? s.sellers[0] : null, sellerLookup) ||
+      '-',
+    // V130 — honesty tag: 'staff'|'auth'|'none'|'caller'|'first-seller-backfill'|''.
+    // Not displayed in the table; available for CSV/audit + tests.
+    createdBySource: s.createdBySource || '',
     cancelledBy: s.cancelledBy || (isCancelled ? '-' : ''),
     isCancelled,
   };
@@ -208,6 +228,7 @@ export function aggregateSaleReport(sales, filters = {}) {
     includeCancelled = false,
     searchText = '',
     customers = null,
+    sellers = null,        // V129: listAllSellers (be_staff + be_doctors) for seller/creator name resolution
     claimsBySaleId = null, // Phase 12.7: Map<saleId, totalPaid> — or pass raw claims via `claims`
     claims = null,
   } = filters;
@@ -230,6 +251,9 @@ export function aggregateSaleReport(sales, filters = {}) {
   const customerLookup = Array.isArray(customers)
     ? new Map(customers.map(c => [String(c?.proClinicId || c?.id || ''), c]))
     : null;
+  // V129: pass the seller lookup array straight through — resolveSellerName
+  // accepts an Array<{id,name}> and does its own id match.
+  const sellerLookup = Array.isArray(sellers) ? sellers : null;
 
   const allSales = Array.isArray(sales) ? sales : [];
 
@@ -263,7 +287,7 @@ export function aggregateSaleReport(sales, filters = {}) {
 
   // 6) Build display rows + sort newest first by (saleDate desc, saleId desc)
   const rows = filtered
-    .map(s => buildSaleReportRow(s, customerLookup, resolvedClaimsMap))
+    .map(s => buildSaleReportRow(s, customerLookup, resolvedClaimsMap, sellerLookup))
     .sort((a, b) => {
       const c = (b.saleDate || '').localeCompare(a.saleDate || '');
       if (c !== 0) return c;

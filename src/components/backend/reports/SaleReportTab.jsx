@@ -11,6 +11,7 @@ import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
 import { loadSalesByDateRange, loadAllCustomersForReport, loadSaleInsuranceClaimsByDateRange } from '../../../lib/reportsLoaders.js';
+import { listAllSellers } from '../../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { aggregateClaimsBySaleId } from '../../../lib/saleInsuranceClaimValidation.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
@@ -51,6 +52,10 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   const [searchText, setSearchText] = useState('');
   const [allSales, setAllSales] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
+  // V129 (2026-05-28): be_staff+be_doctors lookup so the report resolves
+  // พนักงานขาย / ผู้ทำรายการ names from sellers[].id when the denormalized
+  // sellers[].name is empty (38/49 real sales) — matches SaleTab/SalePrintView.
+  const [allSellers, setAllSellers] = useState([]);
   // Phase 12.3 (2026-04-25): load be_sale_insurance_claims in the same
   // window and aggregate paid claims by saleId. Before this wiring the
   // "เบิกประกัน" column was always ฿0 (aggregator had claimsBySaleId
@@ -82,8 +87,9 @@ export default function SaleReportTab({ clinicSettings, theme }) {
       loadSalesByDateRange({ from, to, includeCancelled, branchId: selectedBranchId }),
       loadAllCustomersForReport({ branchId: selectedBranchId }),
       loadSaleInsuranceClaimsByDateRange({ branchId: selectedBranchId }),
+      listAllSellers({ branchId: selectedBranchId }), // V129 — seller/creator name resolution
     ])
-      .then(([s, c, cl]) => { if (!abort) { setAllSales(s); setAllCustomers(c); setAllClaims(cl); } })
+      .then(([s, c, cl, se]) => { if (!abort) { setAllSales(s); setAllCustomers(c); setAllClaims(cl); setAllSellers(se || []); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
@@ -100,9 +106,10 @@ export default function SaleReportTab({ clinicSettings, theme }) {
     () => aggregateSaleReport(allSales, {
       from, to, statusFilter, saleTypeFilter, includeCancelled, searchText,
       customers: allCustomers,
+      sellers: allSellers, // V129 — resolve พนักงานขาย / ผู้ทำรายการ from ids
       claimsBySaleId,
     }),
-    [allSales, allCustomers, claimsBySaleId, from, to, statusFilter, saleTypeFilter, includeCancelled, searchText]
+    [allSales, allCustomers, allSellers, claimsBySaleId, from, to, statusFilter, saleTypeFilter, includeCancelled, searchText]
   );
 
   // Single columns array — SAME for table + CSV (AR11)
@@ -171,6 +178,7 @@ export default function SaleReportTab({ clinicSettings, theme }) {
       {viewingSale && (
         <SaleDetailModal
           sale={viewingSale}
+          sellerLookup={allSellers}
           onClose={handleCloseDetail}
           onOpenCustomer={handleOpenCustomer}
         />
@@ -394,16 +402,19 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
   ].includes(key);
   // Cells we render with custom interaction (link/button), bypassing default format
   const isInteractive = (key) => key === 'customerHN' || key === 'customerName';
+  // V130 — long free-text columns get a max-width + truncate (+title tooltip) so
+  // they don't force the table wider; everything else keeps whitespace-nowrap.
+  const isTruncatable = (key) => key === 'itemsSummary' || key === 'paymentChannels';
 
   return (
-    <div className="hidden lg:block overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
-      <table className="w-full text-xs min-w-[1400px]">
+    <div className="hidden lg:block max-h-[70vh] overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
+      <table className="w-full text-xs min-w-[1180px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>
             {columns.map(c => (
               <th
                 key={c.key}
-                className={`px-2 py-2 font-bold whitespace-nowrap ${isCurrency(c.key) ? 'text-right' : 'text-left'}`}
+                className={`px-1.5 py-1 font-bold whitespace-nowrap ${isCurrency(c.key) ? 'text-right' : 'text-left'}`}
               >
                 {c.label}
               </th>
@@ -427,7 +438,7 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
                 const display = typeof c.format === 'function' ? c.format(raw, r) : raw;
                 if (isInteractive(c.key) && r.customerId) {
                   return (
-                    <td key={c.key} className="px-2 py-2 whitespace-nowrap">
+                    <td key={c.key} className="px-1.5 py-1 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(r.customerId); }}
@@ -443,9 +454,11 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
                 return (
                   <td
                     key={c.key}
-                    className={`px-2 py-2 whitespace-nowrap ${isCurrency(c.key) ? 'text-right tabular-nums' : ''}`}
+                    className={`px-1.5 py-1 whitespace-nowrap ${isCurrency(c.key) ? 'text-right tabular-nums' : ''}`}
                   >
-                    {display}
+                    {isTruncatable(c.key)
+                      ? <span className="block max-w-[180px] truncate" title={String(display ?? '')}>{display}</span>
+                      : display}
                   </td>
                 );
               })}
@@ -455,17 +468,17 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
         {/* Footer total row — AR3: cancelled excluded, AR5: reconciles to row sums */}
         <tfoot className="bg-[var(--bg-hover)] font-bold text-[var(--tx-primary)] border-t-2 border-[var(--bd)] sticky bottom-0 z-[5]" data-testid="sale-report-footer">
           <tr>
-            <td className="px-2 py-2 text-left" colSpan={7}>
+            <td className="px-1.5 py-1 text-left" colSpan={7}>
               รวม {totals.count.toLocaleString('th-TH')} รายการ
             </td>
-            <td className="px-2 py-2 text-right tabular-nums">{fmtMoney(totals.netTotal)}</td>
-            <td className="px-2 py-2 text-right tabular-nums">{fmtMoney(totals.depositApplied)}</td>
-            <td className="px-2 py-2 text-right tabular-nums">{fmtMoney(totals.walletApplied)}</td>
-            <td className="px-2 py-2 text-right tabular-nums">{fmtMoney(totals.refundAmount)}</td>
-            <td className="px-2 py-2 text-right tabular-nums">{fmtMoney(totals.insuranceClaim)}</td>
-            <td className="px-2 py-2 text-right tabular-nums" data-testid="footer-paid">{fmtMoney(totals.paidAmount)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums">{fmtMoney(totals.netTotal)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums">{fmtMoney(totals.depositApplied)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums">{fmtMoney(totals.walletApplied)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums">{fmtMoney(totals.refundAmount)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums">{fmtMoney(totals.insuranceClaim)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums" data-testid="footer-paid">{fmtMoney(totals.paidAmount)}</td>
             <td />
-            <td className="px-2 py-2 text-right tabular-nums" data-testid="footer-outstanding">{fmtMoney(totals.outstandingAmount)}</td>
+            <td className="px-1.5 py-1 text-right tabular-nums" data-testid="footer-outstanding">{fmtMoney(totals.outstandingAmount)}</td>
             <td colSpan={3} />
           </tr>
         </tfoot>

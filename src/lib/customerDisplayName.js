@@ -107,6 +107,39 @@ export function resolveCustomerHN(customer) {
 }
 
 /**
+ * Resolve a customer's phone number from any shape variant.
+ *
+ * Priority (first non-empty wins):
+ *   1. patientData.phone   (canonical — kiosk + admin intake form both write here)
+ *   2. patientData.tel / patientData.mobile / patientData.phoneNumber
+ *   3. top-level phone / tel / mobile (legacy / import shapes)
+ *
+ * Returns '' if none found. Pure — no Firestore. Mirrors the
+ * resolveCustomerDisplayName/HN walk-the-shapes pattern.
+ *
+ * Rule of 3: appointment write-chokepoint (createBackendAppointment) +
+ * hover/modal live-resolve (useResolvedApptPhone) + RemainingCourseTab
+ * (remainingCourseUtils.js) all need the customer phone. Centralize HERE.
+ *
+ * V128 (2026-05-28) — appointment hover card showed phone "sometimes": linked
+ * appts never denormalized customerPhone (only customerPhoneTemp for pick-later).
+ * Real-prod diag: 78/123 appts blank, customer phone present at patientData.phone
+ * for ALL 78. apptPhoneValue now falls back to a live-resolve via this helper.
+ *
+ * @param {object|null|undefined} customer - the be_customers doc
+ * @returns {string}
+ */
+export function resolveCustomerPhone(customer) {
+  if (!customer || typeof customer !== 'object') return '';
+  const pd = customer.patientData || {};
+  return String(
+    pd.phone || pd.tel || pd.mobile || pd.phoneNumber
+    || customer.phone || customer.tel || customer.mobile
+    || ''
+  ).trim();
+}
+
+/**
  * Resolve a customer's display label suitable for transactional row display
  * (sale rows, treatment rows, audit log, etc.).
  *

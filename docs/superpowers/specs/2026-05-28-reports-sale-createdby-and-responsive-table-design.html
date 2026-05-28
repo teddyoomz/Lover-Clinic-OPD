@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>reports-sale: true createdBy + responsive table — Design Spec (V130)</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; font-weight: 700; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .ok { color: #15803d; font-weight: 700; }
+    .bad { color: #b91c1c; font-weight: 700; }
+    .warn { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 0.5em 1em; border-radius: 0 6px 6px 0; margin: 0.8em 0; }
+    /* dark table mock to resemble the real backend surface */
+    .dk { background: #0f0f0f; border-radius: 8px; padding: 10px; color: #e5e5e5; font-size: 11px; }
+    .dk table { width: auto; border-collapse: collapse; margin: 0; }
+    .dk th, .dk td { border: none; border-bottom: 1px solid #262626; padding: 4px 8px; white-space: nowrap; color: #d4d4d4; text-align: left; }
+    .dk th { background: #171717; color: #888; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+    .viewport { border: 2px dashed #b91c1c; border-radius: 8px; overflow: hidden; position: relative; }
+    .viewport::after { content: "viewport edge"; position: absolute; top: 2px; right: 4px; font-size: 9px; color: #b91c1c; }
+    .panel { border: 1px solid #262626; border-radius: 8px; overflow-x: auto; }
+    .flowbox { display: inline-block; border: 1px solid var(--bd); border-radius: 6px; padding: 6px 10px; background: #fff; font-size: 0.85em; margin: 2px 0; }
+    .arrow { color: var(--accent); font-weight: 700; padding: 0 6px; }
+  </style>
+</head>
+<body>
+
+<h1>reports-sale: true <code>createdBy</code> + responsive table — Design Spec (V130)</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-28 · <strong>Status:</strong> Approved by user ("ok", 2026-05-28) ·
+  <strong>Follow-up to:</strong> V129 (reports-sale seller/creator resolve) ·
+  <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-28-reports-sale-createdby-and-responsive-table.html (next step)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Two improvements on the <code>tab=reports-sale</code> surface (รายการขาย):</p>
+<ol>
+  <li><strong>Item 1 — true "ผู้ทำรายการ" (createdBy).</strong> <code>be_sales</code> has never written a <code>createdBy</code>
+  field (empty on all 49 real sales). V129 made the report's ผู้ทำรายการ column <em>fall back</em> to the first seller's
+  resolved name. The user wants the column to reflect <strong>who actually keyed the sale in</strong> — captured at write time
+  from the logged-in staff.</li>
+  <li><strong>Item 2 — responsive table fit.</strong> The report table has <strong>18 columns</strong> and a fixed
+  <code>min-w-[1400px]</code> (<code>SaleReportTab.jsx:408</code>) inside an <code>overflow-auto</code> wrapper. On a
+  display <strong>scaled via Windows</strong> (e.g. 1920px physical @ 150% → ~1280 CSS px) the table is wider than its
+  panel, so columns are cut at the panel edge and the only way to reach them is a horizontal scrollbar that sits at the
+  <strong>bottom of a tall 39-row table</strong> (below the fold) — it <em>looks</em> like "ล้นจอ" / unreachable columns.</li>
+</ol>
+
+<blockquote>
+  <strong>⚠️ Diagnosis correction (real-browser verified, Chrome MCP, 2026-05-28).</strong> The original premise — "a backend
+  shell flex column missing <code>min-w-0</code> blows the table past the viewport" — is <span class="bad">WRONG</span>.
+  Both shells already carry <code>min-w-0</code> (<code>BackendNav.jsx:94</code>, <code>BackendShellNew.jsx:97</code>).
+  A faithful repro of the exact class chain at an emulated 1200px viewport measured: <code>pageOverflows=false</code>,
+  <code>mainClips=false</code>, <code>wrapScrolls=true</code> (a 1400px table inside a 922px wrapper scrolls
+  <strong>in-panel</strong>). So there is NO page overflow — the table is contained and scrolls. The real pain is
+  (a) the table is simply too wide for the panel and (b) the in-panel horizontal scrollbar is below the fold / hard to
+  reach. <strong>The shell "fix" is therefore dropped (no-op); Item 2 = compact density + a height-capped table region so
+  the horizontal scrollbar is always reachable</strong> (user-confirmed 2026-05-28).
+</blockquote>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Item 2 · BEFORE — Windows-scaled viewport · table runs off-screen (the bug)</div>
+  <div class="viewport">
+    <div class="dk">
+      <table>
+        <tr><th>วันที่ขาย</th><th>เลขที่ขาย</th><th>HN</th><th>ลูกค้า</th><th>ประเภท</th><th>รายละเอียด</th><th>พนักงานขาย</th><th>ราคาหลังหักส่วนลด</th><th>หักมัดจำ</th><th>Wallet</th><th>การคืนเงิน</th><th>เบิกประกัน</th><th>ยอดที่ชำระ</th></tr>
+        <tr><td>27/05/2026</td><td>INV-20260527-0004</td><td>LC-26000111</td><td>วศิน เข็มทอง</td><td>คอร์ส</td><td>ขลิบเลเซอร์ (ไม่ดมยาสลบ) 1 ครั้ง, เพิ่ม…</td><td>กวางตุ้ง</td><td style="text-align:right">15,900</td><td style="text-align:right">1,000</td><td style="text-align:right">0</td><td style="text-align:right">0</td><td style="text-align:right">0</td><td style="text-align:right">15,9…</td></tr>
+      </table>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">Columns 14–18 (ช่องทาง / ค้างชำระ / สถานะ / <strong>ผู้ทำรายการ</strong> / ผู้ยกเลิก) are pushed past the viewport edge — no in-panel scrollbar, the whole page overflows.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Item 2 · AFTER — B1 shell containment + B2 compact density · stays inside the panel</div>
+  <div class="viewport">
+    <div class="dk panel">
+      <table style="font-size:10px">
+        <tr><th>วันที่</th><th>เลขที่ขาย</th><th>HN</th><th>ลูกค้า</th><th>ปท.</th><th>รายละเอียด</th><th>พนง.ขาย</th><th style="text-align:right">สุทธิ</th><th style="text-align:right">มัดจำ</th><th style="text-align:right">Wallet</th><th style="text-align:right">คืน</th><th style="text-align:right">ประกัน</th><th style="text-align:right">ชำระ</th><th>ช่องทาง</th><th style="text-align:right">ค้าง</th><th>สถานะ</th><th>ผู้ทำรายการ</th><th>ผู้ยก…</th></tr>
+        <tr><td>27/05/26</td><td>INV-…0004</td><td>LC-…111</td><td>วศิน เข็มทอง</td><td>คอร์ส</td><td style="max-width:90px;overflow:hidden;text-overflow:ellipsis">ขลิบเลเซอร์ (ไม่ดม…</td><td>กวางตุ้ง</td><td style="text-align:right">15,900</td><td style="text-align:right">1,000</td><td style="text-align:right">0</td><td style="text-align:right">0</td><td style="text-align:right">0</td><td style="text-align:right">15,900</td><td>เงินสด</td><td style="text-align:right">0</td><td style="color:#34d399">ชำระแล้ว</td><td>กวางตุ้ง</td><td>—</td></tr>
+      </table>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">Compact (smaller padding, ~10–11px font kept Thai-readable, truncated รายละเอียด/ช่องทาง) fits more columns; whatever still overflows scrolls <strong>inside the dashed panel</strong> (sticky header/footer), never off-screen. Mobile (&lt;lg) card view is unchanged.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Item 1 · Data shape — new be_sales fields (3) for true createdBy</div>
+  <pre>be_sales/{saleId} {
+  ...existing (saleId, branchId, customerId, customerName, sellers[], billing, payment, status) ...
+  createdById:    "STF-1042"        // NEW — staffId (seller id-space); live-resolvable via listAllSellers
+  createdByName:  "กวางตุ้ง"          // NEW — resolved NAME snapshot at write (audit truth)
+  createdBySource:"staff"           // NEW — honesty tag: 'staff' | 'auth' | 'none' | 'first-seller-backfill'
+}</pre>
+  <p style="font-size:0.82em;color:var(--tx-muted)"><strong>createdBySource</strong> distinguishes a true capture from a best-effort
+  legacy guess, so we never present a backfilled approximation as real audit data (Rule Q-honest / V113 spirit).</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Item 1 · WRITE flow — _resolveSaleCreatedBy at the createBackendSale chokepoint</div>
+  <div>
+    <span class="flowbox">createBackendSale(data)</span><span class="arrow">→</span>
+    <span class="flowbox">_resolveSaleCreatedBy(data)</span>
+  </div>
+  <table>
+    <tr><th>Branch</th><th>Condition</th><th>createdById</th><th>createdByName</th><th>createdBySource</th></tr>
+    <tr><td>1 · caller override</td><td>data.createdById / createdByName provided</td><td>verbatim</td><td>verbatim</td><td>verbatim / 'caller'</td></tr>
+    <tr><td>2 · staff</td><td>auth.currentUser.uid → be_staff WHERE firebaseUid==uid LIMIT 1 found</td><td>staff.id</td><td>staff.name</td><td>'staff'</td></tr>
+    <tr><td>3 · non-staff admin</td><td>currentUser exists but no be_staff doc (owner gmail)</td><td>'' </td><td>displayName || email</td><td>'auth'</td></tr>
+    <tr><td>4 · no user</td><td>no auth.currentUser (server / online-sale path)</td><td>''</td><td>''</td><td>'none'</td></tr>
+  </table>
+  <p style="font-size:0.82em;color:var(--tx-muted)">Non-fatal try/catch (a failed be_staff read leaves fields empty → branch 4 semantics). Stamped on the setDoc payload in <code>createBackendSale</code> (mirror of the V108 <code>_resolveSaleCustomerIdentity</code> guard). Create-only — update does NOT stamp (no <code>updatedBy</code> in scope).</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Item 1 · READ flow — ผู้ทำรายการ derivation in saleReportAggregator.js</div>
+  <div>
+    <span class="flowbox">row.createdBy =</span><span class="arrow">→</span>
+    <span class="flowbox">createdByName (snapshot)</span><span class="arrow">||</span>
+    <span class="flowbox">resolveSellerName({id:createdById}, lookup)</span><span class="arrow">||</span>
+    <span class="flowbox">legacy s.createdBy</span><span class="arrow">||</span>
+    <span class="flowbox">resolveSellerName(sellers[0], lookup)</span><span class="arrow">||</span>
+    <span class="flowbox">'-'</span>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">New sales show the true creator (snapshot, or live-resolved id). Legacy sales without the new fields keep showing the first-seller fallback — identical to today's behavior — unless backfilled.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Item 1 · BACKFILL flow (Q4=B, Rule M two-phase) — legacy createdBy = first seller, source-tagged</div>
+  <div>
+    <span class="flowbox">scripts/v130-backfill-sale-created-by.mjs</span><span class="arrow">→</span>
+    <span class="flowbox">dry-run: scan be_sales missing createdById/Name</span><span class="arrow">→</span>
+    <span class="flowbox">--apply</span>
+  </div>
+  <div style="margin-top:6px">
+    <span class="flowbox">resolve sellers[0] → name (be_staff/be_doctors)</span><span class="arrow">→</span>
+    <span class="flowbox">stamp createdByName + createdById + createdBySource:'first-seller-backfill' + _v130BackfilledAt</span><span class="arrow">→</span>
+    <span class="flowbox">audit doc be_admin_audit/v130-…</span>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">Idempotent (re-run --apply → 0 writes). Display is identical with/without backfill (fallback already shows first-seller); the backfill persists the field + tags the source.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Item 2 · Containment flow — VERIFIED state (Chrome MCP, emulated 1200px) and the real fix</div>
+  <table>
+    <tr><th>Layer</th><th>VERIFIED today (already correct)</th><th>CHANGE (V130-B)</th></tr>
+    <tr><td>backend shell <code>&lt;main&gt;</code> (BackendNav:94 + BackendShellNew:97)</td><td><span class="ok">already has <code>min-w-0 overflow-x-hidden</code></span> → flex child shrinks; <code>mainClips=false</code></td><td><span class="ok">NO CHANGE</span> — only a regression-guard test that <code>min-w-0</code> stays</td></tr>
+    <tr><td>SaleReportTable wrapper (<code>overflow-auto</code>)</td><td><span class="ok">scrolls in-panel</span> (<code>wrapScrolls=true</code>, 1400px table in 922px box); <code>pageOverflows=false</code></td><td>add <code>max-h-[~70vh]</code> → horizontal scrollbar always reachable + inner vertical scroll (sticky thead/tfoot stick to the capped box)</td></tr>
+    <tr><td>table density (reports-sale only)</td><td><code>min-w-[1400px]</code>, px-2 py-2, text-xs, nowrap everywhere → too wide for the panel</td><td>compact: ~<code>min-w-[1180px]</code>, px-1.5 py-1, ≥~11px font (Thai floor), truncate รายละเอียด/ช่องทาง → fewer columns need scrolling</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Item 1 — files touched</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>NEW <code>async _resolveSaleCreatedBy(data)</code>; called in <code>createBackendSale</code> (:3226); stamp <code>createdById</code>/<code>createdByName</code>/<code>createdBySource</code> on the setDoc payload (after the <code>_normalizeSaleData</code> spread, like V108 ident).</td></tr>
+  <tr><td><code>src/lib/saleReportAggregator.js</code></td><td><code>buildSaleReportRow</code> (:182) — replace the createdBy derivation with the new fallback chain; row also carries <code>createdBySource</code> (not displayed, available for CSV/audit).</td></tr>
+  <tr><td><code>scripts/v130-backfill-sale-created-by.mjs</code></td><td>NEW Rule M two-phase backfill (dry-run default, <code>--apply</code>, audit doc, forensic stamp, idempotent).</td></tr>
+  <tr><td><code>scripts/verify-v130-sale-created-by.mjs</code></td><td>NEW Rule Q L2 — create a TEST-prefixed sale via the real client path, assert createdById/Name stamped + report resolves.</td></tr>
+</table>
+
+<h3>Item 2 — files touched</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/components/backend/reports/SaleReportTab.jsx</code></td><td><code>SaleReportTable</code> ONLY change: (a) <strong>compact</strong> — cell padding px-2 py-2 → px-1.5 py-1, font ≥~11px (Thai floor), relax <code>min-w-[1400px]</code> → ~<code>min-w-[1180px]</code>, <code>max-w</code>+<code>truncate</code>+<code>title</code> on รายละเอียด/ช่องทาง; (b) <strong>reachable scroll</strong> — wrap the table in a height-capped region (<code>max-h-[70vh] overflow-auto</code>) so the horizontal scrollbar is always in view; sticky thead(top-0)/tfoot(bottom-0) stick to the capped box. Always-on (no density toggle). Mobile (&lt;lg) card list unchanged.</td></tr>
+  <tr><td><code>src/components/backend/nav/BackendNav.jsx</code> · <code>src/components/backend/shell/BackendShellNew.jsx</code></td><td><span class="bad">NO CODE CHANGE</span> — verified they already carry <code>min-w-0</code> on <code>&lt;main&gt;</code>. A source-grep regression test asserts both retain it (AV148) so a future edit can't reintroduce the off-screen risk.</td></tr>
+</table>
+
+<h3>Audit + tests</h3>
+<ul>
+  <li>NEW <strong>AV148</strong> (audit-anti-vibe-code): (a) regression-guard — both backend shells' <code>&lt;main&gt;</code> MUST retain <code>min-w-0</code> (so wide tables keep scrolling in-panel, never off-screen); (b) reports-sale table region MUST be height-capped (<code>max-h-*</code> + <code>overflow-auto</code>) with the compact-density classes. Source-grep both shells + SaleReportTab.</li>
+  <li>NEW <strong>AV149</strong>: sale-write MUST capture createdById/createdByName/createdBySource at the createBackendSale chokepoint; report createdBy fallback chain locked.</li>
+  <li>Unit + source-grep tests: <code>_resolveSaleCreatedBy</code> 4 branches, aggregator fallback chain, compact-class source-grep, shell min-w-0 source-grep.</li>
+  <li><strong>Rule S real-browser (Chrome MCP)</strong> at a scaled viewport: table contained + compact readable in both shells.</li>
+  <li><strong>Rule Q L2</strong> real-prod verify script for Item 1; backfill dry-run on real prod before <code>--apply</code>.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A with user, 2026-05-28)</h2>
+<ul>
+  <li><strong>Q1 = C (compact density):</strong> shrink padding/font (Thai-readable floor) + relax min-width + truncate long text columns. Combined with Q2 the remaining overflow scrolls in-panel.</li>
+  <li><strong>Q2 = A → DROPPED:</strong> the shell-level "fix" was premised on a flex blowout that real-browser measurement disproved (shells already carry <code>min-w-0</code>). No shell code change — only an AV148 regression-guard. (User confirmed 2026-05-28: "ตัดการแก้ shell ทิ้ง ไม่จำเป็น".)</li>
+  <li><strong>Item-2 follow-up = A (Compact + reachable scroll):</strong> height-cap the table region (<code>max-h-[~70vh]</code> + <code>overflow-auto</code>) so the horizontal scrollbar is always in view; sticky header/footer stick to the capped box. (User confirmed 2026-05-28.)</li>
+  <li><strong>Q3 = A (id + name snapshot):</strong> store <code>createdById</code> (live-resolve ref) + <code>createdByName</code> (snapshot) + <code>createdBySource</code> (honesty tag). Report prefers the snapshot, then live-resolve, then legacy/first-seller.</li>
+  <li><strong>Q4 = B (backfill = first seller):</strong> Rule M script stamps legacy createdBy = resolved first seller, tagged <code>createdBySource:'first-seller-backfill'</code> (distinguishable from true capture).</li>
+  <li><strong>Compact = always-on</strong> (no density toggle — user did not pick the toggle option; default per recommendation).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>A new sale created by a logged-in staff writes <code>createdById</code> = that staff's id, <code>createdByName</code> = that staff's name, <code>createdBySource = 'staff'</code> on the be_sales doc.</li>
+  <li>A sale created by a non-staff admin (owner gmail) writes <code>createdByName</code> = displayName/email, <code>createdBySource = 'auth'</code> (no crash; no '-' leak of an id).</li>
+  <li>The reports-sale ผู้ทำรายการ column shows the true creator for new sales; legacy/un-backfilled sales still show the first-seller fallback (never a raw id).</li>
+  <li>Backfill <code>--apply</code> stamps legacy sales' createdBy = first seller with <code>createdBySource:'first-seller-backfill'</code>; re-run yields 0 writes; an audit doc is written.</li>
+  <li>On a Windows-scaled desktop viewport, the reports-sale table region is <strong>height-capped</strong> so the horizontal scrollbar is reachable within the viewport (not below the fold), and compact density fits more columns before any scroll is needed; the page never overflows off-screen.</li>
+  <li>Both backend shells (<code>BackendNav</code>, <code>BackendShellNew</code>) retain <code>min-w-0</code> on <code>&lt;main&gt;</code> (AV148 regression-guard) — no shell code change in this work.</li>
+  <li>Compact density keeps Thai text readable (≈11px, never below ~10px; no clipping of single Thai glyphs); long รายละเอียด/ช่องทาง columns truncate with a <code>title</code> tooltip.</li>
+  <li>Mobile (&lt;lg) card view is byte-unchanged.</li>
+  <li>No firestore.rules/storage/index/cron changes → no Probe-Deploy-Probe; full vitest green + build clean.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>18 columns can't ALL fit</strong> readably on a heavily-scaled screen — compact only reduces scroll; B1 makes the residual scroll safe (in-panel). This is an accepted limit, disclosed.</li>
+  <li><strong>Sticky header/footer inside a height-capped scroll box</strong> — once the table region gets <code>max-h</code> + <code>overflow-auto</code>, the existing sticky thead(top-0)/tfoot(bottom-0) stick to the capped box instead of the page. Must verify in a real browser they still pin correctly (Rule S) and the mobile card view (which has its own sticky footer) is untouched.</li>
+  <li><strong>Shells already correct</strong> — no shell code change; the only risk is a future edit removing <code>min-w-0</code> from a shell <code>&lt;main&gt;</code>, which AV148's regression-guard catches.</li>
+  <li><strong>online-sale path</strong> — if any sale is created server-side (no auth.currentUser), createdBy is empty → first-seller fallback at read (branch 4). Acceptable; flagged.</li>
+  <li><strong>Backfill honesty</strong> — the legacy createdBy is a best-effort guess (first seller), tagged <code>first-seller-backfill</code> so it's never mistaken for true audit capture. Display is unchanged either way.</li>
+  <li><strong>Compact aggressiveness</strong> — exact min-width/padding/font values to be tuned against the real rendered table via Chrome MCP at a scaled viewport during implementation (Rule S).</li>
+  <li><strong>Not in scope:</strong> <code>updatedBy</code> capture on sale edits; a comfortable/compact density toggle; redesigning the 18-column set (no columns removed).</li>
+</ul>
+
+</body>
+</html>

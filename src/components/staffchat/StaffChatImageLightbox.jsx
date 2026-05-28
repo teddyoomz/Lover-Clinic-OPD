@@ -83,6 +83,14 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   // 1x. CSS transform on the <img> is the rendering primitive; cursor hint
   // (zoom-in / zoom-out) shows desktop double-click affordance.
   const [zoom, setZoom] = useState(1);
+  // V128.lb2 (2026-05-28) — PRO pan-zoom: when zoomed in, DRAG to pan (clamped
+  // to the image edges) + scroll-wheel to zoom (desktop), like Photos/Google
+  // Photos. Pan is in screen px via transform `translate(pan) scale(zoom)`.
+  // User: "ซูมก็ซูมได้แค่กลางรูป ... ถ้าซูมมันต้องเลื่อนดูได้ ... ทำให้เหมือนแอป preview รูประดับโปร".
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const imgRef = useRef(null);
+  const dragRef = useRef(null);
   const lastTapAtRef = useRef(0);
 
   // Blob cache — Map<originalUrl, blobObjectUrl>. State (not ref) so re-renders
@@ -147,7 +155,8 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   }, [onClose, N]);
 
   // V115 — reset zoom when image changes so each photo starts at 1x.
-  useEffect(() => { setZoom(1); }, [idx]);
+  // V128.lb2 — also reset pan so the next image starts centered.
+  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [idx]);
 
   if (N === 0) return null;
 
@@ -181,6 +190,7 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     // (a) Double-tap detection: 2 quick taps within 300ms, low movement
     if (Math.abs(dx) < 12 && now - lastTapAtRef.current < 300) {
       setZoom(z => (z === 1 ? 2.5 : 1));
+      setPan({ x: 0, y: 0 }); // V128.lb2 — re-center on zoom toggle
       lastTapAtRef.current = 0;
       touchX.current = null;
       return;
@@ -194,11 +204,51 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     touchX.current = null;
   };
 
-  // V115 — desktop double-click also toggles zoom (parity with mobile
-  // double-tap; ignored when src is empty).
+  // V128.lb2 — clamp pan so the image can't be dragged past its own edges
+  // (max pan = half the overflow at the current zoom). Returns {0,0} at 1x.
+  const clampPan = (p, z) => {
+    const el = imgRef.current;
+    if (!el || z <= 1) return { x: 0, y: 0 };
+    const maxX = (el.offsetWidth * (z - 1)) / 2;
+    const maxY = (el.offsetHeight * (z - 1)) / 2;
+    return { x: Math.max(-maxX, Math.min(maxX, p.x)), y: Math.max(-maxY, Math.min(maxY, p.y)) };
+  };
+
+  // V115/V128.lb2 — desktop double-click / mobile double-tap toggle 1x ↔ 2.5x;
+  // pan re-centers on toggle.
   const onImageDoubleClick = (e) => {
     e.stopPropagation();
-    setZoom(z => (z === 1 ? 2.5 : 1));
+    setZoom(zoom === 1 ? 2.5 : 1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // V128.lb2 — desktop scroll-wheel zoom (continuous 1x–5x); pan re-clamps so
+  // zooming out never leaves the image off-center.
+  const onImageWheel = (e) => {
+    e.preventDefault();
+    const nz = Math.max(1, Math.min(5, zoom - e.deltaY * 0.0015 * (zoom || 1)));
+    setZoom(nz);
+    setPan((p) => clampPan(p, nz));
+  };
+
+  // V128.lb2 — drag-to-pan (mouse + touch via Pointer Events), only when zoomed.
+  // Pointer-capture keeps the drag tracking even if the cursor leaves the image.
+  const onImagePointerDown = (e) => {
+    if (zoom <= 1) return;
+    e.stopPropagation();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y };
+    setDragging(true);
+  };
+  const onImagePointerMove = (e) => {
+    if (!dragRef.current) return;
+    setPan(clampPan({ x: dragRef.current.px + (e.clientX - dragRef.current.sx), y: dragRef.current.py + (e.clientY - dragRef.current.sy) }, zoom));
+  };
+  const onImagePointerUp = (e) => {
+    if (!dragRef.current) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    dragRef.current = null;
+    setDragging(false);
   };
 
   const download = (e) => {
@@ -237,7 +287,7 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onClick={onClose}
-      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] p-4"
+      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] overflow-hidden"
     >
       {/* top bar: counter + download + close
           V115 — paddingTop env(safe-area-inset-top) keeps close button
@@ -302,7 +352,7 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           is ready (native <img> behaviour) → smooth swap, zero flicker.
           Cached blob URLs (in-memory) make the swap instantaneous. */}
       <div
-        className="relative w-full max-w-4xl h-[78vh] flex items-center justify-center overflow-hidden"
+        className="relative w-full h-full flex items-center justify-center overflow-hidden"
         onClick={stop}
       >
         {/* V115 — CSS transform scale() for double-tap-zoom.
@@ -311,17 +361,38 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
             Multi-touch pinch is delegated to iOS Safari's native pinch
             (onTouchStart bails on touches.length>1). */}
         <img
+          ref={imgRef}
           src={effectiveSrc}
           alt=""
           data-testid="staff-chat-lightbox-image"
           onDoubleClick={onImageDoubleClick}
+          onWheel={onImageWheel}
+          onPointerDown={onImagePointerDown}
+          onPointerMove={onImagePointerMove}
+          onPointerUp={onImagePointerUp}
+          onPointerCancel={onImagePointerUp}
+          draggable={false}
           style={{
-            transform: `scale(${zoom})`,
+            // V128.lb2 — translate(pan) BEFORE scale(zoom) → pan in screen px so
+            // dragging moves the magnified image; transition off while dragging.
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             transformOrigin: 'center center',
-            transition: 'transform 0.2s ease-out',
-            cursor: zoom === 1 ? 'zoom-in' : 'zoom-out',
+            transition: dragging ? 'none' : 'transform 0.15s ease-out',
+            cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in',
+            // touchAction none while zoomed so our pointer-pan owns the touch-drag
+            // (1x keeps native so the outer swipe-nav still works).
+            touchAction: zoom > 1 ? 'none' : 'auto',
+            // V128.lb (2026-05-28) — FULL-SCREEN FILL. EXPLICIT width/height 100%
+            // of the full-viewport wrapper (w-full h-full) so even a SMALL image
+            // UPSCALES to fit the screen — `max-w`/`max-h` only CAP (a small image
+            // stays tiny: the bug). object-contain keeps aspect (letterboxed on the
+            // short axis); 100% (NOT 100vw) avoids the scrollbar-gutter overflow.
+            // The top bar + filmstrip overlay the image edges (semi-transparent,
+            // Photos-style). User: "ใหญ่สุดเท่าขนาดจอ เต็มจอพอดี".
+            width: '100%',
+            height: '100%',
           }}
-          className="max-w-full max-h-full object-contain rounded select-none"
+          className="object-contain rounded select-none"
         />
       </div>
 

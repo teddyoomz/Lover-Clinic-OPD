@@ -17,7 +17,7 @@ const GAP = 10;
  * pointerEvents:'none' — the peek never steals the mouse from the card beneath,
  * so the card's onPointerLeave (dismiss) fires cleanly + no flicker.
  */
-export default function AppointmentHoverPeek({ appt, rect, roomName, doctorMap }) {
+export default function AppointmentHoverPeek({ appt, rect, roomName, doctorMap, resolvedPhone = '' }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
 
@@ -32,7 +32,7 @@ export default function AppointmentHoverPeek({ appt, rect, roomName, doctorMap }
     let top = rect.top;
     if (top + h > vh - 8) top = Math.max(8, vh - h - 8);                       // clamp up
     setPos({ left, top });
-  }, [rect, appt]);
+  }, [rect, appt, resolvedPhone]); // resolvedPhone → re-clamp when the phone line arrives (height changes)
 
   if (!appt || !rect) return null;
 
@@ -43,7 +43,7 @@ export default function AppointmentHoverPeek({ appt, rect, roomName, doctorMap }
       className="fixed z-[190] rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl"
       style={{ left: pos.left, top: pos.top, width: PEEK_W, padding: 20, pointerEvents: 'none' }}
     >
-      <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="peek" />
+      <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="peek" resolvedPhone={resolvedPhone} />
     </div>,
     document.body,
   );

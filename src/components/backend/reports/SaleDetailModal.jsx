@@ -10,6 +10,7 @@
 import { useEffect } from 'react';
 import { X, Pill, ShoppingCart, Receipt, Users, Wallet, CreditCard } from 'lucide-react';
 import { fmtMoney } from '../../../lib/financeUtils.js';
+import { resolveSellerName } from '../../../lib/documentFieldAutoFill.js';
 
 /** Format YYYY-MM-DD as dd/mm/yyyy ค.ศ. (admin convention — AR13). */
 function fmtDateCE(iso) {
@@ -34,7 +35,7 @@ const STATUS_LABEL = { paid: 'ชำระแล้ว', split: 'ชำระบ
  *   Receives the customer's proClinicId. Default: opens new tab to backend
  *   customer detail page.
  */
-export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
+export default function SaleDetailModal({ sale, onClose, onOpenCustomer, sellerLookup = [] }) {
   // Esc-to-close
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -55,6 +56,9 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
   const sellers = Array.isArray(sale.sellers) ? sale.sellers : [];
 
   const isCancelled = sale.status === 'cancelled';
+  // V129 — "ผู้ทำรายการ": be_sales never writes createdBy → fall back to the
+  // resolved first seller (was hidden/raw before). Matches the report table.
+  const recordedBy = sale.createdBy || resolveSellerName(sellers[0] || null, sellerLookup);
 
   const handleOpenCustomer = () => {
     const cid = String(sale.customerId || '');
@@ -233,7 +237,7 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
               {sellers.map((s, i) => (
                 <div key={s.id || i} className="flex justify-between py-1 border-b border-[var(--bd)]/50 last:border-0">
                   <span>
-                    {s.name || '-'}
+                    {resolveSellerName(s, sellerLookup) || '-'}
                     {s.percent !== undefined && (
                       <span className="text-[10px] text-[var(--tx-muted)] ml-2">{s.percent}%</span>
                     )}
@@ -264,9 +268,9 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
           )}
 
           {/* Audit fields */}
-          {(sale.createdBy || sale.saleNote) && (
+          {(recordedBy || sale.saleNote || sale.createdAt) && (
             <Section icon={Wallet} title="ข้อมูลเพิ่มเติม">
-              {sale.createdBy && <KV label="ผู้ทำรายการ" value={sale.createdBy} />}
+              {recordedBy && <KV label="ผู้ทำรายการ" value={recordedBy} />}
               {sale.saleNote && <KV label="หมายเหตุ" value={sale.saleNote} />}
               {sale.createdAt && <KV label="สร้างเมื่อ" value={sale.createdAt} mono />}
             </Section>

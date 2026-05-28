@@ -230,7 +230,9 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     expect(s).toMatch(/effectiveSrc/);                       // (b) cached-blob OR original
     // (b) ONE <img> for the main image, testid attached. The browser smoothly
     // swaps when src changes — no key, no remount.
-    expect(s).toMatch(/<img\s+src=\{effectiveSrc\}[\s\S]{0,200}data-testid="staff-chat-lightbox-image"/);
+    // V128.lb2 (2026-05-28) — `ref={imgRef}` + pan/zoom handlers now wrap the
+    // src/testid; still ONE <img> with effectiveSrc + the testid (smooth-swap intact).
+    expect(s).toMatch(/<img[\s\S]{0,60}src=\{effectiveSrc\}[\s\S]{0,500}data-testid="staff-chat-lightbox-image"/);
     // R5 patterns REMOVED — round-6 doesn't preload via `new Image()` and has
     // no thumb-behind layer.
     expect(s).not.toMatch(/new Image\(\)/);

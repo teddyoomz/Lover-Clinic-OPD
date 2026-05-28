@@ -3440,3 +3440,61 @@ grep -n "pointerType !== 'mouse'" src/hooks/useApptHoverPeek.js                 
 **Sanctioned consumers** (closed list): the calendar grid (`AppointmentCalendarView`) + its mobile agenda (`AppointmentAgendaView`) ONLY. The Hub row cards (`AppointmentHubRowCard`) are DELIBERATELY excluded — they already render full details inline (a hover-peek there would be redundant). Adding a 3rd consumer requires an AV144 entry update + the same 3 invariants.
 
 **Cross-link**: AV78 (explicit-close modals — the click-modal keeps its X/ปิด/ESC) · `tests/appt-hover-peek.test.jsx` (H1-H3 hook + F1-F2 body + SG1-SG4 source-grep) · V127 entry in `.claude/rules/00-session-start.md` § 2 · spec/plan `docs/superpowers/{specs,plans}/2026-05-28-appt-hover-detail*`.
+
+### AV145 — Appointment customer phone MUST denorm at write + live-resolve at render (V128, 2026-05-28)
+
+Appointment writers (`AppointmentFormModal`) historically sent `customerName`/`customerHN` + `customerPhoneTemp` (pick-later) but NEVER `customerPhone` → LINKED-customer appts showed a BLANK phone in the hover card / detail modal / phone search / print, even though the phone exists at `be_customers.patientData.phone`. Real-prod Rule-R diag: **78/123 appts blank, customerPhone written on 0**. Same class as V108 (sale name/HN "-"). Two-layer fix:
+
+1. **Write-chokepoint** — `createBackendAppointment` + `updateBackendAppointment` MUST resolve `customerPhone` from `be_customers` via `_resolveAppointmentCustomerPhone` (mirror V108 `_resolveSaleCustomerIdentity`) when the caller leaves it empty + `customerId` is set. Never clobber a good value; resolve `''` → leave the field untouched. Fixes NEW + EDITED appts everywhere (hover/modal/grid/search/print).
+2. **Render live-resolve** — `AppointmentDetailBody` phone = `apptPhoneValue(appt) || resolvedPhone`, where `resolvedPhone` comes from `useResolvedApptPhone` (lazy `getCustomer` + `resolveCustomerPhone`, cached per customerId) supplied by the peek + popover for LEGACY appts predating the chokepoint. V113-aligned: fix the RENDERER, NEVER admin-SDK-backfill the data to "fix display".
+
+`apptPhoneValue` (`customerPhone || customerPhoneTemp`) stays the canonical FIRST read — pick-later appts with a typed `customerPhoneTemp` KEEP showing it (the case the user explicitly required; no regression).
+
+**Grep targets**:
+```
+grep -n "_resolveAppointmentCustomerPhone" src/lib/backendClient.js        # defined + called in create AND update
+grep -n "apptPhoneValue(appt) || resolvedPhone" src/components/backend/AppointmentDetailBody.jsx  # MUST appear
+grep -n "export function resolveCustomerPhone" src/lib/customerDisplayName.js  # centralized (Rule of 3)
+```
+
+**Sanctioned exception**: the grid/agenda INLINE phone may stay `apptPhoneValue`-only (the write-chokepoint fixes new appts inline; legacy appts surface the phone via the hover peek on desktop / tap→modal on mobile). `resolveCustomerPhone` is the single home for customer-phone shape-walk (appt write + render hook + RemainingCourseTab).
+
+**Cross-link**: AV100 (V108 sale identity chokepoint — same family) · AV113 (V113 renderer live-resolve, no backfill) · `tests/v128-appt-phone-and-grid-height.test.jsx` (A-E) + `tests/appt-hover-peek.test.jsx` · V128 entry in `.claude/rules/00-session-start.md` § 2.
+
+### AV146 — Fullscreen image lightbox MUST size viewport-relative, NOT a small fixed max-w cap (V128.lb, 2026-05-28)
+
+A fullscreen image preview/lightbox MUST size its image to the VIEWPORT — full-screen (`max-w 100vw` / `max-h` up to `100dvh`, `object-contain` → fits the screen exactly), NOT a small fixed Tailwind cap (`max-w-4xl/3xl/2xl` ≈ 896/768/672px). User report: "กด Preview รูปใน Staffchat … จอตั้งใหญ่แม่งขึ้น Preview ให้เท่าในรูป … ใหญ่สุดเท่าขนาดจอ auto full เต็มจอพอดี" — `StaffChatImageLightbox` capped the image at `max-w-4xl` (896px) + `h-[78vh]`, so a 2K screen showed a tiny preview. The shared `ImageLightbox` (V123) is the reference (viewport-relative + `object-contain`). Multi-image lightboxes reserve ONLY the bottom filmstrip (`maxHeight: calc(100dvh - 4.75rem)`) so it never hides the image; single image = full `100dvh` (top bar + close overlay it, Photos/pro-style). A zoomed lightbox MUST also support drag-to-pan (zoom without pan is useless — V128.lb2; see `useState pan` + `clampPan` + pointer handlers).
+
+**Grep**: `grep -nE "max-w-(2xl|3xl|4xl|5xl)" src/components/**/*Lightbox*.jsx` → MUST be empty (fullscreen image viewers use vw/dvh).
+
+**Sanctioned exceptions**: chat-bubble THUMBNAILS (`StaffChatMessage` / `StaffChatAttachmentCard`, `max-w-[200-240px]`) are intentionally small (in-flow previews, NOT the fullscreen viewer). `StaffChatPdfOverlay` is a fullscreen iframe (`flex-1 w-full`).
+
+**Cross-link**: AV114 (fullscreen lightbox mobile gates) · AV117 (portal-to-body) · `tests/v128-staffchat-lightbox-size.test.jsx`.
+
+### AV147 — Sale-report seller/creator columns MUST resolve names via the staff lookup (V129, 2026-05-28)
+
+reports-sale's "พนักงานขาย" + "ผู้ทำรายการ" MUST resolve display names via `resolveSellerName(seller, listAllSellers)` — NOT read raw `sellers[].name`. Real-prod Rule-R diag: **38/49 sales store an empty `sellers[].name`** (only `sellers[].id` like "STAFF-…"), and `be_sales.createdBy` is **never written** → the report showed "-" while SaleTab / SalePrintView resolve the name from the be_staff+be_doctors lookup. Same class as V108/AV100 (report reads raw; the canonical path resolves via lookup). "ผู้ทำรายการ" falls back to the resolved FIRST seller (createdBy unwritten).
+
+**Grep**: `saleReportAggregator.deriveSellersLabel(sale, sellerLookup)` must call `resolveSellerName`; `aggregateSaleReport` must accept a `sellers` lookup; `SaleReportTab` must load `listAllSellers` + pass `sellers:` (aggregator) + `sellerLookup={}` (SaleDetailModal); `SaleDetailModal` must resolve sellers display + `createdBy`.
+
+**Sanctioned / references**: `staffSalesAggregator` (already resolves via its own `staffMap`) + `SalePrintView` (already uses `resolveSellerName`) are the WORKING references. **Note**: capturing a TRUE separate `createdBy` at sale-write time is a future enhancement; today "ผู้ทำรายการ" = the resolved first seller (the pre-existing fallback intent, now resolved instead of blank).
+
+**Cross-link**: AV100 (V108 sale identity chokepoint — same family) · `tests/v129-sale-report-seller-creator-resolve.test.js` · `scripts/diag-sale-report-seller-creator.mjs`.
+
+### AV148 — Backend shells keep `min-w-0`; wide report tables stay height-capped + reachable-scroll (V130, 2026-05-28)
+
+Two guards from V130's reports-sale responsive work. (a) **Shell containment regression-guard**: both backend shells' `<main>` MUST retain `min-w-0` (`nav/BackendNav.jsx`, `shell/BackendShellNew.jsx`) — this is what makes a wide table scroll IN-PANEL instead of pushing the page off-screen on a Windows-scaled viewport (real-browser verified: `pageOverflows=false`, `wrapScrolls=true`). The original "missing min-w-0 blowout" theory was WRONG — they already have it; this guard prevents a future edit from removing it. (b) **reports-sale table contract**: `SaleReportTable`'s desktop wrapper MUST be height-capped (`max-h-*` + `overflow-auto`) so the horizontal scrollbar is reachable within the viewport (not at the bottom of a tall table, below the fold), plus compact density (relaxed `min-w`, tight padding, truncated long text columns).
+
+**Grep**: `nav/BackendNav.jsx` + `shell/BackendShellNew.jsx` `<main` must contain `min-w-0`; `SaleReportTab.jsx` table wrapper must contain `max-h-[` + `overflow-auto`, table `min-w-[1180px]`, and `isTruncatable` for the long text columns.
+
+**Sanctioned**: mobile (`<lg`) card list (`SaleMobileList`) is a separate layout — untouched.
+
+**Cross-link**: V130 · `tests/v130-reports-sale-responsive.test.js`.
+
+### AV149 — `createBackendSale` MUST capture the true acting user (createdById/Name/Source) at the chokepoint (V130, 2026-05-28)
+
+The sale-write chokepoint `createBackendSale` MUST stamp the real logged-in actor via `_resolveSaleCreatedBy(data)` (mirror of V108 `_resolveSaleCustomerIdentity`): `createdById` (staffId resolved from `be_staff WHERE firebaseUid == auth.currentUser.uid`), `createdByName` (resolved name snapshot), and `createdBySource` (honesty tag: `staff`/`auth`/`none`/`caller`/`first-seller-backfill`). The report's "ผู้ทำรายการ" MUST prefer `createdByName` → live-resolve `createdById` → legacy `createdBy` → first-seller fallback → `-`. Non-fatal resolution (failure → empty → first-seller fallback). Backfill of legacy sales MUST tag `createdBySource:'first-seller-backfill'` so a guess is never mistaken for true capture.
+
+**Grep**: `backendClient.js` must define `_resolveSaleCreatedBy` with all 4 branches + query `be_staff` by `firebaseUid`; `createBackendSale` must stamp the 3 fields via `_creator`; `saleReportAggregator.buildSaleReportRow` must use the createdByName→createdById→legacy→first-seller chain.
+
+**Cross-link**: AV100/AV147 (same chokepoint family) · `tests/v130-sale-created-by.test.js` · `scripts/v130-backfill-sale-created-by.mjs` · `scripts/verify-v130-sale-created-by.mjs`.

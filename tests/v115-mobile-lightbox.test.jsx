@@ -99,7 +99,9 @@ describe('V115.SG — StaffChatImageLightbox source-grep', () => {
   });
 
   it('SG7: image carries CSS transform scale(zoom) inline style', () => {
-    expect(STAFF_SRC).toMatch(/transform:\s*`scale\(\$\{zoom\}\)`/);
+    // V128.lb2 (2026-05-28) — transform is now `translate(pan) scale(zoom)`
+    // (drag-to-pan added); the zoom scale is preserved.
+    expect(STAFF_SRC).toMatch(/transform:\s*`translate\(\$\{pan\.x\}px, \$\{pan\.y\}px\) scale\(\$\{zoom\}\)`/);
   });
 });
 
