@@ -141,6 +141,14 @@ describe('light-theme + appointment realtime fixes (2026-05-28)', () => {
     }
   });
 
+  it('AA-bg: white-on-bg-{c}-600 darkened to {c}-700 in light (push white-on-color CTAs/badges to AA)', () => {
+    for (const [c, hex] of [['amber', '#b45309'], ['emerald', '#047857'], ['sky', '#0369a1'], ['red', '#b91c1c'], ['green', '#15803d']]) {
+      expect(css, `.bg-${c}-600.text-white should darken to ${c}-700`).toMatch(
+        new RegExp(`\\.bg-${c}-600\\.text-white[\\s\\S]{0,120}background-color:\\s*${hex}`),
+      );
+    }
+  });
+
   it('date-strip selected tab: bg-sky-700/600 descendant white-restore present (label+number are child divs)', () => {
     expect(css).toMatch(/\[class\*="bg-sky-700"\]\s+\.text-white/);
     expect(css).toMatch(/\[class\*="bg-sky-600"\]\s+\.text-white/);

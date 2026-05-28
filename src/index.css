@@ -541,6 +541,31 @@ html.theme-transitioning *::after {
 [data-theme="auto"] [class*="bg-sky-"].text-white,
 [data-theme="auto"] [class*="bg-lime-"].text-white { color: #ffffff !important; }
 
+/* 2026-05-28 V124-fix3 — "ดัน AA เต็ม": white text on a SOLID bg-{c}-600 is sub-AA
+   for most colors in light theme (amber 3.19, emerald 3.77, green 2.8, yellow 2.2,
+   sky-count 4.1, red-save 4.0, …). Darken the bg one step to {c}-700 (white-text AA
+   ≥ 4.5:1) — LIGHT/auto only (dark theme keeps -600 / uses dark: variants). Scoped to
+   `.bg-{c}-600.text-white` so non-white text + tint badges are untouched. Pushes the
+   finance booking-link badges + date-strip count badge + every white-on-color CTA to
+   strict AA without changing their solid look (subtle one-shade deepening). */
+[data-theme="light"] .bg-red-600.text-white,    [data-theme="auto"] .bg-red-600.text-white     { background-color: #b91c1c !important; }
+[data-theme="light"] .bg-orange-600.text-white, [data-theme="auto"] .bg-orange-600.text-white  { background-color: #c2410c !important; }
+[data-theme="light"] .bg-amber-600.text-white,  [data-theme="auto"] .bg-amber-600.text-white   { background-color: #b45309 !important; }
+[data-theme="light"] .bg-yellow-600.text-white, [data-theme="auto"] .bg-yellow-600.text-white  { background-color: #a16207 !important; }
+[data-theme="light"] .bg-lime-600.text-white,   [data-theme="auto"] .bg-lime-600.text-white    { background-color: #4d7c0f !important; }
+[data-theme="light"] .bg-green-600.text-white,  [data-theme="auto"] .bg-green-600.text-white   { background-color: #15803d !important; }
+[data-theme="light"] .bg-emerald-600.text-white,[data-theme="auto"] .bg-emerald-600.text-white { background-color: #047857 !important; }
+[data-theme="light"] .bg-teal-600.text-white,   [data-theme="auto"] .bg-teal-600.text-white    { background-color: #0f766e !important; }
+[data-theme="light"] .bg-cyan-600.text-white,   [data-theme="auto"] .bg-cyan-600.text-white    { background-color: #0e7490 !important; }
+[data-theme="light"] .bg-sky-600.text-white,    [data-theme="auto"] .bg-sky-600.text-white     { background-color: #0369a1 !important; }
+[data-theme="light"] .bg-blue-600.text-white,   [data-theme="auto"] .bg-blue-600.text-white    { background-color: #1d4ed8 !important; }
+[data-theme="light"] .bg-indigo-600.text-white, [data-theme="auto"] .bg-indigo-600.text-white  { background-color: #4338ca !important; }
+[data-theme="light"] .bg-violet-600.text-white, [data-theme="auto"] .bg-violet-600.text-white  { background-color: #6d28d9 !important; }
+[data-theme="light"] .bg-purple-600.text-white, [data-theme="auto"] .bg-purple-600.text-white  { background-color: #7e22ce !important; }
+[data-theme="light"] .bg-fuchsia-600.text-white,[data-theme="auto"] .bg-fuchsia-600.text-white { background-color: #a21caf !important; }
+[data-theme="light"] .bg-pink-600.text-white,   [data-theme="auto"] .bg-pink-600.text-white    { background-color: #be185d !important; }
+[data-theme="light"] .bg-rose-600.text-white,   [data-theme="auto"] .bg-rose-600.text-white    { background-color: #be123c !important; }
+
 /* V83-followup-11 (EOD8 LATE 2026-05-18) — Restore white text on:
    (a) slate/gray/zinc/neutral/stone bg classes (missing from grayscale palette)
    (b) ANY bg-gradient-to-* class (covers from-slate / from-gray / multi-stop)
