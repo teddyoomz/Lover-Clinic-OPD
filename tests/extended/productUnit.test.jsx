@@ -18,7 +18,7 @@ import {
   UNIT_NAME_MAX_LENGTH,
   MIN_UNITS,
   MAX_UNITS,
-} from '../src/lib/productUnitValidation.js';
+} from '../../src/lib/productUnitValidation.js';
 
 /* ─── PUV: validateProductUnitGroup adversarial ────────────────────────── */
 
@@ -303,12 +303,12 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listProductUnitGroups:   (...a) => mockList(...a),
   saveProductUnitGroup:    (...a) => mockSave(...a),
   deleteProductUnitGroup:  (...a) => mockDelete(...a),
@@ -316,8 +316,8 @@ vi.mock('../src/lib/backendClient.js', () => ({
   findProductUnitGroupByName: vi.fn(),
 }));
 
-import ProductUnitsTab from '../src/components/backend/ProductUnitsTab.jsx';
-import ProductUnitFormModal from '../src/components/backend/ProductUnitFormModal.jsx';
+import ProductUnitsTab from '../../src/components/backend/ProductUnitsTab.jsx';
+import ProductUnitFormModal from '../../src/components/backend/ProductUnitFormModal.jsx';
 
 function makeGroup(over = {}) {
   return {

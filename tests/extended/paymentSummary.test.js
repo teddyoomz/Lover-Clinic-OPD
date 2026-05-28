@@ -1,6 +1,6 @@
 // ─── Phase 12.8 · Payment Summary aggregator tests ────────────────────────
 import { describe, it, expect } from 'vitest';
-import { aggregatePaymentSummary, KNOWN_METHODS, getPaymentSummaryColumns } from '../src/lib/paymentSummaryAggregator.js';
+import { aggregatePaymentSummary, KNOWN_METHODS, getPaymentSummaryColumns } from '../../src/lib/paymentSummaryAggregator.js';
 
 const makeSale = (saleId, saleDate, channels, status = 'completed') => ({
   saleId, saleDate, status, payment: { channels },

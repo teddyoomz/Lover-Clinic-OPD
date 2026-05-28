@@ -5,15 +5,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listCoupons: vi.fn(),
   saveCoupon: vi.fn(async () => {}),
   deleteCoupon: vi.fn(async () => {}),
 }));
 
-import CouponTab from '../src/components/backend/CouponTab.jsx';
-import { listCoupons, saveCoupon, deleteCoupon } from '../src/lib/backendClient.js';
-import { bangkokNow, thaiTodayISO } from '../src/utils.js';
+import CouponTab from '../../src/components/backend/CouponTab.jsx';
+import { listCoupons, saveCoupon, deleteCoupon } from '../../src/lib/backendClient.js';
+import { bangkokNow, thaiTodayISO } from '../../src/utils.js';
 
 const clinicSettings = { accentColor: '#dc2626' };
 

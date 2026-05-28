@@ -13,7 +13,7 @@ beforeAll(() => {
   }
 });
 
-import DfEntryModal from '../src/components/backend/DfEntryModal.jsx';
+import DfEntryModal from '../../src/components/backend/DfEntryModal.jsx';
 
 // Fixtures mirror the shapes TreatmentFormPage will pass in Phase 14.4.
 const treatmentCourses = [

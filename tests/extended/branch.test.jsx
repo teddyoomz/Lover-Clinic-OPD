@@ -11,7 +11,7 @@ import {
   STATUS_OPTIONS,
   NAME_MAX_LENGTH,
   ADDRESS_MAX_LENGTH,
-} from '../src/lib/branchValidation.js';
+} from '../../src/lib/branchValidation.js';
 
 describe('validateBranch — BV1..BV15', () => {
   const good = () => ({ ...emptyBranchForm(), name: 'Main', phone: '0812345678' });
@@ -145,20 +145,20 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listBranches: (...a) => mockList(...a),
   saveBranch:   (...a) => mockSave(...a),
   deleteBranch: (...a) => mockDelete(...a),
   getBranch:    vi.fn(),
 }));
 
-import BranchesTab from '../src/components/backend/BranchesTab.jsx';
-import BranchFormModal from '../src/components/backend/BranchFormModal.jsx';
+import BranchesTab from '../../src/components/backend/BranchesTab.jsx';
+import BranchFormModal from '../../src/components/backend/BranchFormModal.jsx';
 
 function makeBranch(over = {}) {
   return {

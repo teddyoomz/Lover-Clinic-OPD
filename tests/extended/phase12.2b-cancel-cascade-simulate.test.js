@@ -22,9 +22,9 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
-import { parseQtyString, reverseQty } from '../src/lib/courseUtils.js';
+import { parseQtyString, reverseQty } from '../../src/lib/courseUtils.js';
 
 // Mirror of removeLinkedSaleCourses filter + reverseCourseDeduction logic.
 function simulateRemoveLinkedSaleCourses(customerCourses, saleId, { removeUsed = false } = {}) {

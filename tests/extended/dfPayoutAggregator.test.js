@@ -1,6 +1,6 @@
 // ─── Phase 13.4.1 · DF payout aggregator tests ───────────────────────────
 import { describe, it, expect } from 'vitest';
-import { computeDfPayoutReport } from '../src/lib/dfPayoutAggregator.js';
+import { computeDfPayoutReport } from '../../src/lib/dfPayoutAggregator.js';
 
 const doctors = [
   { doctorId: 'D1', firstname: 'Alice', lastname: 'A', defaultDfGroupId: 'DFG-1' },

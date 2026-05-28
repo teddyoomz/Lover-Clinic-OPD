@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateCustomer, normalizeCustomer, emptyCustomerForm,
   GENDER_OPTIONS, RECEIPT_TYPE_OPTIONS,
-} from '../src/lib/customerValidation.js';
+} from '../../src/lib/customerValidation.js';
 
 const base = () => ({ ...emptyCustomerForm(), firstname: 'สมชาย', hn_no: 'HN001' });
 

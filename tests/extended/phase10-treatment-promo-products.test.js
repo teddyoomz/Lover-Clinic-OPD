@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   mapPromotionProductsToConsumables,
   filterOutConsumablesForPromotion,
-} from '../src/lib/treatmentBuyHelpers.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
 
 /* ─── Pure mapping ────────────────────────────────────────────────────────── */
 

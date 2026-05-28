@@ -20,10 +20,10 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
-import { parseQtyString, formatQtyString, deductQty } from '../src/lib/courseUtils.js';
-import { mapRawCoursesToForm } from '../src/lib/treatmentBuyHelpers.js';
+import { parseQtyString, formatQtyString, deductQty } from '../../src/lib/courseUtils.js';
+import { mapRawCoursesToForm } from '../../src/lib/treatmentBuyHelpers.js';
 
 // Mirror of deductCourseItems (see backendClient.js:269-363 — also mirrored
 // in phase12.2b-flow-simulate.test.js; kept here so this file is

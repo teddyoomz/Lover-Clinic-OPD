@@ -31,11 +31,11 @@ const FIX_BATCHES = [
   },
 ];
 
-vi.mock('../src/lib/reportsLoaders.js', () => ({
+vi.mock('../../src/lib/reportsLoaders.js', () => ({
   loadAllStockBatchesForReport: vi.fn(async () => FIX_BATCHES),
 }));
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
   // StockReportTab reads via listProducts (canonical) — Phase 14.10-tris.
   listAllSellers: () => Promise.resolve([]),
@@ -48,9 +48,9 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listWalletTypes: () => Promise.resolve([]),
 }));
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
-import StockReportTab from '../src/components/backend/reports/StockReportTab.jsx';
+import StockReportTab from '../../src/components/backend/reports/StockReportTab.jsx';
 
 describe('StockReportTab — render + interactions', () => {
   beforeEach(() => {

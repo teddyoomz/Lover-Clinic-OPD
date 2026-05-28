@@ -62,8 +62,8 @@ vi.mock('firebase-admin/firestore', () => ({
   getFirestore: vi.fn(() => fakeFirestore),
 }));
 
-const { default: handler } = await import('../api/admin/users.js');
-const { __resetAdminAuthForTests } = await import('../api/admin/_lib/adminAuth.js');
+const { default: handler } = await import('../../api/admin/users.js');
+const { __resetAdminAuthForTests } = await import('../../api/admin/_lib/adminAuth.js');
 
 function createReq({ method = 'POST', authorization = '', body = {} } = {}) {
   return { method, headers: { authorization }, body };

@@ -5,8 +5,8 @@ import {
   aggregateAppointmentAnalysis,
   matchSalesToAppointments,
   buildAdvisorKPIColumns,
-} from '../src/lib/appointmentAnalysisAggregator.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/appointmentAnalysisAggregator.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 
 const ASOF = '2026-04-20';
 

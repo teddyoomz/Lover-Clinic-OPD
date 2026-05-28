@@ -23,7 +23,7 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 // ═══════════════════════════════════════════════════════════════════════
 // F1: earnPoints formula

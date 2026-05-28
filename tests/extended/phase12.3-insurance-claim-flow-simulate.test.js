@@ -35,12 +35,12 @@ import {
   aggregateClaimsBySaleId,
   STATUS_OPTIONS,
   TRANSITIONS,
-} from '../src/lib/saleInsuranceClaimValidation.js';
+} from '../../src/lib/saleInsuranceClaimValidation.js';
 import {
   aggregateSaleReport,
   buildSaleReportRow,
   buildSaleReportColumns,
-} from '../src/lib/saleReportAggregator.js';
+} from '../../src/lib/saleReportAggregator.js';
 
 // Pure simulate of SaleInsuranceClaimsTab.handleSaleChange — picking a sale
 // from the dropdown auto-fills customerId/HN/name + defaults claimAmount +
@@ -354,7 +354,7 @@ describe('F6: adversarial inputs', () => {
 /* ─── F7: source-grep regression guards ────────────────────────────── */
 
 describe('F7: source-grep regression guards (lock the fix pattern)', () => {
-  const srcDir = path.resolve(__dirname, '..');
+  const srcDir = path.resolve(__dirname, '..', '..');
   const read = (p) => fs.readFileSync(path.join(srcDir, p), 'utf8');
 
   it('F7.1: SaleReportTab imports + uses loadSaleInsuranceClaimsByDateRange', () => {

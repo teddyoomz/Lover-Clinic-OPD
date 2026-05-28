@@ -31,9 +31,9 @@ import {
   buildPurchasedCourseEntry,
   resolvePickedCourseEntry,
   mapRawCoursesToForm,
-} from '../src/lib/treatmentBuyHelpers.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
 const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ═══════════════════════════════════════════════════════════════════════

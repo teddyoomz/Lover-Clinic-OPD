@@ -12,13 +12,13 @@ const { mockAuth } = vi.hoisted(() => ({
   mockAuth: { currentUser: { getIdToken: vi.fn() } },
 }));
 
-vi.mock('../src/firebase.js', () => ({
+vi.mock('../../src/firebase.js', () => ({
   auth: mockAuth,
   db: {},
   appId: 'test-app',
 }));
 
-const { listAdminUsers, createAdminUser, deleteAdminUser, grantAdmin } = await import('../src/lib/adminUsersClient.js');
+const { listAdminUsers, createAdminUser, deleteAdminUser, grantAdmin } = await import('../../src/lib/adminUsersClient.js');
 
 describe('adminUsersClient', () => {
   beforeEach(() => {

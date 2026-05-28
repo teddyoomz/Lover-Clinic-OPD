@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const ROOT = join(__dirname, '..');
+const ROOT = join(__dirname, '..', '..');
 const saleFile = readFileSync(join(ROOT, 'src/components/backend/SalePrintView.jsx'), 'utf8');
 const quotationFile = readFileSync(join(ROOT, 'src/components/backend/QuotationPrintView.jsx'), 'utf8');
 

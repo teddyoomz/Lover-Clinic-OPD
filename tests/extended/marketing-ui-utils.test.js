@@ -7,7 +7,7 @@ import {
   generateMarketingId,
   scrollToField,
   resolveIsDark,
-} from '../src/lib/marketingUiUtils.js';
+} from '../../src/lib/marketingUiUtils.js';
 
 describe('generateMarketingId', () => {
   it('M1 prefix + ts + hex suffix with dashes', () => {

@@ -8,7 +8,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const P = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data'];
 const TS = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const bc = () => import('../src/lib/backendClient.js');
+const bc = () => import('../../src/lib/backendClient.js');
 
 const whDoc = (id) => doc(db, ...P, 'be_central_stock_warehouses', id);
 const whCol = () => collection(db, ...P, 'be_central_stock_warehouses');

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateProduct, emptyProductForm, normalizeProduct, generateProductId,
   STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS,
-} from '../src/lib/productValidation.js';
+} from '../../src/lib/productValidation.js';
 
 const base = () => ({ ...emptyProductForm(), productName: 'Paracetamol', productType: 'ยา' });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeCell, buildCSV } from '../src/lib/csvExport.js';
+import { escapeCell, buildCSV } from '../../src/lib/csvExport.js';
 
 describe('escapeCell — RFC 4180 quote-escape', () => {
   it('returns empty string for null/undefined/empty', () => {

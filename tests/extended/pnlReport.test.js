@@ -1,6 +1,6 @@
 // ─── Phase 12.8 · P&L Report aggregator tests ────────────────────────────
 import { describe, it, expect } from 'vitest';
-import { aggregatePnLReport, PERIOD_OPTIONS, getPnLColumns } from '../src/lib/pnlReportAggregator.js';
+import { aggregatePnLReport, PERIOD_OPTIONS, getPnLColumns } from '../../src/lib/pnlReportAggregator.js';
 
 const makeSale = (saleDate, net, status = 'completed') => ({
   saleId: `S-${saleDate}-${net}`, saleDate, status, billing: { netTotal: net },

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateStaff, emptyStaffForm, normalizeStaff, generateStaffId,
   STATUS_OPTIONS, POSITION_OPTIONS,
-} from '../src/lib/staffValidation.js';
+} from '../../src/lib/staffValidation.js';
 
 const base = () => ({ ...emptyStaffForm(), firstname: 'สมชาย' });
 

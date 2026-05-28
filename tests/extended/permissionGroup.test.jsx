@@ -17,7 +17,7 @@ import {
   DESC_MAX_LENGTH,
   PERMISSION_MODULES,
   ALL_PERMISSION_KEYS,
-} from '../src/lib/permissionGroupValidation.js';
+} from '../../src/lib/permissionGroupValidation.js';
 
 /* ─── PGV: validator ────────────────────────────────────────────────────── */
 
@@ -208,20 +208,20 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listPermissionGroups: (...a) => mockList(...a),
   savePermissionGroup:  (...a) => mockSave(...a),
   deletePermissionGroup: (...a) => mockDelete(...a),
   getPermissionGroup:   vi.fn(),
 }));
 
-import PermissionGroupsTab from '../src/components/backend/PermissionGroupsTab.jsx';
-import PermissionGroupFormModal from '../src/components/backend/PermissionGroupFormModal.jsx';
+import PermissionGroupsTab from '../../src/components/backend/PermissionGroupsTab.jsx';
+import PermissionGroupFormModal from '../../src/components/backend/PermissionGroupFormModal.jsx';
 
 function makeRole(over = {}) {
   return {

@@ -1,6 +1,6 @@
 // ─── storageClient unit tests ────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest';
-import { buildStoragePath } from '../src/lib/storageClient.js';
+import { buildStoragePath } from '../../src/lib/storageClient.js';
 
 describe('buildStoragePath', () => {
   it('builds correct path format', () => {

@@ -20,7 +20,7 @@ import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
 const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ─── LC1: backendClient exports ────────────────────────────────────────────

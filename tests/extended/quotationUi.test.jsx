@@ -16,7 +16,7 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 const mockListQuotations = vi.fn();
 const mockDeleteQuotation = vi.fn();
@@ -25,7 +25,7 @@ const mockGetAllCustomers = vi.fn();
 const mockGetAllStaff = vi.fn();
 const mockGetAllMasterDataItems = vi.fn();
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listQuotations: (...a) => mockListQuotations(...a),
   deleteQuotation: (...a) => mockDeleteQuotation(...a),
   saveQuotation: (...a) => mockSaveQuotation(...a),
@@ -47,9 +47,9 @@ vi.mock('../src/lib/backendClient.js', () => ({
   // listProducts entries above — same fixture data, canonical entry point.
 }));
 
-const QuotationTab = (await import('../src/components/backend/QuotationTab.jsx')).default;
-const QuotationFormModal = (await import('../src/components/backend/QuotationFormModal.jsx')).default;
-const QuotationPrintView = (await import('../src/components/backend/QuotationPrintView.jsx')).default;
+const QuotationTab = (await import('../../src/components/backend/QuotationTab.jsx')).default;
+const QuotationFormModal = (await import('../../src/components/backend/QuotationFormModal.jsx')).default;
+const QuotationPrintView = (await import('../../src/components/backend/QuotationPrintView.jsx')).default;
 
 function makeQuotation(over = {}) {
   return {

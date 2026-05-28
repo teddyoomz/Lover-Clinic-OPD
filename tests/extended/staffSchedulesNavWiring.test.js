@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   NAV_SECTIONS, ALL_ITEM_IDS, ITEM_LOOKUP, sectionOf, itemById,
-} from '../src/components/backend/nav/navConfig.js';
+} from '../../src/components/backend/nav/navConfig.js';
 
 describe('Phase 13.2.5 — staff-schedules nav wiring', () => {
   it('SN1: staff-schedules item registered in ALL_ITEM_IDS', () => {

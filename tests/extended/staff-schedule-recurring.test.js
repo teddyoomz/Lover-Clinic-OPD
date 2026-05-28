@@ -20,7 +20,7 @@ import {
   dayOfWeekFromDate,
   mergeSchedulesForDate,
   checkAppointmentCollision,
-} from '../src/lib/staffScheduleValidation.js';
+} from '../../src/lib/staffScheduleValidation.js';
 
 describe('SR — Phase 13.2.6 recurring schedule schema + merge', () => {
   describe('SR1 — TYPE_OPTIONS includes "recurring" first', () => {
@@ -289,11 +289,11 @@ describe('SR — Phase 13.2.6 recurring schedule schema + merge', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const validatorSrc = fs.readFileSync(
-      path.resolve(__dirname, '..', 'src/lib/staffScheduleValidation.js'),
+      path.resolve(__dirname, '..', '..', 'src/lib/staffScheduleValidation.js'),
       'utf-8'
     );
     const clientSrc = fs.readFileSync(
-      path.resolve(__dirname, '..', 'src/lib/backendClient.js'),
+      path.resolve(__dirname, '..', '..', 'src/lib/backendClient.js'),
       'utf-8'
     );
 

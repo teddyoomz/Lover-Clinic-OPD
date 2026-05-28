@@ -13,15 +13,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const empSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/EmployeeSchedulesTab.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/EmployeeSchedulesTab.jsx'),
   'utf-8'
 );
 const docSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/DoctorSchedulesTab.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/DoctorSchedulesTab.jsx'),
   'utf-8'
 );
 const dashSrc = readFileSync(
-  resolve(__dirname, '..', 'src/pages/BackendDashboard.jsx'),
+  resolve(__dirname, '..', '..', 'src/pages/BackendDashboard.jsx'),
   'utf-8'
 );
 

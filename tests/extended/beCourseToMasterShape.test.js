@@ -7,9 +7,9 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
-import { beCourseToMasterShape } from '../src/lib/backendClient.js';
+import { beCourseToMasterShape } from '../../src/lib/backendClient.js';
 
 describe('beCourseToMasterShape — main product inclusion', () => {
   it('BC1 course with only mainProductId (no courseProducts) → 1-product output', () => {

@@ -12,14 +12,14 @@ import { describe, it, expect } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import TodaysDoctorsPanel from '../src/components/backend/scheduling/TodaysDoctorsPanel.jsx';
+import TodaysDoctorsPanel from '../../src/components/backend/scheduling/TodaysDoctorsPanel.jsx';
 
 const apptTabSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/AppointmentCalendarView.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/AppointmentCalendarView.jsx'),
   'utf-8'
 );
 const panelSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/scheduling/TodaysDoctorsPanel.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/scheduling/TodaysDoctorsPanel.jsx'),
   'utf-8'
 );
 

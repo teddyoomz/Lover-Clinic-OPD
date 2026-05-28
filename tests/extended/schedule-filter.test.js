@@ -4,7 +4,7 @@
 // leaked through to a พบแพทย์ link that targeted ห้องตรวจ/ผ่าตัด (doctor room).
 // ═══════════════════════════════════════════════════════════════════════════
 import { describe, it, expect } from 'vitest';
-import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../src/lib/scheduleFilterUtils.js';
+import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../../src/lib/scheduleFilterUtils.js';
 
 // Practitioner / room fixtures
 const DR_A = '101';     // doctor

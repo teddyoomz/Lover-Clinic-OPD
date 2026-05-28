@@ -6,8 +6,8 @@ import {
   splitSaleAcrossSellers,
   buildStaffColumns,
   buildDoctorColumns,
-} from '../src/lib/staffSalesAggregator.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/staffSalesAggregator.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 
 function sale({ id, date = '2026-04-10', net = 1000, paid = null, status = 'active', sellers = [], doctorName = '', doctorId = '' }) {
   return {

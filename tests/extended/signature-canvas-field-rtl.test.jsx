@@ -59,7 +59,7 @@ beforeEach(() => {
   }
 });
 
-import SignatureCanvasField from '../src/components/backend/SignatureCanvasField.jsx';
+import SignatureCanvasField from '../../src/components/backend/SignatureCanvasField.jsx';
 
 describe('SignatureCanvasField — RTL integration', () => {
   it('R1 — renders canvas + empty placeholder by default', () => {

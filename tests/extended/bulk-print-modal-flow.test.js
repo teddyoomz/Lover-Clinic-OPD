@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const ROOT = join(__dirname, '..');
+const ROOT = join(__dirname, '..', '..');
 const modalFile = readFileSync(join(ROOT, 'src/components/backend/BulkPrintModal.jsx'), 'utf8');
 
 // ─── BP.A — component shape ────────────────────────────────────────

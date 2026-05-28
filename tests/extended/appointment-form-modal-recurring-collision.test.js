@@ -7,10 +7,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkAppointmentCollision } from '../src/lib/staffScheduleValidation.js';
+import { checkAppointmentCollision } from '../../src/lib/staffScheduleValidation.js';
 
 const modalSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/AppointmentFormModal.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/AppointmentFormModal.jsx'),
   'utf-8'
 );
 

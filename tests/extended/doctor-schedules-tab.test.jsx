@@ -14,35 +14,35 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import MonthCalendarGrid, {
   buildMonthGrid, THAI_MONTHS, WEEK_HEADER, SLOT_TO_JS_DAY,
-} from '../src/components/backend/scheduling/MonthCalendarGrid.jsx';
+} from '../../src/components/backend/scheduling/MonthCalendarGrid.jsx';
 
 // File-source reads (regression guards)
 const calSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/scheduling/MonthCalendarGrid.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/scheduling/MonthCalendarGrid.jsx'),
   'utf-8'
 );
 const sidebarSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/scheduling/ScheduleSidebarPanel.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/scheduling/ScheduleSidebarPanel.jsx'),
   'utf-8'
 );
 const modalSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/scheduling/ScheduleEntryFormModal.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/scheduling/ScheduleEntryFormModal.jsx'),
   'utf-8'
 );
 const tabSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/DoctorSchedulesTab.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/DoctorSchedulesTab.jsx'),
   'utf-8'
 );
 const navSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/nav/navConfig.js'),
+  resolve(__dirname, '..', '..', 'src/components/backend/nav/navConfig.js'),
   'utf-8'
 );
 const permSrc = readFileSync(
-  resolve(__dirname, '..', 'src/lib/tabPermissions.js'),
+  resolve(__dirname, '..', '..', 'src/lib/tabPermissions.js'),
   'utf-8'
 );
 const dashSrc = readFileSync(
-  resolve(__dirname, '..', 'src/pages/BackendDashboard.jsx'),
+  resolve(__dirname, '..', '..', 'src/pages/BackendDashboard.jsx'),
   'utf-8'
 );
 

@@ -17,14 +17,14 @@ import {
   FIELD_TYPES,
   SIGNATURE_MAX_BYTES,
   validateDocumentTemplate,
-} from '../src/lib/documentTemplateValidation.js';
+} from '../../src/lib/documentTemplateValidation.js';
 import {
   buildPrintContext,
   renderTemplate,
   safeImgTag,
-} from '../src/lib/documentPrintEngine.js';
+} from '../../src/lib/documentPrintEngine.js';
 
-const ROOT = join(__dirname, '..');
+const ROOT = join(__dirname, '..', '..');
 const validationFile = readFileSync(join(ROOT, 'src/lib/documentTemplateValidation.js'), 'utf8');
 const engineFile = readFileSync(join(ROOT, 'src/lib/documentPrintEngine.js'), 'utf8');
 const componentFile = readFileSync(join(ROOT, 'src/components/backend/SignatureCanvasField.jsx'), 'utf8');

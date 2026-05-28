@@ -2,7 +2,7 @@
 // Tests extractCouponLikeRows against realistic ProClinic-style HTML.
 
 import { describe, it, expect } from 'vitest';
-import { extractCouponLikeRows } from '../api/proclinic/master.js';
+import { extractCouponLikeRows } from '../../api/proclinic/master.js';
 
 const wrapTable = (rowsHtml) => `
   <table>

@@ -3,16 +3,16 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { FIXTURE_CUSTOMERS, FIXTURE_SALES, EXPECTED_TOTALS_NO_FILTER } from './_fixtures/phase10-customers-fixture.js';
+import { FIXTURE_CUSTOMERS, FIXTURE_SALES, EXPECTED_TOTALS_NO_FILTER } from '../_fixtures/phase10-customers-fixture.js';
 
-vi.mock('../src/lib/reportsLoaders.js', () => ({
+vi.mock('../../src/lib/reportsLoaders.js', () => ({
   loadAllCustomersForReport: vi.fn(async () => FIXTURE_CUSTOMERS),
   loadSalesByDateRange:      vi.fn(async () => FIXTURE_SALES),
 }));
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
-import CustomerReportTab from '../src/components/backend/reports/CustomerReportTab.jsx';
+import CustomerReportTab from '../../src/components/backend/reports/CustomerReportTab.jsx';
 
 describe('CustomerReportTab — render + interactions', () => {
   beforeEach(() => {

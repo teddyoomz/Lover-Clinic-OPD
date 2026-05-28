@@ -5,7 +5,7 @@ import {
   validateOnlineSale, normalizeOnlineSale, emptyOnlineSaleForm,
   generateOnlineSaleId, applyStatusTransition,
   STATUS_OPTIONS, TRANSITIONS,
-} from '../src/lib/onlineSaleValidation.js';
+} from '../../src/lib/onlineSaleValidation.js';
 
 const base = (over = {}) => ({
   ...emptyOnlineSaleForm(),

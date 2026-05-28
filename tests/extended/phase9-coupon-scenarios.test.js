@@ -1,6 +1,6 @@
 // ─── Phase 9 Coupon — 60 adversarial scenarios ───────────────────────────
 import { describe, it, expect } from 'vitest';
-import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../src/lib/couponValidation.js';
+import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../../src/lib/couponValidation.js';
 
 const base = (over = {}) => ({
   ...emptyCouponForm(),

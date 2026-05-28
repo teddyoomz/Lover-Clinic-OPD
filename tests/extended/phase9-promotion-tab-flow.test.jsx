@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listPromotions: vi.fn(),
   savePromotion: vi.fn(async () => {}),
   deletePromotion: vi.fn(async () => {}),
@@ -27,7 +27,7 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listWalletTypes: () => Promise.resolve([]),
 }));
 
-vi.mock('../src/lib/storageClient.js', () => ({
+vi.mock('../../src/lib/storageClient.js', () => ({
   uploadFile: vi.fn(async (file, path) => ({ url: `https://fake.storage/${path}`, storagePath: path })),
   deleteFile: vi.fn(async () => {}),
   buildStoragePath: vi.fn((a, b, c, n) => `${a}/${b}/${c}_${n}`),
@@ -38,8 +38,8 @@ vi.stubGlobal('crypto', {
   getRandomValues: (arr) => { for (let i = 0; i < arr.length; i++) arr[i] = i; return arr; },
 });
 
-import PromotionTab from '../src/components/backend/PromotionTab.jsx';
-import { listPromotions, savePromotion, deletePromotion, listCourses } from '../src/lib/backendClient.js';
+import PromotionTab from '../../src/components/backend/PromotionTab.jsx';
+import { listPromotions, savePromotion, deletePromotion, listCourses } from '../../src/lib/backendClient.js';
 
 const clinicSettings = { accentColor: '#dc2626' };
 

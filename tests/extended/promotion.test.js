@@ -4,7 +4,7 @@
 // Invariants here are for the pure validator + emptyForm shape.
 
 import { describe, it, expect } from 'vitest';
-import { validatePromotion, emptyPromotionForm } from '../src/lib/promotionValidation.js';
+import { validatePromotion, emptyPromotionForm } from '../../src/lib/promotionValidation.js';
 
 describe('validatePromotion — V1…V12', () => {
   const base = () => ({ ...emptyPromotionForm(), promotion_name: 'ชื่อ', sale_price: 100 });

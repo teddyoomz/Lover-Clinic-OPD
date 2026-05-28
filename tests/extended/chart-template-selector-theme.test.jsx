@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const sourcePath = resolve(__dirname, '..', 'src/components/ChartTemplateSelector.jsx');
+const sourcePath = resolve(__dirname, '..', '..', 'src/components/ChartTemplateSelector.jsx');
 const source = readFileSync(sourcePath, 'utf-8');
 
 // Strip JS comments so the test regex doesn't false-positive on the

@@ -45,7 +45,7 @@ import {
   flattenPromotionsForStockDeduction,
   mapPromotionProductsToConsumables,
   filterOutConsumablesForPromotion,
-} from '../src/lib/treatmentBuyHelpers.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
 
 /* ─── Fixtures: every sale shape ─────────────────────────────────────────── */
 
@@ -384,7 +384,7 @@ describe('CRITICAL: do not call BOTH helpers on the same purchase (double-deduct
 /* ─── 5. WIRING — static source-file assertions ──────────────────────────── */
 
 describe('WIRING — source files use the right helper at the right callsite', () => {
-  const root = resolve(__dirname, '..');
+  const root = resolve(__dirname, '..', '..');
   const saleTab = readFileSync(resolve(root, 'src/components/backend/SaleTab.jsx'), 'utf8');
   const treatmentForm = readFileSync(resolve(root, 'src/components/TreatmentFormPage.jsx'), 'utf8');
 
@@ -523,7 +523,7 @@ describe('BUSINESS RULE — treatment delete (2026-04-19): course refund only, n
     // SaleTab's cancel/delete path calls the full cascade (reverseStockForSale,
     // reverseDepositUsage, refundToWallet, reversePointsEarned). This test
     // verifies that path is preserved — the wiring is unchanged.
-    const localRoot = resolve(__dirname, '..');
+    const localRoot = resolve(__dirname, '..', '..');
     const saleTab = readFileSync(resolve(localRoot, 'src/components/backend/SaleTab.jsx'), 'utf8');
     // SaleTab still uses these for its own cancel flow:
     expect(saleTab).toContain('reverseStockForSale');

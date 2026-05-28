@@ -10,7 +10,7 @@ import {
   countUnreadPeople,
   shouldRingChatAlert,
   shouldRingChatInterval,
-} from '../src/lib/chatUnreadUtils.js';
+} from '../../src/lib/chatUnreadUtils.js';
 
 describe('countUnreadPeople — per-platform unread people count', () => {
   it('returns zeros for empty conversation list', () => {

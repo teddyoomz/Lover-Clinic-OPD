@@ -9,7 +9,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 // ═══════════════════════════════════════════════════════════════════════════
 // Part A — Nav config wiring: pinned appointments + all phase 9 tabs present
 // ═══════════════════════════════════════════════════════════════════════════
-import { NAV_SECTIONS, PINNED_ITEMS, ALL_ITEM_IDS, itemById, sectionOf } from '../src/components/backend/nav/navConfig.js';
+import { NAV_SECTIONS, PINNED_ITEMS, ALL_ITEM_IDS, itemById, sectionOf } from '../../src/components/backend/nav/navConfig.js';
 
 describe('Phase 9 nav wiring', () => {
   it('W1 promotions tab lives under "การตลาด" section', () => {
@@ -63,7 +63,7 @@ describe('Phase 9 nav wiring', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // Part B — Phase 9 mappers roundtrip
 // ═══════════════════════════════════════════════════════════════════════════
-import { buildBePromotionFromMaster, buildBeCouponFromMaster, buildBeVoucherFromMaster } from '../src/lib/phase9Mappers.js';
+import { buildBePromotionFromMaster, buildBeCouponFromMaster, buildBeVoucherFromMaster } from '../../src/lib/phase9Mappers.js';
 
 const NOW = '2026-04-19T10:00:00.000Z';
 
@@ -197,7 +197,7 @@ describe('Phase 9 migration mapper roundtrip', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // Part C — cover_image roundtrip through PromotionTab card rendering
 // ═══════════════════════════════════════════════════════════════════════════
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listPromotions: vi.fn(),
   deletePromotion: vi.fn(),
   savePromotion: vi.fn(),
@@ -205,10 +205,10 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listCourses: vi.fn(async () => []),
   listProducts: vi.fn(async () => []),
 }));
-vi.mock('../src/components/backend/PromotionFormModal.jsx', () => ({ default: () => null }));
+vi.mock('../../src/components/backend/PromotionFormModal.jsx', () => ({ default: () => null }));
 
-import PromotionTab from '../src/components/backend/PromotionTab.jsx';
-import { listPromotions } from '../src/lib/backendClient.js';
+import PromotionTab from '../../src/components/backend/PromotionTab.jsx';
+import { listPromotions } from '../../src/lib/backendClient.js';
 
 describe('cover_image wiring — PromotionTab render chain', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -261,7 +261,7 @@ describe('cover_image wiring — PromotionTab render chain', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // Part D — Marketing entity ID format
 // ═══════════════════════════════════════════════════════════════════════════
-import { generateMarketingId } from '../src/lib/marketingUiUtils.js';
+import { generateMarketingId } from '../../src/lib/marketingUiUtils.js';
 
 describe('Marketing ID format wiring — no collision with ProClinic pc_* ids', () => {
   it('D1 promotion id format: PROMO-<ts>-<8 hex>', () => {

@@ -20,7 +20,7 @@ import {
   PRODUCT_TYPES,
   STATUS_OPTIONS,
   NAME_MAX_LENGTH,
-} from '../src/lib/productGroupValidation.js';
+} from '../../src/lib/productGroupValidation.js';
 
 /* ─── PV: validateProductGroup adversarial ──────────────────────────────── */
 
@@ -290,13 +290,13 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
 const mockListProducts = vi.fn();
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listProductGroups:   (...a) => mockList(...a),
   saveProductGroup:    (...a) => mockSave(...a),
   deleteProductGroup:  (...a) => mockDelete(...a),
@@ -305,8 +305,8 @@ vi.mock('../src/lib/backendClient.js', () => ({
   findProductGroupByName: vi.fn(),
 }));
 
-import ProductGroupsTab from '../src/components/backend/ProductGroupsTab.jsx';
-import ProductGroupFormModal from '../src/components/backend/ProductGroupFormModal.jsx';
+import ProductGroupsTab from '../../src/components/backend/ProductGroupsTab.jsx';
+import ProductGroupFormModal from '../../src/components/backend/ProductGroupFormModal.jsx';
 
 function makeGroup(over = {}) {
   return {

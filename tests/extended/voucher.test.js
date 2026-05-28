@@ -1,6 +1,6 @@
 // ─── Voucher validation — adversarial unit tests (Phase 9, Firestore-only) ─
 import { describe, it, expect } from 'vitest';
-import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../src/lib/voucherValidation.js';
+import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../../src/lib/voucherValidation.js';
 
 const base = () => ({
   ...emptyVoucherForm(),

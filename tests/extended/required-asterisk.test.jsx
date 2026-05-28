@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import RequiredAsterisk from '../src/components/ui/RequiredAsterisk.jsx';
+import RequiredAsterisk from '../../src/components/ui/RequiredAsterisk.jsx';
 
 describe('RA1 — RequiredAsterisk + asterisk migration', () => {
   describe('RA1.A — Component runtime behavior', () => {
@@ -47,7 +47,7 @@ describe('RA1 — RequiredAsterisk + asterisk migration', () => {
   });
 
   describe('RA1.B — Migration regression guard (source-grep)', () => {
-    const backendDir = resolve(__dirname, '..', 'src/components/backend');
+    const backendDir = resolve(__dirname, '..', '..', 'src/components/backend');
     const files = readdirSync(backendDir)
       .filter((f) => f.endsWith('FormModal.jsx') || f === 'DocumentPrintModal.jsx');
 
@@ -131,7 +131,7 @@ describe('RA1 — RequiredAsterisk + asterisk migration', () => {
 
   describe('RA1.C — Component file shape', () => {
     const compSource = readFileSync(
-      resolve(__dirname, '..', 'src/components/ui/RequiredAsterisk.jsx'),
+      resolve(__dirname, '..', '..', 'src/components/ui/RequiredAsterisk.jsx'),
       'utf-8'
     );
 

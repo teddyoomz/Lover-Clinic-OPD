@@ -5,7 +5,7 @@
 // field invariants, VAT math rounding, and state-reset resilience.
 
 import { describe, it, expect } from 'vitest';
-import { validatePromotion, emptyPromotionForm } from '../src/lib/promotionValidation.js';
+import { validatePromotion, emptyPromotionForm } from '../../src/lib/promotionValidation.js';
 
 const base = (over = {}) => ({
   ...emptyPromotionForm(),

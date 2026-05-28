@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 // Mock backendClient BEFORE importing PromotionTab (which imports it).
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listPromotions: vi.fn(),
   deletePromotion: vi.fn(),
   savePromotion: vi.fn(),
@@ -22,12 +22,12 @@ vi.mock('../src/lib/backendClient.js', () => ({
 
 // PromotionFormModal isn't under test — stub it so we don't render its
 // master_data fetches.
-vi.mock('../src/components/backend/PromotionFormModal.jsx', () => ({
+vi.mock('../../src/components/backend/PromotionFormModal.jsx', () => ({
   default: () => null,
 }));
 
-import PromotionTab from '../src/components/backend/PromotionTab.jsx';
-import { listPromotions } from '../src/lib/backendClient.js';
+import PromotionTab from '../../src/components/backend/PromotionTab.jsx';
+import { listPromotions } from '../../src/lib/backendClient.js';
 
 const clinicSettings = { accentColor: '#dc2626' };
 

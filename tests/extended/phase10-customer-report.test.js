@@ -7,13 +7,13 @@ import {
   buildCustomerReportRow,
   buildCustomerSalesIndex,
   buildCustomerReportColumns,
-} from '../src/lib/customerReportAggregator.js';
-import { roundTHB, assertReconcile } from '../src/lib/reportsUtils.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/customerReportAggregator.js';
+import { roundTHB, assertReconcile } from '../../src/lib/reportsUtils.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 import {
   FIXTURE_CUSTOMERS, FIXTURE_SALES,
   EXPECTED_TOTALS_NO_FILTER, EXPECTED_MARKETING_ONLY, EXPECTED_APRIL_ONLY,
-} from './_fixtures/phase10-customers-fixture.js';
+} from '../_fixtures/phase10-customers-fixture.js';
 
 const APRIL_RANGE = { from: '2026-04-01', to: '2026-04-30' };
 

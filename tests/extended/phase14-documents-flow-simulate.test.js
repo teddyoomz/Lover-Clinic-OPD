@@ -34,13 +34,13 @@ import {
   HTML_MAX_LENGTH,
   SCHEMA_VERSION,
   MAX_TOGGLES,
-} from '../src/lib/documentTemplateValidation.js';
+} from '../../src/lib/documentTemplateValidation.js';
 import {
   htmlEscape,
   renderTemplate,
   buildPrintContext,
   buildPrintDocument,
-} from '../src/lib/documentPrintEngine.js';
+} from '../../src/lib/documentPrintEngine.js';
 
 /* ─── F1: validator ─────────────────────────────────────────────────────── */
 
@@ -363,7 +363,7 @@ describe('F6: adversarial inputs', () => {
 /* ─── F7: source-grep regression guards ────────────────────────────────── */
 
 describe('F7: source-grep regression guards', () => {
-  const srcDir = path.resolve(__dirname, '..');
+  const srcDir = path.resolve(__dirname, '..', '..');
   const read = (p) => fs.readFileSync(path.join(srcDir, p), 'utf8');
 
   it('F7.1: backendClient exports the full CRUD quadruple', () => {

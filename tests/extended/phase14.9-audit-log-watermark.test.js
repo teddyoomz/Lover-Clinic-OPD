@@ -14,9 +14,9 @@ import { join } from 'path';
 import {
   buildPrintDocument,
   buildPrintContext,
-} from '../src/lib/documentPrintEngine.js';
+} from '../../src/lib/documentPrintEngine.js';
 
-const ROOT = join(__dirname, '..');
+const ROOT = join(__dirname, '..', '..');
 const engineFile = readFileSync(join(ROOT, 'src/lib/documentPrintEngine.js'), 'utf8');
 const modalFile = readFileSync(join(ROOT, 'src/components/backend/DocumentPrintModal.jsx'), 'utf8');
 const backendFile = readFileSync(join(ROOT, 'src/lib/backendClient.js'), 'utf8');

@@ -4,7 +4,7 @@ import {
   validateStaffScheduleStrict, normalizeStaffSchedule, emptyStaffScheduleForm,
   generateStaffScheduleId, checkAppointmentCollision,
   TYPE_OPTIONS, TYPE_LABEL, TIME_SLOTS,
-} from '../src/lib/staffScheduleValidation.js';
+} from '../../src/lib/staffScheduleValidation.js';
 
 const base = (over = {}) => ({
   ...emptyStaffScheduleForm(),

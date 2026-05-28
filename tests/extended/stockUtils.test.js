@@ -19,7 +19,7 @@ import {
   isBatchDepleted,
   isBatchAvailable,
   batchFifoAllocate,
-} from '../src/lib/stockUtils.js';
+} from '../../src/lib/stockUtils.js';
 
 // ─── Constants sanity ───────────────────────────────────────────────────────
 describe('[STK-U] constants sanity', () => {

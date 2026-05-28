@@ -34,7 +34,7 @@ const clean = (o) => JSON.parse(JSON.stringify(o));
 const TS = Date.now();
 
 // Import the module once so the same instance is reused across tests
-const bc = () => import('../src/lib/backendClient.js');
+const bc = () => import('../../src/lib/backendClient.js');
 
 // Seed helpers
 const custDoc = (id) => doc(db, ...P, 'be_customers', id);
@@ -1165,13 +1165,13 @@ describe('[SAE] Sale — lifecycle + analyzeSaleCancel', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 describe('[SAE] financeUtils — boundary cases beyond components.test.jsx', () => {
   it('calcDepositRemaining with string inputs coerces correctly', async () => {
-    const { calcDepositRemaining } = await import('../src/lib/financeUtils.js');
+    const { calcDepositRemaining } = await import('../../src/lib/financeUtils.js');
     expect(calcDepositRemaining('1000', '300')).toBe(700);
     expect(calcDepositRemaining('abc', null)).toBe(0);
   });
 
   it('calcSaleBilling when deposit+wallet > afterMembership → caps at remaining', async () => {
-    const { calcSaleBilling } = await import('../src/lib/financeUtils.js');
+    const { calcSaleBilling } = await import('../../src/lib/financeUtils.js');
     const r = calcSaleBilling({
       subtotal: 1000, membershipDiscountPercent: 10,
       depositApplied: 2000, walletApplied: 2000,
@@ -1183,51 +1183,51 @@ describe('[SAE] financeUtils — boundary cases beyond components.test.jsx', () 
   });
 
   it('calcSaleBilling percent discount applied to subtotal only', async () => {
-    const { calcSaleBilling } = await import('../src/lib/financeUtils.js');
+    const { calcSaleBilling } = await import('../../src/lib/financeUtils.js');
     const r = calcSaleBilling({ subtotal: 1000, billDiscount: 25, billDiscountType: 'percent' });
     expect(r.discount).toBe(250);
     expect(r.afterDiscount).toBe(750);
   });
 
   it('calcPointsEarned floors correctly', async () => {
-    const { calcPointsEarned } = await import('../src/lib/financeUtils.js');
+    const { calcPointsEarned } = await import('../../src/lib/financeUtils.js');
     expect(calcPointsEarned(999, 100)).toBe(9);
     expect(calcPointsEarned(99, 100)).toBe(0);
   });
 
   it('calcMembershipExpiry adds days correctly', async () => {
-    const { calcMembershipExpiry } = await import('../src/lib/financeUtils.js');
+    const { calcMembershipExpiry } = await import('../../src/lib/financeUtils.js');
     const iso = calcMembershipExpiry('2026-01-01T00:00:00Z', 30);
     expect(new Date(iso).toISOString().startsWith('2026-01-31')).toBe(true);
   });
 
   it('isMembershipExpired handles past/future/null', async () => {
-    const { isMembershipExpired } = await import('../src/lib/financeUtils.js');
+    const { isMembershipExpired } = await import('../../src/lib/financeUtils.js');
     expect(isMembershipExpired(null)).toBe(false);
     expect(isMembershipExpired('2020-01-01T00:00:00Z')).toBe(true);
     expect(isMembershipExpired('2099-01-01T00:00:00Z')).toBe(false);
   });
 
   it('fmtMoney preserves 2 decimals when present', async () => {
-    const { fmtMoney } = await import('../src/lib/financeUtils.js');
+    const { fmtMoney } = await import('../../src/lib/financeUtils.js');
     expect(fmtMoney(1234.5)).toMatch(/1,234\.5/);
     expect(fmtMoney(1234)).toMatch(/1,234/);
   });
 
   it('fmtPoints handles zero + large', async () => {
-    const { fmtPoints } = await import('../src/lib/financeUtils.js');
+    const { fmtPoints } = await import('../../src/lib/financeUtils.js');
     expect(fmtPoints(0)).toBe('0');
     expect(fmtPoints(1234567)).toContain('1,234,567');
   });
 
   it('calcDepositStatus handles edge of exact-use', async () => {
-    const { calcDepositStatus } = await import('../src/lib/financeUtils.js');
+    const { calcDepositStatus } = await import('../../src/lib/financeUtils.js');
     expect(calcDepositStatus(1000, 1000)).toBe('used');
     expect(calcDepositStatus(1000, 999.99)).toBe('partial');
   });
 
   it('calcSaleBilling is idempotent on zero inputs', async () => {
-    const { calcSaleBilling } = await import('../src/lib/financeUtils.js');
+    const { calcSaleBilling } = await import('../../src/lib/financeUtils.js');
     const r = calcSaleBilling({});
     Object.values(r).forEach(v => expect(Number.isFinite(v)).toBe(true));
     expect(r.netTotal).toBe(0);

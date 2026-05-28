@@ -32,12 +32,12 @@ import {
   flattenPromotionsForStockDeduction,
   mapPromotionProductsToConsumables,
   filterOutConsumablesForPromotion,
-} from '../src/lib/treatmentBuyHelpers.js';
-import { MOVEMENT_TYPES } from '../src/lib/stockUtils.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
+import { MOVEMENT_TYPES } from '../../src/lib/stockUtils.js';
 
 /* ─── Shared helpers + factories ────────────────────────────────────────── */
 
-const root = resolve(__dirname, '..');
+const root = resolve(__dirname, '..', '..');
 const product = (id, qty = 1) => ({ id, name: `prod-${id}`, qty, unit: 'pc' });
 const med = (id, qty = 10) => ({ id, name: `med-${id}`, qty, unit: 'tab' });
 const promo = (id, freebieCount = 0, qty = 1) => ({

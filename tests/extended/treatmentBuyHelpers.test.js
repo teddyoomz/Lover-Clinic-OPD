@@ -12,7 +12,7 @@ import {
   buildPurchasedCourseEntry,
   findMissingFillLaterQty,
   resolvePickedCourseEntry,
-} from '../src/lib/treatmentBuyHelpers.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
 
 describe('mapPromotionProductsToConsumables', () => {
   it('TBH1 null/undefined/non-object → []', () => {

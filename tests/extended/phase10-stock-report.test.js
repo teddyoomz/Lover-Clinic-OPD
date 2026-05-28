@@ -7,9 +7,9 @@ import {
   buildStockReportRow,
   buildStockReportColumns,
   NEAR_EXPIRY_DAYS,
-} from '../src/lib/stockReportAggregator.js';
-import { assertReconcile } from '../src/lib/reportsUtils.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/stockReportAggregator.js';
+import { assertReconcile } from '../../src/lib/reportsUtils.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 
 /* ─── Fixtures ───────────────────────────────────────────────────────────── */
 

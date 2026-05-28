@@ -23,10 +23,10 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
-import { parseQtyString, formatQtyString, deductQty, reverseQty } from '../src/lib/courseUtils.js';
-import { isPurchasedSessionRowId } from '../src/lib/treatmentBuyHelpers.js';
+import { parseQtyString, formatQtyString, deductQty, reverseQty } from '../../src/lib/courseUtils.js';
+import { isPurchasedSessionRowId } from '../../src/lib/treatmentBuyHelpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Simulate helpers — reverse + deduct mirrors

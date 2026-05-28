@@ -7,7 +7,7 @@ import {
   proportional,
   quantileBoundaries,
   quintileOf,
-} from '../src/lib/reportsUtils.js';
+} from '../../src/lib/reportsUtils.js';
 
 describe('dateRangeFilter', () => {
   const items = [

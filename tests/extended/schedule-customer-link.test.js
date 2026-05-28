@@ -26,7 +26,7 @@ import {
   isSlotOutsideDoctorHours,
   isDayVisible,
   getClinicHoursForDate,
-} from '../src/lib/scheduleFilterUtils.js';
+} from '../../src/lib/scheduleFilterUtils.js';
 
 // Practitioner + room fixtures
 const DR_A = '101'; const DR_B = '102';

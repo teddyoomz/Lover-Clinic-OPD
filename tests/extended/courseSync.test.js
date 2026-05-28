@@ -5,7 +5,7 @@
 // translation (clinic|branch → Thai enum) + pivot→courseProducts mapping.
 
 import { describe, it, expect } from 'vitest';
-import { normalizeCourseJsonItem } from '../api/proclinic/master.js';
+import { normalizeCourseJsonItem } from '../../api/proclinic/master.js';
 
 // Fixture: verbatim course row from ProClinic (id 1067, "11/12 เหมาตามจริง").
 const REAL_PROCLINIC_COURSE = {

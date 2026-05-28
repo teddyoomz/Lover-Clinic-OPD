@@ -11,7 +11,7 @@ import {
   ALL_ITEM_IDS,
   itemById,
   sectionOf,
-} from '../src/components/backend/nav/navConfig.js';
+} from '../../src/components/backend/nav/navConfig.js';
 
 const REPORT_TAB_IDS = [
   'reports',
@@ -98,9 +98,9 @@ describe('PINNED_ITEMS — appointments is still pinned', () => {
 /* ─── ReportsHomeTab card → setActiveTab wiring ──────────────────────────── */
 
 // Mock firebase for jsdom
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
-import ReportsHomeTab from '../src/components/backend/reports/ReportsHomeTab.jsx';
+import ReportsHomeTab from '../../src/components/backend/reports/ReportsHomeTab.jsx';
 
 describe('ReportsHomeTab — card clicks fire onNavigate with correct tabId', () => {
   it('clicking "การขาย" card fires onNavigate("reports-sale")', () => {
@@ -163,7 +163,7 @@ describe('ReportsHomeTab — card clicks fire onNavigate with correct tabId', ()
 describe('ReportsHomeTab tabId references are all valid navConfig IDs', () => {
   it('every active card links to a real tab id in ALL_ITEM_IDS', async () => {
     // Re-import by reading source file — simpler + static check
-    const src = await import('../src/components/backend/reports/ReportsHomeTab.jsx?raw')
+    const src = await import('../../src/components/backend/reports/ReportsHomeTab.jsx?raw')
       .catch(async () => {
         // Fallback: read via fs
         const fs = await import('fs');

@@ -261,7 +261,7 @@ describe('Course Transform + Deduction', () => {
 describe('Course Deduction System', () => {
   const CID = `TEST-COURSE-DEDUCT-${TS}`;
   const ref = () => doc(db, ...P, 'be_customers', CID);
-  const { deductQty, reverseQty, addRemaining, parseQtyString } = require('../src/lib/courseUtils.js');
+  const { deductQty, reverseQty, addRemaining, parseQtyString } = require('../../src/lib/courseUtils.js');
 
   beforeAll(async () => {
     await setDoc(ref(), clean({
@@ -407,7 +407,7 @@ describe('Master Course CRUD', () => {
 describe('Course Assignment to Customer', () => {
   const CID = `TEST-ASSIGN-${TS}`;
   const ref = () => doc(db, ...P, 'be_customers', CID);
-  const { buildQtyString, parseQtyString } = require('../src/lib/courseUtils.js');
+  const { buildQtyString, parseQtyString } = require('../../src/lib/courseUtils.js');
 
   beforeAll(async () => {
     await setDoc(ref(), clean({
@@ -459,7 +459,7 @@ describe('Course Assignment to Customer', () => {
 describe('Product Exchange', () => {
   const CID = `TEST-EXCHANGE-${TS}`;
   const ref = () => doc(db, ...P, 'be_customers', CID);
-  const { buildQtyString, parseQtyString } = require('../src/lib/courseUtils.js');
+  const { buildQtyString, parseQtyString } = require('../../src/lib/courseUtils.js');
 
   beforeAll(async () => {
     await setDoc(ref(), clean({
@@ -1602,7 +1602,7 @@ describe('deductCourseItems — preferNewest (purchased-in-session)', () => {
   afterAll(async () => { try { await deleteDoc(ref()); } catch {} });
 
   it('preferNewest: true → deducts 50 from the newest entry (100→50), old entries untouched', async () => {
-    const { deductCourseItems } = await import('../src/lib/backendClient.js');
+    const { deductCourseItems } = await import('../../src/lib/backendClient.js');
     await deductCourseItems(CUST_ID, [
       { courseName: 'Allergan 100 unit', productName: 'Allergan 100 U', deductQty: 50 },
     ], { preferNewest: true });
@@ -1629,7 +1629,7 @@ describe('deductCourseItems — preferNewest (purchased-in-session)', () => {
       ],
       cloneStatus: 'complete',
     }));
-    const { deductCourseItems } = await import('../src/lib/backendClient.js');
+    const { deductCourseItems } = await import('../../src/lib/backendClient.js');
     await deductCourseItems(CUST_ID, [
       { courseName: 'Botox', productName: 'Nabota', deductQty: 3 },
     ]);
@@ -1652,7 +1652,7 @@ describe('deductCourseItems — preferNewest (purchased-in-session)', () => {
       ],
       cloneStatus: 'complete',
     }));
-    const { deductCourseItems } = await import('../src/lib/backendClient.js');
+    const { deductCourseItems } = await import('../../src/lib/backendClient.js');
     await deductCourseItems(CUST_ID, [
       { courseName: 'C1', productName: 'P1', deductQty: 50 },
     ], { preferNewest: true });
@@ -1671,7 +1671,7 @@ describe('deductCourseItems — preferNewest (purchased-in-session)', () => {
       ],
       cloneStatus: 'complete',
     }));
-    const { reverseCourseDeduction } = await import('../src/lib/backendClient.js');
+    const { reverseCourseDeduction } = await import('../../src/lib/backendClient.js');
     await reverseCourseDeduction(CUST_ID, [
       { courseName: 'C2', productName: 'P2', deductQty: 10 },
     ], { preferNewest: true });
@@ -1697,7 +1697,7 @@ describe('createBackendSale return value — always finalId', () => {
   });
 
   it('returns finalId with suffix when primary saleId already exists', async () => {
-    const { createBackendSale } = await import('../src/lib/backendClient.js');
+    const { createBackendSale } = await import('../../src/lib/backendClient.js');
     // First create a sale so the primary INV number for today is taken
     const r1 = await createBackendSale(clean({
       customerId: `TEST-COLL-${TS}`, customerName: 'Collision Test',
@@ -1781,7 +1781,7 @@ describe('Sale cancel — linkedSaleId + analysis + cleanup', () => {
   });
 
   it('analyzeSaleCancel classifies linked courses by usage + counts goods', async () => {
-    const { analyzeSaleCancel } = await import('../src/lib/backendClient.js');
+    const { analyzeSaleCancel } = await import('../../src/lib/backendClient.js');
     const a = await analyzeSaleCancel(SID);
     expect(a.unused).toHaveLength(1);
     expect(a.unused[0].name).toBe('Linked Unused');
@@ -1807,7 +1807,7 @@ describe('Sale cancel — linkedSaleId + analysis + cleanup', () => {
         { name: 'Linked Used', product: 'Pf', qty: '0 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
       ],
     }));
-    const { removeLinkedSaleCourses } = await import('../src/lib/backendClient.js');
+    const { removeLinkedSaleCourses } = await import('../../src/lib/backendClient.js');
     const res = await removeLinkedSaleCourses(SID);
     expect(res.removedCount).toBe(1); // only the unused one
     expect(res.keptUsedCount).toBe(2); // partial + fully used retained
@@ -1830,7 +1830,7 @@ describe('Sale cancel — linkedSaleId + analysis + cleanup', () => {
         { name: 'Linked Used', product: 'Pf', qty: '0 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
       ],
     }));
-    const { removeLinkedSaleCourses } = await import('../src/lib/backendClient.js');
+    const { removeLinkedSaleCourses } = await import('../../src/lib/backendClient.js');
     const res = await removeLinkedSaleCourses(SID, { removeUsed: true });
     expect(res.removedCount).toBe(3);
     expect(res.keptUsedCount).toBe(0);
@@ -1865,7 +1865,7 @@ describe('Deposit CRUD', () => {
   });
 
   it('createDeposit — sets remainingAmount = amount, status = active', async () => {
-    const { createDeposit } = await import('../src/lib/backendClient.js');
+    const { createDeposit } = await import('../../src/lib/backendClient.js');
     const res = await createDeposit({
       customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP',
       amount: 5000, paymentChannel: 'เงินสด', paymentDate: '2026-04-18',
@@ -1889,7 +1889,7 @@ describe('Deposit CRUD', () => {
   });
 
   it('updateDeposit — change amount recalculates remainingAmount', async () => {
-    const { updateDeposit } = await import('../src/lib/backendClient.js');
+    const { updateDeposit } = await import('../../src/lib/backendClient.js');
     await updateDeposit(createdId, { amount: 7000, note: 'bumped' });
     const d = (await getDoc(depRef(createdId))).data();
     expect(d.amount).toBe(7000);
@@ -1899,37 +1899,37 @@ describe('Deposit CRUD', () => {
   });
 
   it('updateDeposit — ignores direct usedAmount override', async () => {
-    const { updateDeposit } = await import('../src/lib/backendClient.js');
+    const { updateDeposit } = await import('../../src/lib/backendClient.js');
     await updateDeposit(createdId, { usedAmount: 999 });
     const d = (await getDoc(depRef(createdId))).data();
     expect(d.usedAmount).toBe(0); // unchanged
   });
 
   it('getAllDeposits — returns our deposit', async () => {
-    const { getAllDeposits } = await import('../src/lib/backendClient.js');
+    const { getAllDeposits } = await import('../../src/lib/backendClient.js');
     const list = await getAllDeposits();
     const found = list.find(d => d.depositId === createdId);
     expect(found).toBeTruthy();
   });
 
   it('getCustomerDeposits — filters by customer', async () => {
-    const { getCustomerDeposits } = await import('../src/lib/backendClient.js');
+    const { getCustomerDeposits } = await import('../../src/lib/backendClient.js');
     const list = await getCustomerDeposits(CUST_ID);
     expect(list.length).toBeGreaterThanOrEqual(1);
     expect(list[0].customerId).toBe(CUST_ID);
   });
 
   it('getActiveDeposits — includes active status', async () => {
-    const { getActiveDeposits } = await import('../src/lib/backendClient.js');
+    const { getActiveDeposits } = await import('../../src/lib/backendClient.js');
     const list = await getActiveDeposits(CUST_ID);
     expect(list.length).toBeGreaterThanOrEqual(1);
     expect(list.every(d => d.status === 'active' || d.status === 'partial')).toBe(true);
   });
 
   it('cancelDeposit — sets status=cancelled, clears remaining, updates customer', async () => {
-    const { cancelDeposit } = await import('../src/lib/backendClient.js');
+    const { cancelDeposit } = await import('../../src/lib/backendClient.js');
     // Create a fresh one to cancel (so apply tests can reuse createdId)
-    const { createDeposit } = await import('../src/lib/backendClient.js');
+    const { createDeposit } = await import('../../src/lib/backendClient.js');
     const fresh = await createDeposit({
       customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP',
       amount: 2000, paymentChannel: 'เงินสด',
@@ -1944,7 +1944,7 @@ describe('Deposit CRUD', () => {
   });
 
   it('refundDeposit — partial refund reduces remaining', async () => {
-    const { refundDeposit, createDeposit } = await import('../src/lib/backendClient.js');
+    const { refundDeposit, createDeposit } = await import('../../src/lib/backendClient.js');
     const fresh = await createDeposit({
       customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP', amount: 3000,
     });
@@ -1957,7 +1957,7 @@ describe('Deposit CRUD', () => {
   });
 
   it('refundDeposit — full refund sets status=refunded', async () => {
-    const { refundDeposit, createDeposit } = await import('../src/lib/backendClient.js');
+    const { refundDeposit, createDeposit } = await import('../../src/lib/backendClient.js');
     const fresh = await createDeposit({
       customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP', amount: 1500,
     });
@@ -1970,7 +1970,7 @@ describe('Deposit CRUD', () => {
   });
 
   it('refundDeposit — throws when amount > remaining', async () => {
-    const { refundDeposit } = await import('../src/lib/backendClient.js');
+    const { refundDeposit } = await import('../../src/lib/backendClient.js');
     await expect(refundDeposit(createdId, { refundAmount: 999999 })).rejects.toThrow();
   });
 });
@@ -1989,7 +1989,7 @@ describe('Deposit Apply + Reverse', () => {
       proClinicId: CUST_ID, patientData: { firstName: 'Apply' },
       finance: { depositBalance: 0 },
     }));
-    const { createDeposit } = await import('../src/lib/backendClient.js');
+    const { createDeposit } = await import('../../src/lib/backendClient.js');
     const res = await createDeposit({
       customerId: CUST_ID, customerName: 'Apply Test', customerHN: 'HN-AP',
       amount: 10000, paymentChannel: 'โอน',
@@ -2003,7 +2003,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('apply deposit to sale — partial usage → status=partial', async () => {
-    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const { applyDepositToSale } = await import('../../src/lib/backendClient.js');
     const res = await applyDepositToSale(DEP_ID, 'INV-TEST-1', 3000);
     expect(res.success).toBe(true);
     const d = (await getDoc(depRef(DEP_ID))).data();
@@ -2016,7 +2016,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('apply another sale — cumulative usage', async () => {
-    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const { applyDepositToSale } = await import('../../src/lib/backendClient.js');
     await applyDepositToSale(DEP_ID, 'INV-TEST-2', 2000);
     const d = (await getDoc(depRef(DEP_ID))).data();
     expect(d.usedAmount).toBe(5000);
@@ -2025,7 +2025,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('apply exceeding remaining — throws', async () => {
-    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const { applyDepositToSale } = await import('../../src/lib/backendClient.js');
     await expect(applyDepositToSale(DEP_ID, 'INV-TEST-X', 999999)).rejects.toThrow();
   });
 
@@ -2034,7 +2034,7 @@ describe('Deposit Apply + Reverse', () => {
   // duplicate usageHistory entries and silently duplicate the customer's
   // deposit usage (money created from thin air).
   it('M1 — apply same deposit to same sale twice → throws, history unchanged', async () => {
-    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const { applyDepositToSale } = await import('../../src/lib/backendClient.js');
     const before = (await getDoc(depRef(DEP_ID))).data();
     const historyCountBefore = (before.usageHistory || []).length;
     const usedBefore = before.usedAmount;
@@ -2045,7 +2045,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('apply fully — status becomes used', async () => {
-    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const { applyDepositToSale } = await import('../../src/lib/backendClient.js');
     await applyDepositToSale(DEP_ID, 'INV-TEST-FULL', 5000);
     const d = (await getDoc(depRef(DEP_ID))).data();
     expect(d.remainingAmount).toBe(0);
@@ -2053,7 +2053,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('reverseDepositUsage — restores used amount + removes entry', async () => {
-    const { reverseDepositUsage } = await import('../src/lib/backendClient.js');
+    const { reverseDepositUsage } = await import('../../src/lib/backendClient.js');
     const res = await reverseDepositUsage(DEP_ID, 'INV-TEST-1');
     expect(res.restored).toBe(3000);
     const d = (await getDoc(depRef(DEP_ID))).data();
@@ -2064,7 +2064,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('reverseDepositUsage — non-existent sale → no change', async () => {
-    const { reverseDepositUsage } = await import('../src/lib/backendClient.js');
+    const { reverseDepositUsage } = await import('../../src/lib/backendClient.js');
     const before = (await getDoc(depRef(DEP_ID))).data();
     const res = await reverseDepositUsage(DEP_ID, 'INV-NONEXISTENT');
     expect(res.restored).toBe(0);
@@ -2073,7 +2073,7 @@ describe('Deposit Apply + Reverse', () => {
   });
 
   it('cannot cancel deposit with usage', async () => {
-    const { cancelDeposit } = await import('../src/lib/backendClient.js');
+    const { cancelDeposit } = await import('../../src/lib/backendClient.js');
     await expect(cancelDeposit(DEP_ID, { cancelNote: 'nope' })).rejects.toThrow();
   });
 

@@ -5,7 +5,7 @@ import {
   STATUS_OPTIONS,
   COURSE_TYPE_OPTIONS, USAGE_TYPE_OPTIONS,
   isRealQtyCourse, isBuffetCourse, isPickAtTreatmentCourse, isSpecificQtyCourse,
-} from '../src/lib/courseValidation.js';
+} from '../../src/lib/courseValidation.js';
 
 const base = () => ({ ...emptyCourseForm(), courseName: 'Laser 1 ครั้ง' });
 
@@ -411,7 +411,7 @@ describe('PD6: source-grep regression guards (Rule I)', () => {
   it('PD6.1: validateDayInteger helper exists in courseValidation.js', () => {
     const fs = require('fs');
     const path = require('path');
-    const src = fs.readFileSync(path.resolve(__dirname, '../src/lib/courseValidation.js'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, '../../src/lib/courseValidation.js'), 'utf8');
     expect(src).toMatch(/function validateDayInteger\(/);
     expect(src).toMatch(/Number\.isInteger\(n\)/);
     expect(src).toMatch(/n > 3650/);
@@ -419,21 +419,21 @@ describe('PD6: source-grep regression guards (Rule I)', () => {
   it('PD6.2: validateCourse uses validateDayInteger for both period AND daysBeforeExpire', () => {
     const fs = require('fs');
     const path = require('path');
-    const src = fs.readFileSync(path.resolve(__dirname, '../src/lib/courseValidation.js'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, '../../src/lib/courseValidation.js'), 'utf8');
     expect(src).toMatch(/validateDayInteger\(form\.period/);
     expect(src).toMatch(/validateDayInteger\(form\.daysBeforeExpire/);
   });
   it('PD6.3: buffet daysBeforeExpire rule uses isBuffetCourse + > 0 check', () => {
     const fs = require('fs');
     const path = require('path');
-    const src = fs.readFileSync(path.resolve(__dirname, '../src/lib/courseValidation.js'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, '../../src/lib/courseValidation.js'), 'utf8');
     expect(src).toMatch(/isBuffetCourse\(form\.courseType\)/);
     expect(src).toMatch(/บุฟเฟต์ต้องระบุระยะเวลาใช้งาน/);
   });
   it('PD6.4: anti-regression — old loose validateNonNeg(form.period|daysBeforeExpire) lines removed', () => {
     const fs = require('fs');
     const path = require('path');
-    const src = fs.readFileSync(path.resolve(__dirname, '../src/lib/courseValidation.js'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, '../../src/lib/courseValidation.js'), 'utf8');
     // The old chain had `validateNonNeg(form.period, ...)` and `validateNonNeg(form.daysBeforeExpire, ...)`.
     // Now those checks live in validateDayInteger. Loose checks must NOT come back.
     expect(src).not.toMatch(/validateNonNeg\(form\.period,/);

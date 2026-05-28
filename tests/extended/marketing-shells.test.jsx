@@ -6,8 +6,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Tag } from 'lucide-react';
 
-import MarketingTabShell from '../src/components/backend/MarketingTabShell.jsx';
-import MarketingFormShell from '../src/components/backend/MarketingFormShell.jsx';
+import MarketingTabShell from '../../src/components/backend/MarketingTabShell.jsx';
+import MarketingFormShell from '../../src/components/backend/MarketingFormShell.jsx';
 
 const clinicSettings = { accentColor: '#dc2626' };
 

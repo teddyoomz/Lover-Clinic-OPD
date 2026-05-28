@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   NAV_SECTIONS, ALL_ITEM_IDS, ITEM_LOOKUP, sectionOf, itemById,
-} from '../src/components/backend/nav/navConfig.js';
+} from '../../src/components/backend/nav/navConfig.js';
 
 describe('Phase 13.1.5 — quotations nav wiring', () => {
   it('QN1: quotations item registered in ALL_ITEM_IDS (deep-link whitelist)', () => {

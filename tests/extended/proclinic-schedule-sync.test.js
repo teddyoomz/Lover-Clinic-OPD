@@ -13,18 +13,18 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { mapProClinicScheduleEvent } from '../api/proclinic/master.js';
+import { mapProClinicScheduleEvent } from '../../api/proclinic/master.js';
 
 const masterSrc = readFileSync(
-  resolve(__dirname, '..', 'api/proclinic/master.js'),
+  resolve(__dirname, '..', '..', 'api/proclinic/master.js'),
   'utf-8'
 );
 const brokerSrc = readFileSync(
-  resolve(__dirname, '..', 'src/lib/brokerClient.js'),
+  resolve(__dirname, '..', '..', 'src/lib/brokerClient.js'),
   'utf-8'
 );
 const tabSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/MasterDataTab.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/MasterDataTab.jsx'),
   'utf-8'
 );
 

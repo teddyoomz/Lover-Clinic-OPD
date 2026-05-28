@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateSaleStrict, normalizeSale, emptySaleForm,
   STATUS_OPTIONS, DISCOUNT_TYPE_OPTIONS, MAX_SELLERS, MAX_PAYMENT_METHODS,
-} from '../src/lib/saleValidation.js';
+} from '../../src/lib/saleValidation.js';
 
 const base = (over = {}) => ({
   ...emptySaleForm(),

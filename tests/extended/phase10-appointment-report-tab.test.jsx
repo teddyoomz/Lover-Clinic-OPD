@@ -36,12 +36,12 @@ const FIX_APPTS = [
   },
 ];
 
-vi.mock('../src/lib/reportsLoaders.js', () => ({
+vi.mock('../../src/lib/reportsLoaders.js', () => ({
   loadAppointmentsByDateRange: vi.fn(async () => FIX_APPTS),
   loadAllCustomersForReport: vi.fn(async () => FIX_CUSTOMERS),
 }));
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
   // AppointmentReportTab reads via listStaff (canonical) — Phase 14.10-tris.
   listAllSellers: () => Promise.resolve([]),
@@ -54,9 +54,9 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listWalletTypes: () => Promise.resolve([]),
 }));
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
-import AppointmentReportTab from '../src/components/backend/reports/AppointmentReportTab.jsx';
+import AppointmentReportTab from '../../src/components/backend/reports/AppointmentReportTab.jsx';
 
 describe('AppointmentReportTab — render + interactions', () => {
   beforeEach(() => {

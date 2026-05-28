@@ -7,7 +7,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 // ═══════════════════════════════════════════════════════════════════════════
 // 1. courseUtils — renderless but tested as a sanity baseline
 // ═══════════════════════════════════════════════════════════════════════════
-import { parseQtyString, deductQty, buildQtyString } from '../src/lib/courseUtils.js';
+import { parseQtyString, deductQty, buildQtyString } from '../../src/lib/courseUtils.js';
 
 describe('courseUtils rendering sanity', () => {
   it('parseQtyString round-trips with buildQtyString', () => {
@@ -27,7 +27,7 @@ describe('courseUtils rendering sanity', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 2. CustomerCard — renders correct data + buttons for cloned vs search mode
 // ═══════════════════════════════════════════════════════════════════════════
-import CustomerCard from '../src/components/backend/CustomerCard.jsx';
+import CustomerCard from '../../src/components/backend/CustomerCard.jsx';
 
 describe('CustomerCard', () => {
   const mockCustomer = {
@@ -123,7 +123,7 @@ describe('Course index mapping (filtered → original)', () => {
       { name: 'C', qty: '0 / 5 ครั้ง' }, // index 2 — used up
       { name: 'D', qty: '3 / 3 ครั้ง' }, // index 3 — active
     ];
-    const { parseQtyString: parse } = require('../src/lib/courseUtils.js');
+    const { parseQtyString: parse } = require('../../src/lib/courseUtils.js');
     const activeCourses = allCourses.filter(c => parse(c.qty).remaining > 0);
 
     expect(activeCourses).toHaveLength(2);
@@ -176,7 +176,7 @@ describe('Zero-remaining course filtering', () => {
 // 6. Over-deduction validation logic
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Over-deduction validation', () => {
-  const { parseQtyString: parse } = require('../src/lib/courseUtils.js');
+  const { parseQtyString: parse } = require('../../src/lib/courseUtils.js');
 
   it('detects deductQty > remaining', () => {
     const courses = [
@@ -344,7 +344,7 @@ describe('Sale source badge', () => {
 describe('Exchange deduct+create logic', () => {
   it('deducts from source and creates new course (not replace in-place)', () => {
     // Simulate: Acne Tx 12 ครั้ง, exchange 5 → Vit C 5 amp
-    const { parseQtyString, deductQty, buildQtyString } = require('../src/lib/courseUtils.js');
+    const { parseQtyString, deductQty, buildQtyString } = require('../../src/lib/courseUtils.js');
     const source = { name: 'Acne Tx 12 ครั้ง', product: 'Acne Tx', qty: '12 / 12 ครั้ง' };
 
     // Step 1: Deduct 5 from source
@@ -360,7 +360,7 @@ describe('Exchange deduct+create logic', () => {
   });
 
   it('retail exchange: deducts only, no new course', () => {
-    const { deductQty, parseQtyString } = require('../src/lib/courseUtils.js');
+    const { deductQty, parseQtyString } = require('../../src/lib/courseUtils.js');
     const source = { qty: '10 / 10 U' };
     const isRetail = true; // สินค้าหน้าร้าน
 
@@ -371,7 +371,7 @@ describe('Exchange deduct+create logic', () => {
   });
 
   it('qty validation prevents over-deduction', () => {
-    const { deductQty } = require('../src/lib/courseUtils.js');
+    const { deductQty } = require('../../src/lib/courseUtils.js');
     expect(() => deductQty('3 / 10 U', 5)).toThrow('คอร์สคงเหลือไม่พอ');
   });
 });
@@ -495,7 +495,7 @@ describe('Invoice number format', () => {
 // 16. Treatment Buy-Deduct scenarios (logic validation)
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Treatment Buy-Deduct validation logic', () => {
-  const { parseQtyString } = require('../src/lib/courseUtils.js');
+  const { parseQtyString } = require('../../src/lib/courseUtils.js');
 
   // Simulate the validation logic from TreatmentFormPage
   function validateDeductions(selectedItems, customerCourses, liveQtyMap) {
@@ -629,7 +629,7 @@ import {
   calcPointsEarned, calcPointsValue,
   calcMembershipExpiry, isMembershipExpired,
   fmtMoney, fmtPoints,
-} from '../src/lib/financeUtils.js';
+} from '../../src/lib/financeUtils.js';
 
 describe('financeUtils — deposit', () => {
   it('calcDepositRemaining — basic', () => {

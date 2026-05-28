@@ -13,7 +13,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const P = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data'];
 const TS = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const bc = () => import('../src/lib/backendClient.js');
+const bc = () => import('../../src/lib/backendClient.js');
 
 const batchesCol = () => collection(db, ...P, 'be_stock_batches');
 const batchDoc = (id) => doc(db, ...P, 'be_stock_batches', id);

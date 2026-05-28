@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateDoctor, emptyDoctorForm, normalizeDoctor, generateDoctorId,
   STATUS_OPTIONS, POSITION_OPTIONS, DF_PAID_TYPE_OPTIONS,
-} from '../src/lib/doctorValidation.js';
+} from '../../src/lib/doctorValidation.js';
 
 // Phase 14.1 (2026-04-24): defaultDfGroupId is now required for position
 // 'แพทย์' / 'ผู้ช่วยแพทย์'. Tests that don't specifically target DF

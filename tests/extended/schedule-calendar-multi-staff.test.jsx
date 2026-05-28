@@ -18,18 +18,18 @@ import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import MonthCalendarGrid from '../src/components/backend/scheduling/MonthCalendarGrid.jsx';
+import MonthCalendarGrid from '../../src/components/backend/scheduling/MonthCalendarGrid.jsx';
 
 const docTabSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/DoctorSchedulesTab.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/DoctorSchedulesTab.jsx'),
   'utf-8'
 );
 const empTabSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/EmployeeSchedulesTab.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/EmployeeSchedulesTab.jsx'),
   'utf-8'
 );
 const calSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/scheduling/MonthCalendarGrid.jsx'),
+  resolve(__dirname, '..', '..', 'src/components/backend/scheduling/MonthCalendarGrid.jsx'),
   'utf-8'
 );
 

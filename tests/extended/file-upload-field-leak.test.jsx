@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const sourcePath = resolve(__dirname, '..', 'src/components/backend/FileUploadField.jsx');
+const sourcePath = resolve(__dirname, '..', '..', 'src/components/backend/FileUploadField.jsx');
 const source = readFileSync(sourcePath, 'utf-8');
 
 describe('FU1 — FileUploadField URL.revokeObjectURL leak fix', () => {

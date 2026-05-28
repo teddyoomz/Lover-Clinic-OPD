@@ -5,7 +5,7 @@ import {
   validateDfStaffRatesStrict, normalizeDfStaffRates, emptyDfStaffRatesForm,
   getRateForStaffCourse, computeDfAmount, computeCourseUsageWeight,
   STATUS_OPTIONS, RATE_TYPES, RATE_TYPE_LABEL,
-} from '../src/lib/dfGroupValidation.js';
+} from '../../src/lib/dfGroupValidation.js';
 
 const baseG = (over = {}) => ({ ...emptyDfGroupForm(), name: 'Group A', ...over });
 

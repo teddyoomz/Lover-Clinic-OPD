@@ -14,7 +14,7 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: { getIdToken: vi.fn().mockResolvedValue('tok') } } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: { getIdToken: vi.fn().mockResolvedValue('tok') } } }));
 
 const mockListStaff = vi.fn();
 const mockDeleteStaff = vi.fn();
@@ -26,7 +26,7 @@ const mockListBranches = vi.fn();
 const mockListPermissionGroups = vi.fn();
 const mockListDfGroups = vi.fn();
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listStaff: (...a) => mockListStaff(...a),
   deleteStaff: (...a) => mockDeleteStaff(...a),
   saveStaff: (...a) => mockSaveStaff(...a),
@@ -43,7 +43,7 @@ vi.mock('../src/lib/backendClient.js', () => ({
 const mockDeleteAdminUser = vi.fn();
 const mockCreateAdminUser = vi.fn();
 const mockUpdateAdminUser = vi.fn();
-vi.mock('../src/lib/adminUsersClient.js', () => ({
+vi.mock('../../src/lib/adminUsersClient.js', () => ({
   deleteAdminUser: (...a) => mockDeleteAdminUser(...a),
   createAdminUser: (...a) => mockCreateAdminUser(...a),
   updateAdminUser: (...a) => mockUpdateAdminUser(...a),
@@ -53,10 +53,10 @@ vi.mock('../src/lib/adminUsersClient.js', () => ({
   revokeAdmin: vi.fn(),
 }));
 
-import StaffTab from '../src/components/backend/StaffTab.jsx';
-import StaffFormModal from '../src/components/backend/StaffFormModal.jsx';
-import DoctorsTab from '../src/components/backend/DoctorsTab.jsx';
-import DoctorFormModal from '../src/components/backend/DoctorFormModal.jsx';
+import StaffTab from '../../src/components/backend/StaffTab.jsx';
+import StaffFormModal from '../../src/components/backend/StaffFormModal.jsx';
+import DoctorsTab from '../../src/components/backend/DoctorsTab.jsx';
+import DoctorFormModal from '../../src/components/backend/DoctorFormModal.jsx';
 
 function makeStaff(o = {}) {
   return {

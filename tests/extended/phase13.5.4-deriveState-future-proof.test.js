@@ -12,7 +12,7 @@
 // backend nav, what permissions they see, what the admin gate sees.
 
 import { describe, it, expect } from 'vitest';
-import { __deriveStateForTest } from '../src/contexts/UserPermissionContext.jsx';
+import { __deriveStateForTest } from '../../src/contexts/UserPermissionContext.jsx';
 
 // ─── Permissions fixtures ────────────────────────────────────────────────
 const ALL_PERMS = {
@@ -280,7 +280,7 @@ describe('V28 — deriveState future-proof: any future user must "just work"', (
     it('P6.1: OWNER_EMAILS in src/lib/ownerEmails.js matches api/admin/bootstrap-self.js', async () => {
       const fs = await import('fs');
       const path = await import('path');
-      const ROOT = path.resolve(__dirname, '..');
+      const ROOT = path.resolve(__dirname, '..', '..');
 
       const srcContent = fs.readFileSync(path.join(ROOT, 'src/lib/ownerEmails.js'), 'utf8');
       const apiContent = fs.readFileSync(path.join(ROOT, 'api/admin/bootstrap-self.js'), 'utf8');
@@ -305,7 +305,7 @@ describe('V28 — deriveState future-proof: any future user must "just work"', (
       // Make it discoverable for future maintainers
       const fs = require('fs');
       const path = require('path');
-      const ROOT = path.resolve(__dirname, '..');
+      const ROOT = path.resolve(__dirname, '..', '..');
       const srcContent = fs.readFileSync(path.join(ROOT, 'src/lib/ownerEmails.js'), 'utf8');
       const apiContent = fs.readFileSync(path.join(ROOT, 'api/admin/bootstrap-self.js'), 'utf8');
       // Each file mentions the other in its sync comment

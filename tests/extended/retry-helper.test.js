@@ -3,7 +3,7 @@
 // 4xx stop, timeout retry, callback hooks.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { withRetry, parseRetryAfterMs } from '../api/proclinic/_lib/retry.js';
+import { withRetry, parseRetryAfterMs } from '../../api/proclinic/_lib/retry.js';
 
 describe('parseRetryAfterMs', () => {
   it('R1 null/undefined/empty → null', () => {

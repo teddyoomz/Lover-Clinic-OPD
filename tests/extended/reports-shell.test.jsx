@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Receipt, Sparkles } from 'lucide-react';
-import ReportShell from '../src/components/backend/reports/ReportShell.jsx';
-import { buildPresets } from '../src/components/backend/reports/DateRangePicker.jsx';
+import ReportShell from '../../src/components/backend/reports/ReportShell.jsx';
+import { buildPresets } from '../../src/components/backend/reports/DateRangePicker.jsx';
 import {
   NAV_SECTIONS,
   PINNED_ITEMS,
   ALL_ITEM_IDS,
   itemById,
   sectionOf,
-} from '../src/components/backend/nav/navConfig.js';
+} from '../../src/components/backend/nav/navConfig.js';
 
 describe('ReportShell — renders header / counts / actions', () => {
   it('renders title + icon', () => {

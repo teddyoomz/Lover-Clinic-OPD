@@ -8,7 +8,7 @@ import {
   buildDefaultRows,
   isDoctorAlreadyEntered,
   DF_ENTRY_ID_RE,
-} from '../src/lib/dfEntryValidation.js';
+} from '../../src/lib/dfEntryValidation.js';
 
 const goodRow = (over = {}) => ({
   courseId: 'C1', courseName: 'Botox', enabled: true, value: 500, type: 'baht', ...over,

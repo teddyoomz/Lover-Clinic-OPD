@@ -4,15 +4,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listVouchers: vi.fn(),
   saveVoucher: vi.fn(async () => {}),
   deleteVoucher: vi.fn(async () => {}),
 }));
 
-import VoucherTab from '../src/components/backend/VoucherTab.jsx';
-import { listVouchers, saveVoucher, deleteVoucher } from '../src/lib/backendClient.js';
-import { VOUCHER_PLATFORMS } from '../src/lib/voucherValidation.js';
+import VoucherTab from '../../src/components/backend/VoucherTab.jsx';
+import { listVouchers, saveVoucher, deleteVoucher } from '../../src/lib/backendClient.js';
+import { VOUCHER_PLATFORMS } from '../../src/lib/voucherValidation.js';
 
 const clinicSettings = { accentColor: '#dc2626' };
 

@@ -6,9 +6,9 @@ import {
   aggregateSaleReport,
   buildSaleReportRow,
   buildSaleReportColumns,
-} from '../src/lib/saleReportAggregator.js';
-import { roundTHB, assertReconcile } from '../src/lib/reportsUtils.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/saleReportAggregator.js';
+import { roundTHB, assertReconcile } from '../../src/lib/reportsUtils.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 import {
   FIXTURE_SALES,
   EXPECTED_APRIL_RANGE_TOTALS,
@@ -17,7 +17,7 @@ import {
   SALE_CANCELLED,
   LEGACY_SALE_PHASE6,
   FLOAT_DRIFT_FIXTURE,
-} from './_fixtures/phase10-sales-fixture.js';
+} from '../_fixtures/phase10-sales-fixture.js';
 
 const APRIL_RANGE = { from: '2026-04-15', to: '2026-04-18' };
 

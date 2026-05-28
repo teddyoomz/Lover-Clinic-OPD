@@ -25,8 +25,8 @@ import {
   flattenPromotionsForStockDeduction,
   mapPromotionProductsToConsumables,
   filterOutConsumablesForPromotion,
-} from '../src/lib/treatmentBuyHelpers.js';
-import { MOVEMENT_TYPES } from '../src/lib/stockUtils.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
+import { MOVEMENT_TYPES } from '../../src/lib/stockUtils.js';
 
 /* ─── Primitive item factories ───────────────────────────────────────────── */
 
@@ -297,7 +297,7 @@ describe('SECTION 4 — every defined movement type is reachable from the system
     expect(MOVEMENT_TYPES.CANCEL_IMPORT).toBe(14);
   });
 
-  const root = resolve(__dirname, '..');
+  const root = resolve(__dirname, '..', '..');
   const movementLog = readFileSync(resolve(root, 'src/components/backend/MovementLogPanel.jsx'), 'utf8');
 
   for (const [k, v] of Object.entries(MOVEMENT_TYPES)) {
@@ -356,7 +356,7 @@ describe('SECTION 4 — every defined movement type is reachable from the system
 /* ─── SECTION 5 — BUSINESS RULE: treatment delete partial-rollback (30) ── */
 
 describe('SECTION 5 — treatment delete refunds course usage ONLY (user directive 2026-04-19)', () => {
-  const root = resolve(__dirname, '..');
+  const root = resolve(__dirname, '..', '..');
   const backendDash = readFileSync(resolve(root, 'src/pages/BackendDashboard.jsx'), 'utf8');
   const backendClient = readFileSync(resolve(root, 'src/lib/backendClient.js'), 'utf8');
 
@@ -458,7 +458,7 @@ describe('SECTION 5 — treatment delete refunds course usage ONLY (user directi
 /* ─── SECTION 6 — STOCK MOVEMENT INTEGRITY (30 scenarios) ──────────────── */
 
 describe('SECTION 6 — stock movement integrity', () => {
-  const root = resolve(__dirname, '..');
+  const root = resolve(__dirname, '..', '..');
   const backendClient = readFileSync(resolve(root, 'src/lib/backendClient.js'), 'utf8');
 
   it('every deduction emits a movement (setDoc(stockMovementDoc(movementId)))', () => {
@@ -729,33 +729,33 @@ describe('SECTION 8 — END-TO-END user scenarios (real-world cases)', () => {
       // Each flow is documented; assertion varies by ruleAssertion key
       if (flow.ruleAssertion === 'meds-stay') {
         // Per user directive — meds NOT refunded on treatment delete
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const dh = readFileSync(resolve(root, 'src/pages/BackendDashboard.jsx'), 'utf8');
         const block = dh.match(/onDeleteTreatment=\{async[\s\S]*?\n {12}\}\}/)[0];
         expect(block).not.toContain('reverseStockForTreatment');
       } else if (flow.ruleAssertion === 'freebies-stay') {
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const dh = readFileSync(resolve(root, 'src/pages/BackendDashboard.jsx'), 'utf8');
         const block = dh.match(/onDeleteTreatment=\{async[\s\S]*?\n {12}\}\}/)[0];
         expect(block).not.toContain('reverseStockForSale');
       } else if (flow.ruleAssertion === 'full-undo-via-sale') {
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const st = readFileSync(resolve(root, 'src/components/backend/SaleTab.jsx'), 'utf8');
         expect(st).toContain('reverseStockForSale');
       } else if (flow.ruleAssertion === 'sale-cancel-reverses') {
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const bc = readFileSync(resolve(root, 'src/lib/backendClient.js'), 'utf8');
         expect(bc).toMatch(/cancelBackendSale|reverseStockForSale/);
       } else if (flow.ruleAssertion === 'log-all-visible') {
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const ml = readFileSync(resolve(root, 'src/components/backend/MovementLogPanel.jsx'), 'utf8');
         expect(ml).toContain("ทุกประเภท");
       } else if (flow.ruleAssertion === 'log-search-saleId') {
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const ml = readFileSync(resolve(root, 'src/components/backend/MovementLogPanel.jsx'), 'utf8');
         expect(ml).toContain('linkedSaleId');
       } else if (flow.ruleAssertion === 'log-search-treatmentId') {
-        const root = resolve(__dirname, '..');
+        const root = resolve(__dirname, '..', '..');
         const ml = readFileSync(resolve(root, 'src/components/backend/MovementLogPanel.jsx'), 'utf8');
         expect(ml).toContain('linkedTreatmentId');
       } else {
@@ -793,7 +793,7 @@ describe('SECTION 8 — END-TO-END user scenarios (real-world cases)', () => {
 /* ─── SECTION 9 — STOCK MOVEMENT QUERY API completeness ──────────────────── */
 
 describe('SECTION 9 — listStockMovements query coverage', () => {
-  const root = resolve(__dirname, '..');
+  const root = resolve(__dirname, '..', '..');
   const backendClient = readFileSync(resolve(root, 'src/lib/backendClient.js'), 'utf8');
 
   it('listStockMovements function exists', () => {
@@ -847,19 +847,19 @@ describe('SECTION 10 — double-deduct guards (mathematical proof)', () => {
   });
 
   it('TreatmentFormPage source verifies it does NOT import flatten helper', () => {
-    const root = resolve(__dirname, '..');
+    const root = resolve(__dirname, '..', '..');
     const tx = readFileSync(resolve(root, 'src/components/TreatmentFormPage.jsx'), 'utf8');
     expect(tx).not.toContain('flattenPromotionsForStockDeduction');
   });
 
   it('SaleTab source verifies it DOES import flatten helper', () => {
-    const root = resolve(__dirname, '..');
+    const root = resolve(__dirname, '..', '..');
     const st = readFileSync(resolve(root, 'src/components/backend/SaleTab.jsx'), 'utf8');
     expect(st).toContain('flattenPromotionsForStockDeduction');
   });
 
   it('SaleTab wraps EVERY deductStockForSale call with flatten() (regression guard)', () => {
-    const root = resolve(__dirname, '..');
+    const root = resolve(__dirname, '..', '..');
     const st = readFileSync(resolve(root, 'src/components/backend/SaleTab.jsx'), 'utf8');
     const calls = (st.match(/await deductStockForSale\([^)]*\)/g) || []);
     expect(calls.length).toBeGreaterThan(0);
@@ -867,7 +867,7 @@ describe('SECTION 10 — double-deduct guards (mathematical proof)', () => {
   });
 
   it('TreatmentFormPage uses raw grouped (no flatten) for auto-sale (consumables-route guarantee)', () => {
-    const root = resolve(__dirname, '..');
+    const root = resolve(__dirname, '..', '..');
     const tx = readFileSync(resolve(root, 'src/components/TreatmentFormPage.jsx'), 'utf8');
     // The TreatmentFormPage auto-sale calls deductStockForSale with grouped
     // or newGrouped variables — never wrapped with flatten
@@ -878,7 +878,7 @@ describe('SECTION 10 — double-deduct guards (mathematical proof)', () => {
   it('No production file calls BOTH flatten + map on the same purchase (codebase-wide invariant)', () => {
     // Grep all .js/.jsx files in src/ for both helpers in the same function body
     // Simple proxy: ensure the only file using flatten doesn't ALSO use map.
-    const root = resolve(__dirname, '..');
+    const root = resolve(__dirname, '..', '..');
     const st = readFileSync(resolve(root, 'src/components/backend/SaleTab.jsx'), 'utf8');
     const tx = readFileSync(resolve(root, 'src/components/TreatmentFormPage.jsx'), 'utf8');
     // SaleTab uses flatten only
@@ -906,7 +906,7 @@ describe('SECTION 10 — double-deduct guards (mathematical proof)', () => {
   it('Caller pattern: flatten is called exactly ONCE per sale-side deduction', () => {
     // SaleTab + TreatmentFormPage are the only two paths. SaleTab calls flatten;
     // TreatmentFormPage doesn't. Total: 1 flatten per save flow.
-    const root = resolve(__dirname, '..');
+    const root = resolve(__dirname, '..', '..');
     const allFiles = [
       readFileSync(resolve(root, 'src/components/backend/SaleTab.jsx'), 'utf8'),
       readFileSync(resolve(root, 'src/components/TreatmentFormPage.jsx'), 'utf8'),

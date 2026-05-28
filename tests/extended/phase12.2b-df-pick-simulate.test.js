@@ -25,9 +25,9 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
-import { computeDfAmount, computeCourseUsageWeight, getRateForStaffCourse } from '../src/lib/dfGroupValidation.js';
+import { computeDfAmount, computeCourseUsageWeight, getRateForStaffCourse } from '../../src/lib/dfGroupValidation.js';
 
 // ═══════════════════════════════════════════════════════════════════════
 // F1: Percent rate × course price × usage weight

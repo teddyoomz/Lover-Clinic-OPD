@@ -6,8 +6,8 @@ import {
   emptySaleInsuranceClaimForm, generateSaleInsuranceClaimId,
   applyClaimStatusTransition, aggregateClaimsBySaleId,
   STATUS_OPTIONS, TRANSITIONS,
-} from '../src/lib/saleInsuranceClaimValidation.js';
-import { aggregateSaleReport } from '../src/lib/saleReportAggregator.js';
+} from '../../src/lib/saleInsuranceClaimValidation.js';
+import { aggregateSaleReport } from '../../src/lib/saleReportAggregator.js';
 
 const base = (o = {}) => ({
   ...emptySaleInsuranceClaimForm(),

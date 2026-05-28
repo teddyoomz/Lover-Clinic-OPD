@@ -4,9 +4,9 @@ import { describe, it, expect } from 'vitest';
 import {
   aggregateDailyRevenue,
   buildDailyRevenueColumns,
-} from '../src/lib/dailyRevenueAggregator.js';
-import { assertReconcile } from '../src/lib/reportsUtils.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/dailyRevenueAggregator.js';
+import { assertReconcile } from '../../src/lib/reportsUtils.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 
 function sale({ id, date = '2026-04-10', net = 1000, paid = null, dep = 0, wal = 0, ref = 0, status = 'active', paymentStatus = 'paid', channels = null }) {
   return {

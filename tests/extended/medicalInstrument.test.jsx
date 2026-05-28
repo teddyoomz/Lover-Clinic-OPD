@@ -14,7 +14,7 @@ import {
   NAME_MAX_LENGTH,
   CODE_MAX_LENGTH,
   MAX_LOG_ENTRIES,
-} from '../src/lib/medicalInstrumentValidation.js';
+} from '../../src/lib/medicalInstrumentValidation.js';
 
 /* ─── MIV: validator ────────────────────────────────────────────────────── */
 
@@ -227,20 +227,20 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listMedicalInstruments:   (...a) => mockList(...a),
   saveMedicalInstrument:    (...a) => mockSave(...a),
   deleteMedicalInstrument:  (...a) => mockDelete(...a),
   getMedicalInstrument:     vi.fn(),
 }));
 
-import MedicalInstrumentsTab from '../src/components/backend/MedicalInstrumentsTab.jsx';
-import MedicalInstrumentFormModal from '../src/components/backend/MedicalInstrumentFormModal.jsx';
+import MedicalInstrumentsTab from '../../src/components/backend/MedicalInstrumentsTab.jsx';
+import MedicalInstrumentFormModal from '../../src/components/backend/MedicalInstrumentFormModal.jsx';
 
 function makeInst(over = {}) {
   return {

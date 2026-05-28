@@ -41,7 +41,7 @@
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 import {
   buildPurchasedCourseEntry,
@@ -49,8 +49,8 @@ import {
   resolvePurchasedCourseForAssign,
   isPurchasedSessionRowId,
   mapRawCoursesToForm,
-} from '../src/lib/treatmentBuyHelpers.js';
-import { parseQtyString, buildQtyString, formatQtyString, deductQty } from '../src/lib/courseUtils.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
+import { parseQtyString, buildQtyString, formatQtyString, deductQty } from '../../src/lib/courseUtils.js';
 
 const NOW = 1700000000000;
 

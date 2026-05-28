@@ -11,7 +11,7 @@
 // flatten-here would double-deduct.
 
 import { describe, it, expect } from 'vitest';
-import { flattenPromotionsForStockDeduction } from '../src/lib/treatmentBuyHelpers.js';
+import { flattenPromotionsForStockDeduction } from '../../src/lib/treatmentBuyHelpers.js';
 
 const promoBundle = {
   id: 'PROMO-FILLER-3900',

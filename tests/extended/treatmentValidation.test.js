@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateTreatmentStrict, normalizeTreatment, emptyTreatmentForm,
   STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS, DISCOUNT_TYPE_OPTIONS,
-} from '../src/lib/treatmentValidation.js';
+} from '../../src/lib/treatmentValidation.js';
 
 const base = (over = {}) => ({
   ...emptyTreatmentForm(),

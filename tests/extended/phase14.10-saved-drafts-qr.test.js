@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const ROOT = join(__dirname, '..');
+const ROOT = join(__dirname, '..', '..');
 const backendFile = readFileSync(join(ROOT, 'src/lib/backendClient.js'), 'utf8');
 const modalFile = readFileSync(join(ROOT, 'src/components/backend/DocumentPrintModal.jsx'), 'utf8');
 const engineFile = readFileSync(join(ROOT, 'src/lib/documentPrintEngine.js'), 'utf8');

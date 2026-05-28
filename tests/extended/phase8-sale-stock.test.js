@@ -27,8 +27,8 @@ const P = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data'];
 // TS unique per test file — `Date.now() + random` prevents cross-file collisions
 // when vitest runs files in parallel (default) and two modules load in the same ms.
 const TS = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const bc = () => import('../src/lib/backendClient.js');
-const su = () => import('../src/lib/stockUtils.js');
+const bc = () => import('../../src/lib/backendClient.js');
+const su = () => import('../../src/lib/stockUtils.js');
 
 // ─── Collection refs ───────────────────────────────────────────────────────
 const batchDoc = (id) => doc(db, ...P, 'be_stock_batches', id);

@@ -26,7 +26,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
 const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const USERS_API = READ('api/admin/users.js');

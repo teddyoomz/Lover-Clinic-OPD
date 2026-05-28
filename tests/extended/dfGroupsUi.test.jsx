@@ -13,14 +13,14 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 const mockListDfGroups = vi.fn();
 const mockDeleteDfGroup = vi.fn();
 const mockSaveDfGroup = vi.fn();
 const mockListCourses = vi.fn();
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listDfGroups: (...a) => mockListDfGroups(...a),
   deleteDfGroup: (...a) => mockDeleteDfGroup(...a),
   saveDfGroup: (...a) => mockSaveDfGroup(...a),
@@ -29,8 +29,8 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listCourses: (...a) => mockListCourses(...a),
 }));
 
-const DfGroupsTab = (await import('../src/components/backend/DfGroupsTab.jsx')).default;
-const DfGroupFormModal = (await import('../src/components/backend/DfGroupFormModal.jsx')).default;
+const DfGroupsTab = (await import('../../src/components/backend/DfGroupsTab.jsx')).default;
+const DfGroupFormModal = (await import('../../src/components/backend/DfGroupFormModal.jsx')).default;
 
 const makeGroup = (over = {}) => ({
   groupId: 'DFG-0426-aaa', id: 'DFG-0426-aaa',

@@ -1,7 +1,7 @@
 // ─── Phase 13.3.2 · DF group + staff-rates CRUD (mocked Firestore) ───────
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
   doc: vi.fn(() => ({})),
@@ -26,7 +26,7 @@ vi.mock('firebase/firestore', () => ({
   onSnapshot: vi.fn(),
 }));
 
-const mod = await import('../src/lib/backendClient.js');
+const mod = await import('../../src/lib/backendClient.js');
 
 beforeEach(() => { vi.resetAllMocks(); });
 

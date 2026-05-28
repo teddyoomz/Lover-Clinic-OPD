@@ -8,8 +8,8 @@ import {
   computeRFMRaw,
   segmentFromQuintiles,
   buildRFMColumns,
-} from '../src/lib/rfmUtils.js';
-import { buildCSV } from '../src/lib/csvExport.js';
+} from '../../src/lib/rfmUtils.js';
+import { buildCSV } from '../../src/lib/csvExport.js';
 
 const ASOF = '2026-04-20';
 

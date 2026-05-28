@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 import fs from 'fs';
 import {
@@ -22,17 +22,17 @@ import {
   resolvePickedCourseEntry,
   resolvePurchasedCourseForAssign,
   isPurchasedSessionRowId,
-} from '../src/lib/treatmentBuyHelpers.js';
-import { normalizeCourseJsonItem } from '../api/proclinic/master.js';
-import { beCourseToMasterShape } from '../src/lib/backendClient.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
+import { normalizeCourseJsonItem } from '../../api/proclinic/master.js';
+import { beCourseToMasterShape } from '../../src/lib/backendClient.js';
 import {
   getRateForStaffCourse,
   computeDfAmount,
   computeCourseUsageWeight,
-} from '../src/lib/dfGroupValidation.js';
-import { computeDfPayoutReport } from '../src/lib/dfPayoutAggregator.js';
-import { parseQtyString, deductQty, buildQtyString } from '../src/lib/courseUtils.js';
-import { isRealQtyCourse, isSpecificQtyCourse } from '../src/lib/courseValidation.js';
+} from '../../src/lib/dfGroupValidation.js';
+import { computeDfPayoutReport } from '../../src/lib/dfPayoutAggregator.js';
+import { parseQtyString, deductQty, buildQtyString } from '../../src/lib/courseUtils.js';
+import { isRealQtyCourse, isSpecificQtyCourse } from '../../src/lib/courseValidation.js';
 
 const NOW = 1700000000000;
 

@@ -14,10 +14,10 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { thaiTodayISO } from '../src/utils.js';
-import { daysUntilMaintenance } from '../src/lib/medicalInstrumentValidation.js';
+import { thaiTodayISO } from '../../src/utils.js';
+import { daysUntilMaintenance } from '../../src/lib/medicalInstrumentValidation.js';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
 const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ═══════════════════════════════════════════════════════════════════════

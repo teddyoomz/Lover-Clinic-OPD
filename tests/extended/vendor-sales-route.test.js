@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', '..');
 const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 describe('VendorSalesTab route wiring (Phase 14.3 G6 follow-up C)', () => {

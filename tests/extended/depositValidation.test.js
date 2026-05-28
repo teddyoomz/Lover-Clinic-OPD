@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateDeposit, normalizeDeposit, emptyDepositForm, distributeDepositEvenly,
   MAX_SELLERS, STATUS_OPTIONS,
-} from '../src/lib/depositValidation.js';
+} from '../../src/lib/depositValidation.js';
 
 const base = (over = {}) => ({
   ...emptyDepositForm(),

@@ -1,6 +1,6 @@
 // ─── Coupon validation — adversarial unit tests (Phase 9, Firestore-only) ──
 import { describe, it, expect } from 'vitest';
-import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../src/lib/couponValidation.js';
+import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../../src/lib/couponValidation.js';
 
 const base = () => ({
   ...emptyCouponForm(),

@@ -4,7 +4,7 @@
 // extractDfGroupRates (per-group form_1 field matrix).
 
 import { describe, it, expect } from 'vitest';
-import { extractDfGroupList, extractDfGroupRates } from '../api/proclinic/_lib/scraper.js';
+import { extractDfGroupList, extractDfGroupRates } from '../../api/proclinic/_lib/scraper.js';
 
 const tabsHtml = `
 <html><body>

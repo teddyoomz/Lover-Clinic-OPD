@@ -39,7 +39,7 @@
 // → These are covered by post-deploy preview_eval + manual user verify.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { __deriveStateForTest } from '../src/contexts/UserPermissionContext.jsx';
+import { __deriveStateForTest } from '../../src/contexts/UserPermissionContext.jsx';
 
 // ─── Group fixtures (mirror Phase 13.5.1 seedDefaultPermissionGroups) ─────
 const GROUP_OWNER = {
@@ -569,21 +569,21 @@ describe('V29 — End-to-end onboarding: every persona, every permission, no man
     it('E7.1: api/admin/sync-self.js exists', () => {
       const fs = require('fs');
       const path = require('path');
-      const exists = fs.existsSync(path.resolve(__dirname, '../api/admin/sync-self.js'));
+      const exists = fs.existsSync(path.resolve(__dirname, '../../api/admin/sync-self.js'));
       expect(exists).toBe(true);
     });
 
     it('E7.2: src/lib/adminUsersClient.js exports syncClaimsSelf', () => {
       const fs = require('fs');
       const path = require('path');
-      const src = fs.readFileSync(path.resolve(__dirname, '../src/lib/adminUsersClient.js'), 'utf8');
+      const src = fs.readFileSync(path.resolve(__dirname, '../../src/lib/adminUsersClient.js'), 'utf8');
       expect(src).toMatch(/export\s+async\s+function\s+syncClaimsSelf/);
     });
 
     it('E7.3: UserPermissionContext imports syncClaimsSelf + bootstrapSelfAsAdmin', () => {
       const fs = require('fs');
       const path = require('path');
-      const src = fs.readFileSync(path.resolve(__dirname, '../src/contexts/UserPermissionContext.jsx'), 'utf8');
+      const src = fs.readFileSync(path.resolve(__dirname, '../../src/contexts/UserPermissionContext.jsx'), 'utf8');
       expect(src).toMatch(/syncClaimsSelf/);
       expect(src).toMatch(/bootstrapSelfAsAdmin/);
     });
@@ -591,7 +591,7 @@ describe('V29 — End-to-end onboarding: every persona, every permission, no man
     it('E7.4: PermissionGroupsTab does NOT have any of the 3 removed buttons', () => {
       const fs = require('fs');
       const path = require('path');
-      const src = fs.readFileSync(path.resolve(__dirname, '../src/components/backend/PermissionGroupsTab.jsx'), 'utf8');
+      const src = fs.readFileSync(path.resolve(__dirname, '../../src/components/backend/PermissionGroupsTab.jsx'), 'utf8');
       expect(src).not.toMatch(/data-testid=["']permission-bootstrap-self-button["']/);
       expect(src).not.toMatch(/data-testid=["']permission-claims-migrate-button["']/);
       expect(src).not.toMatch(/data-testid=["']cleanup-test-probes-button["']/);

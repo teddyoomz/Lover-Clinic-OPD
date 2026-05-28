@@ -27,9 +27,9 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
-import { computeDfPayoutReport } from '../src/lib/dfPayoutAggregator.js';
+import { computeDfPayoutReport } from '../../src/lib/dfPayoutAggregator.js';
 
 // ═══════════════════════════════════════════════════════════════════════
 // F1: setTreatmentLinkedSaleId helper exists + writes both fields

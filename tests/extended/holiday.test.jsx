@@ -15,7 +15,7 @@ import {
   DAY_OF_WEEK_LABELS,
   NOTE_MAX_LENGTH,
   MAX_SPECIFIC_DATES,
-} from '../src/lib/holidayValidation.js';
+} from '../../src/lib/holidayValidation.js';
 
 /* ─── HV: validator ─────────────────────────────────────────────────────── */
 
@@ -235,12 +235,12 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listHolidays:  (...a) => mockList(...a),
   // Phase 14.7.H follow-up H (2026-04-26): HolidaysTab migrated to listener.
   // Mock invokes mockList for backwards-compat with existing test setups
@@ -257,8 +257,8 @@ vi.mock('../src/lib/backendClient.js', () => ({
   getHoliday:    vi.fn(),
 }));
 
-import HolidaysTab from '../src/components/backend/HolidaysTab.jsx';
-import HolidayFormModal from '../src/components/backend/HolidayFormModal.jsx';
+import HolidaysTab from '../../src/components/backend/HolidaysTab.jsx';
+import HolidayFormModal from '../../src/components/backend/HolidayFormModal.jsx';
 
 function makeHoliday(over = {}) {
   return {

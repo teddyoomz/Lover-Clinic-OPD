@@ -14,7 +14,7 @@ beforeAll(() => {
   }
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 const mockListProducts = vi.fn();
 const mockDeleteProduct = vi.fn();
@@ -25,7 +25,7 @@ const mockSaveCourse = vi.fn();
 const mockListProductGroups = vi.fn();
 const mockListProductUnitGroups = vi.fn();
 
-vi.mock('../src/lib/backendClient.js', () => ({
+vi.mock('../../src/lib/backendClient.js', () => ({
   listProducts: (...a) => mockListProducts(...a),
   deleteProduct: (...a) => mockDeleteProduct(...a),
   saveProduct: (...a) => mockSaveProduct(...a),
@@ -38,10 +38,10 @@ vi.mock('../src/lib/backendClient.js', () => ({
   getCourse: vi.fn(),
 }));
 
-import ProductsTab from '../src/components/backend/ProductsTab.jsx';
-import ProductFormModal from '../src/components/backend/ProductFormModal.jsx';
-import CoursesTab from '../src/components/backend/CoursesTab.jsx';
-import CourseFormModal from '../src/components/backend/CourseFormModal.jsx';
+import ProductsTab from '../../src/components/backend/ProductsTab.jsx';
+import ProductFormModal from '../../src/components/backend/ProductFormModal.jsx';
+import CoursesTab from '../../src/components/backend/CoursesTab.jsx';
+import CourseFormModal from '../../src/components/backend/CourseFormModal.jsx';
 
 function makeProduct(o = {}) {
   return {

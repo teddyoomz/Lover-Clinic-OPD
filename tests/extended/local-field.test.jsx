@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState } from 'react';
-import { LocalInput, LocalTextarea } from '../src/components/form/LocalField.jsx';
+import { LocalInput, LocalTextarea } from '../../src/components/form/LocalField.jsx';
 
 describe('LocalInput — basic render + commit', () => {
   it('L1 renders initial value from prop', () => {

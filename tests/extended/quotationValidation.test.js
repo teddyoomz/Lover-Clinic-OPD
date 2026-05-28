@@ -4,7 +4,7 @@ import {
   validateQuotationStrict, normalizeQuotation, emptyQuotationForm, generateQuotationId,
   STATUS_OPTIONS, DISCOUNT_TYPE_OPTIONS, ADMINISTRATION_METHODS, DOSAGE_UNITS,
   ADMINISTRATION_TIMES,
-} from '../src/lib/quotationValidation.js';
+} from '../../src/lib/quotationValidation.js';
 
 const base = (over = {}) => ({
   ...emptyQuotationForm(),

@@ -3,19 +3,19 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { FIXTURE_SALES, EXPECTED_APRIL_RANGE_TOTALS, EXPECTED_YEAR_2026_TOTALS } from './_fixtures/phase10-sales-fixture.js';
+import { FIXTURE_SALES, EXPECTED_APRIL_RANGE_TOTALS, EXPECTED_YEAR_2026_TOTALS } from '../_fixtures/phase10-sales-fixture.js';
 
-vi.mock('../src/lib/reportsLoaders.js', () => ({
+vi.mock('../../src/lib/reportsLoaders.js', () => ({
   loadSalesByDateRange: vi.fn(async () => FIXTURE_SALES),
   loadAllCustomersForReport: vi.fn(async () => []), // 10.3 backfill — empty by default
   loadSaleInsuranceClaimsByDateRange: vi.fn(async () => []), // Phase 12.3 — empty by default
 }));
 
-vi.mock('../src/firebase.js', () => ({
+vi.mock('../../src/firebase.js', () => ({
   db: {}, appId: 'test-app',
 }));
 
-import SaleReportTab from '../src/components/backend/reports/SaleReportTab.jsx';
+import SaleReportTab from '../../src/components/backend/reports/SaleReportTab.jsx';
 
 describe('SaleReportTab — render + interaction', () => {
   beforeEach(() => {

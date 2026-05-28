@@ -28,14 +28,14 @@
 
 import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
 import {
   mapPromotionProductsToConsumables,
   filterOutConsumablesForPromotion,
   flattenPromotionsForStockDeduction,
   buildCustomerPromotionGroups,
-} from '../src/lib/treatmentBuyHelpers.js';
+} from '../../src/lib/treatmentBuyHelpers.js';
 
 // ═══════════════════════════════════════════════════════════════════════
 // F1: mapPromotionProductsToConsumables — treatment-side flattening

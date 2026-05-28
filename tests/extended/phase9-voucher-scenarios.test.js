@@ -1,6 +1,6 @@
 // ─── Phase 9 Voucher — 50 adversarial scenarios ──────────────────────────
 import { describe, it, expect } from 'vitest';
-import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../src/lib/voucherValidation.js';
+import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../../src/lib/voucherValidation.js';
 
 const base = (over = {}) => ({
   ...emptyVoucherForm(),

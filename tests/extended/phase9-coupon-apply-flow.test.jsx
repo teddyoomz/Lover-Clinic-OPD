@@ -18,10 +18,10 @@ vi.mock('firebase/firestore', async (orig) => {
   };
 });
 
-vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
 import { getDocs } from 'firebase/firestore';
-import { findCouponByCode } from '../src/lib/backendClient.js';
+import { findCouponByCode } from '../../src/lib/backendClient.js';
 
 function mockSnap(docs) {
   return {

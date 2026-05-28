@@ -5,15 +5,15 @@ import {
   validateBankAccount, normalizeBankAccount, emptyBankAccountForm,
   generateBankAccountId, ACCOUNT_TYPE_OPTIONS,
   STATUS_OPTIONS as BANK_STATUS,
-} from '../src/lib/bankAccountValidation.js';
+} from '../../src/lib/bankAccountValidation.js';
 import {
   validateExpenseCategory, normalizeExpenseCategory, emptyExpenseCategoryForm,
   generateExpenseCategoryId, STATUS_OPTIONS as CAT_STATUS,
-} from '../src/lib/expenseCategoryValidation.js';
+} from '../../src/lib/expenseCategoryValidation.js';
 import {
   validateExpense, normalizeExpense, emptyExpenseForm,
   generateExpenseId, STATUS_OPTIONS as EXP_STATUS,
-} from '../src/lib/expenseValidation.js';
+} from '../../src/lib/expenseValidation.js';
 
 /* ─── Bank Account ──────────────────────────────────────────────────── */
 
