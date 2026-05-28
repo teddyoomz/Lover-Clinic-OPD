@@ -2,12 +2,12 @@
 title: Wiki Index
 type: index
 date-created: 2026-05-04
-date-updated: 2026-05-26
+date-updated: 2026-05-28
 ---
 
 # LoverClinic Wiki — Index
 
-Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle). Extended 2026-05-19 NIGHT+5 EOD+1 (V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener). Extended 2026-05-21 (Tablet Chart Editor session-doc relay — separate-files feature, TFP one-prop touch). Extended 2026-05-23 (V116 link-survives-queue-delete + auto-regen + un-hide on re-engage — AV116 invariant + class-of-bug classifier across 4 opd_sessions delete sites). Extended 2026-05-26 (patient-link hide-empty boxes in customer-mode + daily auto-cleanup of stale links — AV135 single-source isEmpty across endpoint + cron).
+Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle). Extended 2026-05-19 NIGHT+5 EOD+1 (V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener). Extended 2026-05-21 (Tablet Chart Editor session-doc relay — separate-files feature, TFP one-prop touch). Extended 2026-05-23 (V116 link-survives-queue-delete + auto-regen + un-hide on re-engage — AV116 invariant + class-of-bug classifier across 4 opd_sessions delete sites). Extended 2026-05-26 (patient-link hide-empty boxes in customer-mode + daily auto-cleanup of stale links — AV135 single-source isEmpty across endpoint + cron). Extended 2026-05-28 (V125 light-theme WCAG-AA — `aaAccent` helper + arbitrary-hex CTA white-restore; treatment-form 19 fails found+fixed, deployed+prod-verified).
 
 **Schema**: see [CLAUDE.md](CLAUDE.md) for conventions.
 **Activity log**: see [log.md](log.md) for chronological history.
@@ -50,6 +50,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [chartEditSessionCore.js](entities/chart-edit-session-core.md) | Helper / Lib | Branch-blind pure SSOT for the Tablet Chart Editor relay: status enums, heartbeat/staleness math, transition graph, doc builders, `shouldReap`. Shared by PC hook + tablet page + backend TX guard + cron — no drift. `toMillis` covers V81-fix1 Timestamp shapes. |
 | [customerLinkPayloadCore.js](entities/customer-link-payload-core.md) | Helper / Lib | Pure SSOT for the patient-link payload + auto-cleanup decision (computeUsableCourses / isAppointmentUpcoming / isCustomerLinkEmpty / decidePatientLinkCleanup). Consumed by `api/patient-view.js` + the cleanup cron — AV135 no-drift. |
 | [patient-link-cleanup-sweep (cron)](entities/patient-link-cleanup-cron.md) | Cron / Endpoint | Daily Vercel cron auto-deleting customer patient-links empty ≥30d via an empty-since state machine. Mirror of opd-session-cleanup-sweep; clear-token true-delete (Q4=A). |
+| [themeAccent.js — aaAccent](entities/theme-accent.md) | Helper / Lib | V125 theme-aware accent helper. `aaAccent(hex,isDark)` deepens inline -500/-400 accent hex → -700 AA-dark in light, pass-through dark. Reaches inline `style={{color}}` accents that V124's class-based CSS can't. Consumers: TFP SectionHeader/ActionBtn + 12 spans, ChartSection, TreatmentTimeline. |
 
 ## Concepts
 
@@ -73,6 +74,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [Skip-stock hide-from-balance (V43-followup)](concepts/skip-stock-hide-from-balance.md) | Products flagged `skipStockDeduction:true` hidden from balance table via single-source pure filter + onSnapshot live listener (BS-18). Edit shortcut button opens ProductFormModal; row disappears live on save. AV97 + BS-18 audit invariants. 1270 new assertions across 7-tier prof-grade test bank. Shipped + deployed 2026-05-19 NIGHT+5 EOD+1. |
 | [Patient-link lifecycle — hide-empty + auto-cleanup (AV135)](concepts/patient-link-lifecycle.md) | Customer link (`?patient=<token>`) shows only boxes with data in customer-mode; stale links self-clean after 30d empty via an empty-since state machine. Single-source isEmpty across display + endpoint + cron. Shipped local 2026-05-26 (await deploy). |
 | [Tablet Chart Editor — session-doc relay](concepts/tablet-chart-editor-relay.md) | PC→tablet chart-annotation relay over a Firestore session doc + Storage image transport. Compound-query instant-pop, busy-aware heartbeat presence, TX guard (BUSY vs OFFLINE — FP4), orphan-sweep cron (verified live), perfect-freehand pen. Separate files; TFP touched 1 prop. L2 e2e 6/6 on prod + Rule I + stress + AV101. Shipped + deployed 2026-05-20/21. |
+| [Light-theme WCAG-AA accent handling](concepts/light-theme-aa.md) | How colored accent text/CTAs stay ≥4.5:1 in light theme: V124 class-based `[data-theme=light]` CSS overrides + the `aaAccent` JS helper for inline styles. Documents the two V124 gaps V125 closed (inline -500 accents + arbitrary-hex `bg-[#7c3aed]` CTA white-restore) on the treatment form. Real-browser scan verified. Shipped + deployed 2026-05-28. |
 
 ## Analyses
 

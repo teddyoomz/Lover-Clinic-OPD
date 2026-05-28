@@ -2,6 +2,14 @@
 
 Chronological, append-only. Every entry starts `## [YYYY-MM-DD] <op> | <title>` so it's greppable: `grep "^## \[" wiki/log.md | tail -10`.
 
+## [2026-05-28 EOD+1] update | V125 light-theme WCAG-AA — aaAccent helper + arbitrary-hex CTA white-restore (SHIPPED + DEPLOYED + prod-verified)
+
+`/session-start → Outstanding ทำเลย`. Re-proved the 3 outstanding L1 items live (appt real-time strip 2→3/3→2 cross-process; chart relay PC-side pairing modal + accurate presence). The treatment-form L1 contrast scan FOUND **19 light-theme AA fails V124's class-based CSS overrides couldn't reach** (the one surface V124 didn't individually scan) → fixed across 2 classes: (1) inline `style={{color:'#…500'}}` accents → NEW `aaAccent(hex,isDark)` helper deepens -500/-400 → -700 in light (SectionHeader/ActionBtn + 12 spans + ChartSection + TreatmentTimeline); (2) doctor-note save button `bg-[#7c3aed] text-white` darkened to 3.05:1 by V124's blanket `.text-white→dark` (white-restore matched only Tailwind `bg-{c}-`) → index.css restore for the arbitrary hex (→5.2 AA; teal/LINE-green left dark, already AA).
+
+**Verify (Rule Q / Q-vis)**: T7 20/0 (AA-math every target ≥4.5 + source-grep) + build clean + full suite 14990 pass (1 pre-existing global.fetch-leak flake, passes 51/0 isolated) + **post-deploy re-scan on the LIVE build**: treatment form 0 fails (1372 els) + sale/finance tab 0 (2186 els, no regression) + appt view 0 + zoom (violet white, headers deepened). Commit `f56bfa9b`, deployed `vercel --prod` → lover-clinic-app.vercel.app (no rules → no Probe-Deploy-Probe). PatientForm = separate design pass (bespoke brand colors).
+
+**Production this entry**: NEW entity [themeAccent.js / aaAccent](entities/theme-accent.md) + NEW concept [Light-theme WCAG-AA accent handling](concepts/light-theme-aa.md). Index extended +2 rows (1 entity + 1 concept) + date-updated 2026-05-26 → 2026-05-28. `graphify update .` ran (AST-only; graph.json refreshed). Cross-refs: aaAccent ↔ light-theme-aa ↔ TreatmentFormPage ↔ V124/V125 (v-log-archive.md).
+
 ## [2026-05-26 EOD+5] ingest | Patient-link hide-empty boxes + auto-cleanup of stale links (AV135) — LOCAL, awaiting deploy
 
 Single-session `/session-start → brainstorming (AskUserQuestion previews, Rule S no live browser at ask/plan) → spec → writing-plans → executing-plans INLINE` (subagents thrash this baseline). Two changes to the customer patient-link page (`?patient=<token>`, `__customerMode`): (1) show ONLY boxes with data — hide the "ไม่มีคอร์สคงเหลือ" empty box in customer-mode (admin/sync view keeps it as feedback, Q1=A); subtle line "ยังไม่มีนัดหมายหรือคอร์สในขณะนี้" when nothing at all (Q2=B). (2) NEW daily cron auto-deletes a link empty (no upcoming appt + no remaining usable course) for ≥30d via an empty-since state machine (Q3=A), delete = clear token (Q4=A true delete).

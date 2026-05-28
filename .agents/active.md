@@ -1,31 +1,32 @@
 ---
-updated_at: "2026-05-28 EOD — V124 light-theme invisibility + appt real-time + full-AA SHIPPED+DEPLOYED+prod-verified."
-status: "SHIPPED + DEPLOYED + prod-verified. /systematic-debugging 2 bug classes (light-theme invisibility + appt real-time) + ดัน AA เต็ม. master=prod=38bd3565 LIVE. Working tree clean."
+updated_at: "2026-05-28 EOD+1 — V125 light-theme WCAG-AA (treatment form) SHIPPED+DEPLOYED+prod-verified."
+status: "SHIPPED + DEPLOYED + prod-verified on LIVE build. master=prod=f56bfa9b LIVE. Tree clean."
 branch: "master"
-last_commit: "38bd3565 (V124-fix3 full-AA). Stack: 77757f67 V124 + d106a5cd fix2(base-match) + 4c751bf5 docs + 38bd3565 fix3(AA-bg)."
-tests: "full vitest 14983/0 (last full run, pre-fix3); fix3 added 1 T7 guard → T7 13/0 targeted (NOT re-run full per directive); build clean."
+last_commit: "f56bfa9b (V125 light-theme AA). Prev: 38bd3565 V124-fix3."
+tests: "full vitest 14990 pass + 1 KNOWN flake (phase15.5b global.fetch-leak, passes 51/0 isolated — not V125); T7 20/0; build clean. (Reused — not re-run at session-end.)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "38bd3565 LIVE (2026-05-28) — V124 + fix2 + fix3 all deployed + prod-verified"
-firestore_rules_version: "UNCHANGED — CSS/theme + component-color + listener swap only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
+production_commit: "f56bfa9b LIVE (2026-05-28) — V125 deployed + prod-verified (post-deploy re-scan)"
+firestore_rules_version: "UNCHANGED — CSS/theme + 1 new lib + listener-swap only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
 ---
 
-# Active Context — V124 light-theme + appt real-time (SHIPPED 2026-05-28)
+# Active Context — V125 light-theme AA (SHIPPED 2026-05-28 EOD+1)
 
 ## State
-- master=prod `38bd3565` LIVE @ lover-clinic-app.vercel.app · prod-verified (Rule Q-vis + L2 real-browser).
-- full vitest 14983/0 (last full) · build clean · tree clean.
-- Detail: checkpoint `.agents/sessions/2026-05-28-v124-light-theme-appt-realtime.md`.
+- master=prod `f56bfa9b` LIVE @ lover-clinic-app.vercel.app · prod-verified (Rule Q-vis on the REAL deployed build) · tree clean.
+- full vitest 14990 pass + 1 known flake · T7 20/0 · build clean.
+- Detail: checkpoint `.agents/sessions/2026-05-28-v125-light-theme-aa.md`.
 
-## What this session shipped (V124 + fix2 + fix3)
-- **Bug A light-theme invisibility (CSS-only)**: bg-tint selectors `[class*="bg-{c}-{700..950}/"]` matched `dark:` variants → clobbered solid `bg-{c}-600 text-white` badges to pale → INVISIBLE (finance "มองไม่เห็นอะไรเลย"). Fix = BASE-match `[class*=" bg-X/"]+[class^="bg-X/"]` (v1 `:not` over-excluded base+hover: → stock-button regression caught post-deploy → v2 base-match).
-- gray-600/700→muted/heading (were faint), orange-500→700, `-400`/`-600` colored-text → AA. date-strip selected tab label/number (1.0/3.01:1 invisible) → white-on-blue via bg-sky-700/600 descendant white-restore; count badge sky-500→600.
-- **ดัน AA เต็ม (fix3)**: white-on-`bg-{c}-600` → `{c}-700` light-only (`.bg-{c}-600.text-white`) → finance badges + count badge + all white-on-color CTAs to strict AA (finance 0 fails).
-- **Bug B appt real-time**: `AppointmentCalendarView` month-strip one-shot `getAppointmentsByMonth` → `listenToAppointmentsByMonth` (onSnapshot, cross-device, per-branch). Covers all 6 backend appt sub-tabs.
-- Verified PROD: finance 0 fails · stock 0 fails · date-strip readable · **Bug B real-time: node write→strip 2→3 LIVE no-refresh, delete→3→2** (cross-process). T7 13/0 · BS-F 21/0.
+## What this session shipped
+- **3 outstanding L1 re-proved live**: appt real-time (strip 2→3 / 3→2 cross-process, per-branch) · chart relay PC-side (pairing modal + accurate "no tablet" presence).
+- **V125 — treatment-form light-theme AA**: scan FOUND 19 fails V124's class-based CSS couldn't reach. Fixed: (1) inline -500 accents → NEW `aaAccent(hex,isDark)` helper (SectionHeader/ActionBtn + 12 spans + ChartSection + TreatmentTimeline); (2) doctor-note save button `bg-[#7c3aed] text-white` (V124 blanket-darken → 3.05:1) → index.css white-restore (→5.2 AA).
+- Verified: T7 20/0 (AA-math + source-grep) + post-deploy re-scan LIVE build (treatment form 0 fails + sale/finance 0 no-regression + zoom). Commit `f56bfa9b` deployed `vercel --prod`.
+- Wiki updated (entity `themeAccent.js` + concept `light-theme-aa`); graphify graph refreshed.
 
 ## Next action
 Idle / await user. No code pending.
 
-## Outstanding (user-triggered)
-- treatment-form not individually scanned (deep PHI nav) — uses same global classes (covered); user L1 if desired.
-- appt-live cross-device + chart prod flows (EOD+11/12) — user multi-device L1.
+## Outstanding user-triggered actions
+- **PatientForm.jsx light-theme** — bespoke `isDark?dark:light` brand colors (pink/rose); needs a DESIGN pass, NOT a mechanical aaAccent wrap. Deferred.
+- appt-live cross-device + chart on a real iPad — multi-device L1.
+- TreatmentTimeline live-render-scan (source-audited + AA-math-verified; awkward nav — covered).
+- Optional: v-log-archive verbose V125 entry + 00-session-start §2 one-liner.
