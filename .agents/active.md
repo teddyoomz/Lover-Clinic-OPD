@@ -1,33 +1,36 @@
 ---
-updated_at: "2026-05-28 EOD+2 — V126 PatientForm light-theme WCAG-AA (B-i Selective) SHIPPED+DEPLOYED+prod-verified."
-status: "SHIPPED + DEPLOYED + prod-verified (reachable states on LIVE build). master=afd4a628 (docs) / code 4ed43920. prod LIVE. Tree clean."
+updated_at: "2026-05-28 EOD+3 — V127 appointment hover-detail peek SHIPPED+DEPLOYED."
+status: "SHIPPED + DEPLOYED (frontend-only). code 26fb5789 LIVE + docs commit on top. prod LIVE. Tree clean."
 branch: "master"
-last_commit: "afd4a628 (V126 docs backfill). Code: 4ed43920 (V126 PatientForm light-theme). Prev: 03c6535e V125 docs."
-tests: "full vitest 15001 pass / 0 fail; T7 30/0 (incl. 10 new PF-1..PF-10); build clean. (Reused — not re-run at session-end.)"
+last_commit: "V127 docs commit (state). Code: 26fb5789 (V127 hover peek). Prev: 53eaddcb V126 docs / 4ed43920 V126 code."
+tests: "full vitest 15009 pass / 1 KNOWN flake (phase-17-1-cross-branch-import-rtl global.fetch-leak, 7/0 isolated — not V127); touched-area 49/0; build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "4ed43920 LIVE (2026-05-28) — V126 deployed + prod-verified (post-deploy LIVE re-scan, reachable states)"
-firestore_rules_version: "UNCHANGED — CSS/theme + JS only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
+production_commit: "26fb5789 LIVE (2026-05-28) — V127 deployed (Vercel build clean). Hover-on-calendar L1 = user."
+firestore_rules_version: "UNCHANGED — frontend-only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
 ---
 
-# Active Context — V126 PatientForm light-theme AA (SHIPPED 2026-05-28 EOD+2)
+# Active Context — V127 appointment hover-detail peek (SHIPPED 2026-05-28 EOD+3)
 
 ## State
-- master=`afd4a628` (docs) / code `4ed43920` · prod LIVE @ lover-clinic-app.vercel.app · prod-verified (reachable states) · tree clean.
-- full vitest 15001/0 · T7 30/0 · build clean.
-- Spec: `docs/superpowers/specs/2026-05-28-patientform-light-theme-aa-design.html` · Plan: `docs/superpowers/plans/2026-05-28-patientform-light-theme-aa.html`.
+- code `26fb5789` LIVE @ lover-clinic-app.vercel.app (+ docs commit on top) · tree clean.
+- full vitest 15009 pass / 1 known flake · touched-area 49/0 · build clean.
+- Spec/plan: `docs/superpowers/{specs,plans}/2026-05-28-appt-hover-detail*`.
 
-## What this session shipped
-- **V126 — PatientForm light-theme WCAG-AA (B-i Selective)** — closes the V125-deferred customer-facing intake form. brainstorm Q1=B (curated palette) / Q2=B-i (pink/rose harmonized) / Q3=Selective (fix broken inline-hex + dynamic `ac`; KEEP orange-emergency/blue-custom/red-critical zones — already AA via V124).
-  - **Fix**: reuse V125 `aaAccent` (no new helper) + NEW `.pf-req` asterisk class (rose-600 light #e11d48 / ember-red dark #ef4444; unifies 21 spans) + `acLight = aaAccent(ac, isDark)` (submit/lang-toggle/icon → white-on-pink-700 in light) + ~10 inline-hex accents deepened (orange→aaAccent; back-btn/cancel/caption/greeting/state-icons → AA literals). Decorative pinks + LINE-green button KEPT; dark unchanged.
-  - **Verified**: build clean · full vitest 15001/0 · T7 30/0 (PF-1..PF-10 AA-math + source-grep) · live `.pf-req` cascade on BOTH local + the **LIVE deployed build** (light #e11d48 4.7:1 / dark #ef4444 5.27:1) + Invalid-Link state scan + screenshot.
-- **V125 doc backfill**: verbose v-log-archive entry + 00-session-start §2 one-liner.
+## What this session shipped (all DEPLOYED)
+- **V126 — PatientForm light-theme WCAG-AA** (B-i Selective, rose-harmonized) — DEPLOYED + prod-verified (reachable states).
+- **V125 doc backfill** — verbose v-log-archive entry + §2 one-liner.
+- **V127 — appointment hover-detail peek** — hover an appt card (desktop mouse) → anchored XL peek-card showing all present details, no click needed. Covers every appointment calendar sub-tab (shared `AppointmentCalendarView`) + agenda. Click→modal + touch unchanged.
+  - NEW `useApptHoverPeek` (desktop-only `pointerType==='mouse'`, 150ms/80ms) + shared `AppointmentDetailBody` (modal + peek both render it — no drift) + portal-anchored `AppointmentHoverPeek` (XL 345px, theme-aware) + modal refactored onto the body + **AV144**.
+  - Hub rows deliberately excluded (already full-detail inline).
+  - Verified: build clean · suite 15009/1-flake · touched-area 49/0 (modal 14/0 + 3 V21 source-grep fixups) · peek theme AA in BOTH light+dark (live scan + screenshot).
 
 ## HONEST GAP (Rule Q)
-- Main intake form + success/closed/expired state-screens NOT seen assembled in a real browser (need real session/admin-sim — auth + PHI; can't drive without creds). Those colors verified by source-grep (0 light-branch raw sub-AA hex) + AA-math (every target ≥4.5 computed) + the `.pf-req` cascade probe (the only class-resolution risk, confirmed live) + inline-style-always-wins. **Full-form 5-state visual L1 = USER post-deploy** (dev server localhost:5173 running, or open a real `?session=` link / admin simulate).
+- The *assembled* hover-on-the-real-calendar (peek beside a real grid cell on mouse-hover, flip/clamp/dismiss, no flicker between dense cells) = **USER L1** (admin-gated calendar + real mouse; the harness can't drive a trusted hover on the mounted calendar without admin login). Logic (hook unit + source-grep) + theme (live scan) + body↔modal consistency (RTL) all verified.
 
 ## Next action
-Idle / await user. No code pending.
+Idle / await user.
 
 ## Outstanding user-triggered
-- **PatientForm full intake-form 5-state visual L1** (real session / admin-sim) — the holistic look + success/closed/expired states.
-- **appt-live cross-device + chart on a real iPad** — multi-device L1.
+- **V127 hover L1** on the real admin appointment calendar (desktop mouse; flip Dark/Light).
+- PatientForm full intake-form 5-state visual L1 (V126).
+- appt-live cross-device + chart on a real iPad (multi-device L1).
