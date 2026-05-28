@@ -541,6 +541,17 @@ html.theme-transitioning *::after {
 [data-theme="auto"] [class*="bg-sky-"].text-white,
 [data-theme="auto"] [class*="bg-lime-"].text-white { color: #ffffff !important; }
 
+/* V125 (2026-05-28) — ARBITRARY-hex CTA bg + text-white restore.
+   The block above only matches Tailwind `bg-{color}-` classes, so a button with
+   an arbitrary-hex bg (`bg-[#7c3aed]`) fell through to the base `.text-white →
+   --tx-heading` darken (index.css:408). TreatmentFormPage's "บันทึกสำหรับแพทย์"
+   save button (bg-[#7c3aed] violet-600) thus rendered DARK slate text → 3.05:1
+   (sub-AA). White-on-#7c3aed = 5.2:1 (AA) + matches the button's `text-white`
+   design intent. (Its teal sibling bg-[#2EC4B6] @7.76 and LINE-green bg-[#06C755]
+   @7.67 are AA as DARK text — intentionally NOT restored.) */
+[data-theme="light"] .bg-\[\#7c3aed\].text-white,
+[data-theme="auto"] .bg-\[\#7c3aed\].text-white { color: #ffffff !important; }
+
 /* 2026-05-28 V124-fix3 — "ดัน AA เต็ม": white text on a SOLID bg-{c}-600 is sub-AA
    for most colors in light theme (amber 3.19, emerald 3.77, green 2.8, yellow 2.2,
    sky-count 4.1, red-save 4.0, …). Darken the bg one step to {c}-700 (white-text AA

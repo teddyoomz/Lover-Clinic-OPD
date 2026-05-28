@@ -16,6 +16,7 @@ import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/
 import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster } from '../lib/treatmentBuyHelpers.js';
 import { chartEntryForPersist } from '../lib/tabletChartTools.js';
+import { aaAccent } from '../lib/themeAccent.js';
 // 2026-05-25 — Storage-ref for ALL treatment blobs (photos / lab images / PDFs).
 // Class-of-bug fix (Rule P): inline base64 in be_treatments doc → 1 MiB cap →
 // intermittent save failure + upload jank. Mirrors the 2026-05-22 chart fix.
@@ -144,10 +145,11 @@ import { resolveCustomerDisplayName, resolveCustomerHN } from '../lib/customerDi
 // in the parent for the pattern.
 
 const SectionHeader = memo(function SectionHeader({ icon: Icon, title, isDark, accent, children }) {
+  const a = aaAccent(accent, isDark); // V125: deepen -500 accent to AA-dark in light theme
   return (
     <div className="flex items-center flex-wrap gap-2 mb-3">
-      <Icon size={15} style={{ color: accent }} />
-      <h4 className="text-xs font-bold tracking-wide" style={{ color: accent }}>{title}</h4>
+      <Icon size={15} style={{ color: a }} />
+      <h4 className="text-xs font-bold tracking-wide" style={{ color: a }}>{title}</h4>
       {children}
     </div>
   );
@@ -162,10 +164,11 @@ const FormSection = memo(function FormSection({ isDark, children, className = ''
 });
 
 const ActionBtn = memo(function ActionBtn({ children, color, isDark, onClick, className = '' }) {
+  const c = aaAccent(color, isDark); // V125: deepen -500 accent to AA-dark in light theme
   return (
     <button onClick={onClick}
       className={`text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1 ${className}`}
-      style={{ color, borderColor: `${color}40`, background: `${color}0a` }}>
+      style={{ color: c, borderColor: `${c}40`, background: `${c}0a` }}>
       {children}
     </button>
   );
@@ -4198,8 +4201,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     useMemo at component scope (~line 1690). */}
                 {dfEntries.length > 0 && (
                   <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <span style={{ color: '#14b8a6' }}>รวมทั้งสิ้น · {dfEntries.length} รายการ</span>
-                    <span className="font-mono tabular-nums" style={{ color: '#14b8a6' }}>
+                    <span style={{ color: aaAccent('#14b8a6', isDark) }}>รวมทั้งสิ้น · {dfEntries.length} รายการ</span>
+                    <span className="font-mono tabular-nums" style={{ color: aaAccent('#14b8a6', isDark) }}>
                       ฿{dfGrandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -4237,7 +4240,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 id="modal-title-med" className="text-sm font-black" style={{ color: '#10b981' }}>{editingMedIndex >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>
+                    <h3 id="modal-title-med" className="text-sm font-black" style={{ color: aaAccent('#10b981', isDark) }}>{editingMedIndex >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>
                   </div>
                   <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     {/* Product select with search */}
@@ -4354,7 +4357,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 id="modal-title-med-group" className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
+                    <h3 id="modal-title-med-group" className="text-sm font-black" style={{ color: aaAccent('#10b981', isDark) }}>เพิ่มยากลับบ้าน</h3>
                     <select value={medGroupSelectedId}
                       onChange={e => {
                         setMedGroupSelectedId(e.target.value);
@@ -4528,7 +4531,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 <p className="text-xs font-bold text-gray-500 mb-2">รายการรักษา</p>
                 <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                   <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                    <span className="text-xs font-bold" style={{ color: '#f97316' }}>รายการ</span>
+                    <span className="text-xs font-bold" style={{ color: aaAccent('#f97316', isDark) }}>รายการ</span>
                     <span className="text-xs text-gray-500">จำนวน</span>
                   </div>
                   {treatmentItems.length === 0 ? (
@@ -4549,7 +4552,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {/* ── Column 1: คอร์ส ── */}
                   <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <span className="text-xs font-bold" style={{ color: '#14b8a6' }}>คอร์ส</span>
+                      <span className="text-xs font-bold" style={{ color: aaAccent('#14b8a6', isDark) }}>คอร์ส</span>
                       <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
@@ -4690,7 +4693,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {/* ── Column 2: โปรโมชัน ── */}
                   <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <span className="text-xs font-bold" style={{ color: '#f59e0b' }}>โปรโมชัน</span>
+                      <span className="text-xs font-bold" style={{ color: aaAccent('#f59e0b', isDark) }}>โปรโมชัน</span>
                       <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
@@ -4753,7 +4756,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {/* ── Column 3: รายการรักษา ── */}
                   <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <span className="text-xs font-bold" style={{ color: '#f97316' }}>รายการรักษา</span>
+                      <span className="text-xs font-bold" style={{ color: aaAccent('#f97316', isDark) }}>รายการรักษา</span>
                       <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
@@ -4805,7 +4808,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             {purchasedByType.product.length > 0 && (
               <div className={`mt-3 rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                 <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                  <span className="text-xs font-bold" style={{ color: '#f97316' }}>สินค้าหน้าร้าน</span>
+                  <span className="text-xs font-bold" style={{ color: aaAccent('#f97316', isDark) }}>สินค้าหน้าร้าน</span>
                   <span className="text-xs text-gray-500">จำนวน</span>
                 </div>
                 <div className="max-h-[150px] overflow-y-auto">
@@ -4832,7 +4835,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 id="modal-title-treat-buy" className="text-sm font-black" style={{ color: '#14b8a6' }}>ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน</h3>
+                    <h3 id="modal-title-treat-buy" className="text-sm font-black" style={{ color: aaAccent('#14b8a6', isDark) }}>ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน</h3>
                     <div className="flex items-center gap-2">
                       <div className="relative">
                         <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -5009,7 +5012,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 <div className={`w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 id="modal-title-cons" className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
+                    <h3 id="modal-title-cons" className="text-sm font-black" style={{ color: aaAccent('#eab308', isDark) }}>เพิ่มสินค้าสิ้นเปลือง</h3>
                   </div>
                   <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     <div>
@@ -5065,7 +5068,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 id="modal-title-cons-group" className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
+                    <h3 id="modal-title-cons-group" className="text-sm font-black" style={{ color: aaAccent('#eab308', isDark) }}>เพิ่มสินค้าสิ้นเปลือง</h3>
                     <select value={consGroupSelectedId}
                       onChange={e => {
                         setConsGroupSelectedId(e.target.value);

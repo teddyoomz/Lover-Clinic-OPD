@@ -6,6 +6,7 @@ import PcPairingModal from './tablet-chart/PcPairingModal.jsx';
 import ImageLightbox from './ImageLightbox.jsx';
 import { useChartEditSession } from '../hooks/useChartEditSession.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { aaAccent } from '../lib/themeAccent.js';
 import { auth } from '../firebase.js';
 
 // 2026-05-25 — chart cap raised 2 → 10 per user request. Safe: charts persist as
@@ -110,16 +111,17 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
   });
   const closePairing = () => { cancel(); setPendingTemplate(null); setPendingChart(null); };
 
+  const a = aaAccent(accent, isDark); // V125: deepen -500 accent to AA-dark in light theme
   return (
     <>
       {/* Section header */}
       <div className="flex items-center flex-wrap gap-2 mb-3">
-        <FileImage size={14} style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }} />
-        <h4 className="text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: accent }}>Chart</h4>
+        <FileImage size={14} style={{ color: a, filter: `drop-shadow(0 0 4px ${a}60)` }} />
+        <h4 className="text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: a }}>Chart</h4>
         {charts.length < MAX_CHARTS && (
           <button onClick={() => setSelectorOpen(true)}
             className={`ml-auto text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1`}
-            style={{ color: accent, borderColor: `${accent}40`, background: `${accent}0a` }}>
+            style={{ color: a, borderColor: `${a}40`, background: `${a}0a` }}>
             <Plus size={10} /> เพิ่ม Chart
           </button>
         )}

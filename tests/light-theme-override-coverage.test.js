@@ -6,6 +6,7 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { describe, it, expect } from 'vitest';
+import { aaAccent, LIGHT_AA_ACCENT } from '../src/lib/themeAccent.js';
 
 const css = readFileSync('src/index.css', 'utf8');
 
@@ -162,5 +163,74 @@ describe('light-theme + appointment realtime fixes (2026-05-28)', () => {
     expect(c).toMatch(/setMonthAppts\(grouped\)/);              // groups flat listener output
     // selected-day label fixed off text-sky-200 (which matched the bg in light theme)
     expect(c).not.toMatch(/isSel \? 'text-sky-200'/);
+  });
+});
+
+// V125 (2026-05-28) — TreatmentFormPage accent headers/pills set color via INLINE
+// style={{ color: '#xxx' }} (raw -500 hex from local SectionHeader/ActionBtn +
+// ~12 inline spans), so V124's CLASS-based [data-theme=light] overrides could not
+// reach them → they stayed raw -500 in light theme and failed AA (yellow-500
+// 1.87:1, amber-500 2.08:1, cyan-500 2.43:1, ...). Fix = shared aaAccent(hex,isDark)
+// that deepens to the -700 AA-dark family in light, pass-through in dark.
+describe('V125 — theme-aware accent helper (light-theme AA for inline accents)', () => {
+  const tfp = readFileSync('src/components/TreatmentFormPage.jsx', 'utf8');
+
+  it('aaAccent: every mapped light-theme target is >= 4.5:1 on white (AA)', () => {
+    const sub = [];
+    for (const [src, target] of Object.entries(LIGHT_AA_ACCENT)) {
+      const cr = 1.05 / (lum(target) + 0.05); // contrast vs white (lum = 1)
+      if (cr < 4.5) sub.push(`#${src} → ${target} = ${cr.toFixed(2)}`);
+    }
+    expect(sub, `mapped targets below AA on white:\n${sub.join('\n')}`).toEqual([]);
+  });
+
+  it('aaAccent: deepens raw -500/-400 accent hex in LIGHT, passes through in DARK', () => {
+    expect(aaAccent('#f59e0b', false)).toBe('#b45309'); // amber-500 → amber-700
+    expect(aaAccent('#06b6d4', false)).toBe('#0e7490'); // cyan-500  → cyan-700
+    expect(aaAccent('#eab308', false)).toBe('#a16207'); // yellow-500 → yellow-700
+    expect(aaAccent('#14b8a6', false)).toBe('#0f766e'); // teal-500  → teal-700
+    expect(aaAccent('#EF4444', false)).toBe('#b91c1c'); // case-insensitive
+    // dark theme = unchanged (vibrant -500 is already AA on a dark surface — V124 "dark untouched")
+    expect(aaAccent('#f59e0b', true)).toBe('#f59e0b');
+    expect(aaAccent('#06b6d4', true)).toBe('#06b6d4');
+  });
+
+  it('aaAccent: unknown / empty / non-string input passes through (safe)', () => {
+    expect(aaAccent('#123456', false)).toBe('#123456'); // unknown hex unchanged
+    expect(aaAccent('', false)).toBe('');
+    expect(aaAccent(null, false)).toBe(null);
+    expect(aaAccent(undefined, false)).toBe(undefined);
+  });
+
+  it('TreatmentFormPage: SectionHeader + ActionBtn deepen accent via aaAccent', () => {
+    expect(tfp).toMatch(/import \{ aaAccent \} from '\.\.\/lib\/themeAccent\.js'/);
+    expect(tfp).toMatch(/const a = aaAccent\(accent, isDark\)/); // SectionHeader icon + h4
+    expect(tfp).toMatch(/const c = aaAccent\(color, isDark\)/);  // ActionBtn color/border/bg
+  });
+
+  it('TreatmentFormPage: NO raw inline accent style remains — all inline colors are theme-aware', () => {
+    expect(tfp).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/); // regression guard
+    const wraps = (tfp.match(/aaAccent\('#[0-9a-fA-F]{6}', isDark\)/g) || []).length;
+    expect(wraps).toBeGreaterThanOrEqual(12); // the 12 inline callsites we converted
+  });
+
+  it('class#2: violet save-button (bg-[#7c3aed] text-white) restored to white in light (was dark 3.05:1)', () => {
+    // the button keeps its arbitrary-hex violet bg with text-white on one line
+    expect(tfp).toMatch(/text-white[^\n]*bg-\[#7c3aed\]/);
+    // index.css restores white for that arbitrary-hex bg (base .text-white→dark darkened it to 3.05:1)
+    expect(css.includes('.bg-\\[\\#7c3aed\\].text-white')).toBe(true);
+    // ...and the teal sibling bg-[#2EC4B6] is intentionally NOT white-restored (dark text @7.76 is AA)
+    expect(css.includes('.bg-\\[\\#2EC4B6\\].text-white')).toBe(false);
+  });
+
+  it('TreatmentTimeline: hardcoded inline accents (green-500/teal-500) routed through aaAccent', () => {
+    const tl = readFileSync('src/components/TreatmentTimeline.jsx', 'utf8');
+    expect(tl).toMatch(/import \{ aaAccent \} from '\.\.\/lib\/themeAccent\.js'/);
+    // the 2 hardcoded inline -500 accents now go through aaAccent (theme-aware)
+    expect(tl).toMatch(/aaAccent\('#22c55e', isDark\)/);
+    expect(tl).toMatch(/aaAccent\('#14b8a6', isDark\)/);
+    // no raw hardcoded inline -500 color literal remains (the theme-aware `accent` var #7c3aed is fine)
+    expect(tl).not.toMatch(/color: '#22c55e'/);
+    expect(tl).not.toMatch(/color: '#14b8a6'/);
   });
 });

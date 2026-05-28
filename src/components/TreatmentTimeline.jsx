@@ -7,6 +7,7 @@ import { Stethoscope, Loader2, RefreshCw, ChevronLeft, ChevronRight, FileText,
 // all rows. getTreatment returns {id, customerId, detail, branchId, ...}
 // directly — no broker `{success, treatment}` wrapper.
 import { getCustomerTreatments, getTreatment, deleteBackendTreatment, rebuildTreatmentSummary } from '../lib/scopedDataLayer.js';
+import { aaAccent } from '../lib/themeAccent.js';
 
 // V50 — adapter: be_treatments doc shape → Timeline row shape.
 function mapBeTreatmentToTimelineRow(t) {
@@ -210,7 +211,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
         <div className="ml-auto flex items-center gap-1.5">
           <button onClick={() => { if (onOpenCreateForm) onOpenCreateForm(customerId); }}
             className="text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1"
-            style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.05)' }}>
+            style={{ color: aaAccent('#22c55e', isDark), borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.05)' }}>
             <Plus size={10} /> สร้าง
           </button>
           <button onClick={() => fetchPage(page)} disabled={loading}
@@ -370,7 +371,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
         <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#222]' : 'bg-white'}`}
           onClick={e => e.stopPropagation()}>
           <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-            <h3 className="text-sm font-black" style={{ color: '#14b8a6' }}>ยกเลิกการรักษา</h3>
+            <h3 className="text-sm font-black" style={{ color: aaAccent('#14b8a6', isDark) }}>ยกเลิกการรักษา</h3>
           </div>
           <div className="px-5 py-4 space-y-3">
             <label className="text-xs font-bold uppercase tracking-widest text-gray-500 block">รายละเอียดการยกเลิก</label>
