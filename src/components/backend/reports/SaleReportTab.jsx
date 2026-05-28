@@ -4,7 +4,7 @@
 // + search + cancelled toggle. CSV export via downloadCSV using the SAME
 // columns array fed to the table (AR11).
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { Receipt, ChevronRight } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
@@ -395,6 +395,25 @@ function SaleMobileFooter({ totals }) {
 }
 
 function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) {
+  // V131 — fill the available viewport height so the table is "พอดีจอ" on ALL
+  // screen sizes (V130's fixed 70vh cap left a gap on tall screens + hid
+  // rows). Measure the wrapper's top → maxHeight = innerHeight - top - margin
+  // (floor 240). Re-measures on resize + when row count changes (the chrome
+  // above can reflow). Scoped to reports-sale; mobile (<lg) card list is separate.
+  const wrapRef = useRef(null);
+  const [maxH, setMaxH] = useState(null);
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return undefined;
+    const compute = () => {
+      const top = el.getBoundingClientRect().top;
+      setMaxH(Math.max(240, Math.round(window.innerHeight - top - 16)));
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, [rows.length]);
+
   // Right-align currency columns; otherwise left/center contextual
   const isCurrency = (key) => [
     'netTotal', 'depositApplied', 'walletApplied', 'refundAmount',
@@ -407,7 +426,12 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
   const isTruncatable = (key) => key === 'itemsSummary' || key === 'paymentChannels';
 
   return (
-    <div className="hidden lg:block max-h-[70vh] overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
+    <div
+      ref={wrapRef}
+      className="hidden lg:block max-h-[85vh] overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]"
+      style={maxH ? { maxHeight: `${maxH}px` } : undefined}
+      data-testid="sale-report-table"
+    >
       <table className="w-full text-xs min-w-[1180px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>

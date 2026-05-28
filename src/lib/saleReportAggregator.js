@@ -14,6 +14,7 @@
 
 import { roundTHB, dateRangeFilter } from './reportsUtils.js';
 import { resolveSellerName } from './documentFieldAutoFill.js';
+import { resolveCustomerHN } from './customerDisplayName.js';
 
 /* ─── Source-shape derivers ──────────────────────────────────────────────── */
 
@@ -146,7 +147,9 @@ export function buildSaleReportRow(sale, customerLookup = null, claimsBySaleId =
       ? customerLookup.get(cid)
       : customerLookup[cid];
     if (c) {
-      if (!resolvedHN) resolvedHN = c.proClinicHN || c.hn || '';
+      // V131 — canonical HN resolver (checks hn_no, where 100% of real HNs
+      // live; the old `proClinicHN || hn` missed it → 6 sales blank). AV150.
+      if (!resolvedHN) resolvedHN = resolveCustomerHN(c);
       if (!resolvedName) {
         const pd = c.patientData || {};
         const composed = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim();

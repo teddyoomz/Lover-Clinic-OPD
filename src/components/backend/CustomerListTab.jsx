@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
 import { getAllCustomers, listBranches } from '../../lib/scopedDataLayer.js';
 import { hexToRgb } from '../../utils.js';
+import { resolveCustomerHN } from '../../lib/customerDisplayName.js'; // V131 — HN search via hn_no; AV150
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import CustomerCard from './CustomerCard.jsx';
 import BulkPrintModal from './BulkPrintModal.jsx';
@@ -97,7 +98,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
     const q = filterQuery.trim().toLowerCase();
     return customers.filter(c => {
       const name = `${c.patientData?.prefix || ''} ${c.patientData?.firstName || ''} ${c.patientData?.lastName || ''}`.toLowerCase();
-      const hn = (c.proClinicHN || '').toLowerCase();
+      const hn = resolveCustomerHN(c).toLowerCase(); // V131 — was c.proClinicHN (empty → HN search dead)
       const phone = (c.patientData?.phone || '').toLowerCase();
       const id = (c.proClinicId || '').toLowerCase();
       return name.includes(q) || hn.includes(q) || phone.includes(q) || id.includes(q);

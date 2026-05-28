@@ -26,7 +26,7 @@ import {
  * type-less appt shows no chip). recurring / deposit are present-guarded —
  * they're absent on calendar appts today and simply omit (Q3=A "when present").
  */
-export default function AppointmentDetailBody({ appt, roomName, doctorMap, variant = 'modal', resolvedPhone = '' }) {
+export default function AppointmentDetailBody({ appt, roomName, doctorMap, variant = 'modal', resolvedPhone = '', onOpenCustomer = null }) {
   if (!appt) return null;
 
   const st = getApptStatusMeta(appt.status);
@@ -44,12 +44,29 @@ export default function AppointmentDetailBody({ appt, roomName, doctorMap, varia
 
   return (
     <>
-      <div
-        className={`text-base font-bold text-[var(--tx-heading)] leading-tight${isPeek ? '' : ' pr-8'}`}
-        data-testid="appt-detail-name"
-      >
-        {apptDisplayName(appt)}
-      </div>
+      {/* V131 — name is a clickable link → open the customer detail in a new tab,
+          but ONLY in the modal (onOpenCustomer supplied) AND only for a LINKED
+          appt (appt.customerId). Peek passes no handler (+ is pointer-events:none),
+          and pick-later/walk-in appts (no customerId) stay plain. Thai-culture:
+          link uses cyan (never red on a patient name). */}
+      {onOpenCustomer && appt.customerId ? (
+        <button
+          type="button"
+          onClick={() => onOpenCustomer(appt.customerId)}
+          className="text-base font-bold leading-tight text-left pr-8 text-cyan-600 dark:text-cyan-300 hover:underline underline-offset-2"
+          data-testid="appt-detail-name"
+          title="เปิดข้อมูลลูกค้าในแท็บใหม่"
+        >
+          {apptDisplayName(appt)}
+        </button>
+      ) : (
+        <div
+          className={`text-base font-bold text-[var(--tx-heading)] leading-tight${isPeek ? '' : ' pr-8'}`}
+          data-testid="appt-detail-name"
+        >
+          {apptDisplayName(appt)}
+        </div>
+      )}
 
       {metaBits && (
         <div className="text-xs text-[var(--tx-muted)] mt-0.5" data-testid="appt-detail-meta">{metaBits}</div>

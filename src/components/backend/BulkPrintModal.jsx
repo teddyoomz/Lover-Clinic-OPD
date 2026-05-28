@@ -26,6 +26,7 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import { exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
 import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
+import { resolveCustomerHN } from '../../lib/customerDisplayName.js'; // V131 — canonical HN (hn_no); AV150
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
@@ -138,7 +139,7 @@ export default function BulkPrintModal({ customers = [], clinicSettings, onClose
           templateName: selected.name,
           docType: selected.docType,
           customerId: customer?.customerId || customer?.id,
-          customerHN: customer?.proClinicHN || customer?.hn,
+          customerHN: resolveCustomerHN(customer), // V131 — was proClinicHN||hn (empty); hn_no is real
           customerName: name,
           action: 'pdf',
           language: selected.language,

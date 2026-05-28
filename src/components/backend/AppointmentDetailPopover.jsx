@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Pencil } from 'lucide-react';
 import AppointmentDetailBody from './AppointmentDetailBody.jsx';
+import { openCustomerInNewTab } from '../../lib/customerNavigation.js'; // V131 — clickable name → customer detail tab
 
 /**
  * AppointmentDetailPopover — read-only quick-view for one appointment (click).
@@ -49,7 +50,7 @@ export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, on
           <X size={14} />
         </button>
 
-        <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="modal" resolvedPhone={resolvedPhone} />
+        <AppointmentDetailBody appt={appt} roomName={roomName} doctorMap={doctorMap} variant="modal" resolvedPhone={resolvedPhone} onOpenCustomer={openCustomerInNewTab} />
 
         <div className="mt-3 flex justify-end gap-2">
           <button

@@ -14,7 +14,14 @@ const av   = readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8'
 
 describe('V130.B SaleReportTable compact + reachable scroll', () => {
   it('B1: desktop wrapper is height-capped + keeps overflow-auto (scrollbar reachable)', () => {
-    expect(tab).toMatch(/hidden lg:block max-h-\[70vh\] overflow-auto/);
+    // V131 (2026-05-28) — fixed max-h-[70vh] → JS-measured fill-available-height
+    // (innerHeight - wrapperTop - margin) so the table is "พอดีจอ" on all sizes;
+    // max-h-[85vh] is the pre-measure CSS fallback, inline maxHeight refines it.
+    expect(tab).toMatch(/hidden lg:block max-h-\[85vh\] overflow-auto/);
+    expect(tab).toMatch(/ref=\{wrapRef\}/);
+    expect(tab).toMatch(/style=\{maxH \? \{ maxHeight: `\$\{maxH\}px` \} : undefined\}/);
+    expect(tab).toMatch(/window\.innerHeight - top - 16/);
+    expect(tab).not.toMatch(/max-h-\[70vh\]/);
   });
   it('B2: table min-width relaxed 1400 → 1180 (compact); old 1400 gone', () => {
     expect(tab).toMatch(/text-xs min-w-\[1180px\]/);

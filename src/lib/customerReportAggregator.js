@@ -23,6 +23,7 @@
 //   - AR15 idempotent — pure function of (customers, sales, filters)
 
 import { roundTHB, dateRangeFilter, sortBy } from './reportsUtils.js';
+import { resolveCustomerHN } from './customerDisplayName.js'; // V131 — canonical HN (hn_no); AV150
 
 /* ─── Identity helpers ───────────────────────────────────────────────────── */
 
@@ -34,7 +35,7 @@ function deriveName(c) {
 }
 
 function deriveHN(c) {
-  return c?.proClinicHN || c?.hn || c?.patientData?.proClinicHN || '';
+  return resolveCustomerHN(c); // V131 — was proClinicHN||hn||pd.proClinicHN (all empty → blank); hn_no is the real field
 }
 
 function deriveCustomerId(c) {

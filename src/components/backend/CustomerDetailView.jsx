@@ -14,6 +14,10 @@ import {
   Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard, Building2,
   ClipboardCheck, Link
 } from 'lucide-react';
+// V131 (2026-05-28) — canonical HN resolver. The header + pickers + search read
+// `customer.proClinicHN` which is empty for ALL real customers (HN lives in
+// hn_no) → no HN ever showed. resolveCustomerHN walks the shapes incl. hn_no. AV150.
+import { resolveCustomerHN } from '../../lib/customerDisplayName.js';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
   getCustomerSales, listenToCustomerSales,
@@ -426,7 +430,7 @@ export default function CustomerDetailView({
   }, [customerId]);
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
-  const hn = customer?.proClinicHN || '';
+  const hn = resolveCustomerHN(customer); // V131 — was customer?.proClinicHN (always empty → HN badge never showed)
 
   // Phase BS — resolve customer's "branch of creation" name. Uses the FULL
   // (unscoped) branches list from useSelectedBranch so customers tagged with
@@ -1880,7 +1884,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
   const filteredCust = customers.filter(c => {
     if (!custSearch) return true;
     const n = `${c.patientData?.prefix || ''} ${c.patientData?.firstName || ''} ${c.patientData?.lastName || ''}`.toLowerCase();
-    return n.includes(custSearch.toLowerCase()) || (c.proClinicHN || '').toLowerCase().includes(custSearch.toLowerCase());
+    return n.includes(custSearch.toLowerCase()) || resolveCustomerHN(c).toLowerCase().includes(custSearch.toLowerCase()); // V131 — HN search via hn_no
   });
   const selectedStaff = staff.find(s => String(s.id) === staffId);
   const toName = selectedCust ? `${selectedCust.patientData?.prefix || ''} ${selectedCust.patientData?.firstName || ''} ${selectedCust.patientData?.lastName || ''}`.trim() : '';
@@ -1927,7 +1931,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
                     <button key={c.id || c.proClinicId} onClick={() => setSelectedCust(c)}
                       className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
                       <span className="text-[var(--tx-secondary)]">{cName}</span>
-                      <span className="text-[var(--tx-muted)] font-mono">{c.proClinicHN || ''}</span>
+                      <span className="text-[var(--tx-muted)] font-mono">{resolveCustomerHN(c)}</span>
                     </button>
                   );
                 })}
@@ -1935,7 +1939,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
             )}
             {selectedCust && (
               <div className={`mt-2 rounded-lg px-3 py-2 flex items-center justify-between border ${isDark ? 'bg-purple-900/10 border-purple-700/30' : 'bg-purple-50 border-purple-200'}`}>
-                <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>{toName} <span className="font-mono text-[var(--tx-muted)]">{selectedCust.proClinicHN || ''}</span></span>
+                <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>{toName} <span className="font-mono text-[var(--tx-muted)]">{resolveCustomerHN(selectedCust)}</span></span>
                 <button onClick={() => setSelectedCust(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
               </div>
             )}

@@ -6,6 +6,33 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* =====================================================
+   V131-bis (2026-05-28) — APP CURSOR (arrow not I-beam) + CARET (hidden except inputs)
+   =====================================================
+   The browser shows the text I-beam mouse cursor over ANY selectable text
+   (default `cursor: auto`), which made the whole backend look like a giant
+   input field (user: "Text cursor ... ขึ้นได้ทุกที่ ไม่สวย"). Set the app's
+   baseline pointer to the default ARROW. Text stays fully selectable +
+   COPYABLE — `cursor` (pointer SHAPE) and `user-select` (selection) are
+   INDEPENDENT; user-select is left untouched. Real text-input fields keep the
+   I-beam; toggle/picker inputs + selects keep the pointer; buttons/links keep
+   their own pointer (Tailwind preflight / UA). AV152. */
+body { cursor: default; }
+input, textarea, [contenteditable="true"], [contenteditable=""] { cursor: text; }
+input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"],
+input[type="file"], input[type="date"], input[type="time"], input[type="datetime-local"],
+input[type="month"], input[type="week"], select { cursor: pointer; }
+
+/* CARET — when the browser has Caret Browsing (F7) enabled, it draws a blinking
+   text-insertion caret in EVERY text node of the page (the "| ทุกที่" the user
+   reported). A web app cannot toggle that browser setting, but we hide the caret
+   everywhere EXCEPT real text-input fields. caret-color is INHERITED, so the html
+   rule cascades app-wide on every page + refresh automatically; inputs restore it
+   so users still see where they type. caret-color does NOT affect text selection
+   or copy. AV152. */
+html { caret-color: transparent; }
+input, textarea, [contenteditable="true"], [contenteditable=""] { caret-color: auto; }
+
+/* =====================================================
    AUDIT 2026-04-26 — A11Y FOCUS-VISIBLE FALLBACK
    ===================================================== */
 /* The audit flagged 145 inputs/buttons across backend tabs that use

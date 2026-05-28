@@ -3498,3 +3498,28 @@ The sale-write chokepoint `createBackendSale` MUST stamp the real logged-in acto
 **Grep**: `backendClient.js` must define `_resolveSaleCreatedBy` with all 4 branches + query `be_staff` by `firebaseUid`; `createBackendSale` must stamp the 3 fields via `_creator`; `saleReportAggregator.buildSaleReportRow` must use the createdByName→createdById→legacy→first-seller chain.
 
 **Cross-link**: AV100/AV147 (same chokepoint family) · `tests/v130-sale-created-by.test.js` · `scripts/v130-backfill-sale-created-by.mjs` · `scripts/verify-v130-sale-created-by.mjs`.
+
+### AV150 — Customer HN display/search MUST use canonical resolveCustomerHN, never a hardcoded proClinicHN subset (V131, 2026-05-28)
+
+Every site that DISPLAYS or SEARCHES a customer's HN MUST use `resolveCustomerHN(c)` (from `customerDisplayName.js`), which walks all shape variants including **`hn_no`** — where 100% of real customers store their HN (real-prod diag 2026-05-28: 109/109 in `hn_no`; `proClinicHN`/`hn`/`patientData.hn` all empty). A hardcoded `c.proClinicHN || c.hn` (or `c.proClinicHN` alone) returns blank for every real customer → blank HN columns + hidden HN badge + dead HN search. Class-of-bug (V105/V108 walk-the-shapes family). Fixed sites: `saleReportAggregator` (report blank HN — 6 rows), `CustomerDetailView:hn` header badge + search + pickers, `customerReportAggregator.deriveHN`, `BulkPrintModal` printed HN, `CustomerListTab` search, `AppointmentFormModal` search + picker write/display.
+
+**Grep**: each of those files must `import { resolveCustomerHN }`; no `proClinicHN || hn` / `proClinicHN || ''` HN reads in DISPLAY/SEARCH code. **Sanctioned (already correct — check hn_no)**: `appointmentHubAggregator:59`, `CustomerCard:116`. **Write-mapping contexts** (`backendClient` hn_no↔proClinicHN, broker/walk-in flow) are out of scope.
+
+**Cross-link**: `tests/v131-hn-canonical-resolve.test.js` · `scripts/diag-hn-resolution.mjs`.
+
+### AV151 — Appointment detail MODAL customer name is a link to the customer detail tab (V131, 2026-05-28)
+
+The shared `AppointmentDetailBody` renders the customer name as a clickable link (→ `openCustomerInNewTab(appt.customerId)` = `?backend=1&customer=<id>`) ONLY when `onOpenCustomer` is supplied AND `appt.customerId` exists. The click-MODAL (`AppointmentDetailPopover`) supplies the handler; the hover PEEK does NOT (and is pointer-events:none); pick-later/walk-in appts (no customerId) stay plain text. Thai-culture: the link uses cyan, never red on a patient name.
+
+**Grep**: `AppointmentDetailBody` must guard `onOpenCustomer && appt.customerId`; `AppointmentDetailPopover` must import `openCustomerInNewTab` + pass `onOpenCustomer`. **Cross-link**: `tests/v131-appt-modal-clickable-name.test.jsx`.
+
+### AV152 — App-wide cursor=arrow + caret hidden except in real inputs; copy preserved (V131-bis, 2026-05-28)
+
+TWO related "stray text-cursor" concerns, both fixed in `index.css`, both leaving `user-select` UNTOUCHED (text stays selectable + copyable — cursor/caret and selection are independent CSS concerns):
+
+1. **Mouse I-beam** — `body { cursor: default; }` so the pointer over the app is the arrow, not the text I-beam the browser shows over every selectable text node. Real text-inputs keep `cursor: text`; toggle/picker inputs + `select` keep `cursor: pointer`; buttons/links keep pointer (Tailwind preflight / UA).
+2. **Blinking insertion caret from Caret Browsing (browser F7)** — THE actual user complaint (confirmed: F7 toggled it off). When a user has Chrome/Edge Caret Browsing enabled, the browser draws a blinking `|` insertion caret in EVERY text node, on every page, app-wide. **A web app cannot disable that browser setting (no web API)**, but `html { caret-color: transparent; }` hides the caret everywhere; `input, textarea, [contenteditable]` restore `caret-color: auto` so real text fields still show where you type. Applies on every page + refresh automatically.
+
+**Lesson (Rule Q-honest)**: the mouse I-beam (cursor) and the caret-browsing caret (caret-color) are DIFFERENT things — an initial diag that only measured `cursor` (and on the wrong page) wrongly concluded "mouse I-beam, not a caret." The caret-browsing caret is NOT reproducible in a clean test browser + is NOT fixable by `cursor` — only `caret-color` (or the user's F7). Verify caret issues with the user (they have the browser state) when a clean browser can't reproduce.
+
+**Grep**: `index.css` must contain `body { cursor: default; }` + `html { caret-color: transparent; }` + the input `cursor`/`caret-color` restore rules; must NOT add a global `body`/`html` `user-select: none` (would break copy). **Cross-link**: `tests/v131-bis-app-cursor.test.js`.

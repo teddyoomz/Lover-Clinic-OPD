@@ -32,6 +32,7 @@ import {
 // instead of in-page redirect. User: "เปิด Tab ของ Browser ใหม่... ไม่ใช่
 // redirection หน้าเดิมไป มันใช้ยาก".
 import { openCustomerInNewTab } from '../../lib/customerNavigation.js';
+import { resolveCustomerHN } from '../../lib/customerDisplayName.js'; // V131 — canonical HN (hn_no); AV150
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock).
 import { CustomerOption } from '../CustomerOption.jsx';
@@ -501,7 +502,7 @@ export default function AppointmentFormModal({
     const q = customerSearch.toLowerCase();
     return customers.filter(c => {
       const name = `${c.patientData?.prefix || ''} ${c.patientData?.firstName || ''} ${c.patientData?.lastName || ''}`.toLowerCase();
-      const hn = (c.proClinicHN || '').toLowerCase();
+      const hn = resolveCustomerHN(c).toLowerCase(); // V131 — HN search via hn_no
       const phone = (c.patientData?.phone || '').toLowerCase();
       return name.includes(q) || hn.includes(q) || phone.includes(q);
     }).slice(0, 50);
@@ -1226,7 +1227,7 @@ export default function AppointmentFormModal({
                     {filteredCustomers.map(c => {
                       const name = `${c.patientData?.prefix||''} ${c.patientData?.firstName||''} ${c.patientData?.lastName||''}`.trim();
                       return (
-                        <button key={c.id} onClick={() => { update({ customerId: c.proClinicId || c.id, customerName: name, customerHN: c.proClinicHN || '' }); setCustomerSearch(''); }}
+                        <button key={c.id} onClick={() => { update({ customerId: c.proClinicId || c.id, customerName: name, customerHN: resolveCustomerHN(c) }); setCustomerSearch(''); }}
                           className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between">
                           {/* Task 9 LR-4 (2026-05-15) — CustomerOption surfaces 🟢/⚪️ LINE
                               badge so admin can see per-branch LINE linkage before
@@ -1240,7 +1241,7 @@ export default function AppointmentFormModal({
                             contextBranchId={selectedBranchId}
                             nameClassName="text-[var(--tx-secondary)]"
                           />
-                          <span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN || ''}</span>
+                          <span className="text-xs font-mono text-[var(--tx-muted)]">{resolveCustomerHN(c)}</span>
                         </button>
                       );
                     })}
