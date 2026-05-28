@@ -2,7 +2,7 @@
 updated_at: "2026-05-28 EOD+6 — V132 + V133/V133-bis + V134 (reports-revenue: course category, chart, deposit display) SHIPPED + DEPLOYED + prod-verified."
 status: "Deployed + live. Reports-revenue (6c99a3d7) deployed. Extended-suite spawned WIP now committed + runnable (4419 pass / 280 pre-existing stale — follow-up). Default suite 15154/0 = deploy gate, unaffected."
 branch: "master"
-last_commit: "6c99a3d7 (V132+V133+V134). EOD docs commit on top."
+last_commit: "64c75247 (docs). Code: 6c99a3d7 (V132+V133+V134, DEPLOYED) + 11793503 (extended-suite runnable, not deployed — test/config only)."
 tests: "NO re-run at session-end (per rule). This session: default suite 15154 pass / 0 fail + build clean; phase10-revenue 27/27 (extended, via temp config); real-prod Rule R diags (categories surface; money conserved, no fractions); chart full-bar+colors+100%-legend measured in real browser. Screenshot tool timed out (infra) — DOM-measured instead."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "6c99a3d7 LIVE (vercel --prod, aliased) — V132/V133/V133-bis/V134 all live."

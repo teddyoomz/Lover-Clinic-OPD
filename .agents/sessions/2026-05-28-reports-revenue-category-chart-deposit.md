@@ -33,16 +33,16 @@ Four `/systematic-debugging` rounds, all on `tab=reports-revenue`, driven by the
 
 ## Next Todo
 - Idle / await user.
-- ⚠ (user) review the spawned extended-suite WIP — run/verify/commit OR discard. Chip spawned.
+- Extended-suite WIP HANDLED this session: committed (`11793503` config + 148 import fixes) + runnable (`npm run test:extended` → 4419 pass / 280 PRE-EXISTING stale). _tmp codemod deleted. **Follow-up (large): triage/delete the 280 obsolete extended assertions** (frozen since session-11 + ~1yr refactors). NOT deploy-gating (npm test = 15154/0).
 - (user) L1 hands-on: reports-revenue categories real / chart full-bar+colors / table gross + footer net.
 
 ## Resume Prompt
 ```text
 Resume LoverClinic — continue from 2026-05-28 EOD+6.
 Read in order BEFORE any tool call: CLAUDE.md · SESSION_HANDOFF.md (master=6c99a3d7, prod=6c99a3d7) · .agents/active.md · .claude/rules/00-session-start.md · this checkpoint.
-Status: master=6c99a3d7 deployed; prod LIVE @ lover-clinic-app.vercel.app; default suite 15154/0 + build clean (this session); reports-revenue V132/V133/V133-bis/V134 live.
+Status: master=64c75247 (docs); prod=6c99a3d7 LIVE @ lover-clinic-app.vercel.app; default suite 15154/0 + build clean; reports-revenue V132/V133/V133-bis/V134 live. Extended suite now runnable (4419 pass / 280 stale).
 Next: idle.
-Outstanding (user-triggered): ⚠ spawned extended-suite WIP uncommitted in working tree (~150 tests/extended + package.json + vitest.extended.config.js + scripts/_tmp-fix-extended-imports.mjs) — review/commit/discard, NOT verified, NOT deployed · L1 hands-on reports-revenue.
+Outstanding (user-triggered): extended-suite 280 PRE-EXISTING stale tests — follow-up triage/delete (large; NOT deploy-gating, npm test=15154/0) · L1 hands-on reports-revenue (categories real / chart full-bar+colors / table gross + footer net).
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Rule Q real-adversarial verify; Probe-Deploy-Probe for rules.
 /session-start
 ```
