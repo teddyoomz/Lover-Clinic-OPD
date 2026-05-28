@@ -1,6 +1,6 @@
 ---
 updated_at: "2026-05-28 EOD+6 — V132 + V133/V133-bis + V134 (reports-revenue: course category, chart, deposit display) SHIPPED + DEPLOYED + prod-verified."
-status: "Deployed + live. master = docs commit on top of 6c99a3d7 (deployed). ⚠ working tree holds UNVERIFIED extended-suite WIP from a spawned task — see Outstanding."
+status: "Deployed + live. Reports-revenue (6c99a3d7) deployed. Extended-suite spawned WIP now committed + runnable (4419 pass / 280 pre-existing stale — follow-up). Default suite 15154/0 = deploy gate, unaffected."
 branch: "master"
 last_commit: "6c99a3d7 (V132+V133+V134). EOD docs commit on top."
 tests: "NO re-run at session-end (per rule). This session: default suite 15154 pass / 0 fail + build clean; phase10-revenue 27/27 (extended, via temp config); real-prod Rule R diags (categories surface; money conserved, no fractions); chart full-bar+colors+100%-legend measured in real browser. Screenshot tool timed out (infra) — DOM-measured instead."
@@ -26,5 +26,5 @@ firestore_rules_version: "UNCHANGED — frontend/lib/CSS only (no rules/storage/
 Idle / await user.
 
 ## Outstanding user-triggered actions
-- ⚠ **Spawned-task WIP in working tree** (extended-suite fix) — UNVERIFIED this session. Review/run/commit OR discard separately. NOT deployed. Chip was spawned for it.
+- **Extended suite (`tests/extended/`) — handled this session**: spawned-task fix committed (NEW `vitest.extended.config.js` + `package.json` `--config` + 148 import-path fixes `../`→`../../`). `npm run test:extended` RUNS now → **4419 pass / 280 fail**. The 280 = PRE-EXISTING stale-assertion drift (suite frozen since session-11; ~1yr refactors: V50/branch-scope/V132/Phase28/marketing). NOT import errors, NOT deploy-gating. **Follow-up (large): triage → rewrite/delete obsolete extended assertions.** Default `npm test` = 15154/0 green, unaffected.
 - L1 hands-on (auth-gated): reports-revenue tab — categories show real names; chart full-bar + distinct colors + legend 100%; table gross-per-row + footer net.
