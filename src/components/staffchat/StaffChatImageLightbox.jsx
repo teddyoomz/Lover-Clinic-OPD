@@ -341,7 +341,12 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           className="absolute left-0 top-16 bottom-16 w-20 flex items-center justify-start pl-3 z-10 text-white group disabled:opacity-30"
           aria-label="รูปก่อนหน้า"
         >
-          <span className="w-11 h-11 rounded-full bg-white/15 group-hover:bg-white/30 group-active:bg-white/40 flex items-center justify-center transition-colors">
+          {/* V140 (2026-05-31) — dark ring-backed circle so the arrow is visible
+              against ANY image colour. Pre-V140 bg-white/15 + white icon vanished
+              on light/white images (user: "ปุ่มกลืนกับรูป"). Mirrors the
+              ImageLightbox bg-black/80 reference; white ring keeps it visible on
+              dark images too. AV161. */}
+          <span className="w-11 h-11 rounded-full bg-black/55 ring-1 ring-white/40 shadow-lg group-hover:bg-black/75 group-active:bg-black/85 flex items-center justify-center transition-colors">
             <ChevronLeft size={26} />
           </span>
         </button>
@@ -408,7 +413,12 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           className="absolute right-0 top-16 bottom-16 w-20 flex items-center justify-end pr-3 z-10 text-white group disabled:opacity-30"
           aria-label="รูปถัดไป"
         >
-          <span className="w-11 h-11 rounded-full bg-white/15 group-hover:bg-white/30 group-active:bg-white/40 flex items-center justify-center transition-colors">
+          {/* V140 (2026-05-31) — dark ring-backed circle so the arrow is visible
+              against ANY image colour. Pre-V140 bg-white/15 + white icon vanished
+              on light/white images (user: "ปุ่มกลืนกับรูป"). Mirrors the
+              ImageLightbox bg-black/80 reference; white ring keeps it visible on
+              dark images too. AV161. */}
+          <span className="w-11 h-11 rounded-full bg-black/55 ring-1 ring-white/40 shadow-lg group-hover:bg-black/75 group-active:bg-black/85 flex items-center justify-center transition-colors">
             <ChevronRight size={26} />
           </span>
         </button>

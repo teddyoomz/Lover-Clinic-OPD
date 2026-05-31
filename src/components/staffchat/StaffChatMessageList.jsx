@@ -15,9 +15,19 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   const endRef = useRef(null);
   const bottomSentinelRef = useRef(null);
 
+  // V140 (2026-05-31) — auto-scroll trigger MUST be the latest-message identity,
+  // NOT messages.length. The listener caps at 50 (useStaffChat limitCount:50), so
+  // once the thread has ≥50 messages a new send returns a fresh last-50 array
+  // whose LENGTH stays 50 → `[messages.length]` never changes → the scroll effect
+  // stopped firing (user: "พิมพ์แล้วไม่เด้งล่างสุด, ต้องเลื่อนเอง"). Keying on the
+  // last id fires on every genuinely-new message (incl. own sends at the cap) and
+  // skips redundant scrolls when the same snapshot re-renders. ChatPanel (customer
+  // chat) is the working reference — it deps on [messages] (array identity). AV160.
+  const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages.length]);
+  }, [lastMessageId]);
 
   // V82 (2026-05-17) — IntersectionObserver on the bottom sentinel. Fires
   // onScrolledToBottom() when the sentinel becomes visible in the scroll
@@ -47,7 +57,7 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
     return () => {
       obs.disconnect();
     };
-  }, [onScrolledToBottom, messages.length]);
+  }, [onScrolledToBottom, lastMessageId]);
 
   if (messages.length === 0) {
     return (

@@ -14,7 +14,7 @@ import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/
 // saveTarget default changed below from 'proclinic' to 'backend' so admin/
 // backend code paths converge — one unified system, branch-aware via BSA.
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster, buildReDeductListWithCarryForward } from '../lib/treatmentBuyHelpers.js';
 import { chartEntryForPersist } from '../lib/tabletChartTools.js';
 import { aaAccent } from '../lib/themeAccent.js';
 // 2026-05-25 — Storage-ref for ALL treatment blobs (photos / lab images / PDFs).
@@ -2589,9 +2589,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Reversal on edit: split old deductions into existing + purchased so the reversal algorithm
         // hits the same entry the deduction touched (purchased items go to the newest match, which is
         // what preferNewest: true gives us).
-        const existingDeductions = (backendDetail.courseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
+        const freshExisting = (backendDetail.courseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
         const oldExisting = (existingCourseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
         const oldPurchased = (existingCourseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
+        // V142 (2026-05-31) — edit-resave SYMMETRY. The reverse below refunds
+        // oldExisting/oldPurchased; the re-deduct MUST re-apply every reversed
+        // deduction whose row is STILL selected, else a 2nd+ save un-deducts a
+        // used course (real-prod LC-26000115: courseItems serialized [] on
+        // reload → reverse without re-deduct → balance reverted to full).
+        // Create-mode has no reverse → fresh list only (no behavior change).
+        const existingDeductions = isEdit
+          ? buildReDeductListWithCarryForward(freshExisting, oldExisting, selectedCourseItems)
+          : freshExisting;
         // V26.0 Phase 26.0b — doctor-save gate: skip reverseCourseDeduction.
         // Doctor-save doesn't touch course balances on save (skips deductCourseItems
         // below). Mirror: skip the reverse so we don't refund a balance that was
@@ -3259,7 +3268,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Doctor-save doesn't run the auto-sale chain that assigns these purchased
         // courses, so the deduct path is moot. Admin's later finalize save re-runs
         // BOTH the assignCourseToCustomer chain AND this purchased-deduction step.
-        const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
+        const freshPurchased = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
+        // V142 — symmetric re-deduct for PURCHASED courses (the primary bug
+        // surface: in-session `purchased-…` rowIds never match the regenerated
+        // deterministic `be-row-N` on edit-reload → Pass-1 miss → fresh list
+        // empty while the reverse refunded). Carry forward oldPurchased that is
+        // still selected so reverse + re-deduct net to the correct balance.
+        const purchasedDeductions = isEdit
+          ? buildReDeductListWithCarryForward(freshPurchased, oldPurchased, selectedCourseItems)
+          : freshPurchased;
         if (saveMode !== 'doctor' && saveMode !== 'vitals' && purchasedDeductions.length > 0) {
           // V104 (2026-05-19 LATE+3 EOD+1) — RIP silent-swallow.
           // Pre-V104: `catch (e) { console.warn(...); }` hid ALL deductCourseItems

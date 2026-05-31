@@ -154,6 +154,22 @@ export function kioskPatientToCanonical(d, opts = {}) {
     history_of_drug_allergy: allergiesStr,
     congenital_disease: underlyingStr,
 
+    // V141 (2026-05-31) — preserve the STRUCTURED visit-reason / chief-complaint
+    // dataset (not ONLY the folded `symptoms` string) so be_customers.patientData
+    // carries it under the SAME names the intake view ("สาเหตุที่มาพบแพทย์",
+    // AdminDashboard) + generateClinicalSummary ("Chief Complaint") read. Pre-V141
+    // these dropped → blank intake even though the customer filled them (proven:
+    // opd_sessions 100% have visitReasons, be_customers 0%). AV162.
+    // snake_case canonical keys (the canonical form is all snake_case so it does
+    // NOT leak camelCase onto the root be_customers doc — Phase 23.0 contract).
+    // buildPatientDataFromForm renames these → camelCase patientData keys the
+    // readers consume (visit_reasons → visitReasons, etc.).
+    visit_reasons: Array.isArray(reasons) ? reasons : [],
+    visit_reason_other: d.visitReasonOther || '',
+    hrt_goals: Array.isArray(d.hrtGoals) ? d.hrtGoals : [],
+    hrt_trans_type: d.hrtTransType || '',
+    hrt_other_detail: d.hrtOtherDetail || '',
+
     // Referral source — kiosk howFoundUs maps to source (top of FIELD_BOUNDS).
     source: sourceStr,
 

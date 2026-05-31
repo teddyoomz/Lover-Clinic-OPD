@@ -481,6 +481,63 @@ export function isPurchasedSessionRowId(rowId) {
 }
 
 /**
+ * V142 (2026-05-31) — edit-resave course-deduction SYMMETRY.
+ *
+ * User bug (real prod LC-26000115 / BT-1780203508072): "ซื้อแล้วตัดคอร์สเลย
+ * แล้วคอร์สมันไม่ตัดออกจากตัว". be_course_changes recorded -1 (qtyAfter
+ * "0 / 1 ครั้ง") yet customer.courses stayed "1 / 1 ครั้ง" (full).
+ *
+ * Root cause: on EDIT, TreatmentFormPage.handleSubmit REVERSES the
+ * previously-saved deductions (`oldReversed`, from existingCourseItems via
+ * reverseCourseDeduction) then RE-DEDUCTS the freshly serialized list
+ * (`fresh`, from backendDetail.courseItems). The fresh serialization MISSES a
+ * previously-deducted course on edit-reload because:
+ *   (a) purchased-in-session rowIds (`purchased-…`) are regenerated to
+ *       deterministic `be-row-N` by mapRawCoursesToForm → Pass-1 by-rowId
+ *       lookup misses;
+ *   (b) the courseItems→treatmentItems restore drops productId → the V101
+ *       Pass-2 by-productId rescue can't run;
+ *   (c) a fully-consumed course sits at remaining 0 → Pass-2 `rem>0` gate
+ *       skips it.
+ * The reverse still refunds it (reverseCourseDeduction targets by
+ * courseName+productName+courseIndex — reliable), so the NET is
+ * REFUND-WITHOUT-REDEDUCT → the balance reverts to full. A subsequent (2nd+)
+ * save of such a treatment silently un-deducts a course that was used.
+ *
+ * Fix: the re-deduct list MUST re-apply every reversed deduction whose row is
+ * STILL SELECTED for deduction (the user did NOT un-check / remove it), so
+ * reverse + re-deduct are symmetric. Carries forward `oldReversed` entries the
+ * fresh list does not already cover (by rowId OR courseName+productName).
+ * `selectedRowIds` gates it: carrying forward an UN-selected row would
+ * re-deduct a course the user deliberately removed.
+ *
+ * Net effect of reverse(old) + deduct(fresh ∪ carried): a still-used course
+ * ends at the same remaining as before the edit (refund then re-deduct), a
+ * removed course ends refunded (un-deducted) — both correct. No
+ * double-deduction: covered fresh entries are excluded from the carry-forward.
+ *
+ * @param {Array} fresh - freshly serialized deductions (backendDetail.courseItems subset)
+ * @param {Array} oldReversed - previously-saved deductions that were reversed (existingCourseItems subset)
+ * @param {Set|Array} selectedRowIds - rowIds still selected for deduction (selectedCourseItems)
+ * @returns {Array} re-deduct list = fresh ∪ carried-forward(oldReversed)
+ */
+export function buildReDeductListWithCarryForward(fresh, oldReversed, selectedRowIds) {
+  const f = Array.isArray(fresh) ? fresh : [];
+  const old = Array.isArray(oldReversed) ? oldReversed : [];
+  const selected = selectedRowIds instanceof Set
+    ? selectedRowIds
+    : new Set(Array.isArray(selectedRowIds) ? selectedRowIds : []);
+  const coveredByFresh = (od) => f.some(c =>
+    (od.rowId != null && c.rowId != null && String(c.rowId) === String(od.rowId)) ||
+    (!!od.courseName
+      && c.courseName === od.courseName
+      && String(c.productName || '') === String(od.productName || ''))
+  );
+  const carried = old.filter(od => selected.has(od.rowId) && !coveredByFresh(od));
+  return [...f, ...carried];
+}
+
+/**
  * Phase 12.2b follow-up (2026-04-24): resolve a purchased course item
  * into the shape `assignCourseToCustomer` expects, preferring the
  * doctor's in-session picks over the master options list.

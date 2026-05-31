@@ -1,31 +1,31 @@
 ---
-updated_at: "2026-05-31 EOD+3 — V140 (staff-chat scroll+lightbox) + V141 (visitReasons preserve) DONE+verified, UNCOMMITTED/HELD. V139 deployed earlier this session."
-status: "V140 + V141 code done + full-verified but NOT committed/deployed (user ran /session-end without authorizing commit/deploy/heal). prod = 3342a9f0 (V138+V139) LIVE."
+updated_at: "2026-05-31 EOD+4 — V142 (course-deduct edit-resave symmetry) DONE+verified via real-prod L2. UNCOMMITTED/HELD on top of V140+V141."
+status: "V142 fix done + REAL-PROD L2 verified (bug reproduced + fix proven with SHIPPED functions). NOT committed/deployed/healed (all gated). prod = 3342a9f0 (V138+V139)."
 branch: "master"
-last_commit: "dbb5c4c9 (EOD docs). prod code = 3342a9f0 (V138+V139 deployed+healed). V140 + V141 SOURCE uncommitted in working tree."
-tests: "Full vitest 15336/0 (700 files) + build clean (this session's last run; session-end reuses — NOT re-run). V140 8/0 + lightbox/chat families 173/0; V141 9/0 + mapper families 157/0. V141 heal dry-run 109/113 recoverable."
+last_commit: "0d5e278f (EOD+3 docs). prod code = 3342a9f0. V140 + V141 + V142 SOURCE uncommitted in working tree."
+tests: "Full vitest 15356/0 (+20 V142). V142 unit 20/0 + TRUE-L2 real-prod e2e 10/0 (bug reproduced + fix verified w/ shipped fns) + targeted course/deduct regression 543/0. Build clean. Heal dry-run: LC-26000115 (3 courses) healable + LC-26000009 (1) ambiguous-manual."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "3342a9f0 LIVE (V138 + V139). V140 + V141 NOT deployed."
-firestore_rules_version: "UNCHANGED — V140 + V141 frontend/lib only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
+production_commit: "3342a9f0 LIVE (V138 + V139). V140 + V141 + V142 NOT deployed."
+firestore_rules_version: "UNCHANGED — V142 frontend/lib only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
 ---
 
-# Active Context — V140 + V141 (2026-05-31 EOD+3) — HELD
+# Active Context — V142 (2026-05-31 EOD+4) — HELD
 
 ## State
-- 2× `/systematic-debugging`. Both DONE + fully verified, **UNCOMMITTED/HELD** (user ended session without authorizing commit/deploy/heal). prod unchanged = 3342a9f0 (V138+V139, deployed earlier this session).
-- V139 (+V138) was committed + deployed + healed earlier THIS session (`3342a9f0`); V140 + V141 stack on top in the working tree.
+- `/systematic-debugging` on a user-reported course-deduction bug (real prod LC-26000115 / BT-1780203508072). DONE + verified by **real-prod L2** (the bug was reproduced AND the fix verified with the SHIPPED `assign/deduct/reverse` functions — NOT mocks/simulate, addressing the exact Rule-Q-honest failure the user was furious about).
+- UNCOMMITTED/HELD on top of the held V140 + V141 (3 features in the working tree).
 
-## What this session shipped (detail → checkpoint 2026-05-31-v140-v141-chat-scroll-lightbox-visitreasons.md)
-- **V140 Bug1** — staff-chat auto-scroll froze at the 50-msg cap (`StaffChatMessageList` effect keyed on `[messages.length]`; listener `limitCount:50`) → key on `lastMessageId`. **AV160**.
-- **V140 Bug2** — lightbox nav arrows `bg-white/15` invisible on white images → dark `bg-black/55 ring-1 ring-white/40` (×2, prev+next). Rule Q-vis screenshot proven on all colors. **AV161**.
-- **V141** — kiosk intake→be_customers conversion folded `visitReasons`→`symptoms` + dropped the rest → intake "สาเหตุที่มาพบแพทย์" blank (Rule R: opd_sessions 100% have it, be_customers 0%). Fixed the 3-mapper triangle (kioskPatientToCanonical + buildPatientDataFromForm + buildFormFromCustomer; snake_case canonical). **AV162**. Form already REQUIRES it (no fill-bug). Heal dry-run 109/113 recoverable from symptoms.
+## What this session fixed (detail → checkpoint 2026-05-31-v142-course-deduct-edit-resave-symmetry.md)
+- **Root cause**: edit-RESAVE reverse/re-deduct ASYMMETRY. On a 2nd+ save, `handleSubmit` reverses the prior course deduction (`oldPurchased`) but the fresh re-deduct serialization comes up EMPTY for purchased courses (in-session `purchased-…` rowIds regenerate to `be-row-N` → Pass-1 miss; productId stripped → Pass-2 skip; rem=0 → Pass-2 gate). Refund-without-rededuct → balance reverts to full. (Audit kept the stale "0/1"; customer.courses showed "1/1".)
+- **Fix**: NEW `buildReDeductListWithCarryForward` (treatmentBuyHelpers.js) re-applies every reversed deduction still selected → reverse + re-deduct symmetric. TFP wires both sites, create-mode bypassed. **AV163**.
+- **Stock parallel**: investigated, NOT affected (gated by `hasStockChange` + `_resolveProductIdByName`).
 
 ## Next action
-Idle / await user. When authorized: commit V140+V141 → `vercel --prod` (frontend-only, no Probe-Deploy-Probe) → V141 heal `--apply` (109 customers).
+Idle / await user. When authorized: commit (V140+V141+V142) → `vercel --prod` (frontend-only) → heal `--apply` (LC-26000115, AFTER deploy) → L1.
 
 ## Outstanding user-triggered actions
-- **Commit + push** V140 + V141 source (6 mod + 4 new — frontend/lib + scripts + tests).
+- **Commit + push** V140 + V141 + V142 (ask if split desired).
 - **Deploy** (`vercel --prod`; V18 needs "deploy").
-- **V141 heal `--apply`** (Rule M — 109 be_customers restore visitReasons from symptoms; dry-run passed).
-- **L1 hands-on** prod (V140 chat scroll + lightbox nav; V141 intake visit-reason after deploy+heal).
+- **V142 heal `--apply`** (Rule M — LC-26000115 3 courses → 0/1; LC-26000009 manual review). Run AFTER deploy.
+- **L1 hands-on**: buy course in TFP → use → save → re-open → save again → course stays deducted.
 - Pre-existing (large, NOT deploy-gating): extended-suite 280 stale tests.

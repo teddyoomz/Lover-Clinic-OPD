@@ -388,6 +388,16 @@ function buildPatientDataFromForm(form) {
   if (form.history_of_food_allergy) pd.foodAllergy = form.history_of_food_allergy;
   if (typeof form.pregnanted === 'boolean') pd.pregnanted = form.pregnanted;
 
+  // V141 (2026-05-31) — structured visit-reason / chief-complaint dataset carried
+  // from the kiosk conversion. The intake view + generateClinicalSummary read
+  // these by these names; pre-V141 they were dropped from patientData → blank
+  // "สาเหตุที่มาพบแพทย์" even though the customer filled them. AV162.
+  if (Array.isArray(form.visit_reasons) && form.visit_reasons.length) pd.visitReasons = form.visit_reasons;
+  if (form.visit_reason_other) pd.visitReasonOther = form.visit_reason_other;
+  if (Array.isArray(form.hrt_goals) && form.hrt_goals.length) pd.hrtGoals = form.hrt_goals;
+  if (form.hrt_trans_type) pd.hrtTransType = form.hrt_trans_type;
+  if (form.hrt_other_detail) pd.hrtOtherDetail = form.hrt_other_detail;
+
   // Emergency contacts (camelCase aliases)
   if (form.contact_1_firstname) pd.emergencyName = form.contact_1_firstname + (form.contact_1_lastname ? ` ${form.contact_1_lastname}` : '');
   if (form.contact_1_telephone_number) pd.emergencyPhone = form.contact_1_telephone_number;
@@ -499,6 +509,13 @@ function buildFormFromCustomer(customer) {
     history_of_food_allergy: pick('history_of_food_allergy', 'foodAllergy'),
     history_of_food_allergy_en: pick('history_of_food_allergy_en'),
     note: pick('note', 'note'),
+    // V141 — round-trip the visit-reason dataset (snake_case form keys ← camelCase
+    // patientData) so a backend edit re-save does NOT clobber it. AV162.
+    visit_reasons: Array.isArray(pd.visitReasons) ? pd.visitReasons : [],
+    visit_reason_other: pick('visit_reason_other', 'visitReasonOther'),
+    hrt_goals: Array.isArray(pd.hrtGoals) ? pd.hrtGoals : [],
+    hrt_trans_type: pick('hrt_trans_type', 'hrtTransType'),
+    hrt_other_detail: pick('hrt_other_detail', 'hrtOtherDetail'),
     like_note: pick('like_note', 'likeNote'),
     dislike_note: pick('dislike_note', 'dislikeNote'),
     receipt_type: pick('receipt_type', 'receiptType'),

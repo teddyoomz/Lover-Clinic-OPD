@@ -284,6 +284,9 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
         "firstname": "สมหญิง",
         "gender": "F",
         "history_of_drug_allergy": "Penicillin",
+        "hrt_goals": [],
+        "hrt_other_detail": "",
+        "hrt_trans_type": "",
         "lastname": "ใจดี",
         "line_id": "",
         "nickname": "",
@@ -299,6 +302,8 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
         "sub_district": "",
         "symptoms": "",
         "telephone_number": "0812345678",
+        "visit_reason_other": "",
+        "visit_reasons": [],
       }
     `);
   });
@@ -331,6 +336,9 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
         "firstname": "John",
         "gender": "M",
         "history_of_drug_allergy": "",
+        "hrt_goals": [],
+        "hrt_other_detail": "",
+        "hrt_trans_type": "",
         "lastname": "Doe",
         "line_id": "",
         "nickname": "",
@@ -347,6 +355,8 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
         "sub_district": "",
         "symptoms": "",
         "telephone_number": "0998765432",
+        "visit_reason_other": "",
+        "visit_reasons": [],
       }
     `);
   });
@@ -376,6 +386,9 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
         "firstname": "Min",
         "gender": "",
         "history_of_drug_allergy": "",
+        "hrt_goals": [],
+        "hrt_other_detail": "",
+        "hrt_trans_type": "",
         "lastname": "Imal",
         "line_id": "",
         "nickname": "",
@@ -391,6 +404,8 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
         "sub_district": "",
         "symptoms": "",
         "telephone_number": "0800000000",
+        "visit_reason_other": "",
+        "visit_reasons": [],
       }
     `);
   });
