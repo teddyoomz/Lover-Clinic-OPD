@@ -40,3 +40,12 @@ describe('② wiring — AppointmentHubView today sort', () => {
     expect(src).toMatch(/activeTab === 'today'\s*\n?\s*\?\s*sortApptsConfirmedFirst/);
   });
 });
+
+describe('① card tint — AppointmentHubRowCard', () => {
+  const src = readFileSync('src/components/admin/AppointmentHubRowCard.jsx', 'utf8');
+  test('confirmed → sky surface; else var(--bg-card)', () => {
+    expect(src).toMatch(/isConfirmedHighlight\s*=\s*effectiveStatus === 'confirmed'/);
+    expect(src).toMatch(/border-sky-500\/50 bg-sky-500\/\[0\.06\]/);
+    expect(src).toMatch(/border \$\{surfaceCls\}/);
+  });
+});

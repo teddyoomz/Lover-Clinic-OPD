@@ -116,6 +116,13 @@ export default function AppointmentHubRowCard({
   // → badge shows "ยืนยันแล้ว · รอการรักษา" matching the waiting-queue state.
   const effectiveStatus = appt.serviceCompletedAt ? 'done' : rawStatus;
   const status = effectiveStatus;
+  // ① (2026-05-31) — confirmed (not yet served) gets a clear sky-tinted box
+  // (matches the existing sky "ยืนยันแล้ว" accent/chip). Cosmetic only — uses the
+  // already-derived effectiveStatus; no handler/state/prop change.
+  const isConfirmedHighlight = effectiveStatus === 'confirmed';
+  const surfaceCls = isConfirmedHighlight
+    ? 'border-sky-500/50 bg-sky-500/[0.06]'
+    : 'border-[var(--bd)] bg-[var(--bg-card)]';
   const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
   const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);
   const baseMissed = isMissedAppointment(appt, now);
@@ -157,7 +164,7 @@ export default function AppointmentHubRowCard({
 
   return (
     <div
-      className={`relative border border-[var(--bd)] rounded-2xl overflow-hidden bg-[var(--bg-card)] shadow-sm mb-3 flex flex-col transition-all duration-200 hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10${isFilledPending ? ' card-filled-pending' : ''}`}
+      className={`relative border ${surfaceCls} rounded-2xl overflow-hidden shadow-sm mb-3 flex flex-col transition-all duration-200 hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10${isFilledPending ? ' card-filled-pending' : ''}`}
       data-testid="appt-hub-row"
       data-appt-id={appt.id}
       data-status-accent={accentKey}
