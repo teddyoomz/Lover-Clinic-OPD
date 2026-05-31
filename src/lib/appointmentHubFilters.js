@@ -138,3 +138,16 @@ export function subPillCountsForToday(appts, now = new Date()) {
   }
   return { waiting, completed };
 }
+
+// ① (2026-05-31) — confirmed-active appts to the TOP of the "today" list, then
+// the rest; each partition keeps the existing date+time ascending order. Pure;
+// does not mutate input. "confirmed-active" = status==='confirmed' AND not yet
+// service-completed (served rows leave the waiting queue / become 'done').
+export function sortApptsConfirmedFirst(appts) {
+  const list = Array.isArray(appts) ? appts : [];
+  const isConfirmedActive = (a) => !!a && a.status === 'confirmed' && !a.serviceCompletedAt;
+  return [
+    ...sortApptsByDateTimeAsc(list.filter(isConfirmedActive)),
+    ...sortApptsByDateTimeAsc(list.filter((a) => !isConfirmedActive(a))),
+  ];
+}
