@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat Jump-to-Latest Button — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    /* faithful panel mockup */
+    .panels{display:flex;gap:18px;flex-wrap:wrap;}
+    .pcol .t{font-weight:700;font-size:12px;margin-bottom:5px;}
+    .panel{--rose:#e11d48;--sky:#0ea5e9;--card:#0f0f0f;--surf:#0a0a0a;--in:#141414;--hov:#1a1a1a;--bds:#333;--bdd:#222;--tx:#e5e7eb;--mut:#6b7280;
+      width:250px;height:320px;background:var(--card);border:1px solid var(--bds);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
+    .hd{display:flex;justify-content:space-between;padding:6px 10px;background:var(--rose);color:#fff;font-size:11px;font-weight:700;}
+    .lst{flex:1;padding:7px 10px;display:flex;flex-direction:column;gap:6px;position:relative;}
+    .m{display:flex;flex-direction:column;max-width:84%;} .m.o{align-self:flex-start;} .m.s{align-self:flex-end;}
+    .nm{font-size:9px;font-weight:700;margin-bottom:1px;} .o .nm{color:var(--sky);} .s .nm{color:#f43f5e;}
+    .b{padding:5px 9px;border-radius:13px;font-size:12px;border:1px solid;color:var(--tx);}
+    .o .b{background:rgba(14,165,233,.2);border-color:rgba(14,165,233,.45);border-bottom-left-radius:4px;}
+    .s .b{background:rgba(244,63,94,.2);border-color:rgba(244,63,94,.45);border-bottom-right-radius:4px;}
+    .cmp{border-top:1px solid var(--bdd);background:var(--surf);padding:5px 8px;display:flex;gap:6px;align-items:center;}
+    .cmp .i{flex:1;height:24px;border-radius:6px;background:var(--in);border:1px solid var(--bdd);color:var(--mut);font-size:10px;display:flex;align-items:center;padding:0 8px;}
+    .cmp .sd{width:24px;height:24px;border-radius:6px;background:var(--rose);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;}
+    .jw{position:absolute;right:9px;bottom:8px;display:inline-block;}
+    .jb{width:32px;height:32px;border-radius:99px;background:var(--hov);border:1px solid var(--bds);color:var(--tx);display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 5px 14px rgba(0,0,0,.5);}
+    .cnt{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:var(--rose);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--card);}
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat Jump-to-Latest Button — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use HTML checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add a small floating "jump to latest" button to the staff-chat message list that appears when scrolled up, shows an unread-count badge (Messenger style), and smooth-scrolls to the latest message on tap.</p>
+  <p><strong>Architecture:</strong> Purely additive cosmetic-shell change to <code>StaffChatMessageList.jsx</code> — reuse the EXISTING <code>bottomSentinelRef</code> IntersectionObserver (piggyback an <code>isAtBottom</code> boolean; V82 read-cursor timing untouched), reuse <code>endRef.scrollIntoView</code> for the scroll, reuse <code>chat.unreadCount</code> for the badge. One-line prop thread in <code>StaffChatWidget.jsx</code>. No new module, no second observer, no Firestore/rules/storage/cron.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Tailwind (CSS-var tokens), lucide-react (<code>ChevronDown</code>, already a dep), Vitest + @testing-library/react.</p>
+  <p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-06-01-staffchat-jump-to-latest-design.html</code> (Q1=C circle+count · Q2=A appear-when-scrolled-up).</p>
+  <p><strong>⚠️ Code blocks are HTML-entity-escaped for browser rendering.</strong> When transcribing into real <code>.jsx</code>/<code>.js</code> files, decode entities back to literal characters (angle brackets, ampersands, <code>&amp;&amp;</code>, arrow functions).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Faithful real panel (exact <code>src/index.css</code> dark tokens + real component classes). Only the floating circle button is new.</p>
+<div class="mockup">
+  <div class="mockup-label">Desktop · dark · the 3 states the button renders in</div>
+  <div class="panels">
+    <div class="pcol"><div class="t">1 · At bottom → HIDDEN</div>
+      <div class="panel"><div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>🔔 ━</span></div>
+        <div class="lst">
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">คนไข้ห้อง 2 พร้อมแล้ว</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">รับทราบค่า 🙏</div></div>
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">ขอบคุณค่ะ</div></div>
+        </div><div class="cmp"><span>😀</span><span>📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div></div>
+    <div class="pcol"><div class="t">2 · Scrolled up, no new → bare circle</div>
+      <div class="panel"><div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>🔔 ━</span></div>
+        <div class="lst">
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">เคสเช้านี้รีพอร์ตแล้ว</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">โอเคค่า</div></div>
+          <div class="m o"><div class="nm">พี่เคาน์เตอร์</div><div class="b">ของเข้าสต็อกแล้ว</div></div>
+          <div class="jw"><div class="jb">⌄</div></div>
+        </div><div class="cmp"><span>😀</span><span>📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div></div>
+    <div class="pcol"><div class="t">3 · Scrolled up + new → circle + "N"</div>
+      <div class="panel"><div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>🔔 ━</span></div>
+        <div class="lst">
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">เคสเช้านี้รีพอร์ตแล้ว</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">โอเคค่า</div></div>
+          <div class="m o"><div class="nm">พี่เคาน์เตอร์</div><div class="b">ของเข้าสต็อกแล้ว</div></div>
+          <div class="jw"><div class="jb">⌄</div><span class="cnt">3</span></div>
+        </div><div class="cmp"><span>😀</span><span>📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div></div>
+  </div>
+  <p style="font-size:12px;color:#666;">Button: <code>absolute bottom-3 right-3 z-[5] w-9 h-9 rounded-full bg-[var(--bg-hover)] border border-[var(--bd-strong)]</code> + <code>ChevronDown</code>. Badge: <code>bg-rose-600</code> pill top-right, caps "9+". Auto dark+light via tokens.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">State machine — show / hide / reset</div>
+  <table>
+    <tr><th>#</th><th>Trigger</th><th>Source signal</th><th>Result</th></tr>
+    <tr><td>1</td><td>At bottom (pinned to latest)</td><td>observer → <code>isIntersecting=true</code> → <code>isAtBottom=true</code></td><td>Button NOT rendered</td></tr>
+    <tr><td>2</td><td>Scroll up</td><td>sentinel leaves → <code>isIntersecting=false</code> → <code>isAtBottom=false</code></td><td>Bare circle renders</td></tr>
+    <tr><td>3</td><td>New msg while scrolled up</td><td><code>chat.unreadCount &gt; 0</code></td><td>Circle + rose "N" badge ("9+" cap)</td></tr>
+    <tr><td>4</td><td>Tap button</td><td><code>endRef.scrollIntoView({behavior:'smooth',block:'end'})</code></td><td>Smooth-scroll to latest</td></tr>
+    <tr><td>5</td><td>Landed at bottom</td><td>sentinel intersects → existing <code>onScrolledToBottom()</code> → <code>markScrolledToBottom()</code> → cursor advances → <code>unreadCount→0</code></td><td>Badge clears + button hides (self-resetting)</td></tr>
+  </table>
+  <div class="mockup-label" style="margin-top:1em;">Data flow (NEW paths marked ★)</div>
+<pre>useStaffChat ──unreadCount──▶ StaffChatWidget ──★unreadCount prop──▶ StaffChatMessageList
+ bottomSentinelRef ─IntersectionObserver(EXISTING)─┬─▶ onScrolledToBottom()  (UNCHANGED → V82 cursor)
+                                                   └─▶ ★setIsAtBottom(isIntersecting)
+                                                            │  ★!isAtBottom && render &lt;button&gt; (count={unreadCount})
+                                                            │  onClick → endRef.scrollIntoView({smooth}) → (lands) → observer → markScrolledToBottom</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility / change</th></tr>
+  <tr><td>Modify: <code>src/components/staffchat/StaffChatMessageList.jsx</code></td><td>Add <code>isAtBottom</code> state; extend the existing observer to set it (both directions); relax the effect guard so the observer runs even without <code>onScrolledToBottom</code>; new <code>unreadCount=0</code> prop; wrap scroll div in a <code>relative</code> parent; render the jump button when <code>!isAtBottom</code>; import <code>ChevronDown</code>.</td></tr>
+  <tr><td>Modify: <code>src/components/staffchat/StaffChatWidget.jsx:79-85</code></td><td>Pass <code>unreadCount={chat.unreadCount}</code> to <code>&lt;StaffChatMessageList&gt;</code>.</td></tr>
+  <tr><td>Create: <code>tests/staffchat-jump-to-latest.test.jsx</code></td><td>RTL behavior (J1-J7) + source-grep locks (SG1-SG9) + Rule I flow-simulate (F1). Controllable IntersectionObserver mock + scrollIntoView mock (AV41 global restore).</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Write the failing behavior tests (J1-J7)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/staffchat-jump-to-latest.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Create the test file with the IO/scroll mocks + J1-J7</strong></label></div>
+<pre><code class="language-jsx">// tests/staffchat-jump-to-latest.test.jsx
+// (2026-06-01) Jump-to-latest button. RTL with a controllable IntersectionObserver
+// mock (jsdom has none) + scrollIntoView mock. Q1=C (circle+count, "9+" cap),
+// Q2=A (appear when scrolled up). V82 onScrolledToBottom (read cursor) preserved.
+import React from 'react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { StaffChatMessageList } from '../src/components/staffchat/StaffChatMessageList.jsx';
+
+// --- controllable IntersectionObserver mock ---
+let ioInstances = [];
+class MockIntersectionObserver {
+  constructor(cb) { this.cb = cb; ioInstances.push(this); }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+function fireIntersect(isIntersecting) {
+  act(() => { ioInstances.forEach(io => io.cb([{ isIntersecting }])); });
+}
+
+// AV41 — capture + restore globals (no cross-file leak).
+const ORIG_IO = global.IntersectionObserver;
+const ORIG_SCROLL = Element.prototype.scrollIntoView;
+beforeEach(() => {
+  ioInstances = [];
+  global.IntersectionObserver = MockIntersectionObserver;
+  Element.prototype.scrollIntoView = vi.fn();
+});
+afterAll(() => {
+  if (ORIG_IO === undefined) delete global.IntersectionObserver;
+  else global.IntersectionObserver = ORIG_IO;
+  Element.prototype.scrollIntoView = ORIG_SCROLL;
+});
+
+const now = Date.UTC(2026, 5, 1, 7, 0, 0); // createdAt as Firestore {toMillis}
+const MSGS = [
+  { id: 'm1', text: 'เคสเช้านี้รีพอร์ตแล้วนะ', deviceId: 'dev-other', displayName: 'หมอ A', createdAt: { toMillis: () =&gt; now } },
+  { id: 'm2', text: 'โอเคค่า', deviceId: 'dev-me', displayName: 'มิ้นท์', createdAt: { toMillis: () =&gt; now + 1000 } },
+  { id: 'm3', text: 'ของเข้าสต็อกแล้วน้า', deviceId: 'dev-other', displayName: 'พี่เคาน์เตอร์', createdAt: { toMillis: () =&gt; now + 2000 } },
+];
+
+function renderList(props = {}) {
+  return render(
+    &lt;StaffChatMessageList
+      messages={MSGS}
+      ownDeviceId="dev-me"
+      onScrolledToBottom={props.onScrolledToBottom || (() =&gt; {})}
+      unreadCount={props.unreadCount ?? 0}
+    /&gt;
+  );
+}
+
+describe('J1-J7 jump-to-latest button behavior', () =&gt; {
+  it('J1: hidden at bottom', () =&gt; {
+    renderList();
+    fireIntersect(true);
+    expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
+  });
+
+  it('J2: appears when scrolled up', () =&gt; {
+    renderList();
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest')).toBeTruthy();
+  });
+
+  it('J3: badge shows unreadCount when &gt;0 and scrolled up', () =&gt; {
+    renderList({ unreadCount: 3 });
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest-count').textContent).toBe('3');
+  });
+
+  it('J4: no badge when unreadCount=0 (bare circle)', () =&gt; {
+    renderList({ unreadCount: 0 });
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest')).toBeTruthy();
+    expect(screen.queryByTestId('staff-chat-jump-latest-count')).toBeNull();
+  });
+
+  it('J5: badge caps at "9+" for counts &gt; 9', () =&gt; {
+    renderList({ unreadCount: 15 });
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest-count').textContent).toBe('9+');
+  });
+
+  it('J6: clicking smooth-scrolls endRef to bottom', () =&gt; {
+    renderList();
+    fireIntersect(false);
+    Element.prototype.scrollIntoView.mockClear();
+    fireEvent.click(screen.getByTestId('staff-chat-jump-latest'));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'end' });
+  });
+
+  it('J7: returning to bottom hides button AND fires onScrolledToBottom (V82 preserved)', () =&gt; {
+    const onScrolledToBottom = vi.fn();
+    renderList({ onScrolledToBottom });
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest')).toBeTruthy();
+    fireIntersect(true);
+    expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
+    expect(onScrolledToBottom).toHaveBeenCalled();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run to verify it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staffchat-jump-to-latest.test.jsx</code></p>
+  <p>Expected: J2/J3/J5/J6/J7 FAIL (no <code>staff-chat-jump-latest</code> element — button not implemented yet). J1/J4 may pass trivially (button never renders). Suite RED overall.</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Commit the failing tests</strong></label></div>
+<pre><code class="language-bash">git add tests/staffchat-jump-to-latest.test.jsx
+git commit -m "test(staffchat): failing jump-to-latest behavior tests (J1-J7)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Implement the jump button in StaffChatMessageList</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/staffchat/StaffChatMessageList.jsx</code> (full replacement below)</li>
+    <li>Test: <code>tests/staffchat-jump-to-latest.test.jsx</code> (J1-J7)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Replace the file with this version</strong></label></div>
+  <p>Key changes vs current: (a) <code>useState</code> + <code>ChevronDown</code> import; (b) <code>isAtBottom</code> state default <code>true</code>; (c) observer effect drops the <code>onScrolledToBottom</code>-required guard, sets <code>isAtBottom</code> for every entry, fires <code>onScrolledToBottom</code> only on intersect; (d) <code>relative</code> wrapper around the (unchanged) scroll div; (e) the jump button when <code>!isAtBottom</code>. The auto-scroll effect + scroll div + <code>endRef</code> + <code>bottomSentinelRef</code> + day-group render stay verbatim.</p>
+<pre><code class="language-jsx">// src/components/staffchat/StaffChatMessageList.jsx
+// V73 (2026-05-16) — Scrollable list of messages, auto-scroll to bottom on new msg.
+// V73 Feature C (2026-05-16) — Forwards onReply to each message so hover Reply button fires.
+// V82 (2026-05-17) — Bottom sentinel + IntersectionObserver fires onScrolledToBottom
+//   when the user reaches the latest message. ChatPanel wires this to
+//   useStaffChat.markScrolledToBottom → advances the persistent read cursor.
+// (2026-05-26) Feature 1 — day separators. Feature 3 — onDelete unsend affordance.
+// (2026-06-01) Jump-to-latest button — reuses the SAME bottom-sentinel observer to
+//   drive an isAtBottom boolean; a floating ChevronDown button (Q1=C circle + rose
+//   unreadCount badge "9+" cap, Q2=A appear-when-scrolled-up) smooth-scrolls endRef
+//   to the latest message. V82 onScrolledToBottom timing is unchanged (still fires
+//   only on intersect). Additive only — no change to send/receive/read-cursor flow.
+import React, { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { StaffChatMessage } from './StaffChatMessage.jsx';
+import { groupMessagesByDay } from '../../lib/staffChatDayGroups.js';
+
+export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete, onScrolledToBottom, unreadCount = 0 }) {
+  const endRef = useRef(null);
+  const bottomSentinelRef = useRef(null);
+  // (2026-06-01) true when the bottom sentinel is in view. Default true so the
+  // button is hidden on first mount (the auto-scroll effect pins to the bottom).
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  // V140 (2026-05-31) — auto-scroll keyed on the latest-message identity (the
+  // listener caps at 50, so messages.length stops changing past the cap).
+  const lastMessageId = messages.length &gt; 0 ? messages[messages.length - 1].id : null;
+
+  useEffect(() =&gt; {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [lastMessageId]);
+
+  // V82 observer — fires onScrolledToBottom on intersect (read cursor).
+  // (2026-06-01) ALSO drives isAtBottom both directions for the jump button.
+  // Guard relaxed (no longer early-returns when onScrolledToBottom is absent) so
+  // the boolean tracks regardless; onScrolledToBottom still fires ONLY on intersect.
+  useEffect(() =&gt; {
+    if (typeof IntersectionObserver === 'undefined') return undefined;
+    const node = bottomSentinelRef.current;
+    if (!node) return undefined;
+    const obs = new IntersectionObserver(
+      (entries) =&gt; {
+        for (const entry of entries) {
+          setIsAtBottom(entry.isIntersecting);
+          if (entry.isIntersecting &amp;&amp; typeof onScrolledToBottom === 'function') {
+            try {
+              onScrolledToBottom();
+            } catch {
+              // swallow — cursor write failures must not crash the list
+            }
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+    obs.observe(node);
+    return () =&gt; {
+      obs.disconnect();
+    };
+  }, [onScrolledToBottom, lastMessageId]);
+
+  const scrollToLatest = () =&gt; {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  };
+
+  if (messages.length === 0) {
+    return (
+      &lt;div data-testid="staff-chat-empty" className="flex-1 flex items-center justify-center text-[var(--tx-muted)] text-sm p-4"&gt;
+        ยังไม่มีข้อความ — เริ่มแชทกับเพื่อนร่วมงานได้เลย
+      &lt;/div&gt;
+    );
+  }
+
+  return (
+    &lt;div className="relative flex-1 flex flex-col min-h-0"&gt;
+      &lt;div
+        data-testid="staff-chat-message-list"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-2"
+        style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+      &gt;
+        {groupMessagesByDay(messages).map(group =&gt; (
+          &lt;React.Fragment key={group.dayKey}&gt;
+            {group.label &amp;&amp; (
+              &lt;div className="flex justify-center my-2" data-testid="staff-chat-day-divider"&gt;
+                &lt;span className="text-[11px] text-[var(--tx-muted)] bg-black/30 px-3 py-0.5 rounded-full"&gt;
+                  {group.label}
+                &lt;/span&gt;
+              &lt;/div&gt;
+            )}
+            {group.items.map(m =&gt; (
+              &lt;StaffChatMessage
+                key={m.id}
+                message={m}
+                isOwn={m.deviceId === ownDeviceId}
+                onReply={onReply}
+                onDelete={onDelete}
+              /&gt;
+            ))}
+          &lt;/React.Fragment&gt;
+        ))}
+        &lt;div ref={endRef} /&gt;
+        {/* V82 — bottom sentinel watched by IntersectionObserver. */}
+        &lt;div ref={bottomSentinelRef} data-testid="staff-chat-bottom-sentinel" style={{ height: '1px' }} /&gt;
+      &lt;/div&gt;
+      {/* (2026-06-01) jump-to-latest — appears whenever scrolled up from bottom
+          (Q2=A). Circle + ChevronDown; rose count badge when unreadCount&gt;0 (Q1=C,
+          caps "9+"). Tap → smooth-scroll to endRef → observer intersects →
+          markScrolledToBottom advances the cursor → unreadCount=0 → button hides. */}
+      {!isAtBottom &amp;&amp; (
+        &lt;button
+          type="button"
+          onClick={scrollToLatest}
+          data-testid="staff-chat-jump-latest"
+          aria-label="ลงไปข้อความล่าสุด"
+          title="ลงไปข้อความล่าสุด"
+          className="absolute bottom-3 right-3 z-[5] w-9 h-9 rounded-full bg-[var(--bg-hover)] border border-[var(--bd-strong)] text-[var(--tx-primary)] shadow-lg flex items-center justify-center hover:bg-[var(--bg-card)] transition-colors"
+        &gt;
+          &lt;ChevronDown size={18} /&gt;
+          {unreadCount &gt; 0 &amp;&amp; (
+            &lt;span
+              data-testid="staff-chat-jump-latest-count"
+              className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[11px] font-bold flex items-center justify-center border-2 border-[var(--bg-card)]"
+            &gt;
+              {unreadCount &gt; 9 ? '9+' : unreadCount}
+            &lt;/span&gt;
+          )}
+        &lt;/button&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+
+export default StaffChatMessageList;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run J1-J7 to verify they pass</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staffchat-jump-to-latest.test.jsx</code></p>
+  <p>Expected: all 7 PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/staffchat/StaffChatMessageList.jsx
+git commit -m "feat(staffchat): jump-to-latest button — circle + unread badge, appears when scrolled up"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Thread unreadCount from the Widget + source-grep regression locks</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/staffchat/StaffChatWidget.jsx</code> (the <code>&lt;StaffChatMessageList&gt;</code> render, ~line 79)</li>
+    <li>Test: <code>tests/staffchat-jump-to-latest.test.jsx</code> (append SG1-SG9)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Append the SG describe block to the test file</strong></label></div>
+<pre><code class="language-jsx">import fs from 'node:fs';
+import path from 'node:path';
+
+describe('SG source-grep regression locks', () =&gt; {
+  const listSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/staffchat/StaffChatMessageList.jsx'), 'utf8');
+  const widgetSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/staffchat/StaffChatWidget.jsx'), 'utf8');
+
+  it('SG1: MessageList imports ChevronDown from lucide-react', () =&gt; {
+    expect(listSrc).toMatch(/import\s*\{[^}]*ChevronDown[^}]*\}\s*from\s*['"]lucide-react['"]/);
+  });
+  it('SG2: button has the testid + Thai aria-label', () =&gt; {
+    expect(listSrc).toContain('data-testid="staff-chat-jump-latest"');
+    expect(listSrc).toContain('aria-label="ลงไปข้อความล่าสุด"');
+  });
+  it('SG3: button gated on !isAtBottom', () =&gt; {
+    expect(listSrc).toMatch(/!isAtBottom\s*&amp;&amp;/);
+  });
+  it('SG4: isAtBottom driven by the SAME observer (one observer, reuse)', () =&gt; {
+    expect(listSrc).toMatch(/setIsAtBottom\(entry\.isIntersecting\)/);
+    expect((listSrc.match(/new IntersectionObserver/g) || []).length).toBe(1);
+  });
+  it('SG5: V82 onScrolledToBottom still fires only on intersect', () =&gt; {
+    expect(listSrc).toMatch(/entry\.isIntersecting\s*&amp;&amp;\s*typeof onScrolledToBottom === 'function'/);
+  });
+  it('SG6: tap scrolls endRef smooth to bottom via scrollToLatest', () =&gt; {
+    expect(listSrc).toMatch(/scrollToLatest/);
+    expect(listSrc).toMatch(/scrollIntoView\(\{ behavior: 'smooth', block: 'end' \}\)/);
+  });
+  it('SG7: badge caps at "9+"', () =&gt; {
+    expect(listSrc).toMatch(/unreadCount &gt; 9 \? '9\+' : unreadCount/);
+  });
+  it('SG8: Widget threads chat.unreadCount into MessageList', () =&gt; {
+    expect(widgetSrc).toMatch(/unreadCount=\{chat\.unreadCount\}/);
+  });
+  it('SG9: scroll list keeps its data-testid (consumers depend on it)', () =&gt; {
+    expect(listSrc).toContain('data-testid="staff-chat-message-list"');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run — SG8 fails (Widget not wired yet)</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staffchat-jump-to-latest.test.jsx -t SG</code></p>
+  <p>Expected: SG1-SG7, SG9 PASS; SG8 FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Wire the Widget</strong></label></div>
+  <p>In <code>src/components/staffchat/StaffChatWidget.jsx</code>, add the prop to the <code>&lt;StaffChatMessageList&gt;</code> element (after <code>onScrolledToBottom={chat.markScrolledToBottom}</code>):</p>
+<pre><code class="language-jsx">          &lt;StaffChatMessageList
+            messages={chat.messages}
+            ownDeviceId={chat.deviceId}
+            onReply={handleReply}
+            onDelete={chat.deleteMessage}
+            onScrolledToBottom={chat.markScrolledToBottom}
+            unreadCount={chat.unreadCount}
+          /&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run the full test file → all green</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staffchat-jump-to-latest.test.jsx</code></p>
+  <p>Expected: J1-J7 + SG1-SG9 all PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/staffchat/StaffChatWidget.jsx tests/staffchat-jump-to-latest.test.jsx
+git commit -m "feat(staffchat): thread unreadCount to jump button + source-grep locks (SG1-SG9)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Rule I flow-simulate (F1) — full show → badge → tap → reset cycle</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Test: <code>tests/staffchat-jump-to-latest.test.jsx</code> (append F1)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Append the F1 describe block</strong></label></div>
+<pre><code class="language-jsx">describe('F1 Rule I flow-simulate — full jump-to-latest cycle', () =&gt; {
+  it('cycles: at-bottom hidden → scroll-up bare → new-msg badge → tap → land → reset', () =&gt; {
+    const onScrolledToBottom = vi.fn();
+    const props = { messages: MSGS, ownDeviceId: 'dev-me', onScrolledToBottom };
+    const { rerender } = render(&lt;StaffChatMessageList {...props} unreadCount={0} /&gt;);
+
+    // 1. at bottom → hidden
+    fireIntersect(true);
+    expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
+
+    // 2. scroll up, no new → bare circle (no badge)
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest')).toBeTruthy();
+    expect(screen.queryByTestId('staff-chat-jump-latest-count')).toBeNull();
+
+    // 3. new messages arrive while scrolled up → badge "2"
+    rerender(&lt;StaffChatMessageList {...props} unreadCount={2} /&gt;);
+    expect(screen.getByTestId('staff-chat-jump-latest-count').textContent).toBe('2');
+
+    // 4. tap → smooth scroll to latest
+    Element.prototype.scrollIntoView.mockClear();
+    fireEvent.click(screen.getByTestId('staff-chat-jump-latest'));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'end' });
+
+    // 5. landed at bottom → cursor advances (V82) + button hides
+    rerender(&lt;StaffChatMessageList {...props} unreadCount={0} /&gt;);
+    fireIntersect(true);
+    expect(onScrolledToBottom).toHaveBeenCalled();
+    expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run the full test file</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staffchat-jump-to-latest.test.jsx</code></p>
+  <p>Expected: J1-J7 + SG1-SG9 + F1 all PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/staffchat-jump-to-latest.test.jsx
+git commit -m "test(staffchat): Rule I flow-simulate for jump-to-latest cycle (F1)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Verify — targeted + full suite + build + real-browser L1</h3>
+  <p><strong>Files:</strong> none (verification only; fix-forward + commit if a regression surfaces).</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Targeted staff-chat regression (Rule N)</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staffchat-jump-to-latest.test.jsx $(node -e "const cp=require('child_process');const out=cp.execSync('git grep -l StaffChatMessageList -- tests').toString().trim().split(/\\s+/).join(' ');process.stdout.write(out)")</code></p>
+  <p>Or simply: <code>npx vitest run tests/ -t "staff-chat"</code> plus any file importing <code>StaffChatMessageList</code>/<code>StaffChatWidget</code> (grep: <code>git grep -l "StaffChatMessageList\|StaffChatWidget" tests</code>). Expected: all PASS. If a V82/V73 message-list test breaks (e.g. it asserted the observer is skipped when <code>onScrolledToBottom</code> is absent), fix per Rule P — the guard relaxation is intentional; update the assertion + note it.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Full suite + build (end-of-batch, Rule N)</strong></label></div>
+  <p>Run: <code>npx vitest run</code> then <code>npm run build</code></p>
+  <p>Expected: full suite GREEN (baseline 15510/0 + new tests); build clean. Investigate ANY new red (don't dismiss as flake — Rule Q-honest) and fix-forward.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Real-browser L1 on the real component (Rule Q / Rule S — best effort)</strong></label></div>
+  <p>Mount the REAL <code>StaffChatMessageList</code> in a temporary harness so a real browser drives a real scroll container + real IntersectionObserver (mirror the EOD+6 resizable-panel L1). Minimal harness: a temp route/entry that renders <code>&lt;StaffChatMessageList&gt;</code> with ~30 messages inside a fixed-height (480px) <code>div.flex.flex-col</code> + the panel tokens, served by the running Vite dev server; open in Chrome (Browser 1). Verify by SCREENSHOT (Rule Q-vis), each item:</p>
+  <ul>
+    <li>At bottom → no button.</li>
+    <li>Scroll up → bare circle appears bottom-right.</li>
+    <li>Pass <code>unreadCount=3</code> → red "3" badge; pass 15 → "9+".</li>
+    <li>Click → smooth-scrolls to bottom → button disappears.</li>
+    <li>Toggle the document theme attribute → button readable in light too.</li>
+  </ul>
+  <p>Delete the temp harness after (never commit it — Rule S). <strong>Honest Rule Q gap:</strong> the assembled admin-gated AdminDashboard panel with LIVE <code>unreadCount</code> (real Firestore) + real minimize/popup = <strong>USER L1</strong> after deploy. Record this gap; do NOT claim "verified" beyond what the harness/L1 actually showed.</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit any fixups; report</strong></label></div>
+<pre><code class="language-bash"># only if Step 1/2 surfaced a regression fix:
+git add -p
+git commit -m "fix(staffchat): &lt;regression&gt; surfaced by jump-to-latest full-suite sweep"</code></pre>
+  <p>Report: test counts (before/after), build status, L1 screenshots, and the honest USER-L1 gap. No deploy without explicit "deploy" (V18). Frontend-only → no Probe-Deploy-Probe.</p>
+</div>
+
+<h2>Notes / Constraints</h2>
+<ul>
+  <li><strong>Cosmetic-shell:</strong> zero change to send / receive / read-cursor (V82) / day-grouping / delete flow. The observer's <code>onScrolledToBottom</code> still fires only on intersect; <code>isAtBottom</code> is an additive boolean off the same callback.</li>
+  <li><strong>No new module / no second observer:</strong> SG4 locks exactly one <code>new IntersectionObserver</code>. The button is inline in <code>StaffChatMessageList</code> (no reuse elsewhere → no extracted component).</li>
+  <li><strong>Backward-compatible prop:</strong> <code>unreadCount</code> defaults to 0; any other consumer of <code>StaffChatMessageList</code> (none today besides the Widget) is unaffected.</li>
+  <li><strong>Mobile:</strong> same component drives the fullscreen mobile overlay → button works there too (no separate path).</li>
+  <li><strong>Scope:</strong> frontend-only (2 components + 1 test file). No Firestore / rules / storage / cron. No Probe-Deploy-Probe. No deploy without explicit "deploy" (V18).</li>
+  <li><strong>Ship artifacts at deploy:</strong> delete <code>public/brainstorm-staffchat-jump-latest.html</code>; consider a short V-/AV-note only if the full-suite sweep surfaces a class-of-bug (otherwise this is a clean additive feature, no AV needed).</li>
+</ul>
+
+</body>
+</html>
