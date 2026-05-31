@@ -109,7 +109,7 @@ export function TreatmentHistoryRow({
           </span>
         </div>
 
-        <TreatmentLifecycleStepper lifecycle={lifecycle} isDark={isDark} isLatest={isLatest} />
+        <TreatmentLifecycleStepper lifecycle={lifecycle} isDark={isDark} isLatest={isLatest} withCourseStep courseDeducted={t.courseDeducted} />
 
         {/* Meta line */}
         {(t.doctor || t.branch || (t.assistants && t.assistants.length > 0) || t.editedByName) && (

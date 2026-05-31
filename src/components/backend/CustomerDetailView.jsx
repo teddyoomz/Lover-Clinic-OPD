@@ -18,6 +18,8 @@ import {
 // `customer.proClinicHN` which is empty for ALL real customers (HN lives in
 // hn_no) → no HN ever showed. resolveCustomerHN walks the shapes incl. hn_no. AV150.
 import { resolveCustomerHN } from '../../lib/customerDisplayName.js';
+// ③ (2026-05-31) — course-deduction signal for the treatment-history course step (③B).
+import { resolveCourseDeducted } from '../../lib/treatmentDisplayResolvers.js';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
   getCustomerSales, listenToCustomerSales,
@@ -570,6 +572,10 @@ export default function CustomerDetailView({
         branch: t.detail?.branch || '',
         cc: t.detail?.symptoms || '',
         dx: t.detail?.diagnosis || '',
+        // ③ (2026-05-31) — raw t has .detail here; summary row keeps the deduction
+        // signal so the history stepper's course step is accurate (V139/V104 class:
+        // the mapper strips .detail, so compute the boolean here from raw t).
+        courseDeducted: resolveCourseDeducted(t),
         createdBy: t.createdBy || 'cloned',
         // V26.1 (2026-05-13) — V12 multi-reader-sweep fix.
         // Phase 26.0e correctly added `status` to rebuildTreatmentSummary (backendClient.js

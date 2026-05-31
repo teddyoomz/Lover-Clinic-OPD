@@ -15,7 +15,7 @@ const COURSE_STEPS = ['vitalsigns', 'doctor', 'course', 'completed'];
  * "นัดหมาย วันนี้" OPD card. The course step is driven by `courseDeducted` (a boolean
  * from resolveCourseDeducted — NOT a lifecycle timestamp):
  *   done(violet) = ตัดคอร์สแล้ว · not-deducted(muted "ไม่ตัดคอร์ส") = OPD เสร็จแต่ไม่ตัด · pending = ระหว่างทาง.
- * CDV treatment-history keeps the 3-step default (withCourseStep=false → unchanged).
+ * CDV treatment-history (③ 2026-05-31) opts in via withCourseStep (4 steps, keeps its teal/amber connectors).
  *
  * State per step:
  * - 'done': filled gradient + ✓ + glow per stage color (teal/amber/violet/emerald)
