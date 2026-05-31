@@ -578,10 +578,15 @@ describe('INV.11 — UI → backend wiring (source-grep)', () => {
     expect(src).toMatch(/const BRANCH_ID = branchIdOverride \|\| ctxBranchId/);
   });
 
-  it('11.4 StockBalancePanel reads listStockBatches (not raw Firestore in component)', () => {
+  it('11.4 StockBalancePanel reads via the backendClient listener (V143-ter), not raw Firestore in component', () => {
     const path = join(process.cwd(), 'src', 'components', 'backend', 'StockBalancePanel.jsx');
     const src = readFileSync(path, 'utf-8');
-    expect(src).toMatch(/listStockBatches\(\{\s*branchId:\s*locationId/);
+    // V143-ter (2026-05-31, real-time): migrated from the one-shot listStockBatches
+    // getter to the live listenToStockBatchesByBranch listener (still a
+    // scopedDataLayer/backendClient helper — NOT raw Firestore in the component).
+    // The "not raw Firestore in component" intent stands; only the helper name changed.
+    expect(src).toMatch(/listenToStockBatchesByBranch\(\{\s*branchId:\s*locationId/);
+    expect(src).not.toMatch(/onSnapshot\(|getDocs\(/); // no raw Firestore in the component
   });
 
   it('11.5 MovementLogPanel uses listStockMovements with branchId filter', () => {
