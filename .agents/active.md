@@ -1,31 +1,30 @@
 ---
-updated_at: "2026-05-31 EOD+4 LATE+4 — Brainstorm→spec→PLAN: confirmed-card highlight/reorder + course-step muted (①A/②A/③B). NOT implemented (next session). + NEW rule ground-mockups-in-existing-design."
-status: "Plan ready for implementation next session. NO code shipped this session (docs/rule only). Prod UNCHANGED = 0c607f68."
+updated_at: "2026-05-31 EOD+5 — Implemented plan (①reorder+green card, ②course-step muted, ③CDV course step) + /systematic-debugging (confirm-btn-follows-status + confirmed sky→green). Pushed, NOT deployed."
+status: "13 commits ahead of prod, pushed to origin/master. NOT deployed (await 'deploy'). Frontend/lib only → no Probe-Deploy-Probe."
 branch: "master"
-last_commit: "EOD docs commit (on 0c607f68) — spec+plan+rule+mockups. Prod LIVE = 0c607f68."
-tests: "15418/0 (last full run PRIOR session; NOT re-run — session-end rule; no src changed this session)."
+last_commit: "15cde92e (confirmed color sky→green). prod = 0c607f68 LIVE."
+tests: "15440/0 full suite (ran this session after debug fixes; NOT re-run at session-end per rule)."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "0c607f68 LIVE (V142 course double-deduct + V143 stock). UNCHANGED this session."
 firestore_rules_version: "UNCHANGED. No rules/storage/index/cron touched."
 ---
 
-# Active Context — Brainstorm + PLAN: confirmed-card + course-step (2026-05-31 EOD+4 LATE+4)
+# Active Context — confirmed-card + course-step impl + confirm-btn debug (2026-05-31 EOD+5)
 
 ## State
-- NO code shipped. Brainstorm (Visual Companion grounded in REAL component source) → spec → plan DONE. Implementation = NEXT session.
-- Decisions locked: **①A** sky-tint confirmed card + reorder-to-top (today tab) realtime · **②A** course "ยังไม่ตัด"(amber)→muted "ไม่ตัดคอร์ส" · **③B** add course step to CDV history, keep teal/amber connectors.
-- NEW iron-clad sub-rule **"ground every mockup in the EXISTING design FIRST"** encoded 4 places (memory + `.claude/rules/01-iron-clad.md` §S-design + brainstorming SKILL.md).
+- Plan `2026-05-31-appt-confirmed-card-and-course-step.html` IMPLEMENTED (Tasks 1-7). Then `/systematic-debugging` on 2 user-reported issues fixed on top.
+- Net: confirmed "วันนี้" card = **GREEN** (Task 3 shipped sky, debug task recolored sky→green per user) + reorder confirmed-to-top; OPD course step muted "ไม่ตัดคอร์ส"; CDV history has the 4th course step; confirm button now follows real status (reappears when pending even if a treatment record exists).
+- 9 code/test commits this session, all pushed. Prod UNCHANGED.
 
-## What this session shipped (docs/rule only → checkpoint 2026-05-31-brainstorm-confirmed-card-course-step.md)
-- spec `docs/superpowers/specs/2026-05-31-appt-confirmed-card-and-course-step-design.html`
-- plan `docs/superpowers/plans/2026-05-31-appt-confirmed-card-and-course-step.html` (7 tasks, TDD, real line anchors)
-- rule "ground-mockups-in-existing-design": memory `feedback_ground_mockups_in_existing_design.md` + MEMORY.md + `01-iron-clad.md` §S-design + `~/.claude/skills/brainstorming/SKILL.md`
-- dev mockups `public/brainstorm-v2-grounded.html` + `public/brainstorm-confirmed-card-course-step.html` — **DELETE at deploy** (plan Task 7)
-- ③ root-cause VERIFIED: `CustomerDetailView` treatmentSummary mapper (~L564) strips `detail` → must compute `courseDeducted` in the mapper (V139/V104 class trap)
+## What this session shipped (detail → checkpoint 2026-05-31-confirmed-card-coursestep-confirmbtn.md)
+- Tasks 1-3 (① reorder `sortApptsConfirmedFirst` + today-tab wire + card tint) · Task 4 (②A course warn→not-deducted, 1 SSOT) · Task 5 (③B CDV course step) · Task 6 (7 V139 V21-fixups) · diag `scripts/diag-course-deducted-check.mjs` (Rule R: 15/10 split real prod, trap-check 0)
+- Debug Issue 1: `showConfirmBtn` separate status gate (mirrors mark-complete/un-mark) — V73-BS1 class; `tests/appt-confirm-button-follows-status.test.jsx` 6/0
+- Debug Issue 2: confirmed sky→green at 3 sites (`_apptHubStyles` bar+chip + RowCard tint); distinct from done=emerald
 
 ## Next action
-- Implement the plan Task 1→7 via `subagent-driven-development`. All cosmetic-shell + 1 pure sort helper; frontend/lib only; NO Probe-Deploy-Probe; NO deploy until user types "deploy".
+- User-gated: **deploy** (frontend/lib only, no Probe-Deploy-Probe) → then USER L1 (confirm-btn reappears on pending+treated card; green both themes; ① reorder+realtime; ② muted course; ③ CDV 4-step). OR continue.
 
 ## Outstanding user-triggered actions
-- Implement plan next session (above).
-- (carryover) L1 hands-on V142/V143 (2-device live balance + NK shows 0); cron stock-lot-cleanup active 03:45 BKK.
+- Deploy the 13-commit batch + USER L1 hands-on (above).
+- Ship artifacts at deploy: V-entry + AVxx (V73-BS1 class: status-action gates must be status-driven, not hasTreatmentForDay; + course-step consumers need courseDeducted from a source with detail) + delete dev mockups `public/brainstorm-*.html`.
+- (carryover) L1 V142/V143 (2-device balance + NK shows 0); cron stock-lot-cleanup active 03:45 BKK.
