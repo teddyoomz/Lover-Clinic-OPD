@@ -1,34 +1,31 @@
 ---
-updated_at: "2026-05-31 EOD+2 — V139 (OPD course-step + appt status↔tab sync) + V138 SHIPPED + DEPLOYED + HEALED."
-status: "V139 + V138 shipped + deployed (3342a9f0 LIVE @ lover-clinic-app.vercel.app) + Rule M heal applied (3 batches depleted→active). Awaiting user L1 hands-on prod."
+updated_at: "2026-05-31 EOD+3 — V140 (staff-chat scroll+lightbox) + V141 (visitReasons preserve) DONE+verified, UNCOMMITTED/HELD. V139 deployed earlier this session."
+status: "V140 + V141 code done + full-verified but NOT committed/deployed (user ran /session-end without authorizing commit/deploy/heal). prod = 3342a9f0 (V138+V139) LIVE."
 branch: "master"
-last_commit: "3342a9f0 — feat(backend): V138 negative-batch status invariant + V139 OPD course-step & appt status↔tab sync (combined; pushed + vercel --prod aliased)."
-tests: "FULL vitest 15319/0 (698 files) + build clean + 2 TRUE-L2 e2e on real prod (V139 13/0 + V138 12/0) + theme-AA (Chrome MCP). V139: course-step 14/0 + status-sync 12/0 + flow-sim 17/0 + 4 V21 fixups."
+last_commit: "dbb5c4c9 (EOD docs). prod code = 3342a9f0 (V138+V139 deployed+healed). V140 + V141 SOURCE uncommitted in working tree."
+tests: "Full vitest 15336/0 (700 files) + build clean (this session's last run; session-end reuses — NOT re-run). V140 8/0 + lightbox/chat families 173/0; V141 9/0 + mapper families 157/0. V141 heal dry-run 109/113 recoverable."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "3342a9f0 LIVE (V138 + V139). Rule M heal applied on prod (audit heal-negative-batch-1780208334449-895a86e6)."
-firestore_rules_version: "UNCHANGED — V138 + V139 frontend/lib only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
+production_commit: "3342a9f0 LIVE (V138 + V139). V140 + V141 NOT deployed."
+firestore_rules_version: "UNCHANGED — V140 + V141 frontend/lib only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
 ---
 
-# Active Context — V139 OPD course-step + status↔tab sync (2026-05-31 EOD+2) — SHIPPED
+# Active Context — V140 + V141 (2026-05-31 EOD+3) — HELD
 
 ## State
-- `/brainstorming → spec → writing-plans → executing-plans (inline, 8 tasks)`. 2 user-requested features for the Frontend "นัดหมาย วันนี้" card. **DONE + verified + DEPLOYED + HEALED** (commit `3342a9f0`).
-- V138 (negative-batch status invariant) shipped in the SAME commit (shared backendClient.js + audit SKILL.md) + Rule M heal applied.
+- 2× `/systematic-debugging`. Both DONE + fully verified, **UNCOMMITTED/HELD** (user ended session without authorizing commit/deploy/heal). prod unchanged = 3342a9f0 (V138+V139, deployed earlier this session).
+- V139 (+V138) was committed + deployed + healed earlier THIS session (`3342a9f0`); V140 + V141 stack on top in the working tree.
 
-## What shipped (detail → checkpoint 2026-05-31-v139-opd-course-step-status-sync.md)
-- **V139 Feature 1** — opt-in 4th "คอร์ส" step (card stepper): violet ✓=ตัดคอร์ส · amber "ยังไม่ตัด"=เสร็จแต่ไม่ตัด · เลขจาง=กำลังทำ. SSOT `resolveCourseDeducted`/`resolveCourseStepState` (reads `detail.*` — Rule R confirmed). `withCourseStep` opt-in → CDV history คง 3 ขั้น. Live ฟรี.
-- **V139 Feature 2** — `decideApptStatusServiceSync` wired 3 backendClient chokepoints (mark/unmark/updateBackendAppointment). serviceCompletedAt = tab SSOT (filter ไม่แตะ). Live ฟรี cross-surface.
-- **V138** — `resolveBatchStatusForRemaining` (negative=active DEBT visible). Heal: 3 batches (Augmentin −91, คอนฟอร์ม 2 นิ้ว −3, E.P.T.Q S500 −12 @ นครราชสีมา) → active. AV158 + AV159.
-
-## Verified
-- FULL vitest **15319/0** (698 files) + build clean + **2 TRUE-L2 e2e on real prod** (V139 13/0 + V138 12/0) + theme-AA (Chrome MCP: violet + amber AA both themes, 4 dots fit 360+300px) + heal idempotent (re-run = 0).
-
-## Honest Rule Q gap
-USER L1 post-deploy = ASSEMBLED real-browser flow on auth-gated AdminDashboard: deduct a real course → course dot lights live; mark-complete/edit-modal-status cross-surface → card hops tab live cross-device.
+## What this session shipped (detail → checkpoint 2026-05-31-v140-v141-chat-scroll-lightbox-visitreasons.md)
+- **V140 Bug1** — staff-chat auto-scroll froze at the 50-msg cap (`StaffChatMessageList` effect keyed on `[messages.length]`; listener `limitCount:50`) → key on `lastMessageId`. **AV160**.
+- **V140 Bug2** — lightbox nav arrows `bg-white/15` invisible on white images → dark `bg-black/55 ring-1 ring-white/40` (×2, prev+next). Rule Q-vis screenshot proven on all colors. **AV161**.
+- **V141** — kiosk intake→be_customers conversion folded `visitReasons`→`symptoms` + dropped the rest → intake "สาเหตุที่มาพบแพทย์" blank (Rule R: opd_sessions 100% have it, be_customers 0%). Fixed the 3-mapper triangle (kioskPatientToCanonical + buildPatientDataFromForm + buildFormFromCustomer; snake_case canonical). **AV162**. Form already REQUIRES it (no fill-bug). Heal dry-run 109/113 recoverable from symptoms.
 
 ## Next action
-Idle / await user L1 confirmation. If a bug surfaces in L1 → `/systematic-debugging` + Rule P.
+Idle / await user. When authorized: commit V140+V141 → `vercel --prod` (frontend-only, no Probe-Deploy-Probe) → V141 heal `--apply` (109 customers).
 
-## Outstanding (user-triggered)
-- **L1 hands-on prod** (V139 course-step live + status→tab cross-surface; V138 ปรับเพิ่ม batch ติดลบ → ยอดคงเหลือ ไม่หาย).
+## Outstanding user-triggered actions
+- **Commit + push** V140 + V141 source (6 mod + 4 new — frontend/lib + scripts + tests).
+- **Deploy** (`vercel --prod`; V18 needs "deploy").
+- **V141 heal `--apply`** (Rule M — 109 be_customers restore visitReasons from symptoms; dry-run passed).
+- **L1 hands-on** prod (V140 chat scroll + lightbox nav; V141 intake visit-reason after deploy+heal).
 - Pre-existing (large, NOT deploy-gating): extended-suite 280 stale tests.
