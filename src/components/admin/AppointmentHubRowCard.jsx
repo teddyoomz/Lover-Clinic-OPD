@@ -116,12 +116,12 @@ export default function AppointmentHubRowCard({
   // → badge shows "ยืนยันแล้ว · รอการรักษา" matching the waiting-queue state.
   const effectiveStatus = appt.serviceCompletedAt ? 'done' : rawStatus;
   const status = effectiveStatus;
-  // ① (2026-05-31) — confirmed (not yet served) gets a clear sky-tinted box
-  // (matches the existing sky "ยืนยันแล้ว" accent/chip). Cosmetic only — uses the
-  // already-derived effectiveStatus; no handler/state/prop change.
+  // ① (2026-05-31) — confirmed (not yet served) gets a clear GREEN-tinted box
+  // (matches the green "ยืนยันแล้ว" accent/chip; user 2026-05-31 — was sky). Cosmetic
+  // only — uses the already-derived effectiveStatus; no handler/state/prop change.
   const isConfirmedHighlight = effectiveStatus === 'confirmed';
   const surfaceCls = isConfirmedHighlight
-    ? 'border-sky-500/50 bg-sky-500/[0.06]'
+    ? 'border-green-500/50 bg-green-500/[0.06]'
     : 'border-[var(--bd)] bg-[var(--bg-card)]';
   const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
   const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);

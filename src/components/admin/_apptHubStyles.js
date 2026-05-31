@@ -93,7 +93,7 @@ export const BUBBLE_INACTIVE =
 // Color choices reflect priority/urgency:
 //   missed     → red (urgent — patient didn't come; admin must act)
 //   pending    → amber (attention — needs confirm)
-//   confirmed  → sky (locked-in — calm)
+//   confirmed  → green (ยืนยันแล้ว = confirmed/ready; distinct from done=emerald — user 2026-05-31, was sky)
 //   done       → emerald (closed — minor visual weight)
 //   cancelled  → gray (deprioritized)
 export const ACCENT_BAR_BASE =
@@ -102,7 +102,7 @@ export const ACCENT_BAR_BASE =
 export const ACCENT_BAR = {
   missed:    'bg-gradient-to-b from-red-500 to-rose-700',
   pending:   'bg-gradient-to-b from-amber-400 to-orange-600',
-  confirmed: 'bg-gradient-to-b from-sky-400 to-cyan-600',
+  confirmed: 'bg-gradient-to-b from-green-400 to-green-600',
   done:      'bg-gradient-to-b from-emerald-400 to-emerald-700',
   cancelled: 'bg-gradient-to-b from-gray-500 to-gray-700',
 };
@@ -111,7 +111,7 @@ export const ACCENT_BAR = {
 
 export const STATUS_CHIP_CLS = {
   pending:   'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800/60',
-  confirmed: 'bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800/60',
+  confirmed: 'bg-green-100 text-green-900 border border-green-300 dark:bg-green-950/60 dark:text-green-200 dark:border-green-800/60',
   done:      'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800/60',
   cancelled: 'bg-gray-200 text-gray-700 border border-gray-300 dark:bg-gray-900/60 dark:text-gray-400 dark:border-gray-700/60',
 };

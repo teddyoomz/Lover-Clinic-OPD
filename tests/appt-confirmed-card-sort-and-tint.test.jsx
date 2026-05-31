@@ -43,9 +43,20 @@ describe('② wiring — AppointmentHubView today sort', () => {
 
 describe('① card tint — AppointmentHubRowCard', () => {
   const src = readFileSync('src/components/admin/AppointmentHubRowCard.jsx', 'utf8');
-  test('confirmed → sky surface; else var(--bg-card)', () => {
+  test('confirmed → green surface; else var(--bg-card)', () => {   // (2026-05-31) sky→green
     expect(src).toMatch(/isConfirmedHighlight\s*=\s*effectiveStatus === 'confirmed'/);
-    expect(src).toMatch(/border-sky-500\/50 bg-sky-500\/\[0\.06\]/);
+    expect(src).toMatch(/border-green-500\/50 bg-green-500\/\[0\.06\]/);
+    expect(src).not.toMatch(/border-sky-500\/50 bg-sky-500\/\[0\.06\]/);   // anti-regression
     expect(src).toMatch(/border \$\{surfaceCls\}/);
+  });
+});
+
+describe('② confirmed status color = green (bar + chip) — _apptHubStyles', () => {
+  const s = readFileSync('src/components/admin/_apptHubStyles.js', 'utf8');
+  test('ACCENT_BAR.confirmed + STATUS_CHIP_CLS.confirmed are green (not sky)', () => {
+    expect(s).toMatch(/confirmed:\s*'bg-gradient-to-b from-green-400 to-green-600'/);
+    expect(s).toMatch(/confirmed:\s*'bg-green-100 text-green-900[^']*dark:bg-green-950/);
+    expect(s).not.toMatch(/from-sky-400 to-cyan-600/);          // anti-regression
+    expect(s).not.toMatch(/confirmed:\s*'bg-sky-100/);          // anti-regression
   });
 });
