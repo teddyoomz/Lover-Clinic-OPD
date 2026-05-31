@@ -36,6 +36,11 @@ import { flattenPromotionsForStockDeduction, buildPromotionSubCourseProducts } f
 // write). See AV93 + V105 V-entry.
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
+// 2026-05-31 — actual-paid resolvers for the ยอดชำระจริง column + pay-modal DRY.
+import { resolveSalePaidAmount, resolveSalePaidTone, resolveSaleOutstanding } from '../../lib/financeUtils.js';
+// 2026-05-31 — paginate the sales table 30/page (Rule C1 canonical pager).
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 import {
   findCouponByCode, listPromotions,
 } from '../../lib/scopedDataLayer.js';
@@ -528,6 +533,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     }
     return list;
   }, [sales, filterQuery, filterStatus, subTab]);
+
+  // 2026-05-31 — paginate 30/page via canonical usePagination (Rule C1). key
+  // resets to page 1 when sub-tab / search / status / branch changes.
+  const _pageKey = `${subTab}|${filterQuery}|${filterStatus}|${BRANCH_ID}`;
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(filtered, { pageSize: 30, key: _pageKey });
 
   // ── Load form options ──
   // Phase 14.10-tris (2026-04-26) — sellers loaded from be_staff +
@@ -1217,13 +1227,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--bd)] bg-[var(--bg-elevated)]">
-                  {['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดรวม','สถานะ','จัดการ'].map(h => (
+                  {['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดสุทธิ','ยอดชำระจริง','สถานะ','จัดการ'].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((sale, i) => {
+                {visibleItems.map((sale, i) => {
                   const st = resolveSaleStatus(sale);
                   // V105 (2026-05-19) customerName display-time fallback —
                   // RP1 (EOD+1, 2026-05-20): hoisted out of JSX (previously an
@@ -1240,6 +1250,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     : '';
                   const _v105DisplayName = sale.customerName || _v105FallbackName || '-';
                   const _v105DisplayHN = sale.customerHN || _v105FallbackHN;
+                  // 2026-05-31 — actual-paid + color tone for the ยอดชำระจริง cell (Q2=B).
+                  const _paidAmt = resolveSalePaidAmount(sale);
+                  const _paidTone = resolveSalePaidTone(_paidAmt, sale.billing?.netTotal);
+                  const _paidCls = _paidTone === 'full'
+                    ? (isDark ? 'text-emerald-400' : 'text-emerald-700')
+                    : _paidTone === 'partial'
+                    ? (isDark ? 'text-amber-400' : 'text-amber-700')
+                    : (isDark ? 'text-gray-500' : 'text-slate-400');
                   return (
                     <tr
                       key={sale.saleId || sale.id || i}
@@ -1297,6 +1315,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                           <span>{fmtMoney(sale.billing?.netTotal)} ฿</span>
                         </div>
                       </td>
+                      {/* 2026-05-31 — ยอดชำระจริง (actual paid) · color-coded full/partial/zero (Q2=B). */}
+                      <td className="px-3 py-2 text-right font-mono">
+                        <span className={`font-semibold ${_paidCls}`} data-testid={`saletab-paid-${sale.saleId || sale.id || i}`}>{fmtMoney(_paidAmt)} ฿</span>
+                      </td>
                       <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         {/* Action buttons MUST stopPropagation so they don't
@@ -1340,6 +1362,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} testId="saletab-pagination" />
         </div>
       )}
 
@@ -1701,7 +1724,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <h3 id="modal-title-pay-sale" className="text-sm font-bold text-emerald-400">รับชำระเงิน {payModal.saleId}</h3>
-              <p className="text-xs text-[var(--tx-muted)]">ยอดค้าง: {fmtMoney(Math.max(0, (payModal.billing?.netTotal||0) - (payModal.payment?.channels||[]).reduce((s,c) => s + (parseFloat(c.amount)||0), 0)))} บาท</p>
+              <p className="text-xs text-[var(--tx-muted)]">ยอดค้าง: {fmtMoney(resolveSaleOutstanding(payModal))} บาท</p>
             </div>
             <div className="p-5 space-y-3">
               <div><label className={labelCls}>ช่องทาง</label>
