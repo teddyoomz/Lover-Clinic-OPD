@@ -1,31 +1,33 @@
 ---
-updated_at: "2026-06-01 EOD — Sales paid-column + table redesign SHIPPED + DEPLOYED. prod = current code."
-status: "DEPLOYED (vercel-only, no Probe-Deploy-Probe). USER L1 pending. HEAD=docs commit; prod bundle = code HEAD."
+updated_at: "2026-06-01 EOD+1 — Staff-chat jump-to-latest button SHIPPED + DEPLOYED + L1-verified on LIVE prod."
+status: "DEPLOYED (vercel-only, no Probe-Deploy-Probe). L1 DONE on real prod (read-only). prod = current code."
 branch: "master"
-last_commit: "5fe8edaa (active.md post-deploy). prod bundle = 0628f91a LIVE (code identical; 5fe8edaa is docs-only)."
-tests: "15510/0 full suite (ran this session after redesign V21 fixups; NOT re-run at session-end per rule)."
+last_commit: "416e8341 (strip dev mockup pre-deploy). Feature code: de6f322b + 0c26e21a."
+tests: "15527/0 full suite (ran this session). +17 new (J1-J7 + SG1-SG9 + F1)."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0628f91a LIVE (aliased). Was 0c607f68 (V142+V143). Deployed the 29-commit batch this turn."
-firestore_rules_version: "UNCHANGED. No rules/storage/index/cron touched."
+production_commit: "416e8341 LIVE (aliased; vercel --prod). Was 0628f91a (sales paid-column batch)."
+firestore_rules_version: "UNCHANGED. No rules/storage/index/cron/functions touched (verified in diff)."
 ---
 
-# Active Context — sales paid-column + table redesign DEPLOYED (2026-06-01)
+# Active Context — staff-chat jump-to-latest button DEPLOYED (2026-06-01 EOD+1)
 
 ## State
-- Deployed the 29-commit batch to prod (`vercel --prod` → aliased lover-clinic-app.vercel.app). Frontend/lib only → no Probe-Deploy-Probe (verified 0 rules/storage/index/cron in diff). Dev `public/brainstorm-*.html` stripped pre-deploy.
-- Two features shipped this session (brainstorm→spec→plan→implement each, cosmetic-shell, Rule Q): paid column + table redesign. Batch also carried prior EOD+5/EOD+6 work (staffchat resizable, confirmed-card/course-step).
-- Full suite 15510/0; build clean.
+- Shipped a Messenger-style "ลงไปข้อความล่าสุด" (jump-to-latest) button on the staff-chat message list. Full `/brainstorming → spec → /writing-plans → execute` (TDD, cosmetic-shell). Subagent-driven was blocked by a "1M context credits" account error → fell back to inline execution (controller review per task).
+- Deployed vercel-only (diff = 0 rules/storage/index/cron → no Probe-Deploy-Probe). Dev mockup stripped pre-deploy (416e8341).
+- Full suite 15527/0; build clean.
 
-## What this session shipped (detail → checkpoint 2026-06-01-sales-paid-column-and-redesign.md)
-- **ยอดชำระจริง column + 30/page pagination** (tab=sales): NEW financeUtils resolveSalePaidAmount/Outstanding/Tone (Rule R diag 35/35 use payment.channels; Rule Q L2 0-mismatch/40 prod sales) + reuse canonical usePagination(30)+Pagination.
-- **Sales table redesign** (clean money nowrap, source→tag, status pill, compact actions, responsive min-w+truncate): NEW `SaleRowParts.jsx` (pure SaleSourceTag+SaleStatusPill, RTL 6/0).
-- Tests: unit/RTL/source-grep/flow-simulate + 3 V21 fixups (header 8-col / money-clean / OPD label→SaleRowParts). Rule Q-vis: 2 themes + responsive 1280/1040/900 SEEN in Chrome MCP.
+## What shipped (detail → checkpoint 2026-06-01-staffchat-jump-to-latest.md if created)
+- Decisions: Q1=C (circle + rose unread badge, "9+" cap) · Q2=A (appears whenever scrolled up from bottom).
+- `StaffChatMessageList.jsx` — `isAtBottom` piggybacked on the EXISTING V82 bottomSentinel IntersectionObserver (read-cursor timing unchanged); floating ChevronDown button when `!isAtBottom`; tap → `endRef.scrollIntoView({smooth})`; new `unreadCount` prop. `StaffChatWidget.jsx` — threads `chat.unreadCount` (1 line).
+- `tests/staffchat-jump-to-latest.test.jsx` — 17 tests (J1-J7 behavior + SG1-SG9 source-grep + F1 flow-simulate). Caught + fixed an SG8 false-positive (was matching the pre-existing StaffChatBubble prop; scoped to the MessageList element).
+
+## Verification (Rule Q)
+- L1 on harness (real component + real IO + real scroll, both themes) AND **L1 on LIVE prod** (real admin-gated widget + real Firestore data, read-only): at-bottom→no button / scroll-up→⌄ / set 15→"9+" / tap→smooth-scroll-to-latest→hides. Honest gap CLOSED.
+- Targeted staff-chat 297/0 (no V21 regression from observer-guard relaxation / relative wrapper / Widget prop). Full 15527/0. Build clean.
 
 ## Next action
-- **USER L1** on the LIVE admin-gated SaleTab + real Windows-scaled screen: paid column (green/amber/gray) + 30/page pager + redesign (compact actions, status pill nowrap, source tag, responsive). Cosmetic-shell + class-locked — high confidence, SEE-it pending.
+- None pending for this feature (deployed + L1-verified). Awaiting next task.
 
-## Outstanding user-triggered actions
-- USER L1 (above). If a bug surfaces → /systematic-debugging + Rule P.
-- Ship artifact: V-log entries for this session (paid-column + redesign) + carryover (EOD+6 resizable-panel, EOD+5 V73-BS1 confirm-btn + course-step) — not yet written.
-- (carryover) cron stock-lot-cleanup active 03:45 BKK.
-- Honest gap: assembled real-SaleTab pixels + responsive on a real scaled screen = USER (Chrome harness window-resize limited; mockup + fixed-width previews verified).
+## Outstanding (carryover, user-triggered)
+- cron `stock-lot-cleanup` active 03:45 BKK (V143-quater) — optional CRON_SECRET hit to verify.
+- Prior sessions' ship-artifact V-log entries still unwritten (sales paid-column + redesign; EOD+5/+6 resizable-panel/V73-BS1/course-step). This jump-button feature needs no V-/AV-entry (clean additive, no class-of-bug).
