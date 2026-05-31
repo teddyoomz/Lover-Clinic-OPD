@@ -27,6 +27,7 @@ import {
   applyTabFilter,
   dateRangeForTab,
   sortApptsByDateTimeAsc,
+  sortApptsConfirmedFirst,   // ① (2026-05-31)
 } from '../../lib/appointmentHubFilters.js';
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
 import {
@@ -366,7 +367,11 @@ export default function AppointmentHubView({
     const scoped = activeTab === 'opd-pending'
       ? filtered.filter(a => isAppointmentOpdPending({ appt: a, linkedSession: resolveLinkedSession ? resolveLinkedSession(a) : null }))
       : filtered;
-    return sortApptsByDateTimeAsc(scoped);
+    // ① (2026-05-31) — today tab surfaces confirmed-active rows first (then time);
+    // other tabs keep pure time order.
+    return activeTab === 'today'
+      ? sortApptsConfirmedFirst(scoped)
+      : sortApptsByDateTimeAsc(scoped);
   }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill, resolveLinkedSession]);
 
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.

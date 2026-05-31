@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+import { readFileSync } from 'fs';
 import { sortApptsConfirmedFirst } from '../src/lib/appointmentHubFilters.js';
 
 const mk = (id, status, startTime, serviceCompletedAt = null, date = '2026-05-31') =>
@@ -29,5 +30,13 @@ describe('sortApptsConfirmedFirst (①)', () => {
     const copy = JSON.parse(JSON.stringify(input));
     sortApptsConfirmedFirst(input);
     expect(input).toEqual(copy);
+  });
+});
+
+describe('② wiring — AppointmentHubView today sort', () => {
+  const src = readFileSync('src/components/admin/AppointmentHubView.jsx', 'utf8');
+  test('imports + uses sortApptsConfirmedFirst on today tab', () => {
+    expect(src).toMatch(/sortApptsConfirmedFirst/);
+    expect(src).toMatch(/activeTab === 'today'\s*\n?\s*\?\s*sortApptsConfirmedFirst/);
   });
 });
