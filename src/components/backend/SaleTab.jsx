@@ -41,6 +41,8 @@ import { resolveSalePaidAmount, resolveSalePaidTone, resolveSaleOutstanding } fr
 // 2026-05-31 — paginate the sales table 30/page (Rule C1 canonical pager).
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// 2026-06-01 — pure row parts for the table redesign (source tag + status pill).
+import { SaleSourceTag, SaleStatusPill } from './SaleRowParts.jsx';
 import {
   findCouponByCode, listPromotions,
 } from '../../lib/scopedDataLayer.js';
@@ -1224,7 +1226,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       ) : (
         <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[920px] text-xs">
               <thead>
                 <tr className="border-b border-[var(--bd)] bg-[var(--bg-elevated)]">
                   {['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดสุทธิ','ยอดชำระจริง','สถานะ','จัดการ'].map(h => (
@@ -1267,7 +1269,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       data-testid={`saletab-row-${sale.saleId || sale.id || i}`}
                     >
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">
+                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium max-w-[220px]">
                         {/* stopPropagation so opening the customer page in a
                             new tab doesn't ALSO trigger the row's detail modal.
                             V105 customerName display-time fallback computed
@@ -1278,68 +1280,50 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors"
+                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors truncate inline-block max-w-[170px] align-bottom"
                           >
                             {_v105DisplayName}
                           </a>
-                        ) : _v105DisplayName}
+                        ) : <span className="truncate inline-block max-w-[170px] align-bottom">{_v105DisplayName}</span>}
                         {_v105DisplayHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{_v105DisplayHN}</span>}
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
-                      {/* 2026-04-28 redesign: รายการขาย column — colored
-                          category dots + compact stack + +N counter +
-                          full-list tooltip on hover. Replaced the prior
-                          plain-text summary which was hard to scan
-                          (user-reported "ลายตาและอ่านยากมาก"). */}
-                      <td className="px-3 py-2">
+                      {/* รายการขาย — 2026-06-01 redesign (Q3=A): source tag moved
+                          here out of the money column + colored category dots + +N.
+                          max-w lets it truncate (responsive at narrow/scaled widths). */}
+                      <td className="px-3 py-2 max-w-[300px]">
+                        <SaleSourceTag source={sale.source} isDark={isDark} />
                         <SaleItemsCell items={flattenSaleItemsForSummary(sale)} isDark={isDark} />
                       </td>
-                      {/* 2026-04-28: yodroum column now ALWAYS shows amount;
-                          source badge appears INLINE next to amount when set
-                          (was: badge XOR amount → user couldn't see OPD-sale
-                          totals at a glance). */}
-                      <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          {sale.source === 'exchange' && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>เปลี่ยนสินค้า</span>
-                          )}
-                          {sale.source === 'share' && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700'}`}>แชร์คอร์ส</span>
-                          )}
-                          {sale.source === 'treatment' && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>จาก OPD Card</span>
-                          )}
-                          {sale.source === 'addRemaining' && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>เพิ่มคงเหลือ</span>
-                          )}
-                          <span>{fmtMoney(sale.billing?.netTotal)} ฿</span>
-                        </div>
-                      </td>
+                      {/* ยอดสุทธิ — 2026-06-01 redesign: clean single-line nowrap.
+                          Source badge moved to รายการขาย (SaleSourceTag) so the
+                          amount columns stay aligned + responsive. */}
+                      <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)] whitespace-nowrap">{fmtMoney(sale.billing?.netTotal)} ฿</td>
                       {/* 2026-05-31 — ยอดชำระจริง (actual paid) · color-coded full/partial/zero (Q2=B). */}
-                      <td className="px-3 py-2 text-right font-mono">
+                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">
                         <span className={`font-semibold ${_paidCls}`} data-testid={`saletab-paid-${sale.saleId || sale.id || i}`}>{fmtMoney(_paidAmt)} ฿</span>
                       </td>
-                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
+                      <td className="px-3 py-2"><SaleStatusPill color={st.color} label={st.label} isDark={isDark} /></td>
                       <td className="px-3 py-2">
                         {/* Action buttons MUST stopPropagation so they don't
                             also trigger the row-click detail modal. */}
-                        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setViewingSale(sale)} className="p-2.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
+                        <div className="flex gap-0.5 justify-end" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setViewingSale(sale)} className="p-1.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
                           {/* Phase 14.10-bis (2026-04-26) — Print receipt button.
                               Renders SalePrintView modal — same A4 receipt as
                               QuotationTab uses for converted sales. Available
                               for every row regardless of payment status. */}
                           <button onClick={() => setPrintingSale(sale)}
-                            className="p-2.5 rounded hover:bg-emerald-900/20 text-emerald-400"
+                            className="p-1.5 rounded hover:bg-emerald-900/20 text-emerald-400"
                             title="พิมพ์ใบเสร็จ"
                             aria-label="พิมพ์ใบเสร็จ"
                             data-testid={`saletab-print-${sale.saleId || sale.id}`}>
                             <Printer size={13} />
                           </button>
-                          <button onClick={() => openEdit(sale)} className="p-2.5 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
+                          <button onClick={() => openEdit(sale)} className="p-1.5 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           {(sale.payment?.status === 'unpaid' || sale.payment?.status === 'split') && (
                             <button onClick={() => { setPayModal(sale); setPayMethod(''); setPayAmount(''); setPayDate(thaiTodayISO()); setPayRefNo(''); }}
-                              className="p-2.5 rounded hover:bg-emerald-900/20 text-emerald-400" title="รับชำระเงิน" aria-label="รับชำระเงิน"><DollarSign size={13} /></button>
+                              className="p-1.5 rounded hover:bg-emerald-900/20 text-emerald-400" title="รับชำระเงิน" aria-label="รับชำระเงิน"><DollarSign size={13} /></button>
                           )}
                           {sale.status !== 'cancelled' && (
                             <button onClick={async () => {
@@ -1352,7 +1336,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                               } catch (e) { console.warn('[SaleTab] listStaffByBranch failed:', e); setCancelStaffList([]); }
                               finally { setCancelStaffLoading(false); }
                             }}
-                              className="p-2.5 rounded hover:bg-red-900/20 text-red-400" title="ยกเลิก" aria-label="ยกเลิก"><X size={13} /></button>
+                              className="p-1.5 rounded hover:bg-red-900/20 text-red-400" title="ยกเลิก" aria-label="ยกเลิก"><X size={13} /></button>
                           )}
                         </div>
                       </td>
