@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Staff Chat Resizable Panel — Design Spec</title>
+<style>
+  :root { --accent:#e11d48; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666;
+          /* real app dark tokens for faithful mockup */
+          --bg-card:#0f0f0f; --bg-input:#141414; --d-bd:#222; --d-bd-strong:#333; --rose600:#e11d48; --rose700:#be123c; }
+  body { font-family:-apple-system,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+  h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+  h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+  pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.88em; }
+  code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+  blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+  .section { background:var(--bg-section); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+  .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+  table { border-collapse:collapse; width:100%; margin:1em 0; }
+  th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+  th { background:var(--bg-meta); }
+  /* faithful mini chat box (mirrors StaffChatPanel) */
+  .stage{position:relative;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;display:inline-block}
+  .box{position:absolute;bottom:14px;right:14px;background:var(--bg-card);border:1px solid var(--d-bd-strong);
+       border-radius:12px;box-shadow:0 20px 40px -12px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}
+  .box.light{background:#f8fafc;border-color:#cbd5e1}
+  .hd{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 10px;background:var(--rose600);color:#fff;font-size:11.5px;font-weight:700}
+  .bd2{flex:1;overflow:hidden;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .bub{background:var(--bg-input);border:1px solid var(--d-bd);border-radius:9px;padding:5px 8px;font-size:11px;color:#e5e5e5;max-width:80%}
+  .box.light .bub{background:#fff;border-color:#e2e8f0;color:#0f172a}
+  .me{align-self:flex-end}.me .bub{background:rgba(225,29,72,.18);border-color:rgba(225,29,72,.4);color:#fbe8ec}
+  .box.light .me .bub{color:#9f1239}
+  .nm{font-size:9px;font-weight:700;margin-bottom:1px}
+  .cmp{display:flex;gap:4px;padding:6px;border-top:1px solid var(--d-bd)}
+  .cmp .i{flex:1;background:var(--bg-input);border:1px solid var(--d-bd-strong);border-radius:6px;height:22px}
+  .cmp .s{background:var(--rose600);border-radius:6px;width:34px}
+  .grip{position:absolute;top:0;left:0;width:18px;height:18px;cursor:nwse-resize}
+  .grip::before{content:"";position:absolute;top:4px;left:4px;width:8px;height:8px;border-top:2px solid #f59ec0;border-left:2px solid #f59ec0;border-radius:3px 0 0 0}
+  .badge{position:absolute;top:5px;left:22px;font-size:9px;color:#f59ec0;font-weight:700;background:rgba(0,0,0,.4);padding:0 5px;border-radius:5px}
+  .anch{position:absolute;bottom:14px;right:14px;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.25);transform:translate(50%,50%)}
+  .flowrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:.4em 0}
+  .fb{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:6px 12px;font-size:.85em}
+  .fb.hl{border-color:var(--accent);background:#fff5f7}
+  .arr{color:var(--accent);font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>Staff Chat Resizable Panel — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-31 · <strong>Status:</strong> Approved by user (Q1=A, Q2=A; "spec → plan → implement เลย") ·
+  <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-31-staff-chat-resizable-panel.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>บน desktop กล่อง staff chat (<code>StaffChatPanel</code>) ตอนนี้เป็น <strong>360×480 คงที่</strong> ยึดมุมล่างขวา —
+ผู้ใช้รายงานว่า "บางทีรู้สึกเล็กไป". ต้องการให้ <strong>ลากมุมซ้ายบน</strong>ปรับความกว้าง+ความสูงได้อิสระ (มุมล่างขวายึดติดจอเหมือนเดิม),
+UI ขยาย-หด + จัดระเบียบข้อความ <strong>ลื่นๆ ทันทีตามเมาส์</strong>, และ <strong>จำขนาดไว้ที่เครื่อง (per-device)</strong> →
+ย่อ (กด −) แล้วเปิดใหม่ หรือ มีคนทักแล้วแชทเด้งขึ้น = กลับมาขนาดที่ผู้ใช้คนนั้นลากเลือกไว้โดยอัตโนมัติ.
+มือถือไม่เปลี่ยน (ยังเต็มจอ). ฟีเจอร์นี้ <strong>เพิ่มแบบ additive</strong> — ไม่แตะ flow แชทเดิม (ส่ง/ย่อ/เด้ง/cursor/unread).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · BEFORE (ดีไซน์จริงปัจจุบัน — StaffChatPanel 360×480 คงที่ · ยึดมุมล่างขวา)</div>
+  <div class="stage" style="width:340px;height:230px">
+    <div class="box" style="width:175px;height:200px">
+      <div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>🔔 —</span></div>
+      <div class="bd2">
+        <div><div class="nm" style="color:#22d3ee">มะปราง</div><div class="bub">เคสบ่ายเลื่อนไหมคะ</div></div>
+        <div class="me"><div class="bub">เลื่อน 15:30 นะ</div></div>
+      </div>
+      <div class="cmp"><div class="i"></div><div class="s"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · AFTER (ลากมุมซ้ายบน ⤡ · มุมล่างขวา 📌 ยึดติด · จำขนาดที่เครื่อง) — Dark + Light theme</div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap">
+    <div class="stage" style="width:420px;height:340px">
+      <div class="anch"></div>
+      <div class="box" style="width:300px;height:300px">
+        <div class="grip"></div><span class="badge">520 × 600</span>
+        <div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>👤 มะปราง ✎ 🔔 —</span></div>
+        <div class="bd2">
+          <div><div class="nm" style="color:#22d3ee">มะปราง</div><div class="bub">เคสบ่ายนี้เลื่อนไหมคะ ลูกค้าโทรมาขอเลื่อน</div></div>
+          <div class="me"><div class="bub">เลื่อนเป็น 15:30 นะ เดี๋ยวอัปเดตปฏิทินให้</div></div>
+          <div><div class="nm" style="color:#a78bfa">หมอเอ</div><div class="bub">โอเคครับ ผมว่างช่วงนั้นพอดี</div></div>
+          <div class="me"><div class="bub">👍 จัดให้ค่ะ</div></div>
+        </div>
+        <div class="cmp"><div class="i"></div><div class="s"></div></div>
+      </div>
+    </div>
+    <div class="stage" style="width:300px;height:340px">
+      <div class="anch"></div>
+      <div class="box light" style="width:230px;height:300px">
+        <div class="grip"></div><span class="badge" style="color:#be123c">480 × 600</span>
+        <div class="hd"><span>💬 แชทสาขา</span><span>🔔 —</span></div>
+        <div class="bd2">
+          <div><div class="nm" style="color:#0891b2">มะปราง</div><div class="bub">เคสบ่ายเลื่อนไหมคะ</div></div>
+          <div class="me"><div class="bub">เลื่อน 15:30 นะ</div></div>
+          <div><div class="nm" style="color:#7c3aed">หมอเอ</div><div class="bub">โอเคครับ</div></div>
+        </div>
+        <div class="cmp"><div class="i"></div><div class="s"></div></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:.82em;color:#666;margin:.6em 0 0">ลากมุมซ้ายบน → กล่องโตขึ้น-ซ้าย, มุมล่างขวาอยู่กับที่ (จุดเขียว = anchor). bubble = <code>max-w-[80%]</code> + list = <code>flex-1</code> → ข้อความ reflow เองทันทีตามขนาด. ขนาดต่ำสุด 360×480 (ห้ามเล็กกว่าเดิม) · สูงสุด = กว้างจอ−32 × สูงจอ−32.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile (&lt;768px) · UNCHANGED — ไม่มี grip, ยังเต็มจอเหมือนเดิม</div>
+  <div class="stage" style="width:150px;height:240px">
+    <div class="box" style="left:8px;right:8px;top:34px;bottom:8px;width:auto;height:auto">
+      <div class="hd"><span>💬 แชทสาขา</span><span>—</span></div>
+      <div class="bd2"><div><div class="nm" style="color:#22d3ee">มะปราง</div><div class="bub">…</div></div></div>
+      <div class="cmp"><div class="i"></div><div class="s"></div></div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 — Resize drag (smooth, no React re-render mid-drag)</div>
+  <div class="flowrow">
+    <span class="fb">pointerdown บน grip</span><span class="arr">→</span>
+    <span class="fb">setPointerCapture + record {x,y,w,h}</span><span class="arr">→</span>
+    <span class="fb hl">pointermove: w=startW−Δx, h=startH−Δy → <code>clampSize</code> → เขียน <code>panelRef.style</code> ตรงๆ (DOM, ไม่ setState)</span><span class="arr">→</span>
+    <span class="fb">browser reflow bubbles/list เอง (flex + 80%)</span><span class="arr">→</span>
+    <span class="fb hl">pointerup: setState(size) + <code>setPanelSize()</code> → localStorage</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 — Auto-restore (minimize→reopen / someone messages→pop-up) — FREE via mount</div>
+  <div class="flowrow">
+    <span class="fb">กด − (minimize) / มีคนทัก (auto-popup)</span><span class="arr">→</span>
+    <span class="fb"><code>useStaffChat</code> setMinimized(true/false)</span><span class="arr">→</span>
+    <span class="fb hl">minimized=false → StaffChatPanel <b>MOUNTS ใหม่</b></span><span class="arr">→</span>
+    <span class="fb hl">mount: <code>getPanelSize() ?? DEFAULT</code> → <code>clampSize(viewport)</code> → inline size</span><span class="arr">→</span>
+    <span class="fb">เด้งมาขนาดที่ผู้ใช้เลือกไว้ อัตโนมัติ</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 3 — Window resize / orientation (กันหลุดจอ)</div>
+  <div class="flowrow">
+    <span class="fb">window 'resize'</span><span class="arr">→</span>
+    <span class="fb"><code>matchMedia('(min-width:768px)')</code> → desktop?</span><span class="arr">→</span>
+    <span class="fb hl">re-read current → <code>clampSize(new vw,vh)</code> → ถ้าเปลี่ยน เขียน style + setState (persist clamped)</span><span class="arr">→</span>
+    <span class="fb">กล่องพอดีจอเสมอ</span>
+  </div>
+  <p style="font-size:.82em;color:#666;margin:.4em 0 0">desktop↔mobile crossing: ถ้าจอเล็กลงต่ำกว่า 768px → ปล่อย class เดิม (fullscreen), ไม่ apply inline size. กลับเป็น desktop → apply saved size อีกครั้ง.</p>
+</div>
+
+<h2>Architecture</h2>
+<p>3 ชิ้น additive — ไม่แตะ logic แชทเดิม (messages/send/minimize/popup/cursor/unread):</p>
+<table>
+  <tr><th>ไฟล์</th><th>ชนิด</th><th>หน้าที่</th></tr>
+  <tr><td><code>src/lib/staffChatPanelSize.js</code></td><td>NEW (pure)</td>
+      <td>localStorage helper (device-wide key <code>staffChat.panelSize.v1</code>): <code>getPanelSize()</code> / <code>setPanelSize(s)</code> / <code>clearPanelSize()</code> + ค่าคงที่ <code>DEFAULT={w:360,h:480}</code> <code>MIN={w:360,h:480}</code> <code>MARGIN=32</code> + pure <code>clampSize({w,h},{vw,vh})</code>. invalid/missing → null (caller ใช้ DEFAULT).</td></tr>
+  <tr><td><code>src/hooks/useStaffChatPanelResize.js</code></td><td>NEW</td>
+      <td>desktop gate (<code>matchMedia(min-width:768px)</code> + listener); state <code>size</code>; <code>panelRef</code>; <code>gripProps</code> (pointer handlers, direct-DOM mid-drag, commit+persist บน pointerup); window-resize re-clamp; double-click grip → reset DEFAULT. คืน <code>{isDesktop, size, panelRef, gripProps}</code>.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatPanel.jsx</code></td><td>MODIFIED</td>
+      <td>เรียก hook. desktop: <code>ref={panelRef}</code> + inline <code>style={{width,height}}</code> (ทับ <code>md:w-[360px]</code>) + render grip ⤡ มุมซ้ายบน. mobile: ไม่ render grip/ไม่ใส่ inline → overlay เต็มจอเดิม 100%. header/banner/children เดิมทั้งหมด.</td></tr>
+</table>
+<p><strong>Smoothness:</strong> pointermove เขียน <code>panelRef.current.style.width/height</code> ตรงๆ (ไม่ setState → list 50 ข้อความไม่ re-render) → 60fps; commit state + persist เฉพาะตอน pointerup. <strong>Reflow:</strong> ฟรีจาก layout เดิม (<code>flex-1 min-h-0 overflow-y-auto</code> + bubble <code>max-w-[80%] break-words</code>).</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> จุดจับ = มุมซ้ายบนจุดเดียว (ปรับกว้าง+สูงพร้อมกัน) — ตรงตามที่ผู้ใช้สั่ง; ไม่มี edge handles.</li>
+  <li><strong>Q2 = A:</strong> เล็กสุด = 360×480 (ห้ามเล็กกว่าปัจจุบัน), ใหญ่สุด = <code>vw−32 × vh−32</code> (เกือบเต็มจอ "อิสระ"); clamp อัตโนมัติเมื่อจอเล็กลง.</li>
+  <li><strong>By request (locked):</strong> desktop เท่านั้น (mobile เต็มจอเดิม) · มุมล่างขวายึดติด (ไม่ย้ายตำแหน่ง) · per-device (device-wide, ไม่ใช่ per-branch) · restore ทั้ง minimize-reopen และ auto-popup.</li>
+  <li><strong>Polish:</strong> double-click grip → reset DEFAULT 360×480 (รวมไว้; ถ้าไม่อยากได้บอกตัด).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Desktop: ลากมุมซ้ายบน → กล่องกว้าง+สูงเปลี่ยนตามเมาส์ลื่นๆ, มุมล่างขวาอยู่กับที่, ข้อความ reflow ทันที.</li>
+  <li>ขนาด clamp อยู่ใน [360×480 , vw−32 × vh−32] เสมอ (ลองค่า adversarial: ลากเลยขอบ/จอจิ๋ว/NaN ก็ไม่หลุด).</li>
+  <li>ลากเสร็จ → ขนาดถูกเก็บใน localStorage (device-wide).</li>
+  <li>กด − แล้วเปิดใหม่ → กล่องกลับมาขนาดที่เก็บไว้ (ไม่ใช่ 360×480).</li>
+  <li>มีคนทัก (auto-popup) → กล่องเด้งมาขนาดที่เก็บไว้.</li>
+  <li>ย่อ window เล็กกว่าขนาดที่เก็บไว้ → กล่อง clamp พอดีจอ ไม่หลุดขอบ.</li>
+  <li>Mobile (&lt;768px): ไม่มี grip, ยังเต็มจอเหมือนเดิม (zero regression).</li>
+  <li>ไม่มีการเปลี่ยนพฤติกรรมแชทเดิม (ส่ง/ย่อ/เด้ง/cursor/unread/upload/sticker/unsend) — additive ล้วน.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>grip ทับ header:</strong> grip 18px มุมซ้ายบนซ้อนกับ 💬 ของ header rose — ทำให้ subtle + cursor:nwse-resize; ผู้ใช้ขอ "ขอบซ้ายบน" จึงคาดหวังจับตรงนั้นพอดี. (ไม่บัง interactive อื่นเพราะ header ซ้ายสุดเป็นข้อความ ไม่ใช่ปุ่ม.)</li>
+  <li><strong>Rule Q L1:</strong> harness ลากกล่อง mockup/real-mounted ได้ (Chrome MCP) แต่ widget จริงอยู่หลัง auth (AdminDashboard) → assembled L1 = ผู้ใช้ทำเองหลัง deploy (ลื่น/reflow/persist ข้าม minimize+popup/2 ธีม).</li>
+  <li><strong>SSR/test env:</strong> <code>matchMedia</code> + <code>localStorage</code> ต้อง guard (typeof window) เพื่อไม่ throw ใน jsdom/SSR.</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat Resizable Panel Implementation Plan</title>
+  <style>
+    :root { --accent: #e11d48; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666;
+            --bg-card:#0f0f0f; --bg-input:#141414; --d-bd:#222; --d-bd-strong:#333; --rose600:#e11d48; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th,td { border: 1px solid var(--bd); padding: .5em .8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .fb { display:inline-block; background:#fff; border:1px solid var(--bd); border-radius:8px; padding:5px 11px; font-size:.85em; margin:2px; }
+    .fb.hl { border-color:var(--accent); background:#fff5f7; }
+    .arr { color:var(--accent); font-weight:700; }
+    .stage{position:relative;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;display:inline-block}
+    .box{position:absolute;bottom:14px;right:14px;background:var(--bg-card);border:1px solid var(--d-bd-strong);border-radius:12px;box-shadow:0 20px 40px -12px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}
+    .hd{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 10px;background:var(--rose600);color:#fff;font-size:11px;font-weight:700}
+    .bd2{flex:1;overflow:hidden;padding:7px;display:flex;flex-direction:column;gap:5px}
+    .bub{background:var(--bg-input);border:1px solid var(--d-bd);border-radius:9px;padding:4px 7px;font-size:10.5px;color:#e5e5e5;max-width:80%}
+    .me{align-self:flex-end}.me .bub{background:rgba(225,29,72,.18);border-color:rgba(225,29,72,.4);color:#fbe8ec}
+    .nm{font-size:8.5px;font-weight:700;margin-bottom:1px}
+    .cmp{display:flex;gap:4px;padding:5px;border-top:1px solid var(--d-bd)}
+    .cmp .i{flex:1;background:var(--bg-input);border:1px solid var(--d-bd-strong);border-radius:6px;height:20px}
+    .cmp .s{background:var(--rose600);border-radius:6px;width:30px}
+    .grip{position:absolute;top:0;left:0;width:18px;height:18px;cursor:nwse-resize}
+    .grip::before{content:"";position:absolute;top:4px;left:4px;width:8px;height:8px;border-top:2px solid rgba(255,255,255,.7);border-left:2px solid rgba(255,255,255,.7);border-radius:3px 0 0 0}
+    .anch{position:absolute;bottom:14px;right:14px;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.25);transform:translate(50%,50%)}
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat Resizable Panel Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline — recommended for this baseline; subagents cost ~355K tok/task here per V81 / tablet-chart lesson). Steps use HTML checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Desktop staff-chat box becomes freely resizable by dragging the top-left corner (bottom-right stays anchored), reflows smoothly, and persists its size per-device — restored automatically on minimize-reopen and on auto-popup.</p>
+  <p><strong>Architecture:</strong> 3 additive pieces — a pure localStorage module (<code>staffChatPanelSize.js</code>, mirrors <code>staffChatReadCursor.js</code>), a desktop-only resize hook (<code>useStaffChatPanelResize.js</code>, direct-DOM during drag → no list re-render → 60fps; commit+persist on pointerup), and a grip + inline size on <code>StaffChatPanel.jsx</code>. Reflow is FREE from the existing <code>flex-1</code> list + <code>max-w-[80%]</code> bubbles. Auto-restore is FREE — minimize/popup flip <code>minimized</code> → panel remounts → mount reads saved size. Zero change to chat flow.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Tailwind, Vitest + RTL, Chrome MCP (Rule Q L1).</p>
+  <p><strong>Spec:</strong> docs/superpowers/specs/2026-05-31-staff-chat-resizable-panel-design.html</p>
+  <p><strong>Constraints:</strong> Rule N (targeted tests; full suite at batch end) · Rule Q (L1 real-browser before "verified") · cosmetic-shell-additive (no existing chat handler/state/prop touched) · NO deploy without explicit "deploy" (V18).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Desktop · BEFORE (360×480 fixed) → AFTER (dragged larger; ⤡ grip top-left; 📌 anchor bottom-right)</div>
+  <div style="display:flex;gap:24px;align-items:flex-end;flex-wrap:wrap">
+    <div class="stage" style="width:300px;height:210px">
+      <div class="box" style="width:150px;height:175px">
+        <div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>—</span></div>
+        <div class="bd2"><div><div class="nm" style="color:#22d3ee">มะปราง</div><div class="bub">เคสบ่ายเลื่อนไหม</div></div><div class="me"><div class="bub">15:30 นะ</div></div></div>
+        <div class="cmp"><div class="i"></div><div class="s"></div></div>
+      </div>
+    </div>
+    <div class="stage" style="width:360px;height:300px">
+      <div class="anch"></div>
+      <div class="box" style="width:270px;height:265px">
+        <div class="grip"></div>
+        <div class="hd"><span>💬 แชทสาขา · นครราชสีมา</span><span>👤 มะปราง ✎ —</span></div>
+        <div class="bd2">
+          <div><div class="nm" style="color:#22d3ee">มะปราง</div><div class="bub">เคสบ่ายนี้เลื่อนไหมคะ ลูกค้าโทรมาขอเลื่อน</div></div>
+          <div class="me"><div class="bub">เลื่อนเป็น 15:30 นะ เดี๋ยวอัปเดตปฏิทินให้</div></div>
+          <div><div class="nm" style="color:#a78bfa">หมอเอ</div><div class="bub">โอเคครับ ผมว่างพอดี</div></div>
+        </div>
+        <div class="cmp"><div class="i"></div><div class="s"></div></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:.82em;color:#666;margin:.5em 0 0">Live grounded mockup (draggable): <code>public/brainstorm-staffchat-resize.html</code>. Mobile (&lt;768px) = unchanged fullscreen overlay (no grip).</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Drag · Restore · Window-resize</div>
+  <p><strong>Drag:</strong>
+    <span class="fb">pointerdown grip</span><span class="arr">→</span>
+    <span class="fb">record start {x,y,w,h} + add window move/up listeners</span><span class="arr">→</span>
+    <span class="fb hl">pointermove: w=startW−Δx, h=startH−Δy → clampSize → write <code>panelRef.style</code> (DOM, no setState)</span><span class="arr">→</span>
+    <span class="fb">browser reflows list/bubbles</span><span class="arr">→</span>
+    <span class="fb hl">pointerup: setState(size) + setPanelSize() (localStorage) + remove listeners</span>
+  </p>
+  <p><strong>Restore (minimize-reopen / auto-popup):</strong>
+    <span class="fb">minimized flips false</span><span class="arr">→</span>
+    <span class="fb hl">StaffChatPanel MOUNTS</span><span class="arr">→</span>
+    <span class="fb hl">hook init: clampSize(getPanelSize() ?? DEFAULT, viewport)</span><span class="arr">→</span>
+    <span class="fb">renders at saved size</span> &nbsp;(no popup/minimize wiring touched)
+  </p>
+  <p><strong>Window resize:</strong>
+    <span class="fb">window 'resize'</span><span class="arr">→</span>
+    <span class="fb hl">clampSize(prev, new vw/vh)</span><span class="arr">→</span>
+    <span class="fb">if changed: write style + setState + persist</span> &nbsp;(never off-screen)
+  </p>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Type</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/staffChatPanelSize.js</code></td><td>NEW (pure)</td><td>Device-wide localStorage size + constants + pure <code>clampSize</code>. Mirrors <code>staffChatReadCursor.js</code> guards.</td></tr>
+  <tr><td><code>src/hooks/useStaffChatPanelResize.js</code></td><td>NEW</td><td>Desktop gate (matchMedia), drag (direct-DOM→commit), window-resize re-clamp, reset. Returns <code>{isDesktop,size,panelRef,gripProps}</code>.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatPanel.jsx</code></td><td>MODIFY</td><td>Consume hook; desktop → <code>ref</code> + inline size + grip; mobile → unchanged.</td></tr>
+  <tr><td><code>tests/staff-chat-panel-size.test.js</code></td><td>NEW</td><td>clampSize + persistence unit (Task 1).</td></tr>
+  <tr><td><code>tests/staff-chat-panel-resize-rtl.test.jsx</code></td><td>NEW</td><td>Hook+panel behavior: grip/inline desktop, none mobile, drag→persist, resize re-clamp, reset (Task 2).</td></tr>
+  <tr><td><code>tests/staff-chat-panel-resize-flow-simulate.test.js</code></td><td>NEW</td><td>Rule I: persist→remount restore = minimize/popup contract (Task 3).</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ───────────────────────── TASK 1 ───────────────────────── -->
+<div class="task">
+  <h3>Task 1: <code>staffChatPanelSize.js</code> — pure size module (TDD)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/lib/staffChatPanelSize.js</code></li>
+    <li>Test: <code>tests/staff-chat-panel-size.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-panel-size.test.js
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  getPanelSize, setPanelSize, clearPanelSize, clampSize,
+  DEFAULT_PANEL_SIZE, MIN_PANEL_SIZE, VIEWPORT_MARGIN, PANEL_SIZE_STORAGE_KEY,
+} from '../src/lib/staffChatPanelSize.js';
+
+describe('staffChatPanelSize — clampSize (pure)', () => {
+  it('S1.1 floors at MIN when request is smaller', () => {
+    expect(clampSize({ width: 100, height: 100 }, { vw: 2000, vh: 2000 }))
+      .toEqual({ width: 360, height: 480 });
+  });
+  it('S1.2 caps at viewport minus margin', () => {
+    expect(clampSize({ width: 5000, height: 5000 }, { vw: 800, vh: 600 }))
+      .toEqual({ width: 800 - VIEWPORT_MARGIN, height: 600 - VIEWPORT_MARGIN });
+  });
+  it('S1.3 viewport wins when smaller than MIN (always fits)', () => {
+    expect(clampSize({ width: 360, height: 480 }, { vw: 300, vh: 200 }))
+      .toEqual({ width: 300 - VIEWPORT_MARGIN, height: 200 - VIEWPORT_MARGIN });
+  });
+  it('S1.4 passes through a mid value unchanged', () => {
+    expect(clampSize({ width: 560, height: 620 }, { vw: 1280, vh: 900 }))
+      .toEqual({ width: 560, height: 620 });
+  });
+  it('S1.5 NaN/garbage request → default-based, still clamped', () => {
+    expect(clampSize({ width: NaN, height: 'x' }, { vw: 2000, vh: 2000 }))
+      .toEqual({ width: DEFAULT_PANEL_SIZE.width, height: DEFAULT_PANEL_SIZE.height });
+  });
+  it('S1.6 missing/Infinity viewport → floor at MIN only', () => {
+    expect(clampSize({ width: 999, height: 999 }, {}))
+      .toEqual({ width: 999, height: 999 });
+    expect(clampSize({ width: 100, height: 100 }, {}))
+      .toEqual({ width: 360, height: 480 });
+  });
+  it('S1.7 negative request → MIN', () => {
+    expect(clampSize({ width: -50, height: -50 }, { vw: 2000, vh: 2000 }))
+      .toEqual({ width: 360, height: 480 });
+  });
+});
+
+describe('staffChatPanelSize — persistence', () => {
+  beforeEach(() => { try { globalThis.localStorage.clear(); } catch { /* */ } });
+  it('S2.1 round-trips a valid size', () => {
+    setPanelSize({ width: 520, height: 640 });
+    expect(getPanelSize()).toEqual({ width: 520, height: 640 });
+    expect(globalThis.localStorage.getItem(PANEL_SIZE_STORAGE_KEY)).toContain('520');
+  });
+  it('S2.2 missing key → null', () => { expect(getPanelSize()).toBeNull(); });
+  it('S2.3 invalid JSON → null', () => {
+    globalThis.localStorage.setItem(PANEL_SIZE_STORAGE_KEY, '{not json');
+    expect(getPanelSize()).toBeNull();
+  });
+  it('S2.4 non-finite / non-positive stored → null', () => {
+    globalThis.localStorage.setItem(PANEL_SIZE_STORAGE_KEY, JSON.stringify({ width: 0, height: -1 }));
+    expect(getPanelSize()).toBeNull();
+  });
+  it('S2.5 setPanelSize ignores invalid input (no write)', () => {
+    setPanelSize({ width: NaN, height: 480 });
+    expect(getPanelSize()).toBeNull();
+  });
+  it('S2.6 clearPanelSize removes the key', () => {
+    setPanelSize({ width: 400, height: 500 });
+    clearPanelSize();
+    expect(getPanelSize()).toBeNull();
+  });
+  it('S2.7 rounds fractional dimensions on write', () => {
+    setPanelSize({ width: 400.7, height: 500.2 });
+    expect(getPanelSize()).toEqual({ width: 401, height: 500 });
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → verify it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-panel-size.test.js</code> · Expected: FAIL (Cannot resolve <code>../src/lib/staffChatPanelSize.js</code>).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement the module</strong></label></div>
+<pre><code class="language-javascript">// src/lib/staffChatPanelSize.js
+// (2026-05-31) Desktop staff-chat panel resize — per-device size persistence.
+// Mirrors staffChatReadCursor.js localStorage pattern (globalThis guard,
+// graceful degrade). DEVICE-WIDE single key (NOT per-branch) so the size the
+// user drags applies everywhere the widget mounts. Pure clampSize for tests.
+
+export const PANEL_SIZE_STORAGE_KEY = 'staffChat:panelSize';
+export const DEFAULT_PANEL_SIZE = Object.freeze({ width: 360, height: 480 });
+export const MIN_PANEL_SIZE = Object.freeze({ width: 360, height: 480 });
+export const VIEWPORT_MARGIN = 32; // px gap from each screen edge at max
+
+function _getLocalStorage() {
+  try {
+    if (typeof globalThis === 'undefined') return null;
+    const ls = globalThis.localStorage;
+    if (!ls || typeof ls.getItem !== 'function' || typeof ls.setItem !== 'function') return null;
+    return ls;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
+ * Pure: clamp a requested size to [MIN, viewport-margin]. If the viewport is
+ * smaller than MIN, the viewport ceiling wins so the box always fits on screen.
+ * Unknown/invalid viewport dims → Infinity ceiling (floor at MIN only).
+ */
+export function clampSize(size, viewport) {
+  const reqW = Number(size && size.width);
+  const reqH = Number(size && size.height);
+  const vw = Number(viewport && viewport.vw);
+  const vh = Number(viewport && viewport.vh);
+  const ceilW = Number.isFinite(vw) && vw > 0 ? Math.max(0, vw - VIEWPORT_MARGIN) : Infinity;
+  const ceilH = Number.isFinite(vh) && vh > 0 ? Math.max(0, vh - VIEWPORT_MARGIN) : Infinity;
+  const baseW = Number.isFinite(reqW) ? reqW : DEFAULT_PANEL_SIZE.width;
+  const baseH = Number.isFinite(reqH) ? reqH : DEFAULT_PANEL_SIZE.height;
+  const width = Math.min(ceilW, Math.max(MIN_PANEL_SIZE.width, baseW));
+  const height = Math.min(ceilH, Math.max(MIN_PANEL_SIZE.height, baseH));
+  return { width: Math.round(width), height: Math.round(height) };
+}
+
+/** @returns {{width:number,height:number}|null} */
+export function getPanelSize() {
+  const ls = _getLocalStorage();
+  if (!ls) return null;
+  let raw;
+  try { raw = ls.getItem(PANEL_SIZE_STORAGE_KEY); } catch (_e) { return null; }
+  if (!raw) return null;
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch (_e) { return null; }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const width = Number(parsed.width);
+  const height = Number(parsed.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+  if (width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
+export function setPanelSize(size) {
+  const ls = _getLocalStorage();
+  if (!ls) return;
+  const width = Number(size && size.width);
+  const height = Number(size && size.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+  if (width <= 0 || height <= 0) return;
+  try {
+    ls.setItem(PANEL_SIZE_STORAGE_KEY, JSON.stringify({ width: Math.round(width), height: Math.round(height) }));
+  } catch (e) {
+    try { console.warn('[staffChatPanelSize] setPanelSize write failed:', e); } catch (_e2) { /* */ }
+  }
+}
+
+export function clearPanelSize() {
+  const ls = _getLocalStorage();
+  if (!ls) return;
+  try { ls.removeItem(PANEL_SIZE_STORAGE_KEY); } catch (_e) { /* non-fatal */ }
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → verify it passes</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-panel-size.test.js</code> · Expected: PASS (14).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/staffChatPanelSize.js tests/staff-chat-panel-size.test.js
+git commit -m "feat(staffchat): staffChatPanelSize — per-device size persistence + pure clampSize (Task 1)"</code></pre>
+</div>
+
+<!-- ───────────────────────── TASK 2 ───────────────────────── -->
+<div class="task">
+  <h3>Task 2: <code>useStaffChatPanelResize</code> hook + wire <code>StaffChatPanel</code> + grip (RTL)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/hooks/useStaffChatPanelResize.js</code></li>
+    <li>Modify: <code>src/components/staffchat/StaffChatPanel.jsx</code></li>
+    <li>Test: <code>tests/staff-chat-panel-resize-rtl.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the failing RTL test</strong></label></div>
+  <p>Native <code>MouseEvent</code>s named pointerdown/move/up (jsdom-safe; React root delegation catches the bubbled grip pointerdown, window listeners catch move/up). <code>matchMedia</code> mocked per test. <code>getBoundingClientRect</code> mocked so drag math has a real start.</p>
+<pre><code class="language-jsx">// tests/staff-chat-panel-resize-rtl.test.jsx
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, act } from '@testing-library/react';
+import React from 'react';
+import { StaffChatPanel } from '../src/components/staffchat/StaffChatPanel.jsx';
+import { getPanelSize, setPanelSize, PANEL_SIZE_STORAGE_KEY } from '../src/lib/staffChatPanelSize.js';
+
+function mockMatchMedia(isDesktop) {
+  window.matchMedia = vi.fn().mockImplementation((q) => ({
+    matches: isDesktop, media: q, onchange: null,
+    addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+  }));
+}
+function fire(node, type, { clientX = 0, clientY = 0 } = {}) {
+  act(() => { node.dispatchEvent(new MouseEvent(type, { clientX, clientY, bubbles: true, cancelable: true })); });
+}
+const renderPanel = () => render(
+  <StaffChatPanel branchName="ทดสอบ" onMinimize={() => {}} displayName="มะปราง" canMinimize>
+    <div data-testid="kid">messages</div>
+  </StaffChatPanel>
+);
+
+describe('StaffChatPanel resize', () => {
+  beforeEach(() => {
+    try { globalThis.localStorage.clear(); } catch { /* */ }
+    // jsdom default innerWidth/innerHeight = 1024×768
+    window.innerWidth = 1024; window.innerHeight = 768;
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it('R1 desktop: renders grip + applies inline size from saved', () => {
+    setPanelSize({ width: 520, height: 600 });
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    expect(screen.getByTestId('staff-chat-resize-grip')).toBeTruthy();
+    expect(panel.style.width).toBe('520px');
+    expect(panel.style.height).toBe('600px');
+  });
+
+  it('R2 mobile: no grip, no inline width/height', () => {
+    setPanelSize({ width: 520, height: 600 });
+    mockMatchMedia(false);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    expect(screen.queryByTestId('staff-chat-resize-grip')).toBeNull();
+    expect(panel.style.width).toBe('');
+    expect(panel.style.height).toBe('');
+  });
+
+  it('R3 desktop no-saved: defaults to 360×480', () => {
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    expect(panel.style.width).toBe('360px');
+    expect(panel.style.height).toBe('480px');
+  });
+
+  it('R4 drag the grip up-left → grows + persists', () => {
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    panel.getBoundingClientRect = () => ({ width: 360, height: 480, top: 288, left: 648, right: 1008, bottom: 768, x: 648, y: 288, toJSON() {} });
+    const grip = screen.getByTestId('staff-chat-resize-grip');
+    fire(grip, 'pointerdown', { clientX: 648, clientY: 288 });   // top-left corner
+    fire(window, 'pointermove', { clientX: 548, clientY: 188 }); // drag up-left 100,100
+    fire(window, 'pointerup', { clientX: 548, clientY: 188 });
+    // startW 360 - (548-648) = 460 ; startH 480 - (188-288) = 580 ; both within 1024/768 ceil
+    expect(panel.style.width).toBe('460px');
+    expect(panel.style.height).toBe('580px');
+    expect(getPanelSize()).toEqual({ width: 460, height: 580 });
+  });
+
+  it('R5 drag beyond viewport ceiling → clamped, never off-screen', () => {
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    panel.getBoundingClientRect = () => ({ width: 360, height: 480, top: 288, left: 648, right: 1008, bottom: 768, x: 648, y: 288, toJSON() {} });
+    const grip = screen.getByTestId('staff-chat-resize-grip');
+    fire(grip, 'pointerdown', { clientX: 648, clientY: 288 });
+    fire(window, 'pointermove', { clientX: -5000, clientY: -5000 }); // way past edges
+    fire(window, 'pointerup', { clientX: -5000, clientY: -5000 });
+    expect(getPanelSize()).toEqual({ width: 1024 - 32, height: 768 - 32 }); // 992×736
+  });
+
+  it('R6 window resize smaller than saved → re-clamps to fit', () => {
+    setPanelSize({ width: 900, height: 700 });
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    act(() => { window.innerWidth = 600; window.innerHeight = 500; window.dispatchEvent(new Event('resize')); });
+    expect(panel.style.width).toBe('568px');  // 600-32
+    expect(panel.style.height).toBe('468px'); // 500-32
+    expect(getPanelSize()).toEqual({ width: 568, height: 468 });
+  });
+
+  it('R7 double-click grip → reset to default 360×480', () => {
+    setPanelSize({ width: 800, height: 700 });
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    const grip = screen.getByTestId('staff-chat-resize-grip');
+    fire(grip, 'dblclick');
+    expect(panel.style.width).toBe('360px');
+    expect(panel.style.height).toBe('480px');
+    expect(getPanelSize()).toEqual({ width: 360, height: 480 });
+  });
+
+  it('R8 saved size larger than viewport on mount → clamped on first render', () => {
+    setPanelSize({ width: 5000, height: 5000 });
+    mockMatchMedia(true);
+    renderPanel();
+    const panel = screen.getByTestId('staff-chat-panel');
+    expect(panel.style.width).toBe('992px');
+    expect(panel.style.height).toBe('736px');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → verify it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-panel-resize-rtl.test.jsx</code> · Expected: FAIL (no grip / no inline size yet; hook module missing).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3a: Create the hook</strong></label></div>
+<pre><code class="language-javascript">// src/hooks/useStaffChatPanelResize.js
+// (2026-05-31) Desktop-only resize for StaffChatPanel. Drag the top-left grip
+// to resize (bottom-right stays anchored). Direct-DOM writes during drag (no
+// React re-render of the 50-message list → 60fps); commit + persist on
+// pointerup. Mobile (<768px): isDesktop=false → caller renders the existing
+// fullscreen overlay unchanged. SSR/jsdom-safe (guards window/matchMedia/LS).
+import { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  getPanelSize, setPanelSize, clampSize, DEFAULT_PANEL_SIZE,
+} from '../lib/staffChatPanelSize.js';
+
+const DESKTOP_QUERY = '(min-width: 768px)';
+
+function readViewport() {
+  if (typeof window === 'undefined') return { vw: Infinity, vh: Infinity };
+  return { vw: window.innerWidth, vh: window.innerHeight };
+}
+function matchesDesktop() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try { return window.matchMedia(DESKTOP_QUERY).matches; } catch { return false; }
+}
+
+export function useStaffChatPanelResize() {
+  const panelRef = useRef(null);
+  const dragRef = useRef(null);
+  const [isDesktop, setIsDesktop] = useState(() => matchesDesktop());
+  const [size, setSize] = useState(() => clampSize(getPanelSize() || DEFAULT_PANEL_SIZE, readViewport()));
+
+  const writeDom = useCallback((s) => {
+    if (panelRef.current) {
+      panelRef.current.style.width = s.width + 'px';
+      panelRef.current.style.height = s.height + 'px';
+    }
+  }, []);
+
+  // matchMedia desktop tracking
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    let mql;
+    try { mql = window.matchMedia(DESKTOP_QUERY); } catch { return; }
+    const onChange = () => setIsDesktop(!!mql.matches);
+    onChange();
+    if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
+    else if (typeof mql.addListener === 'function') mql.addListener(onChange);
+    return () => {
+      if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
+      else if (typeof mql.removeListener === 'function') mql.removeListener(onChange);
+    };
+  }, []);
+
+  const onPointerMove = useCallback((e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    const next = clampSize({ width: d.startW - dx, height: d.startH - dy }, readViewport());
+    writeDom(next);          // direct DOM — no setState during drag (60fps)
+    d.last = next;
+  }, [writeDom]);
+
+  const onPointerUp = useCallback(() => {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    const final = d.last;
+    setSize(final);          // commit to React state
+    setPanelSize(final);     // persist (device-wide localStorage)
+  }, [onPointerMove]);
+
+  const onPointerDown = useCallback((e) => {
+    if (!panelRef.current) return;
+    if (e.cancelable) e.preventDefault();
+    const rect = panelRef.current.getBoundingClientRect();
+    dragRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      startW: rect.width, startH: rect.height,
+      last: { width: Math.round(rect.width), height: Math.round(rect.height) },
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }, [onPointerMove, onPointerUp]);
+
+  const onDoubleClick = useCallback(() => {
+    const next = clampSize(DEFAULT_PANEL_SIZE, readViewport());
+    setSize(next);
+    setPanelSize(next);
+    writeDom(next);
+  }, [writeDom]);
+
+  // re-clamp on window resize (keep on-screen)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => {
+      setSize((prev) => {
+        const next = clampSize(prev, readViewport());
+        if (next.width === prev.width && next.height === prev.height) return prev;
+        writeDom(next);
+        setPanelSize(next);
+        return next;
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [writeDom]);
+
+  // defensive cleanup if unmounted mid-drag
+  useEffect(() => () => {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+  }, [onPointerMove, onPointerUp]);
+
+  const gripProps = {
+    onPointerDown,
+    onDoubleClick,
+    role: 'separator',
+    'aria-label': 'ปรับขนาดหน้าต่างแชท (ลากมุมซ้ายบน · ดับเบิลคลิกเพื่อรีเซ็ต)',
+    'data-testid': 'staff-chat-resize-grip',
+    style: { cursor: 'nwse-resize' },
+  };
+
+  return { isDesktop, size, panelRef, gripProps };
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 3b: Wire the hook into <code>StaffChatPanel.jsx</code></strong></label></div>
+  <p>Add the import, call the hook, attach <code>ref</code>, spread the desktop inline size into the existing <code>style</code>, and render the grip ONLY on desktop. Everything else (header, banners, children) unchanged.</p>
+<pre><code class="language-jsx">// src/components/staffchat/StaffChatPanel.jsx — replace the import block + body
+import React, { useEffect } from 'react';
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { StaffChatHeader } from './StaffChatHeader.jsx';
+import { useStaffChatPanelResize } from '../../hooks/useStaffChatPanelResize.js';
+
+export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
+  const { isDesktop, size, panelRef, gripProps } = useStaffChatPanelResize();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-staff-chat-open', 'true');
+    return () => { document.documentElement.removeAttribute('data-staff-chat-open'); };
+  }, []);
+
+  // Desktop only: inline size overrides the md:w-[360px] md:h-[480px] classes.
+  // Mobile: undefined → existing fullscreen overlay (insets) unchanged.
+  const desktopSize = isDesktop ? { width: size.width + 'px', height: size.height + 'px' } : null;
+
+  return (
+    &lt;div
+      ref={panelRef}
+      data-testid="staff-chat-panel"
+      className="fixed
+        bottom-2 right-2 left-2 top-[20vh] md:top-auto md:left-auto md:bottom-4 md:right-4
+        md:w-[360px] md:h-[480px]
+        bg-[var(--bg-card)] border border-[var(--bd-strong)] rounded-xl shadow-2xl
+        flex flex-col overflow-hidden overscroll-contain z-[9000]"
+      style={{ touchAction: 'pan-y', ...desktopSize }}
+    &gt;
+      {isDesktop && (
+        &lt;div
+          {...gripProps}
+          className="absolute top-0 left-0 w-[18px] h-[18px] z-[10] group"
+          title="ลากเพื่อปรับขนาด · ดับเบิลคลิกเพื่อรีเซ็ต"
+        &gt;
+          &lt;span className="absolute top-[4px] left-[4px] w-[9px] h-[9px] border-t-2 border-l-2 border-white/70 group-hover:border-white rounded-tl-sm pointer-events-none" /&gt;
+        &lt;/div&gt;
+      )}
+      &lt;StaffChatHeader
+        branchName={branchName}
+        onMinimize={onMinimize}
+        onEditName={onEditName}
+        displayName={displayName}
+        canMinimize={canMinimize}
+      /&gt;
+      {error && (
+        &lt;div data-testid="staff-chat-error-banner" className="flex items-start gap-2 px-3 py-2 bg-rose-500/15 border-b border-rose-500/40 text-[11px] text-rose-300"&gt;
+          &lt;AlertCircle size={14} className="flex-shrink-0 mt-0.5" /&gt;
+          &lt;div className="flex-1 min-w-0"&gt;
+            &lt;div className="font-bold"&gt;ไม่สามารถโหลดข้อความได้&lt;/div&gt;
+            &lt;div className="text-rose-200/80 break-words"&gt;{error}&lt;/div&gt;
+            &lt;div className="text-rose-200/60 text-[10px] mt-0.5"&gt;ลองรีเฟรชหน้านี้ หรือเปลี่ยนสาขาแล้วเปลี่ยนกลับ&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      )}
+      {loading && !error && (
+        &lt;div data-testid="staff-chat-loading-banner" className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-input)] border-b border-[var(--bd)] text-[11px] text-[var(--tx-muted)]"&gt;
+          &lt;Loader2 size={12} className="animate-spin" /&gt;
+          &lt;span&gt;กำลังโหลดข้อความ...&lt;/span&gt;
+        &lt;/div&gt;
+      )}
+      &lt;div className="flex-1 flex flex-col min-h-0"&gt;
+        {children}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default StaffChatPanel;
+</code></pre>
+  <blockquote>Note: keep the existing top-of-file comment block; only the import line gains the hook + the body gains the hook call, <code>ref</code>, <code>...desktopSize</code>, and the grip. Do not alter header/banner/children markup.</blockquote>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 4: Run → verify it passes</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-panel-resize-rtl.test.jsx</code> · Expected: PASS (8).</p>
+  <p>If R4/R5 drag events don't reach React's <code>onPointerDown</code> via native dispatch, fall back to <code>fireEvent.pointerDown(grip, {clientX,clientY})</code> from <code>@testing-library/react</code> for the grip only; keep window move/up as native <code>MouseEvent</code> dispatch.</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/hooks/useStaffChatPanelResize.js src/components/staffchat/StaffChatPanel.jsx tests/staff-chat-panel-resize-rtl.test.jsx
+git commit -m "feat(staffchat): desktop resizable panel — top-left grip drag + persist + clamp (Task 2)"</code></pre>
+</div>
+
+<!-- ───────────────────────── TASK 3 ───────────────────────── -->
+<div class="task">
+  <h3>Task 3: Rule I flow-simulate (restore contract) + full suite + build</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Test: <code>tests/staff-chat-panel-resize-flow-simulate.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write the flow-simulate test (Rule I)</strong></label></div>
+  <p>Chains the persistence contract that makes minimize-reopen + auto-popup restore "free": a resize persists, and a fresh mount (= remount after <code>minimized</code> flips) reads it back, clamped to the live viewport.</p>
+<pre><code class="language-javascript">// tests/staff-chat-panel-resize-flow-simulate.test.js
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  getPanelSize, setPanelSize, clampSize, DEFAULT_PANEL_SIZE,
+} from '../src/lib/staffChatPanelSize.js';
+
+// Mirror the hook's mount-time size resolution (the line that runs on every
+// StaffChatPanel mount — i.e. every minimize-reopen and every auto-popup).
+function resolveMountSize(viewport) {
+  return clampSize(getPanelSize() || DEFAULT_PANEL_SIZE, viewport);
+}
+
+describe('F1 — resize → persist → remount restore (minimize/popup contract)', () => {
+  beforeEach(() => { try { globalThis.localStorage.clear(); } catch { /* */ } });
+
+  it('F1.1 fresh device (no saved) mounts at default', () => {
+    expect(resolveMountSize({ vw: 1280, vh: 900 })).toEqual({ width: 360, height: 480 });
+  });
+  it('F1.2 after a resize, a remount restores the dragged size (NOT default)', () => {
+    setPanelSize({ width: 620, height: 700 });          // user dragged
+    // ...user clicks − (minimize) → panel unmounts → clicks bubble (reopen) → panel mounts:
+    expect(resolveMountSize({ vw: 1280, vh: 900 })).toEqual({ width: 620, height: 700 });
+  });
+  it('F1.3 auto-popup (someone messages) restores the same dragged size', () => {
+    setPanelSize({ width: 540, height: 660 });
+    // minimized flips false on incoming message → same mount path:
+    expect(resolveMountSize({ vw: 1280, vh: 900 })).toEqual({ width: 540, height: 660 });
+  });
+  it('F1.4 saved size bigger than current viewport → clamps on restore', () => {
+    setPanelSize({ width: 1200, height: 1000 });
+    expect(resolveMountSize({ vw: 800, vh: 600 })).toEqual({ width: 768, height: 568 });
+  });
+  it('F1.5 persistence is device-wide (single key, branch-agnostic)', () => {
+    setPanelSize({ width: 500, height: 520 });
+    // no branch param anywhere — same value regardless of selected branch
+    expect(resolveMountSize({ vw: 1280, vh: 900 })).toEqual({ width: 500, height: 520 });
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → verify it passes</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-panel-resize-flow-simulate.test.js</code> · Expected: PASS (5).</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Full suite + build (Rule N batch-end)</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> (expect 15440 + 27 new ≈ 15467, 0 fail — investigate ANY new red per Rule P; lightbox flake may appear, re-run if so). Then <code>npm run build</code> (expect clean). Grep guard: confirm no existing staffchat test regressed (the panel change is additive).</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/staff-chat-panel-resize-flow-simulate.test.js
+git commit -m "test(staffchat): Rule I flow-simulate — resize persist → remount restore (Task 3)"</code></pre>
+</div>
+
+<!-- ───────────────────────── TASK 4 ───────────────────────── -->
+<div class="task">
+  <h3>Task 4: Rule Q L1 — real-browser verify on the REAL mounted panel (Chrome MCP) + cleanup</h3>
+  <p><strong>Files (temp — DELETE after, never commit):</strong></p>
+  <ul>
+    <li>Temp: <code>staffchat-panel-l1.html</code> (project root — Vite dev entry)</li>
+    <li>Temp: <code>src/__staffChatPanelL1.jsx</code> (mounts the REAL <code>StaffChatPanel</code>)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Build the temp L1 harness</strong></label></div>
+<pre><code class="language-jsx">// src/__staffChatPanelL1.jsx  (TEMP — delete after L1)
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { StaffChatPanel } from './components/staffchat/StaffChatPanel.jsx';
+import './index.css';
+function Demo() {
+  return (
+    &lt;StaffChatPanel branchName="ทดสอบ" onMinimize={() =&gt; {}} onEditName={() =&gt; {}} displayName="มะปราง" canMinimize&gt;
+      &lt;div style={{ flex: 1, overflowY: 'auto', padding: 10, color: '#e5e5e5' }}&gt;
+        {Array.from({ length: 12 }).map((_, i) =&gt; (
+          &lt;div key={i} style={{ marginBottom: 8 }}&gt;
+            &lt;div style={{ fontSize: 10, color: '#22d3ee', fontWeight: 700 }}&gt;มะปราง&lt;/div&gt;
+            &lt;div style={{ background: '#141414', border: '1px solid #222', borderRadius: 10, padding: '6px 10px', fontSize: 13, maxWidth: '80%' }}&gt;
+              ข้อความทดสอบ reflow บรรทัดที่ {i + 1} — ลากกล่องให้กว้างขึ้นแล้วดูข้อความจัดเรียงใหม่
+            &lt;/div&gt;
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/StaffChatPanel&gt;
+  );
+}
+createRoot(document.getElementById('root')).render(&lt;Demo /&gt;);
+</code></pre>
+<pre><code class="language-html">&lt;!-- staffchat-panel-l1.html  (TEMP — delete after L1) --&gt;
+&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;meta charset="UTF-8"&gt;&lt;title&gt;Staff Chat Panel L1&lt;/title&gt;&lt;/head&gt;
+&lt;body style="margin:0;background:#181818;height:100vh"&gt;&lt;div id="root"&gt;&lt;/div&gt;
+&lt;script type="module" src="/src/__staffChatPanelL1.jsx"&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Drive it in a real browser (Chrome MCP — Rule Q L1 / Q-vis)</strong></label></div>
+  <ul>
+    <li>Navigate Chrome to <code>http://localhost:5173/staffchat-panel-l1.html</code> (desktop viewport).</li>
+    <li>Read the grip's initial bounding rect + the panel rect (record bottom-right corner X/Y).</li>
+    <li>Drive a real pointer drag on the grip up-left (e.g. (cornerX,cornerY) → (cornerX-180, cornerY-160)) via the Chrome MCP <code>computer</code> drag (or dispatch trusted pointer events).</li>
+    <li><strong>Assert by SEEING (screenshot) + measuring:</strong> (a) panel width+height GREW; (b) the bottom-right corner X/Y is UNCHANGED (anchored); (c) the message bubbles re-wrapped (reflow); (d) drag past the screen edge → panel CLAMPS (stays on-screen).</li>
+    <li>Reload → panel comes back at the dragged size (localStorage persisted). Double-click grip → resets to 360×480.</li>
+    <li>Screenshot each (Rule Q-vis: verify rendered pixels, not the object model).</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Delete the temp harness (never commit it)</strong></label></div>
+<pre><code class="language-bash"># remove temp L1 files
+rm staffchat-panel-l1.html src/__staffChatPanelL1.jsx
+git status   # confirm only the Task 1-3 files are staged/committed; no temp files tracked</code></pre>
+  <blockquote>Keep <code>public/brainstorm-staffchat-resize.html</code> for now — it is a <code>brainstorm-*.html</code> dev mockup and is deleted at deploy with the others (per the outstanding ship-artifacts list).</blockquote>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Push + report (NO deploy)</strong></label></div>
+<pre><code class="language-bash">git push origin master
+# Do NOT deploy. Report L1 evidence + honest gap: assembled auth-gated widget L1 = user post-deploy.</code></pre>
+</div>
+
+<h2>Verification Summary (Rule Q)</h2>
+<table>
+  <tr><th>Level</th><th>What</th><th>Covers</th></tr>
+  <tr><td>Unit</td><td>clampSize + persistence (14)</td><td>bounds math, adversarial NaN/negative/huge/tiny-viewport, localStorage round-trip + invalid</td></tr>
+  <tr><td>RTL</td><td>panel+hook (8)</td><td>desktop grip+inline size, mobile none, drag→persist, ceiling clamp, window-resize re-clamp, reset, oversized-saved clamp-on-mount</td></tr>
+  <tr><td>Rule I flow-simulate</td><td>restore contract (5)</td><td>persist → remount = the minimize-reopen + auto-popup restore path; device-wide</td></tr>
+  <tr><td>Rule Q L1</td><td>Chrome MCP on REAL mounted panel</td><td>pixel grow + bottom-right anchored + reflow + clamp + persist-across-reload + dbl-click reset (SEEN via screenshot)</td></tr>
+  <tr><td>L1 (user)</td><td>assembled auth-gated AdminDashboard widget</td><td>HONEST GAP — smoothness/reflow/persist across minimize+popup, both themes, on the real logged-in widget (post-deploy, user hands-on)</td></tr>
+</table>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> AC1 drag (Task 2 R4) · AC2 clamp (Task 1 S1.* + R5) · AC3 persist (R4 + Task 1) · AC4 minimize-restore (Task 3 F1.2) · AC5 auto-popup restore (F1.3) · AC6 window-resize clamp (R6) · AC7 mobile unchanged (R2) · AC8 additive/no-flow-change (panel diff is import+ref+inline+grip only; Task 3 full-suite confirms no existing staffchat test regressed). All covered.</li>
+  <li><strong>No placeholders:</strong> every step has real code/commands. ✓</li>
+  <li><strong>Type/name consistency:</strong> <code>clampSize</code>, <code>getPanelSize</code>, <code>setPanelSize</code>, <code>clearPanelSize</code>, <code>PANEL_SIZE_STORAGE_KEY</code>, <code>DEFAULT_PANEL_SIZE</code>, <code>MIN_PANEL_SIZE</code>, <code>VIEWPORT_MARGIN</code>, hook returns <code>{isDesktop,size,panelRef,gripProps}</code>, grip testid <code>staff-chat-resize-grip</code> — consistent across all tasks. ✓</li>
+  <li><strong>Ship artifacts (at deploy, not now):</strong> V-entry + AVxx (resizable-panel additive contract: direct-DOM-during-drag + mount-restore-is-free + desktop-gate) · delete <code>public/brainstorm-*.html</code>.</li>
+</ul>
+
+</body>
+</html>
