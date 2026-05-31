@@ -1,30 +1,32 @@
 ---
-updated_at: "2026-05-31 EOD+5 — Implemented plan (①reorder+green card, ②course-step muted, ③CDV course step) + /systematic-debugging (confirm-btn-follows-status + confirmed sky→green). Pushed, NOT deployed."
-status: "13 commits ahead of prod, pushed to origin/master. NOT deployed (await 'deploy'). Frontend/lib only → no Probe-Deploy-Probe."
+updated_at: "2026-05-31 EOD+6 — Staff-chat desktop resizable panel SHIPPED (brainstorm→spec→plan→impl, 4 commits, pushed). NOT deployed."
+status: "17 commits ahead of prod, pushed to origin/master. NOT deployed (await 'deploy'). Frontend/lib only → no Probe-Deploy-Probe."
 branch: "master"
-last_commit: "15cde92e (confirmed color sky→green). prod = 0c607f68 LIVE."
-tests: "15440/0 full suite (ran this session after debug fixes; NOT re-run at session-end per rule)."
+last_commit: "3678f6c5 (Task 3 flow-simulate). prod = 0c607f68 LIVE."
+tests: "15469/0 full suite (ran this session after Task 3; +29 new vs 15440; NOT re-run at session-end per rule)."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "0c607f68 LIVE (V142 course double-deduct + V143 stock). UNCHANGED this session."
 firestore_rules_version: "UNCHANGED. No rules/storage/index/cron touched."
 ---
 
-# Active Context — confirmed-card + course-step impl + confirm-btn debug (2026-05-31 EOD+5)
+# Active Context — staff-chat desktop resizable panel (2026-05-31 EOD+6)
 
 ## State
-- Plan `2026-05-31-appt-confirmed-card-and-course-step.html` IMPLEMENTED (Tasks 1-7). Then `/systematic-debugging` on 2 user-reported issues fixed on top.
-- Net: confirmed "วันนี้" card = **GREEN** (Task 3 shipped sky, debug task recolored sky→green per user) + reorder confirmed-to-top; OPD course step muted "ไม่ตัดคอร์ส"; CDV history has the 4th course step; confirm button now follows real status (reappears when pending even if a treatment record exists).
-- 9 code/test commits this session, all pushed. Prod UNCHANGED.
+- NEW feature: desktop staff-chat box is freely resizable — drag the top-left ⤡ grip (bottom-right anchored), reflows live, size persisted per-device, restored on minimize-reopen + auto-popup. Mobile unchanged. Additive (zero change to chat flow).
+- 4 commits this session (docs + Tasks 1-3), all pushed. Prod UNCHANGED. Joins the existing un-deployed batch → 17 commits ahead of prod.
+- This batch now bundles: EOD+5 confirmed-card/course-step/confirm-btn (13 commits) + EOD+6 resizable panel (4 commits).
 
-## What this session shipped (detail → checkpoint 2026-05-31-confirmed-card-coursestep-confirmbtn.md)
-- Tasks 1-3 (① reorder `sortApptsConfirmedFirst` + today-tab wire + card tint) · Task 4 (②A course warn→not-deducted, 1 SSOT) · Task 5 (③B CDV course step) · Task 6 (7 V139 V21-fixups) · diag `scripts/diag-course-deducted-check.mjs` (Rule R: 15/10 split real prod, trap-check 0)
-- Debug Issue 1: `showConfirmBtn` separate status gate (mirrors mark-complete/un-mark) — V73-BS1 class; `tests/appt-confirm-button-follows-status.test.jsx` 6/0
-- Debug Issue 2: confirmed sky→green at 3 sites (`_apptHubStyles` bar+chip + RowCard tint); distinct from done=emerald
+## What this session shipped (detail → checkpoint 2026-05-31-staffchat-resizable-panel.md)
+- `/brainstorming` (Visual Companion grounded in REAL StaffChatPanel/tokens; Q1=A top-left corner grip / Q2=A min 360×480..max vw-32×vh-32) → spec HTML → `/writing-plans` HTML → `/executing-plans` inline (TDD, 4 tasks).
+- NEW `src/lib/staffChatPanelSize.js` (pure clampSize + per-device localStorage, mirrors staffChatReadCursor) + NEW `src/hooks/useStaffChatPanelResize.js` (matchMedia desktop-gate; direct-DOM drag → 60fps, commit+persist on pointerup; window-resize re-clamp; dbl-click reset) + `StaffChatPanel.jsx` wire (ref + inline size + grip).
+- Tests: unit 15/0 + RTL 8/0 + Rule I flow-simulate 6/0 = +29; full suite 15469/0; build clean.
+- Rule Q L1 real-browser (Chrome MCP, REAL mounted panel): default 360×480→drag 560×680 (bottom-right UNCHANGED + reflow SEEN)→clamp 1797×836→reload restores saved→dbl-click reset 360×480.
 
 ## Next action
-- User-gated: **deploy** (frontend/lib only, no Probe-Deploy-Probe) → then USER L1 (confirm-btn reappears on pending+treated card; green both themes; ① reorder+realtime; ② muted course; ③ CDV 4-step). OR continue.
+- User-gated: **deploy** the 17-commit batch (frontend/lib only, no Probe-Deploy-Probe) → then USER L1. OR continue.
 
 ## Outstanding user-triggered actions
-- Deploy the 13-commit batch + USER L1 hands-on (above).
-- Ship artifacts at deploy: V-entry + AVxx (V73-BS1 class: status-action gates must be status-driven, not hasTreatmentForDay; + course-step consumers need courseDeducted from a source with detail) + delete dev mockups `public/brainstorm-*.html`.
-- (carryover) L1 V142/V143 (2-device balance + NK shows 0); cron stock-lot-cleanup active 03:45 BKK.
+- Deploy the 17-commit batch + USER L1 (resizable panel: smoothness/both-themes/real minimize+popup on auth-gated widget; + carryover EOD+5 confirm-btn/green-card/course-steps; + V142/V143 2-device balance + NK shows 0).
+- Ship artifacts at deploy: V-log entries (EOD+5 V73-BS1 + course-step; EOD+6 resizable-panel feature) + delete dev mockups `public/brainstorm-*.html`.
+- (carryover) cron stock-lot-cleanup active 03:45 BKK.
+- Honest gap: mobile-<768 real-browser viewport-shrink harness-blocked → RTL-verified only.
