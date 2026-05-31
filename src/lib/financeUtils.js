@@ -118,3 +118,35 @@ export function fmtMoney(n) {
 export function fmtPoints(n) {
   return Number(n || 0).toLocaleString('th-TH');
 }
+
+// ─── Sale actual-paid resolvers (2026-05-31, spec Q1=A) ───────────────────────
+// resolveSalePaidAmount(sale) — money actually received on a sale.
+// Rule R diag 2026-05-31: 35/35 recent real sales (form + OPD treatment) store the
+// paid amount in payment.channels; 0 use totalPaidAmount (only markSalePaid writes
+// it). Primary = Σ channels; totalPaidAmount = legacy/edge fallback; else 0.
+// Same formula as the pay-modal "ยอดค้าง" + markSalePaid (Rule of 3 → canonical here).
+export function resolveSalePaidAmount(sale) {
+  const channels = sale?.payment?.channels;
+  if (Array.isArray(channels) && channels.length > 0) {
+    return roundTHB(channels.reduce((s, c) => s + (parseFloat(c?.amount) || 0), 0));
+  }
+  const tpa = Number(sale?.totalPaidAmount);
+  if (Number.isFinite(tpa)) return roundTHB(tpa);
+  return 0;
+}
+
+// Unpaid remainder (never negative).
+export function resolveSaleOutstanding(sale) {
+  const net = Number(sale?.billing?.netTotal ?? sale?.netTotal) || 0;
+  return Math.max(0, roundTHB(net - resolveSalePaidAmount(sale)));
+}
+
+// Color tone for the ยอดชำระจริง cell: 'full' | 'partial' | 'zero'.
+// 'full' covers paid-in-full incl 0฿ (paid 0 >= net 0).
+export function resolveSalePaidTone(paid, net) {
+  const p = Number(paid) || 0;
+  const n = Number(net) || 0;
+  if (p + 0.01 >= n) return 'full';
+  if (p > 0) return 'partial';
+  return 'zero';
+}
