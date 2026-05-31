@@ -52,6 +52,10 @@ describe('V71.A U1 unmarkAppointmentServiceCompleted writer', () => {
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, payload] = updateDoc.mock.calls[0];
     expect(payload).toEqual({
+      // V139 (2026-05-31) — coupling: back-to-queue now also resets status to
+      // 'confirmed' so the card returns to "กำลังรอ" + the mark-complete button
+      // (gated on status==='confirmed') reappears.
+      status: 'confirmed',
       serviceCompletedAt: null,
       serviceCompletedBy: '',
     });

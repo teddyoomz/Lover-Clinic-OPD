@@ -12,6 +12,7 @@ import { storagePrefixForMessage } from './staffChatRetentionCore.js';
 import { resolveSelectedBranchId } from './branchSelection.js';
 import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } from './chartEditSessionCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
+import { decideApptStatusServiceSync } from './appointmentDisplay.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
 // in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson). Same
@@ -2338,9 +2339,22 @@ export async function updateBackendAppointment(appointmentId, data) {
     }
   } catch { /* non-fatal */ }
 
+  // V139 (2026-05-31) — couple status ↔ serviceCompletedAt so the today sub-tab
+  // follows the status dropdown from ANY surface (Frontend modal, Backend appt
+  // tab). The tab filter is unchanged (serviceCompletedAt is the SSOT); we only
+  // reconcile serviceCompletedAt when an explicit status crosses the done
+  // boundary. Non-fatal — never block the appointment update.
+  let _v139Sync = {};
+  try {
+    const _v139Decision = decideApptStatusServiceSync(data && data.status, oldData && oldData.serviceCompletedAt);
+    if (_v139Decision === 'stamp') _v139Sync = { serviceCompletedAt: serverTimestamp(), wasServiceCompleted: true };
+    else if (_v139Decision === 'clear') _v139Sync = { serviceCompletedAt: null, serviceCompletedBy: '' };
+  } catch { /* non-fatal */ }
+
   await updateDoc(appointmentDoc(appointmentId), {
     ...data,
     ...(_v128UpdPhone ? { customerPhone: _v128UpdPhone } : {}),
+    ..._v139Sync,
     updatedAt: new Date().toISOString(),
   });
 
@@ -2418,6 +2432,9 @@ export async function markAppointmentServiceCompleted(apptId, uid) {
     throw new Error('V71_MARK_SERVICE_COMPLETED_REQUIRES_APPT_ID');
   }
   await updateDoc(appointmentDoc(apptId), {
+    // V139 (2026-05-31) — couple status to the service-completed stamp so the
+    // badge shows "เสร็จแล้ว" and a modal/Backend reader sees status==='done'.
+    status: 'done',
     serviceCompletedAt: serverTimestamp(),
     serviceCompletedBy: typeof uid === 'string' ? uid : '',
     // V71.B-bis (2026-05-18) — persistent flag survives unmark cycles. Lets
@@ -2441,6 +2458,10 @@ export async function unmarkAppointmentServiceCompleted(apptId) {
     throw new Error('V71_UNMARK_SERVICE_COMPLETED_REQUIRES_APPT_ID');
   }
   await updateDoc(appointmentDoc(apptId), {
+    // V139 (2026-05-31) — couple status back to "ยืนยันแล้ว" so the card returns
+    // to "กำลังรอ" AND the mark-complete button (gated on status==='confirmed')
+    // reappears (pre-V139 it could stay 'done' → button vanished).
+    status: 'confirmed',
     serviceCompletedAt: null,
     serviceCompletedBy: '',
   });
@@ -5899,7 +5920,7 @@ async function _repayNegativeBalances({
   }
 
   const { stockUtils } = await _stockLib();
-  const { BATCH_STATUS, applyNegativeRepay } = stockUtils;
+  const { BATCH_STATUS, applyNegativeRepay, resolveBatchStatusForRemaining } = stockUtils;
 
   // Phase 17.2 (2026-05-05): legacy-'main' fallback removed — strict
   // branchId filter (migration rewrites legacy batches to real branch IDs).
@@ -5949,12 +5970,10 @@ async function _repayNegativeBalances({
 
       const newRemaining = beforeRemaining + repayAmt;
       const newQty = { remaining: newRemaining, total: Number(b.qty?.total) || 0 };
-      // Status: if remaining still negative or 0 → depending; ≥0 → ACTIVE.
-      const newStatus = newRemaining > 0
-        ? BATCH_STATUS.ACTIVE
-        : newRemaining === 0
-          ? BATCH_STATUS.DEPLETED
-          : BATCH_STATUS.ACTIVE; // still negative → debt remains, batch stays active so admin sees it
+      // 2026-05-31: single-source status. Identical to the prior tri-state
+      // (>0 active / ===0 depleted / <0 active — partial repay leaves the
+      // batch negative+active so admin keeps seeing the remaining debt).
+      const newStatus = resolveBatchStatusForRemaining(newRemaining);
 
       tx.update(batchRef, {
         qty: newQty,
@@ -6886,7 +6905,7 @@ export async function createStockAdjustment(p, opts = {}) {
   // batch was at full capacity → audit doc + movement written but qty
   // unchanged. Long-standing production bug; surfaced when user did
   // ปรับเพิ่ม +20 +20 +10 on a 10/10 chanel batch and saw no change.
-  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, adjustAddQtyNumeric } = stockUtils;
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, adjustAddQtyNumeric, resolveBatchStatusForRemaining } = stockUtils;
 
   const batchId = p?.batchId;
   const type = p?.type;
@@ -6932,7 +6951,12 @@ export async function createStockAdjustment(p, opts = {}) {
       ? adjustAddQtyNumeric(batch.qty, qty)
       : deductQtyNumeric(batch.qty, qty);
     const afterRemaining = newQty.remaining;
-    const newStatus = afterRemaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+    // 2026-05-31 fix: negative remaining = active DEBT (must stay visible).
+    // resolveBatchStatusForRemaining: === 0 → depleted; < 0 OR > 0 → active.
+    // PRIMARY BUG: ADJUST_ADD on a -13 batch → -12 was flipped to DEPLETED by
+    // the old `<= 0` check → vanished from "ยอดคงเหลือ" (active-only filter) +
+    // became unrepayable. This is the "บวกสต็อคติดลบทีละนิด" path the user wants.
+    const newStatus = resolveBatchStatusForRemaining(afterRemaining);
     const branchId = p.branchId || batch.branchId;
 
     // Mutate batch
@@ -7303,7 +7327,7 @@ async function _deductOneItem({
   // Phase 15.7 (2026-04-28) — pickNegativeTargetBatch added for negative-stock
   // overage push (FIFO-last batch goes negative). MOVEMENT_TYPES retained for
   // existing audit-log integration. BATCH_STATUS unchanged.
-  const { MOVEMENT_TYPES, BATCH_STATUS, batchFifoAllocate, deductQtyNumeric, pickNegativeTargetBatch } = stockUtils;
+  const { MOVEMENT_TYPES, BATCH_STATUS, batchFifoAllocate, deductQtyNumeric, pickNegativeTargetBatch, resolveBatchStatusForRemaining } = stockUtils;
 
   if (!item.productId) {
     // Manual/one-off item — emit a skipped movement for audit continuity.
@@ -7659,7 +7683,12 @@ async function _deductOneItem({
         }
         const newQty = deductQtyNumeric(b.qty, a.takeQty);
         const afterRemaining = newQty.remaining;
-        const newStatus = afterRemaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+        // 2026-05-31: single-source status (=== 0 → depleted; else active).
+        // Positive FIFO loop is guarded (line ~7655 throws if before < takeQty)
+        // so afterRemaining is always ≥ 0 here — this only ever resolves to
+        // active-or-depleted-at-0; the helper keeps it consistent + lets the
+        // source-grep regression lock "no `<= 0 ? DEPLETED`" project-wide.
+        const newStatus = resolveBatchStatusForRemaining(afterRemaining);
         const now = new Date().toISOString();
 
         tx.update(batchRef, {
@@ -7726,8 +7755,10 @@ async function _deductOneItem({
         const beforeRemaining = Number(b.qty?.remaining) || 0;
         const newRemaining = beforeRemaining - plan.shortfall;
         const newQty = { remaining: newRemaining, total: Number(b.qty?.total) || 0 };
-        // Negative remaining = active debt; only flip to DEPLETED on exact 0
-        const newStatus = newRemaining === 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+        // Negative remaining = active debt; only flip to DEPLETED on exact 0.
+        // 2026-05-31: routed through resolveBatchStatusForRemaining (was already
+        // `=== 0` — kept identical; single-source for the source-grep lock).
+        const newStatus = resolveBatchStatusForRemaining(newRemaining);
         const now = new Date().toISOString();
 
         tx.update(batchRef, {
@@ -8397,7 +8428,7 @@ export async function createStockTransfer(data, opts = {}) {
  */
 export async function updateStockTransferStatus(transferId, newStatus, opts = {}) {
   const { stockUtils } = await _stockLib();
-  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric } = stockUtils;
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric, resolveBatchStatusForRemaining } = stockUtils;
   const TS_ENUM = stockUtils.TRANSFER_STATUS;
 
   const ref = stockTransferDoc(transferId);
@@ -8464,7 +8495,10 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
       const before = Number(b.qty?.remaining || 0);
       if (before < item.qty) throw new Error(`Batch ${item.sourceBatchId} short: have ${before}, need ${item.qty}`);
       const newQty = deductQtyNumeric(b.qty, item.qty);
-      const newStat = newQty.remaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+      // 2026-05-31: single-source status. Export is guarded above (throws if
+      // before < qty) so this never drives negative — anti-negative rule:
+      // only TFP-treatment + sale may go negative; transfer-out blocks.
+      const newStat = resolveBatchStatusForRemaining(newQty.remaining);
       tx.update(bRef, { qty: newQty, status: newStat, updatedAt: now });
       // V48 (2026-05-08) — Rule O extension. liveExportName comes from
       // the resolvedItems entry (live-resolved at create-transfer gate).
@@ -8757,7 +8791,7 @@ export async function createStockWithdrawal(data, opts = {}) {
 /** Transition: 0→1 (send/approve) | 1→2 (receive) | 0→3 or 1→3 (cancel). */
 export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts = {}) {
   const { stockUtils } = await _stockLib();
-  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric } = stockUtils;
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric, resolveBatchStatusForRemaining } = stockUtils;
 
   const ref = stockWithdrawalDoc(withdrawalId);
   const next = Number(newStatus);
@@ -8810,7 +8844,10 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
       const before = Number(b.qty?.remaining || 0);
       if (before < item.qty) throw new Error(`Batch short`);
       const newQty = deductQtyNumeric(b.qty, item.qty);
-      const newStat = newQty.remaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+      // 2026-05-31: single-source status. Withdrawal-out is guarded above
+      // (throws if before < qty) so it never drives negative — anti-negative
+      // rule: only TFP-treatment + sale may go negative; withdrawal-out blocks.
+      const newStat = resolveBatchStatusForRemaining(newQty.remaining);
       tx.update(bRef, { qty: newQty, status: newStat, updatedAt: now });
       // V48 (2026-05-08) — Rule O extension. liveExportWdName from resolvedItems.
       const liveExportWdName = item.productName || '';

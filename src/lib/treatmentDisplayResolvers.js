@@ -140,6 +140,41 @@ export function getTreatmentLifecycle(t) {
 }
 
 /**
+ * V139 (2026-05-31) — did THIS treatment / OPD record DEDUCT a course?
+ * Reads `detail.courseItems` (deduction ledger) OR `detail.treatmentItems`
+ * (fill-later course usage) on the RAW be_treatments doc. Mirrors V136
+ * `loadedHasNoCourseUsage` (TFP:1029-1037, `const t = existing.detail`) — same
+ * predicate, exposed here as a reusable SSOT for the OPD-card course step.
+ * Purchase-only (`detail.purchasedItems`) is NOT a deduction → false.
+ * Field path Rule-R verified 2026-05-31 (TOP-LEVEL courseItems = 0 on prod).
+ *
+ * @param {object} t — raw be_treatments doc (top-level + `detail`)
+ * @returns {boolean}
+ */
+export function resolveCourseDeducted(t) {
+  if (!t || typeof t !== 'object') return false;
+  const d = (t.detail && typeof t.detail === 'object') ? t.detail : {};
+  const ci = Array.isArray(d.courseItems) ? d.courseItems.length : 0;
+  const ti = Array.isArray(d.treatmentItems) ? d.treatmentItems.length : 0;
+  return ci > 0 || ti > 0;
+}
+
+/**
+ * V139 — display state for the OPD-card "course" step (TreatmentLifecycleStepper).
+ *   done    → ตัดคอร์สแล้ว (violet ✓)
+ *   warn    → OPD เสร็จแล้วแต่ไม่ได้ตัด (amber "ยังไม่ตัด")  [Q1=B locked]
+ *   pending → ยังไม่เสร็จ (stepper upgrades to pending-now pulse upstream)
+ *
+ * @param {{courseDeducted:boolean, completedDone:boolean}} [a]
+ * @returns {'done'|'warn'|'pending'}
+ */
+export function resolveCourseStepState({ courseDeducted = false, completedDone = false } = {}) {
+  if (courseDeducted) return 'done';
+  if (completedDone) return 'warn';
+  return 'pending';
+}
+
+/**
  * Phase 28 (2026-05-14) — Thai status label per 9-case lifecycle vocabulary.
  * Pure derivation from getTreatmentLifecycle output (key set only — not times).
  * `isLatest` differentiates "รอแพทย์บันทึก" (queue head) vs "ซักประวัติเท่านั้น"

@@ -119,6 +119,30 @@ export function apptTimeRange(appt) {
   return appt.endTime ? `${appt.startTime}–${appt.endTime}` : appt.startTime;
 }
 
+/**
+ * V139 (2026-05-31) — couple appt.status ↔ serviceCompletedAt so the
+ * "กำลังรอ / ✓ เสร็จแล้ว" today sub-tab (driven by serviceCompletedAt, the SSOT)
+ * stays in sync with the status dropdown ("เสร็จแล้ว"='done') + mark/unmark
+ * buttons. serviceCompletedAt remains the tab SSOT — the filter is NOT touched;
+ * this only reconciles serviceCompletedAt when an explicit status crosses the
+ * done boundary. Pure (no Firestore) so the caller applies serverTimestamp.
+ *
+ *   'stamp' → caller adds serviceCompletedAt=serverTimestamp() (+ wasServiceCompleted:true) → moves to "เสร็จแล้ว"
+ *   'clear' → caller adds serviceCompletedAt=null (+ serviceCompletedBy:'')           → moves to "กำลังรอ"
+ *   'none'  → no coupling change (no status in patch OR already consistent OR no transition)
+ *
+ * @param {*} patchStatus           appt.status in the incoming update patch (only lowercase 'done' counts as done)
+ * @param {*} oldServiceCompletedAt existing serviceCompletedAt (truthy = currently in the done tab)
+ * @returns {'stamp'|'clear'|'none'}
+ */
+export function decideApptStatusServiceSync(patchStatus, oldServiceCompletedAt) {
+  if (typeof patchStatus !== 'string' || !patchStatus) return 'none';
+  const inDoneTab = !!oldServiceCompletedAt;
+  if (patchStatus === 'done' && !inDoneTab) return 'stamp';
+  if (patchStatus !== 'done' && inDoneTab) return 'clear';
+  return 'none';
+}
+
 // Phase 19.0 (2026-05-06) — re-export type-resolution helpers from
 // appointmentTypes.js so chip-rendering callers (AppointmentTab,
 // CustomerDetailView, AdminDashboard) have a single import surface.

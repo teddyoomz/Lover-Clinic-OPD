@@ -150,7 +150,11 @@ describe('INV.1 — Per-batch conservation (replay = snapshot)', () => {
 describe('INV.2 — Atomicity (source-grep regression guards)', () => {
   it('2.1 createStockAdjustment uses runTransaction wrapping batch update + movement set', () => {
     const fnIdx = BACKEND_CLIENT_SRC.indexOf('export async function createStockAdjustment');
-    const block = BACKEND_CLIENT_SRC.slice(fnIdx, fnIdx + 4000);
+    // V138 (2026-05-31) fixup: slice to next export (was fnIdx+4000 — the V138
+    // resolveBatchStatusForRemaining comments grew the fn past the fixed window
+    // → tx.set(stockAdjustmentDoc fell off; contract unchanged).
+    const nextFnIdx = BACKEND_CLIENT_SRC.indexOf('export async function', fnIdx + 50);
+    const block = BACKEND_CLIENT_SRC.slice(fnIdx, nextFnIdx > 0 ? nextFnIdx : fnIdx + 5000);
     expect(block).toMatch(/runTransaction\s*\(\s*db/);
     // Inside the same tx, both batch.update and movement.set occur
     expect(block).toMatch(/tx\.update\(batchRef/);
@@ -406,7 +410,9 @@ describe('INV.6 — Reverse symmetry', () => {
 describe('INV.7 — Audit completeness (source-grep)', () => {
   it('7.1 createStockAdjustment writes movement + adjustment + batch update in same tx', () => {
     const fnIdx = BACKEND_CLIENT_SRC.indexOf('export async function createStockAdjustment');
-    const block = BACKEND_CLIENT_SRC.slice(fnIdx, fnIdx + 4000);
+    // V138 (2026-05-31) fixup: next-export boundary (was fnIdx+4000).
+    const nextFnIdx = BACKEND_CLIENT_SRC.indexOf('export async function', fnIdx + 50);
+    const block = BACKEND_CLIENT_SRC.slice(fnIdx, nextFnIdx > 0 ? nextFnIdx : fnIdx + 5000);
     expect(block).toMatch(/tx\.update\(batchRef[\s\S]*?tx\.set\(stockMovementDoc[\s\S]*?tx\.set\(stockAdjustmentDoc/);
   });
 

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPD Course-Step + Flow — Mockup</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; padding: 24px; background: #555; color: #eee; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #bbb; margin: 0 0 20px; }
+  .grid { display: flex; gap: 24px; flex-wrap: wrap; }
+  .pane { flex: 1; min-width: 440px; border-radius: 12px; padding: 18px; }
+  .pane.dark  { background: #0a0a0a; }
+  .pane.light { background: #ffffff; }
+  .pane h2 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 14px; }
+  .dark  h2 { color: #888; } .light h2 { color: #64748b; }
+
+  /* theme tokens */
+  .dark  { --bg-base:#141414; --bd:#2a2a2a; --bd-strong:#3a3a3a; --tx-faint:#5a5a5a; --tx-primary:#e5e5e5; --tx-muted:#9a9a9a;
+           --card:#0f0f0f; --band-bg:rgba(239,68,68,0.06); --band-bd:rgba(239,68,68,0.20); }
+  .light { --bg-base:#f1f5f9; --bd:#e2e8f0; --bd-strong:#cbd5e1; --tx-faint:#94a3b8; --tx-primary:#1e293b; --tx-muted:#64748b;
+           --card:#ffffff; --band-bg:rgba(254,226,226,0.5); --band-bd:rgba(239,68,68,0.25); }
+
+  .card { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 0; margin-bottom: 16px; overflow: hidden; }
+  .card-top { padding: 10px 14px; font-size: 13px; color: var(--tx-primary); display:flex; justify-content:space-between; align-items:center; }
+  .badge { font-size:11px; padding:2px 9px; border-radius:999px; font-weight:600; }
+  .badge.confirmed { background:rgba(56,189,248,0.18); color:#38bdf8; }
+  .badge.done { background:rgba(52,211,153,0.18); color:#34d399; }
+  .scenario-label { font-size:11px; color: var(--tx-muted); margin: 14px 0 6px; font-weight:600; }
+
+  .band { background: var(--band-bg); border-top: 1px solid var(--band-bd); padding: 10px 14px; }
+  .stepper-wrap { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; }
+  .opd-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--tx-muted); }
+
+  .stepper { display:flex; align-items:flex-start; }
+  .step { display:flex; flex-direction:column; align-items:center; min-width:70px; }
+  .dot { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+         font-size:11px; font-weight:700; border:2px solid; position:relative; z-index:2; }
+  .lbl { font-size:10px; margin-top:5px; font-weight:600; }
+  .tm  { font-size:9px; font-family:'SF Mono',Menlo,monospace; font-weight:600; margin-top:2px; letter-spacing:.05em; color:var(--tx-faint); }
+
+  /* done tones */
+  .dot.teal    { background:linear-gradient(135deg,#14b8a6,#0f766e); border-color:#5eead4; color:#fff; box-shadow:0 0 12px rgba(20,184,166,.5); }
+  .dot.amber   { background:linear-gradient(135deg,#f59e0b,#b45309); border-color:#fcd34d; color:#fff; box-shadow:0 0 12px rgba(245,158,11,.5); }
+  .dot.emerald { background:linear-gradient(135deg,#10b981,#047857); border-color:#6ee7b7; color:#fff; box-shadow:0 0 12px rgba(16,185,129,.5); }
+  .dot.violet  { background:linear-gradient(135deg,#8b5cf6,#6d28d9); border-color:#c4b5fd; color:#fff; box-shadow:0 0 12px rgba(139,92,246,.5); }
+  .dot.fuchsia { background:linear-gradient(135deg,#d946ef,#a21caf); border-color:#f0abfc; color:#fff; box-shadow:0 0 12px rgba(217,70,239,.5); }
+  .dot.rose    { background:linear-gradient(135deg,#fb7185,#be123c); border-color:#fda4af; color:#fff; box-shadow:0 0 12px rgba(244,63,94,.5); }
+  /* pending / skipped (neutral) */
+  .dot.pending { background:var(--bg-base); border-color:var(--bd-strong); color:var(--tx-faint); box-shadow:none; }
+  /* warning (not-deducted, attention) */
+  .dot.warn    { background:rgba(245,158,11,0.10); border-color:#fbbf24; color:#f59e0b; box-shadow:none; }
+
+  .lbl.on  { color:var(--tx-primary); }
+  .lbl.off { color:var(--tx-faint); }
+  .lbl.warn{ color:#d97706; }
+
+  .conn { width:34px; height:2px; margin-top:11px; background:var(--bd-strong); }
+  .conn.tealamber   { background:linear-gradient(90deg,#0f766e,#b45309); }
+  .conn.ambercourse { background:linear-gradient(90deg,#b45309,#6d28d9); }
+  .conn.coursedone  { background:linear-gradient(90deg,#6d28d9,#047857); }
+  .conn.dim2emerald { background:linear-gradient(90deg,#3a3a3a,#047857); }
+
+  .note { font-size:11px; color:#bbb; margin:8px 0 0; max-width:900px; line-height:1.6; }
+  .opt-row { display:flex; gap:30px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .opt-cap { font-size:11px; color:var(--tx-muted); min-width:120px; }
+</style>
+</head>
+<body>
+
+<h1>สถานะ OPD — เพิ่มขั้น "คอร์ส" (ระหว่าง แพทย์ ↔ เสร็จ)</h1>
+<p class="sub">Mockup · 2026-05-31 · faithful reproduction of TreatmentLifecycleStepper styling · ตีมเดิม Dark + Light</p>
+
+<div class="grid">
+
+  <!-- ===================== DARK ===================== -->
+  <div class="pane dark">
+    <h2>🌙 Dark theme</h2>
+
+    <div class="card">
+      <div class="card-top"><span>👤 คุณสมหญิง · LC-26000123</span><span class="badge done">เสร็จแล้ว</span></div>
+      <div class="band">
+        <div class="scenario-label">A) ตัดคอร์สแล้ว → ขั้น "คอร์ส" = สำเร็จ (เขียว/ม่วง)</div>
+        <div class="stepper-wrap">
+          <span class="opd-tag">สถานะ OPD</span>
+          <div class="stepper">
+            <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">10:05</div></div>
+            <div class="conn tealamber"></div>
+            <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">10:22</div></div>
+            <div class="conn ambercourse"></div>
+            <div class="step"><div class="dot violet">✓</div><div class="lbl on">คอร์ส</div><div class="tm">10:40</div></div>
+            <div class="conn coursedone"></div>
+            <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">10:41</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span>👤 คุณวิชัย · LC-26000124</span><span class="badge done">เสร็จแล้ว</span></div>
+      <div class="band">
+        <div class="scenario-label">B-แบบเงียบ) เสร็จแต่ไม่ได้ตัดคอร์ส → ขั้น "คอร์ส" = ขีด "−" จาง (เหมือน "ข้าม" เดิม)</div>
+        <div class="stepper-wrap">
+          <span class="opd-tag">สถานะ OPD</span>
+          <div class="stepper">
+            <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">11:05</div></div>
+            <div class="conn tealamber"></div>
+            <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">11:20</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot pending">−</div><div class="lbl off">คอร์ส</div><div class="tm">—</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">11:21</div></div>
+          </div>
+        </div>
+        <p class="note">ผู้จัดการเห็นว่าขั้น "คอร์ส" ไม่เขียว = รู้ทันทีว่า OPD นี้ "ยังไม่ได้ตัดคอร์ส" (เงียบ ไม่รก)</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span>👤 คุณวิชัย · LC-26000124</span><span class="badge done">เสร็จแล้ว</span></div>
+      <div class="band">
+        <div class="scenario-label">B-แบบเตือน) เสร็จแต่ไม่ได้ตัดคอร์ส → ขั้น "คอร์ส" = เตือนเหลือง "ยังไม่ตัด"</div>
+        <div class="stepper-wrap">
+          <span class="opd-tag">สถานะ OPD</span>
+          <div class="stepper">
+            <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">11:05</div></div>
+            <div class="conn tealamber"></div>
+            <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">11:20</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot warn">!</div><div class="lbl warn">ยังไม่ตัด</div><div class="tm">—</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">11:21</div></div>
+          </div>
+        </div>
+        <p class="note">เตือนชัดว่าพนักงานอาจลืมตัดคอร์ส (แต่จะ "ดัง" กับเคสที่ไม่มีคอร์สให้ตัดจริงๆ ด้วย เช่น มาปรึกษาเฉยๆ)</p>
+      </div>
+    </div>
+
+    <div class="scenario-label" style="color:#bbb">ตัวเลือกสี ขั้น "คอร์ส" (done):</div>
+    <div class="opt-row">
+      <span class="opt-cap">ม่วง (violet)</span><div class="dot violet" style="display:inline-flex">✓</div>
+      <span class="opt-cap">บานเย็น (fuchsia)</span><div class="dot fuchsia" style="display:inline-flex">✓</div>
+      <span class="opt-cap">ชมพู (rose)</span><div class="dot rose" style="display:inline-flex">✓</div>
+    </div>
+  </div>
+
+  <!-- ===================== LIGHT ===================== -->
+  <div class="pane light">
+    <h2>☀️ Light theme</h2>
+
+    <div class="card">
+      <div class="card-top"><span style="color:#1e293b">👤 คุณสมหญิง · LC-26000123</span><span class="badge done">เสร็จแล้ว</span></div>
+      <div class="band">
+        <div class="scenario-label">A) ตัดคอร์สแล้ว → ขั้น "คอร์ส" = สำเร็จ</div>
+        <div class="stepper-wrap">
+          <span class="opd-tag">สถานะ OPD</span>
+          <div class="stepper">
+            <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">10:05</div></div>
+            <div class="conn tealamber"></div>
+            <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">10:22</div></div>
+            <div class="conn ambercourse"></div>
+            <div class="step"><div class="dot violet">✓</div><div class="lbl on">คอร์ส</div><div class="tm">10:40</div></div>
+            <div class="conn coursedone"></div>
+            <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">10:41</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span style="color:#1e293b">👤 คุณวิชัย · LC-26000124</span><span class="badge done">เสร็จแล้ว</span></div>
+      <div class="band">
+        <div class="scenario-label">B-แบบเงียบ) เสร็จแต่ไม่ได้ตัดคอร์ส → ขีด "−" จาง</div>
+        <div class="stepper-wrap">
+          <span class="opd-tag">สถานะ OPD</span>
+          <div class="stepper">
+            <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">11:05</div></div>
+            <div class="conn tealamber"></div>
+            <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">11:20</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot pending">−</div><div class="lbl off">คอร์ส</div><div class="tm">—</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">11:21</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span style="color:#1e293b">👤 คุณวิชัย · LC-26000124</span><span class="badge done">เสร็จแล้ว</span></div>
+      <div class="band">
+        <div class="scenario-label">B-แบบเตือน) เตือนเหลือง "ยังไม่ตัด"</div>
+        <div class="stepper-wrap">
+          <span class="opd-tag">สถานะ OPD</span>
+          <div class="stepper">
+            <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">11:05</div></div>
+            <div class="conn tealamber"></div>
+            <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">11:20</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot warn">!</div><div class="lbl warn">ยังไม่ตัด</div><div class="tm">—</div></div>
+            <div class="conn dim2emerald"></div>
+            <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">11:21</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scenario-label" style="color:#64748b">ตัวเลือกสี ขั้น "คอร์ส" (done):</div>
+    <div class="opt-row">
+      <span class="opt-cap">ม่วง (violet)</span><div class="dot violet" style="display:inline-flex">✓</div>
+      <span class="opt-cap">บานเย็น (fuchsia)</span><div class="dot fuchsia" style="display:inline-flex">✓</div>
+      <span class="opt-cap">ชมพู (rose)</span><div class="dot rose" style="display:inline-flex">✓</div>
+    </div>
+  </div>
+</div>
+
+<h1 style="margin-top:28px">Feature 2 — กดเสร็จ/แก้สถานะ → ย้าย tab อัตโนมัติ (sync status ↔ serviceCompletedAt)</h1>
+<p class="note" style="color:#ddd">
+ปัจจุบัน: <b>2 ตัวแปรแยกกัน</b> — tab "เสร็จแล้ว/กำลังรอ" ดูจาก <code>serviceCompletedAt</code> (timestamp) เท่านั้น;
+ส่วน <code>status</code> (ยืนยันแล้ว/เสร็จแล้ว ใน dropdown แก้ไขนัด) แยกขาดกัน → กดเสร็จแล้ว status ไม่เปลี่ยน / เปลี่ยน status ใน modal เป็น "เสร็จแล้ว" แล้ว card ก็ยังค้างอยู่ tab กำลังรอ.<br><br>
+ข้อเสนอ: ผูก 2 อย่างเข้าด้วยกัน (serviceCompletedAt = SSOT ของ tab เหมือนเดิม):
+</p>
+<table style="border-collapse:collapse;color:#eee;font-size:12px;max-width:920px">
+  <tr style="background:#333"><th style="border:1px solid #555;padding:6px 10px;text-align:left">การกระทำ</th><th style="border:1px solid #555;padding:6px 10px;text-align:left">serviceCompletedAt</th><th style="border:1px solid #555;padding:6px 10px;text-align:left">status</th><th style="border:1px solid #555;padding:6px 10px;text-align:left">ผล (tab)</th></tr>
+  <tr><td style="border:1px solid #555;padding:6px 10px">กด "✓ ลูกค้ารับบริการเรียบร้อย"</td><td style="border:1px solid #555;padding:6px 10px">= now</td><td style="border:1px solid #555;padding:6px 10px">→ <b>done</b> (ใหม่)</td><td style="border:1px solid #555;padding:6px 10px">→ tab "✓ เสร็จแล้ว"</td></tr>
+  <tr><td style="border:1px solid #555;padding:6px 10px">แก้ไขนัด → status = "เสร็จแล้ว"</td><td style="border:1px solid #555;padding:6px 10px">→ stamp now (ใหม่)</td><td style="border:1px solid #555;padding:6px 10px">done</td><td style="border:1px solid #555;padding:6px 10px">→ tab "✓ เสร็จแล้ว"</td></tr>
+  <tr><td style="border:1px solid #555;padding:6px 10px">กด "↩ กลับไปคิวรอ"</td><td style="border:1px solid #555;padding:6px 10px">→ null</td><td style="border:1px solid #555;padding:6px 10px">→ <b>confirmed</b> (ใหม่)</td><td style="border:1px solid #555;padding:6px 10px">→ tab "กำลังรอ"</td></tr>
+  <tr><td style="border:1px solid #555;padding:6px 10px">แก้ไขนัด → status กลับเป็น "ยืนยันแล้ว" (จาก done)</td><td style="border:1px solid #555;padding:6px 10px">→ null (ใหม่/symmetric)</td><td style="border:1px solid #555;padding:6px 10px">confirmed</td><td style="border:1px solid #555;padding:6px 10px">→ tab "กำลังรอ"</td></tr>
+</table>
+
+</body>
+</html>

@@ -10,16 +10,22 @@
 
 import React from 'react';
 import { TreatmentLifecycleStepper } from '../backend/treatment-history/TreatmentLifecycleStepper.jsx';
-import { getTreatmentLifecycle } from '../../lib/treatmentDisplayResolvers.js';
+import { getTreatmentLifecycle, resolveCourseDeducted } from '../../lib/treatmentDisplayResolvers.js';
 
 export default function AppointmentOpdStepperRow({ latestTreatment, isTodayTab }) {
   // Hide entirely on non-today tabs when no treatment exists.
   if (!latestTreatment && !isTodayTab) return null;
 
-  // Derive lifecycle from real treatment (drives all 3 stages + colors + times)
-  // OR pass empty array → stepper renders 3 muted pending dots.
+  // Derive lifecycle from real treatment (drives vitals/doctor/completed + colors + times)
+  // OR pass empty array → stepper renders muted pending dots.
   const lifecycle = latestTreatment ? getTreatmentLifecycle(latestTreatment) : [];
   const isLatest = !!latestTreatment;
+  // V139 — opt-in "course" step (4 dots). Driven by whether THIS OPD record
+  // deducted a course, via the resolveCourseDeducted SSOT (AV159 — no inline
+  // predicate here). Live: latestTreatment flows from AppointmentHubView's
+  // listenToTreatmentsByDateRange onSnapshot → a fresh deduction lights the step
+  // instantly, same as vitals/doctor/completed.
+  const courseDeducted = latestTreatment ? resolveCourseDeducted(latestTreatment) : false;
 
   return (
     <div
@@ -30,7 +36,12 @@ export default function AppointmentOpdStepperRow({ latestTreatment, isTodayTab }
         <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)] shrink-0">
           สถานะ OPD
         </span>
-        <TreatmentLifecycleStepper lifecycle={lifecycle} isLatest={isLatest} />
+        <TreatmentLifecycleStepper
+          lifecycle={lifecycle}
+          isLatest={isLatest}
+          withCourseStep
+          courseDeducted={courseDeducted}
+        />
       </div>
     </div>
   );

@@ -14,7 +14,8 @@ describe('OPD stepper polish — centre + Ember band', () => {
     expect(flexRow.className).toMatch(/justify-center/);
     expect(flexRow.className).toMatch(/items-center/); // existing classes kept
     expect(screen.getByText('สถานะ OPD')).toBeInTheDocument();
-    expect(screen.getAllByTestId('stepper-dot')).toHaveLength(3); // circles verbatim — not touched
+    // V139 (2026-05-31) — OPD card stepper gained a 4th "course" step (withCourseStep).
+    expect(screen.getAllByTestId('stepper-dot')).toHaveLength(4);
   });
 
   it('source-grep: AppointmentOpdStepperRow flex row has justify-center', () => {

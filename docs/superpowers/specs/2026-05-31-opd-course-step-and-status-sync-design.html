@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPD "คอร์ส" Step + Appointment Status↔Tab Sync — Design Spec</title>
+<style>
+  :root { --accent:#7c3aed; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:1000px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+  h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+  h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+  pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+  code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+  blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+  .section { background:var(--bg-section); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+  .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+  table { border-collapse:collapse; width:100%; margin:1em 0; }
+  th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; font-size:.92em; }
+  th { background:var(--bg-meta); }
+
+  /* stepper mockup */
+  .pane { border-radius:10px; padding:14px 16px; margin:8px 0; }
+  .pane.dark { background:#0a0a0a; --bg-base:#141414; --bd-strong:#3a3a3a; --tx-faint:#5a5a5a; --tx-primary:#e5e5e5; --tx-muted:#9a9a9a; --band-bg:rgba(239,68,68,.06); --band-bd:rgba(239,68,68,.20); }
+  .pane.light { background:#fff; border:1px solid #e5e5e5; --bg-base:#f1f5f9; --bd-strong:#cbd5e1; --tx-faint:#94a3b8; --tx-primary:#1e293b; --tx-muted:#64748b; --band-bg:rgba(254,226,226,.5); --band-bd:rgba(239,68,68,.25); }
+  .band { background:var(--band-bg); border-top:1px solid var(--band-bd); padding:8px 12px; border-radius:6px; }
+  .stepper-wrap { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+  .opd-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--tx-muted); }
+  .stepper { display:flex; align-items:flex-start; }
+  .step { display:flex; flex-direction:column; align-items:center; min-width:66px; }
+  .dot { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; border:2px solid; }
+  .lbl { font-size:10px; margin-top:5px; font-weight:600; }
+  .tm { font-size:9px; font-family:monospace; font-weight:600; margin-top:2px; color:var(--tx-faint); }
+  .dot.teal{background:linear-gradient(135deg,#14b8a6,#0f766e);border-color:#5eead4;color:#fff;box-shadow:0 0 12px rgba(20,184,166,.5)}
+  .dot.amber{background:linear-gradient(135deg,#f59e0b,#b45309);border-color:#fcd34d;color:#fff;box-shadow:0 0 12px rgba(245,158,11,.5)}
+  .dot.emerald{background:linear-gradient(135deg,#10b981,#047857);border-color:#6ee7b7;color:#fff;box-shadow:0 0 12px rgba(16,185,129,.5)}
+  .dot.violet{background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-color:#c4b5fd;color:#fff;box-shadow:0 0 12px rgba(139,92,246,.5)}
+  .dot.pending{background:var(--bg-base);border-color:var(--bd-strong);color:var(--tx-faint)}
+  .dot.warn{background:rgba(245,158,11,.10);border-color:#fbbf24;color:#d97706}
+  .lbl.on{color:var(--tx-primary)} .lbl.off{color:var(--tx-faint)} .lbl.warn{color:#d97706}
+  .conn{width:30px;height:2px;margin-top:11px;background:var(--bd-strong)}
+  .conn.g1{background:linear-gradient(90deg,#0f766e,#b45309)} .conn.g2{background:linear-gradient(90deg,#b45309,#6d28d9)} .conn.g3{background:linear-gradient(90deg,#6d28d9,#047857)}
+  .conn.dim{background:linear-gradient(90deg,#b45309,#047857)}
+  .new{color:#7c3aed;font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>OPD "คอร์ส" Step + Appointment Status ↔ Tab Real-time Sync</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-31 · <strong>Status:</strong> Pending user approval ·
+  <strong>Surface:</strong> Frontend "นัดหมาย วันนี้" card list (+ cross-surface real-time) ·
+  <strong>Theme:</strong> Dark + Light (เข้าตีมเดิม)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><strong>Feature 1 — ขั้น "คอร์ส" ในสเต็ปเปอร์ OPD:</strong> พนักงานชอบ "ซื้อคอร์สทิ้งไว้แล้วลืมกดตัด". เพิ่มขั้น <span class="new">"คอร์ส"</span> ระหว่าง ② แพทย์ ↔ ③ เสร็จ บน card "นัดหมาย วันนี้" — เป็นสีม่วง "สำเร็จ" <em>เฉพาะเมื่อ OPD นั้น<u>ตัดคอร์ส</u>จริง</em> (ซื้ออย่างเดียวไม่นับ); ถ้า OPD เสร็จแล้วแต่ไม่ได้ตัด → เตือนเหลือง "ยังไม่ตัด" ให้ผู้จัดการ/พนักงานเห็นทันที.</p>
+<p><strong>Feature 2 — กดเสร็จ/แก้สถานะ → ย้าย tab อัตโนมัติ + real-time ทุกที่:</strong> ปัจจุบันแท็บ "กำลังรอ/✓ เสร็จแล้ว" ตัดสินด้วย <code>serviceCompletedAt</code> (timestamp) ซึ่ง<u>แยกขาด</u>จาก <code>appt.status</code> (ยืนยันแล้ว/เสร็จแล้ว ใน dropdown แก้ไขนัด) → กดเสร็จแล้ว status ไม่เปลี่ยน, แก้ status เป็น "เสร็จแล้ว" ใน modal แล้ว card ก็ยังค้าง tab กำลังรอ. ต้องผูก 2 อย่างให้ sync กัน และเด้ง tab แบบ real-time จากทุก surface (Frontend + Backend) ทุกอุปกรณ์.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 1 · 4-step stepper · ซักประวัติ → แพทย์ → <span class="new">คอร์ส</span> → เสร็จ · Dark + Light</div>
+
+  <div class="pane dark">
+    <div style="font-size:11px;color:#9a9a9a;margin-bottom:6px">A) ตัดคอร์สแล้ว → ขั้น "คอร์ส" = สำเร็จ (ม่วง violet)</div>
+    <div class="band"><div class="stepper-wrap"><span class="opd-tag">สถานะ OPD</span><div class="stepper">
+      <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">10:05</div></div><div class="conn g1"></div>
+      <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">10:22</div></div><div class="conn g2"></div>
+      <div class="step"><div class="dot violet">✓</div><div class="lbl on">คอร์ส</div><div class="tm">10:40</div></div><div class="conn g3"></div>
+      <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">10:41</div></div>
+    </div></div></div>
+
+    <div style="font-size:11px;color:#9a9a9a;margin:10px 0 6px">B) เสร็จแต่ไม่ตัดคอร์ส → เตือนเหลือง "ยังไม่ตัด" <em>(ตัวเลือกที่ user ล็อก)</em></div>
+    <div class="band"><div class="stepper-wrap"><span class="opd-tag">สถานะ OPD</span><div class="stepper">
+      <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">11:05</div></div><div class="conn g1"></div>
+      <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">11:20</div></div><div class="conn dim"></div>
+      <div class="step"><div class="dot warn">!</div><div class="lbl warn">ยังไม่ตัด</div><div class="tm">—</div></div><div class="conn dim"></div>
+      <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">11:21</div></div>
+    </div></div></div>
+
+    <div style="font-size:11px;color:#9a9a9a;margin:10px 0 6px">C) ระหว่างทาง (แพทย์เสร็จ ยังไม่ปิด OPD) → ขั้น "คอร์ส" = รอ (เลข จาง, ยังไม่เตือน)</div>
+    <div class="band"><div class="stepper-wrap"><span class="opd-tag">สถานะ OPD</span><div class="stepper">
+      <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">12:05</div></div><div class="conn g1"></div>
+      <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">12:20</div></div><div class="conn"></div>
+      <div class="step"><div class="dot pending">3</div><div class="lbl off">คอร์ส</div><div class="tm">—</div></div><div class="conn"></div>
+      <div class="step"><div class="dot pending">4</div><div class="lbl off">เสร็จ</div><div class="tm">—</div></div>
+    </div></div></div>
+  </div>
+
+  <div class="pane light">
+    <div style="font-size:11px;color:#64748b;margin-bottom:6px">Light theme — A) ตัดแล้ว / B) เตือน "ยังไม่ตัด" (สีจะถูกดันเป็นเฉด AA-dark ในธีมสว่าง ตาม V124/V125)</div>
+    <div class="band"><div class="stepper-wrap"><span class="opd-tag">สถานะ OPD</span><div class="stepper">
+      <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">10:05</div></div><div class="conn g1"></div>
+      <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">10:22</div></div><div class="conn g2"></div>
+      <div class="step"><div class="dot violet">✓</div><div class="lbl on">คอร์ส</div><div class="tm">10:40</div></div><div class="conn g3"></div>
+      <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">10:41</div></div>
+    </div></div></div>
+    <div class="band" style="margin-top:8px"><div class="stepper-wrap"><span class="opd-tag">สถานะ OPD</span><div class="stepper">
+      <div class="step"><div class="dot teal">✓</div><div class="lbl on">ซักประวัติ</div><div class="tm">11:05</div></div><div class="conn g1"></div>
+      <div class="step"><div class="dot amber">✓</div><div class="lbl on">แพทย์</div><div class="tm">11:20</div></div><div class="conn dim"></div>
+      <div class="step"><div class="dot warn">!</div><div class="lbl warn">ยังไม่ตัด</div><div class="tm">—</div></div><div class="conn dim"></div>
+      <div class="step"><div class="dot emerald">✓</div><div class="lbl on">เสร็จ</div><div class="tm">11:21</div></div>
+    </div></div></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 2 · ผูก status ↔ serviceCompletedAt (serviceCompletedAt ยังเป็น SSOT ของ tab เหมือนเดิม → ไม่กระทบ legacy)</div>
+  <table>
+    <tr><th>การกระทำ (จาก surface ไหนก็ได้)</th><th>serviceCompletedAt</th><th>status</th><th>ผล (tab) — real-time ทุกที่</th></tr>
+    <tr><td>กด "✓ ลูกค้ารับบริการเรียบร้อย"</td><td>= now (เดิม)</td><td class="new">→ done (ใหม่)</td><td>→ "✓ เสร็จแล้ว"</td></tr>
+    <tr><td>แก้ไขนัด (Frontend/Backend) → status = "เสร็จแล้ว"</td><td class="new">→ stamp now (ใหม่)</td><td>done</td><td>→ "✓ เสร็จแล้ว"</td></tr>
+    <tr><td>กด "↩ กลับไปคิวรอ"</td><td>→ null (เดิม)</td><td class="new">→ confirmed (ใหม่)</td><td>→ "กำลังรอ"</td></tr>
+    <tr><td>แก้ไขนัด → status กลับเป็น "ยืนยันแล้ว"/"รอยืนยัน" (จาก done)</td><td class="new">→ null (ใหม่/symmetric)</td><td>confirmed/pending</td><td>→ "กำลังรอ"</td></tr>
+    <tr><td>แก้ไขนัด → status = "ยกเลิก"</td><td class="new">→ null (ใหม่)</td><td>cancelled</td><td>หลุดจากวันนี้ (เดิม)</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 1 — course-step state machine (ต่อท้ายขั้น lifecycle เดิม)</div>
+  <table>
+    <tr><th>เงื่อนไข (อ่านจาก live be_treatments doc)</th><th>state ของขั้น "คอร์ส"</th><th>หน้าตา</th></tr>
+    <tr><td><code>detail.courseItems.length &gt; 0</code> OR <code>detail.treatmentItems.length &gt; 0</code></td><td><b>done</b></td><td>จุดม่วง ✓ "คอร์ส"</td></tr>
+    <tr><td>ไม่ตัด + OPD เสร็จแล้ว (lifecycle มี 'completed')</td><td><b>warn</b></td><td>จุดเหลือง ! "ยังไม่ตัด"</td></tr>
+    <tr><td>ไม่ตัด + ยังไม่เสร็จ (กำลังดำเนินการ)</td><td><b>pending</b></td><td>เลข จาง "คอร์ส" (pulse ถ้าแพทย์เสร็จ + เป็น OPD ล่าสุด)</td></tr>
+  </table>
+  <p style="font-size:12px;color:#666">Real-time: <code>AppointmentHubView</code> มี <code>listenToTreatmentsByDateRange</code> (onSnapshot, allBranches) อยู่แล้ว → ตัดคอร์ส (เขียน be_treatments) → listener ยิง → <code>treatmentsByCustomerDate</code> recompute → card re-render → ขั้นคอร์สเปลี่ยน<u>ทันที</u> เหมือน ซักประวัติ/แพทย์/เสร็จ. <b>ไม่ต้องเพิ่ม listener ใหม่.</b></p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 2 — write chokepoint → live propagation</div>
+<pre>
+[ทุก surface] กดเสร็จ / กดกลับคิว / แก้ status ใน modal (Frontend หรือ Backend)
+        │
+        ▼  เขียนผ่าน chokepoint เดียว (เพิ่ม coupling 3 จุดใน backendClient.js)
+ ┌─────────────────────────────────────────────────────────────┐
+ │ markAppointmentServiceCompleted(id,uid)  → + status:'done'   │
+ │ unmarkAppointmentServiceCompleted(id)     → + status:'confirmed' │
+ │ updateBackendAppointment(id, {status,...}):                  │
+ │    • status='done'  & ไม่มี serviceCompletedAt → stamp now    │
+ │    • status≠'done' & เคยมี serviceCompletedAt → clear (null)  │
+ └─────────────────────────────────────────────────────────────┘
+        │  เขียน be_appointments (whole doc: status + serviceCompletedAt)
+        ▼
+ onSnapshot listeners (มีอยู่แล้ว) ยิงพร้อมกันทุก subscriber:
+   • Frontend AppointmentHubView (listenToAppointmentsByMonth → appointmentDataVersion)
+   • Backend AppointmentCalendarView (listenToAppointmentsByDate + ByMonth)
+        │
+        ▼
+ ทุก card/badge/tab re-render ทันที · cross-device · cross-surface
+   filter เดิม: tab = !!serviceCompletedAt  (ไม่แตะ → ไม่มี legacy surprise)
+</pre>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<p><strong>Feature 1 (display-only, อ่านจาก live data):</strong></p>
+<ul>
+  <li><strong>SSOT helper</strong> ใหม่ <code>resolveCourseDeducted(treatment)</code> ใน <code>src/lib/treatmentDisplayResolvers.js</code> = <code>!!(t?.detail?.courseItems?.length) || !!(t?.detail?.treatmentItems?.length)</code> (logic เดียวกับ V136 <code>loadedHasNoCourseUsage</code> แต่บน raw live doc → reuse/SSOT, กัน V12 drift).</li>
+  <li><strong>Stepper opt-in</strong>: <code>TreatmentLifecycleStepper</code> รับ prop ใหม่ <code>withCourseStep</code> + <code>courseDeducted</code>. เมื่อ <code>withCourseStep</code> → <code>STEP_KEYS = ['vitalsigns','doctor','course','completed']</code>; ขั้น 'course' มี state done(violet) / warn(amber "ยังไม่ตัด") / pending. <b>ไม่แตะ <code>getTreatmentLifecycle</code></b> → CDV treatment-history stepper (Phase 28) คงเป็น 3 ขั้นเดิม (scoped; ขยายไป CDV ทีหลังได้ถ้าต้องการ).</li>
+  <li><code>AppointmentOpdStepperRow</code> ส่ง <code>withCourseStep</code> + <code>courseDeducted={resolveCourseDeducted(latestTreatment)}</code>.</li>
+  <li><strong>Theme</strong>: violet + amber ต้องผ่าน WCAG-AA ทั้ง dark + light — ใน light ดันเป็นเฉดเข้ม (เช่น violet-700 / amber-700) ตาม V124/V125. ปลอดภัยกับกฎไทย (ไม่ใช่แดงกับชื่อ/HN; warn เป็นเหลืองไม่ใช่แดง).</li>
+</ul>
+<p><strong>Feature 2 (coupling chokepoint, 3 จุดใน <code>src/lib/backendClient.js</code>):</strong></p>
+<ul>
+  <li><code>markAppointmentServiceCompleted</code> → เพิ่ม <code>status:'done'</code> ลงใน updateDoc.</li>
+  <li><code>unmarkAppointmentServiceCompleted</code> → เพิ่ม <code>status:'confirmed'</code>.</li>
+  <li><code>updateBackendAppointment</code> → ใช้ <code>oldData</code> (pre-read ที่มีอยู่แล้ว) ตรวจ transition: done↔non-done แล้ว set/clear <code>serviceCompletedAt</code> (+ <code>serviceCompletedBy</code>/<code>wasServiceCompleted</code>) ให้ตรง. แตะเฉพาะตอน <code>data.status</code> มีค่าและข้ามเส้น done เท่านั้น (ไม่ clobber การ save ที่ไม่เกี่ยว status).</li>
+  <li>ทุก caller (Frontend AppointmentFormModal, Backend appt tab, legacy form, confirm/queue-auto-confirm) inherit อัตโนมัติ. <strong>serviceCompletedAt ยังเป็น SSOT ของ tab filter → ไม่แตะ filter, ไม่ต้อง migrate legacy.</strong></li>
+</ul>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = B:</strong> OPD เสร็จแต่ไม่ตัดคอร์ส → ขั้น "คอร์ส" แสดง <em>เตือนเหลือง "ยังไม่ตัด"</em> (ไม่ใช่ขีดเงียบ) — เพื่อจับ "ลืมตัด" ชัดๆ (ยอมรับว่าจะเตือนกับเคสไม่มีคอร์สให้ตัดด้วย).</li>
+  <li><strong>Q2 = A:</strong> สีขั้น "คอร์ส" ตอนสำเร็จ = <em>ม่วง violet</em>.</li>
+  <li><strong>Q3 = A:</strong> ผูก status ↔ tab <em>สองทางเต็ม (symmetric)</em> — รวมการแก้ status กลับจาก done ใน modal ก็เด้งกลับ "กำลังรอ".</li>
+  <li><strong>Real-time (user เพิ่ม):</strong> ตัดคอร์ส / แก้สถานะ จาก surface ไหน (Frontend หรือ Backend) ก็แสดง/เด้ง tab <em>ทันที ทุกอุปกรณ์</em> — ใช้ onSnapshot listener ที่มีอยู่แล้ว (ไม่เพิ่ม listener ใหม่).</li>
+  <li><strong>Scope = A:</strong> เพิ่มขั้น "คอร์ส" เฉพาะ stepper บน card "นัดหมาย วันนี้" (opt-in prop); CDV treatment-history คง 3 ขั้นเดิม.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Card "นัดหมาย วันนี้" แสดง stepper 4 ขั้น: ซักประวัติ → แพทย์ → <b>คอร์ส</b> → เสร็จ ทั้ง dark + light (AA ทั้งคู่).</li>
+  <li>OPD ที่<u>ตัดคอร์ส</u> (detail.courseItems/treatmentItems ไม่ว่าง) → ขั้น "คอร์ส" = ม่วง ✓ ; ตัดเสร็จปุ๊บขึ้น<u>ทันที</u> (live) เหมือนขั้นอื่น.</li>
+  <li>OPD เสร็จแต่<u>ไม่ตัด</u> → ขั้น "คอร์ส" = เหลือง "ยังไม่ตัด"; OPD ที่ตัดเฉพาะ "ซื้อ" (purchasedItems) แต่ไม่ตัดใช้ → ยังเตือน (ซื้ออย่างเดียว ≠ ตัด).</li>
+  <li>กด "✓ ลูกค้ารับบริการเรียบร้อย" → status = "เสร็จแล้ว" + ย้าย tab "✓ เสร็จแล้ว" ทันที; badge เป็น "เสร็จแล้ว".</li>
+  <li>แก้ status เป็น "เสร็จแล้ว" ใน modal นัด (Frontend หรือ Backend) → card เด้งไป tab "✓ เสร็จแล้ว" ทันที ทุก surface/อุปกรณ์.</li>
+  <li>กด "↩ กลับไปคิวรอ" หรือแก้ status กลับเป็น "ยืนยันแล้ว" → status = "ยืนยันแล้ว" + เด้งกลับ tab "กำลังรอ" ทันที.</li>
+  <li>ไม่มี regression: appt ที่ไม่เกี่ยว status/serviceCompletedAt (แก้เวลา/หมอ/ห้อง) ไม่โดน clobber; legacy done-without-serviceCompletedAt ไม่ถูกย้าย tab ย้อนหลัง.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>#1 (correctness — verify ก่อน claim done, Rule Q):</strong> field path <code>detail.courseItems</code> / <code>detail.treatmentItems</code> ยืนยันจากโค้ด (TFP:1029-1037 + backendDetail write) แล้ว — แต่ต้อง <strong>Rule R diag</strong> อ่าน be_treatments doc จริงบน prod (เคสตัดคอร์สจริง) ยืนยันว่า predicate ติดสว่างถูกต้อง ก่อน claim (กันบั๊ก V104/V136-class "อ่านผิด field → ขั้นไม่สว่าง/เตือนผิด").</li>
+  <li><strong>multi-treatment/day:</strong> stepper ใช้ <code>latestTreatment</code> (OPD ล่าสุดของวันนั้น) — ถ้าตัดคอร์สใน OPD ก่อนหน้าแต่ OPD ล่าสุดไม่ตัด จะเตือน. ตรงกับ spec "ในบันทึก OPD นั้นๆ" (per-record). ยอมรับเป็น v1.</li>
+  <li><strong>warn false-positive:</strong> เคสมาปรึกษา/ซื้อสินค้าเฉยๆ (ไม่มีคอร์สให้ตัด) จะขึ้น "ยังไม่ตัด" ด้วย — user เลือก B แล้ว (ยอมรับ). ถ้ารกเกินไปในอนาคต → upgrade เป็น "เตือนเฉพาะลูกค้าที่มีคอร์สเหลือ" (option C เดิม) ได้.</li>
+  <li><strong>optimistic UI:</strong> ปุ่มกดเสร็จ optimistic แค่ <code>serviceCompletedAt</code> (ย้าย tab ทันทีสำหรับคนกด); badge status ตามมาจาก listener (~ms). อาจ optimistic <code>status</code> ด้วยได้ (เสริม, ไม่บังคับ).</li>
+  <li><strong>เลขขั้นในธีมสว่าง:</strong> warn amber + violet ใน light footer band (red-tint) ต้องผ่าน AA — ใช้เฉด -700 ใน light (V125 aaAccent pattern).</li>
+  <li><strong>No deploy/rules/storage:</strong> frontend/lib เท่านั้น → ไม่มี Probe-Deploy-Probe; deploy รอ user สั่ง (V18).</li>
+</ul>
+
+<h2>Testing plan (Rule I + Rule Q)</h2>
+<ul>
+  <li>Unit: <code>resolveCourseDeducted</code> (courseItems/treatmentItems/purchasedItems-only/empty/null/detail-missing) + course-step state mapping (done/warn/pending) + coupling decision (status↔serviceCompletedAt transition matrix incl. no-op/cancelled).</li>
+  <li>RTL: stepper renders 4 ขั้น + warn/done/pending; AppointmentHubRowCard badge sync.</li>
+  <li>Source-grep: chokepoint coupling อยู่ครบ 3 จุด; resolver SSOT reused (ไม่ inline drift); AV invariant ใหม่.</li>
+  <li>Rule I flow-sim: ตัดคอร์ส → live treatment listener → course step; mark-complete/modal-status → serviceCompletedAt+status → tab routing.</li>
+  <li>Rule R diag (prod): ยืนยัน field path + เคสจริง 1-2 OPD ที่ตัด/ไม่ตัด.</li>
+  <li>Rule Q L1 (user hands-on post-deploy): real browser ตัดคอร์ส + กดเสร็จ + แก้ modal cross-surface เห็นเด้งจริง.</li>
+</ul>
+
+</body>
+</html>

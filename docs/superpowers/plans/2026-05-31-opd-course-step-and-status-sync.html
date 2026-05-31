@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OPD "คอร์ส" Step + Appointment Status↔Tab Sync — Implementation Plan</title>
+  <style>
+    :root { --accent:#7c3aed; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-task:#fafafa; --bg-pre:#f5f5f5; --tx-muted:#666; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.6; color:#222; }
+    h1 { color:#111; border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { color:#111; border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { color:#222; }
+    pre { background:var(--bg-pre); padding:1em; border-radius:6px; overflow-x:auto; font-size:.85em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); padding-left:1em; color:var(--tx-muted); margin:1em 0; background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; }
+    .header-meta { background:var(--bg-meta); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .header-meta p { margin:.4em 0; }
+    .task { border-left:4px solid var(--accent); padding:.8em 1.2em; margin:1.2em 0; background:var(--bg-task); border-radius:0 6px 6px 0; }
+    .step { margin:.6em 0; padding-left:.5em; }
+    .step input[type=checkbox]{ margin-right:.6em; transform:scale(1.2); accent-color:var(--accent); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; } th,td { border:1px solid var(--bd); padding:.5em .8em; font-size:.9em; text-align:left; } th { background:var(--bg-meta); }
+    .warn { background:#fff7ed; border-left:4px solid #f59e0b; padding:.5em 1em; border-radius:0 6px 6px 0; margin:1em 0; }
+  </style>
+</head>
+<body>
+
+<h1>OPD "คอร์ส" Step + Appointment Status ↔ Tab Real-time Sync — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute via superpowers:executing-plans (INLINE — backendClient.js + the stepper baseline are large; subagents thrash per V81/V86). Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-05-31-opd-course-step-and-status-sync-design.html</code>.
+</blockquote>
+
+<div class="warn">
+  <strong>⚠ COMMIT/DEPLOY HELD (V18 + V138):</strong> V138 source is uncommitted in the working tree. This feature work STACKS on top (do NOT revert/disturb V138 edits in <code>stockUtils.js</code>/<code>backendClient.js</code>). <strong>Do NOT commit or deploy</strong> until the user explicitly authorizes. Each task ends with run-tests + leave-in-working-tree, NOT commit. Frontend/lib only → no firestore.rules/storage/index/cron → no Probe-Deploy-Probe.
+</div>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (1) Add a "คอร์ส" step to the OPD lifecycle stepper on the "นัดหมาย วันนี้" card (violet=ตัดแล้ว / amber "ยังไม่ตัด"=เสร็จแต่ไม่ตัด); (2) couple <code>appt.status</code> ↔ <code>serviceCompletedAt</code> so mark-complete/edit-status routes the card to the right tab in real-time from any surface.</p>
+  <p><strong>Architecture:</strong> Feature 1 = pure display reading the LIVE be_treatments doc (existing onSnapshot) via new SSOT helpers; opt-in prop on the shared stepper (CDV history untouched). Feature 2 = pure-decided coupling at 3 write chokepoints in <code>backendClient.js</code>; <code>serviceCompletedAt</code> stays the tab SSOT (existing listeners propagate live cross-surface/cross-device — no new listener).</p>
+  <p><strong>Tech Stack:</strong> React 19, Firestore (firebase client SDK), Vitest + RTL, Tailwind (CSS-var theme tokens), Chrome MCP (Rule Q-vis), admin-SDK Rule R diag + TRUE-L2 e2e.</p>
+  <p><strong>Decisions:</strong> Q1=B (warn "ยังไม่ตัด") · Q2=A (violet) · Q3=A (symmetric) · scope=card-only opt-in.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">4-step stepper · done(violet) / warn(amber "ยังไม่ตัด") / pending — see the spec HTML for the rendered dark+light panels</div>
+  <table>
+    <tr><th>course-step state</th><th>dot</th><th>label</th><th>tone</th></tr>
+    <tr><td>done (courseDeducted)</td><td>✓</td><td>คอร์ส</td><td>violet gradient + glow (white ✓)</td></tr>
+    <tr><td>warn (completed &amp;&amp; !deducted)</td><td>!</td><td>ยังไม่ตัด</td><td>amber outline + amber text</td></tr>
+    <tr><td>pending-now (doctor done, latest)</td><td>3</td><td>คอร์ส</td><td>amber pulse (existing pending-now)</td></tr>
+    <tr><td>pending-future</td><td>3</td><td>คอร์ส</td><td>dim token</td></tr>
+  </table>
+</div>
+<div class="mockup">
+  <div class="mockup-label">be_treatments doc shape (read path locked — Rule R verify in Task 1)</div>
+<pre>be_treatments/{id} = {
+  status, completedAt, vitalsignsRecordedAt, doctorRecordedAt,   ← TOP-LEVEL (lifecycle stamps)
+  recordedAt, editedAt, customerId, branchId, createdAt,
+  detail: {                                                       ← course usage lives HERE
+    courseItems:    [ {courseName, productName, rowId, deductQty, unit, ...} ],  ← ตัดคอร์ส (deduct)
+    treatmentItems: [ {id, productId, name, qty, ...} ],                          ← fill-later course usage
+    purchasedItems: [ ... ],   ← ซื้อคอร์ส (NOT counted as deduct)
+    treatmentDate, doctorId, vitals, ...
+  }
+}
+courseDeducted = !!(detail.courseItems?.length) || !!(detail.treatmentItems?.length)</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Feature 1 — course step derives from live data (no new listener)</div>
+<pre>ตัดคอร์ส (TFP save → be_treatments.detail.courseItems)
+  → listenToTreatmentsByDateRange (onSnapshot, EXISTING) fires
+  → AppointmentHubView allTreatments → treatmentsByCustomerDate (recompute)
+  → AppointmentHubRowCard latestTreatment → AppointmentOpdStepperRow
+  → courseDeducted = resolveCourseDeducted(latestTreatment)
+  → TreatmentLifecycleStepper(withCourseStep, courseDeducted) → ขั้น "คอร์ส" สว่าง ทันที</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Feature 2 — coupling chokepoints → live tab routing</div>
+<pre>mark btn   → markAppointmentServiceCompleted(id,uid)   → {serviceCompletedAt:now, status:'done', ...}
+unmark btn → unmarkAppointmentServiceCompleted(id)      → {serviceCompletedAt:null, status:'confirmed'}
+modal save → updateBackendAppointment(id,{status,...})  → decideApptStatusServiceSync(status, old.serviceCompletedAt):
+                'stamp' → +{serviceCompletedAt:now, wasServiceCompleted:true}
+                'clear' → +{serviceCompletedAt:null, serviceCompletedBy:''}
+                'none'  → (no coupling change)
+   → updateDoc be_appointments (whole doc)
+   → onSnapshot (Frontend hub + Backend calendar, EXISTING) fire → tab/badge re-render live cross-device
+   → tab filter UNCHANGED: waiting/done = !!serviceCompletedAt  (no legacy migration)</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th><th>Action</th></tr>
+  <tr><td><code>scripts/diag-opd-course-step-field-path.mjs</code></td><td>Rule R — confirm detail.courseItems path on real prod</td><td>Create</td></tr>
+  <tr><td><code>src/lib/treatmentDisplayResolvers.js</code></td><td>SSOT: <code>resolveCourseDeducted</code> + <code>resolveCourseStepState</code></td><td>Modify (append)</td></tr>
+  <tr><td><code>src/lib/appointmentDisplay.js</code></td><td>SSOT: <code>decideApptStatusServiceSync</code> (pure coupling decision)</td><td>Modify (append)</td></tr>
+  <tr><td><code>src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx</code></td><td>opt-in 4th "course" step + violet/warn states</td><td>Modify</td></tr>
+  <tr><td><code>src/components/admin/AppointmentOpdStepperRow.jsx</code></td><td>pass withCourseStep + courseDeducted</td><td>Modify</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>coupling at mark/unmark/updateBackendAppointment</td><td>Modify</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>AV159 invariant</td><td>Modify</td></tr>
+  <tr><td><code>tests/v139-opd-course-step.test.jsx</code></td><td>Feature 1 unit + RTL</td><td>Create</td></tr>
+  <tr><td><code>tests/v139-appt-status-service-sync.test.js</code></td><td>Feature 2 unit + decision matrix + source-grep</td><td>Create</td></tr>
+  <tr><td><code>tests/v139-flow-simulate.test.js</code></td><td>Rule I both features + adversarial</td><td>Create</td></tr>
+  <tr><td><code>scripts/e2e-v139-status-sync-course-step.mjs</code></td><td>TRUE-L2 real-prod (Rule Q)</td><td>Create</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ===================== TASK 1 ===================== -->
+<div class="task">
+  <h3>Task 1: Rule R diag — confirm course-deduction field path on real prod (correctness gate)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/diag-opd-course-step-field-path.mjs</code></p>
+  <p>Per Rule Q (V104/V136-class guard): verify <code>detail.courseItems</code>/<code>detail.treatmentItems</code> is where deductions live on REAL be_treatments docs, and that the predicate distinguishes a course-deducted OPD from a purchase-only / no-course OPD — BEFORE wiring the resolver.</p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the diag (admin-SDK, read-only, Rule R)</strong></label></div>
+<pre><code>// scripts/diag-opd-course-step-field-path.mjs
+// Rule R — READ-ONLY. Confirms V139 course-step field path on real prod.
+import 'dotenv/config';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+function loadEnv() {
+  // .env.local.prod has FIREBASE_ADMIN_* (Rule R/M canonical)
+  try { return JSON.parse(readFileSync('.env.local.prod.json', 'utf8')); } catch { return process.env; }
+}
+async function main() {
+  const env = process.env.FIREBASE_ADMIN_PRIVATE_KEY ? process.env : loadEnv();
+  const privateKey = (env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n');
+  initializeApp({ credential: cert({ projectId: env.FIREBASE_ADMIN_PROJECT_ID || APP_ID, clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL, privateKey }) });
+  const db = getFirestore();
+  const col = db.collection(`artifacts/${APP_ID}/public/data/be_treatments`);
+  const snap = await col.orderBy('createdAt', 'desc').limit(60).get();
+  let deducted = 0, purchaseOnly = 0, none = 0, topLevelCI = 0;
+  const samples = [];
+  snap.forEach(doc => {
+    const t = doc.data();
+    const d = t.detail || {};
+    const ci = Array.isArray(d.courseItems) ? d.courseItems.length : 0;
+    const ti = Array.isArray(d.treatmentItems) ? d.treatmentItems.length : 0;
+    const pi = Array.isArray(d.purchasedItems) ? d.purchasedItems.length : 0;
+    const courseDeducted = !!ci || !!ti;
+    if (Array.isArray(t.courseItems)) topLevelCI++; // should be 0 — would mean top-level too
+    if (courseDeducted) deducted++; else if (pi) purchaseOnly++; else none++;
+    if (samples.length < 8) samples.push({ id: doc.id, status: t.status, completedAt: !!t.completedAt, ci, ti, pi, courseDeducted });
+  });
+  console.log('scanned', snap.size, '| deducted', deducted, '| purchaseOnly', purchaseOnly, '| none', none, '| TOP-LEVEL courseItems(should be 0)', topLevelCI);
+  console.table(samples);
+}
+if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(e => { console.error(e); process.exit(1); });
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Pull env (Rule R standing auth) + run</strong></label></div>
+  <p>Run: <code>vercel env pull .env.local.prod --environment=production</code> then adapt env-loading to whatever format exists (the script reads <code>process.env</code> when <code>FIREBASE_ADMIN_PRIVATE_KEY</code> is set — load <code>.env.local.prod</code> via dotenv path or inline). Then: <code>node scripts/diag-opd-course-step-field-path.mjs</code></p>
+  <p><strong>Expected:</strong> <code>TOP-LEVEL courseItems = 0</code> (confirms reads must use <code>detail.*</code>); at least one sample with <code>courseDeducted:true</code> AND <code>ci&gt;0</code>; at least one <code>completedAt:true &amp;&amp; courseDeducted:false</code> (the warn case). If TOP-LEVEL ≠ 0 → STOP, the resolver must also read top-level — adjust the design.</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Record finding</strong></label></div>
+  <p>Paste the table into the session notes. This is the evidence the predicate is correct on real data. (No commit — diag script stays in working tree.)</p>
+</div>
+
+<!-- ===================== TASK 2 ===================== -->
+<div class="task">
+  <h3>Task 2: SSOT helpers — resolveCourseDeducted + resolveCourseStepState (TDD)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/treatmentDisplayResolvers.js</code> · Test <code>tests/v139-opd-course-step.test.jsx</code> (unit block)</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write failing unit tests</strong></label></div>
+<pre><code>// tests/v139-opd-course-step.test.jsx  (UNIT block — RTL added in Task 3)
+import { describe, it, expect } from 'vitest';
+import { resolveCourseDeducted, resolveCourseStepState } from '../src/lib/treatmentDisplayResolvers.js';
+
+describe('V139 · resolveCourseDeducted (SSOT, reads detail.* on raw be_treatments doc)', () => {
+  it('true when detail.courseItems non-empty', () => {
+    expect(resolveCourseDeducted({ detail: { courseItems: [{ rowId: 'r1' }] } })).toBe(true);
+  });
+  it('true when detail.treatmentItems non-empty (fill-later course usage)', () => {
+    expect(resolveCourseDeducted({ detail: { treatmentItems: [{ id: 'x' }] } })).toBe(true);
+  });
+  it('false when only purchasedItems (ซื้ออย่างเดียว ≠ ตัด)', () => {
+    expect(resolveCourseDeducted({ detail: { purchasedItems: [{ id: 'p' }], courseItems: [], treatmentItems: [] } })).toBe(false);
+  });
+  it('false for empty/missing detail / null / non-object / arrays-undefined', () => {
+    expect(resolveCourseDeducted({ detail: {} })).toBe(false);
+    expect(resolveCourseDeducted({})).toBe(false);
+    expect(resolveCourseDeducted(null)).toBe(false);
+    expect(resolveCourseDeducted(undefined)).toBe(false);
+    expect(resolveCourseDeducted('nope')).toBe(false);
+    expect(resolveCourseDeducted({ detail: { courseItems: 'bad', treatmentItems: null } })).toBe(false);
+  });
+  it('does NOT read top-level courseItems (must be under detail)', () => {
+    expect(resolveCourseDeducted({ courseItems: [{ rowId: 'r' }] })).toBe(false);
+  });
+});
+
+describe('V139 · resolveCourseStepState', () => {
+  it("done when courseDeducted", () => {
+    expect(resolveCourseStepState({ courseDeducted: true, completedDone: false })).toBe('done');
+    expect(resolveCourseStepState({ courseDeducted: true, completedDone: true })).toBe('done');
+  });
+  it("warn when completed but not deducted", () => {
+    expect(resolveCourseStepState({ courseDeducted: false, completedDone: true })).toBe('warn');
+  });
+  it("pending when not deducted and not completed", () => {
+    expect(resolveCourseStepState({ courseDeducted: false, completedDone: false })).toBe('pending');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run — verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-opd-course-step.test.jsx</code> → FAIL ("resolveCourseDeducted is not a function").</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement helpers (append to treatmentDisplayResolvers.js)</strong></label></div>
+<pre><code>/**
+ * V139 (2026-05-31) — did THIS treatment/OPD record DEDUCT a course?
+ * Reads `detail.courseItems` (deduction ledger) OR `detail.treatmentItems`
+ * (fill-later course usage) on the raw be_treatments doc. Mirrors V136
+ * `loadedHasNoCourseUsage` (TFP:1029-1037, `const t = existing.detail`) — same
+ * predicate, here as a reusable SSOT for the OPD-card course step. Purchase-only
+ * (detail.purchasedItems) is NOT a deduction → false. Field path Rule-R verified.
+ */
+export function resolveCourseDeducted(t) {
+  if (!t || typeof t !== 'object') return false;
+  const d = (t.detail && typeof t.detail === 'object') ? t.detail : {};
+  const ci = Array.isArray(d.courseItems) ? d.courseItems.length : 0;
+  const ti = Array.isArray(d.treatmentItems) ? d.treatmentItems.length : 0;
+  return ci > 0 || ti > 0;
+}
+
+/**
+ * V139 — course-step display state for TreatmentLifecycleStepper.
+ *   done    → ตัดคอร์สแล้ว (violet ✓)
+ *   warn    → OPD เสร็จแล้วแต่ไม่ได้ตัด (amber "ยังไม่ตัด")  [Q1=B]
+ *   pending → ยังไม่เสร็จ (เลขจาง; stepper upgrades to pending-now pulse upstream)
+ * @param {{courseDeducted:boolean, completedDone:boolean}} a
+ * @returns {'done'|'warn'|'pending'}
+ */
+export function resolveCourseStepState({ courseDeducted, completedDone } = {}) {
+  if (courseDeducted) return 'done';
+  if (completedDone) return 'warn';
+  return 'pending';
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run — verify PASS. (HELD — no commit.)</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-opd-course-step.test.jsx</code> → unit block PASS.</p>
+</div>
+
+<!-- ===================== TASK 3 ===================== -->
+<div class="task">
+  <h3>Task 3: TreatmentLifecycleStepper opt-in course step + AppointmentOpdStepperRow wiring + RTL</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx</code>, <code>src/components/admin/AppointmentOpdStepperRow.jsx</code> · Test <code>tests/v139-opd-course-step.test.jsx</code> (RTL block)</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write failing RTL tests</strong></label></div>
+<pre><code>// append to tests/v139-opd-course-step.test.jsx
+import { render, screen } from '@testing-library/react';
+import AppointmentOpdStepperRow from '../src/components/admin/AppointmentOpdStepperRow.jsx';
+
+const mkTreatment = (over = {}) => ({
+  id: 'T1', vitalsignsRecordedAt: '2026-05-31T03:00:00Z', doctorRecordedAt: '2026-05-31T03:20:00Z',
+  completedAt: '2026-05-31T03:40:00Z', detail: { treatmentDate: '2026-05-31' }, ...over,
+});
+
+describe('V139 · OPD card course step (RTL)', () => {
+  it('renders 4 dots: ซักประวัติ/แพทย์/คอร์ส/เสร็จ when course deducted', () => {
+    render(<AppointmentOpdStepperRow isTodayTab latestTreatment={mkTreatment({ detail: { treatmentDate: '2026-05-31', courseItems: [{ rowId: 'r' }] } })} />);
+    expect(screen.getByText('คอร์ส')).toBeInTheDocument();
+    expect(screen.getAllByTestId('stepper-dot')).toHaveLength(4);
+  });
+  it('shows amber "ยังไม่ตัด" when completed but not deducted', () => {
+    render(<AppointmentOpdStepperRow isTodayTab latestTreatment={mkTreatment()} />);
+    expect(screen.getByText('ยังไม่ตัด')).toBeInTheDocument();
+  });
+  it('shows neutral "คอร์ส" (no warn) when in-progress (doctor done, not completed)', () => {
+    render(<AppointmentOpdStepperRow isTodayTab latestTreatment={mkTreatment({ completedAt: null })} />);
+    expect(screen.getByText('คอร์ส')).toBeInTheDocument();
+    expect(screen.queryByText('ยังไม่ตัด')).toBeNull();
+  });
+  it('no-treatment today → 4 muted dots incl. course', () => {
+    render(<AppointmentOpdStepperRow isTodayTab latestTreatment={null} />);
+    expect(screen.getAllByTestId('stepper-dot')).toHaveLength(4);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run — verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-opd-course-step.test.jsx</code> → RTL block FAIL (3 dots / no "คอร์ส").</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Edit TreatmentLifecycleStepper.jsx — add opt-in course step</strong></label></div>
+  <p>Replace the module so the step set + states/tones/labels handle <code>course</code> via the new <code>withCourseStep</code> + <code>courseDeducted</code> props. Key edits:</p>
+<pre><code>// line 6 — make STEP_KEYS dynamic; add imports
+import { resolveCourseStepState } from '../../../lib/treatmentDisplayResolvers.js';
+const BASE_STEPS = ['vitalsigns', 'doctor', 'completed'];
+const COURSE_STEPS = ['vitalsigns', 'doctor', 'course', 'completed'];
+
+// signature (line 22) — add props
+export function TreatmentLifecycleStepper({ lifecycle = [], isDark = true, isLatest = false, withCourseStep = false, courseDeducted = false }) {
+  const lc = Array.isArray(lifecycle) ? lifecycle : [];
+  const keys = new Set(lc.map((s) => s && s.key).filter(Boolean));
+  const STEP_KEYS = withCourseStep ? COURSE_STEPS : BASE_STEPS;
+  const labels = getStepLabels(lc);
+  const labelMap = { vitalsigns: labels.t, doctor: labels.a, completed: labels.e };
+  const timeByKey = Object.fromEntries(lc.filter((s) => s && s.key).map((s) => [s.key, s.time]));
+
+  // V139 — unified "is this step done?" (course is driven by courseDeducted prop, not lifecycle keys)
+  const isStepDone = (key) => key === 'course' ? !!courseDeducted : keys.has(key);
+
+  const stepStateForKey = (key, idx) => {
+    if (key === 'course') {
+      // Q1=B: completed-but-not-deducted → warn (not skipped/dim)
+      return resolveCourseStepState({ courseDeducted: !!courseDeducted, completedDone: keys.has('completed') }) === 'done'
+        ? 'done'
+        : resolveCourseStepState({ courseDeducted: !!courseDeducted, completedDone: keys.has('completed') }) === 'warn'
+          ? 'warn'
+          : (isLatest && keys.has('doctor')) ? 'pending-now' : 'pending-future';
+    }
+    if (isStepDone(key)) return 'done';
+    const laterDone = STEP_KEYS.slice(idx + 1).some((k) => isStepDone(k));
+    if (laterDone) return 'skipped';
+    const prevKey = STEP_KEYS[idx - 1];
+    const prevDone = idx > 0 && isStepDone(prevKey);
+    if (isLatest && prevDone) return 'pending-now';
+    return 'pending-future';
+  };
+
+  const dotClasses = (key, state) => {
+    const base = 'w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all relative z-10 border-2';
+    if (state === 'done') {
+      const tones = {
+        vitalsigns: 'bg-gradient-to-br from-teal-500 to-teal-700 border-teal-300 text-white shadow-[0_0_12px_rgba(20,184,166,0.5)]',
+        doctor:     'bg-gradient-to-br from-amber-500 to-amber-700 border-amber-300 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]',
+        course:     'bg-gradient-to-br from-violet-500 to-violet-700 border-violet-300 text-white shadow-[0_0_12px_rgba(139,92,246,0.5)]',
+        completed:  'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-300 text-white shadow-[0_0_12px_rgba(16,185,129,0.5)]',
+      };
+      return `${base} ${tones[key]}`;
+    }
+    if (state === 'warn') {
+      // Q1=B amber "ยังไม่ตัด" — AA in BOTH themes: amber-700 text in light, amber-300 in dark
+      return `${base} bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300`;
+    }
+    if (state === 'pending-now') return `${base} bg-amber-500/5 border-amber-300 text-amber-300 animate-pulse`;
+    return `${base} bg-[var(--bg-base)] border-[var(--bd-strong)] text-[var(--tx-faint)]`;
+  };
+
+  const labelClasses = (state) => {
+    if (state === 'done') return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-[var(--tx-primary)]';
+    if (state === 'warn') return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-amber-700 dark:text-amber-300';
+    if (state === 'pending-now') return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-amber-300';
+    return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-[var(--tx-muted)]';
+  };
+
+  // course label flips to "ยังไม่ตัด" in warn state
+  const labelFor = (key, state) => key === 'course' ? (state === 'warn' ? 'ยังไม่ตัด' : 'คอร์ส') : labelMap[key];
+</code></pre>
+  <p>Then in <code>connClasses</code> add violet bridges (doctor→course amber→violet; course→completed violet→emerald) using <code>isStepDone</code>; and in the render loop replace <code>const label = labelMap[key];</code> with <code>const label = labelFor(key, state);</code> and add the <code>'warn'</code> dotContent branch:</p>
+<pre><code>// connector — extend the both-done gradient cases:
+if (isStepDone(prevKey) && isStepDone(nextKey) && prevKey === 'doctor' && nextKey === 'course')
+  return `${base} bg-gradient-to-r from-amber-300 via-amber-500 to-violet-600`;
+if (isStepDone(prevKey) && isStepDone(nextKey) && prevKey === 'course' && nextKey === 'completed')
+  return `${base} bg-gradient-to-r from-violet-400 via-violet-600 to-emerald-500`;
+// (keep existing vitals→doctor + skip-doctor cases; update keys.has → isStepDone where doctor adjacency matters)
+
+// render dotContent:
+if (state === 'done') dotContent = &lt;Check size={11} aria-hidden="true" /&gt;;
+else if (state === 'warn') dotContent = &lt;span&gt;!&lt;/span&gt;;
+else if (state === 'skipped') dotContent = &lt;span&gt;−&lt;/span&gt;;
+else dotContent = &lt;span&gt;{idx + 1}&lt;/span&gt;;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Edit AppointmentOpdStepperRow.jsx — pass the props</strong></label></div>
+<pre><code>import { getTreatmentLifecycle, resolveCourseDeducted } from '../../lib/treatmentDisplayResolvers.js';
+// ...
+const courseDeducted = latestTreatment ? resolveCourseDeducted(latestTreatment) : false;
+// ...
+&lt;TreatmentLifecycleStepper lifecycle={lifecycle} isLatest={isLatest} withCourseStep courseDeducted={courseDeducted} /&gt;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Run RTL + the existing Phase 28 stepper/CDV tests (regression — CDV must stay 3-step)</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-opd-course-step.test.jsx</code> → PASS. Then: <code>npm test -- --run tests/phase-28-treatment-history.test.jsx tests/appt-calendar-density.test.jsx</code> (or grep for stepper consumers: <code>grep -rln "TreatmentLifecycleStepper\|AppointmentOpdStepperRow" tests/</code>) → all PASS (CDV history default 3-step unchanged because <code>withCourseStep</code> defaults false). Fix any V21 source-grep lock that asserted exactly 3 dots in the appt-card context.</p>
+</div>
+
+<!-- ===================== TASK 4 ===================== -->
+<div class="task">
+  <h3>Task 4: Feature 2 — pure coupling decision + 3 chokepoints in backendClient.js (TDD)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/appointmentDisplay.js</code> (pure helper), <code>src/lib/backendClient.js</code> (3 functions) · Test <code>tests/v139-appt-status-service-sync.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write failing unit tests (decision matrix + source-grep)</strong></label></div>
+<pre><code>// tests/v139-appt-status-service-sync.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { decideApptStatusServiceSync } from '../src/lib/appointmentDisplay.js';
+
+describe('V139 · decideApptStatusServiceSync (pure coupling decision)', () => {
+  it("stamp: status→done when not previously in done tab", () => {
+    expect(decideApptStatusServiceSync('done', null)).toBe('stamp');
+    expect(decideApptStatusServiceSync('done', undefined)).toBe('stamp');
+  });
+  it("clear: status→non-done when previously in done tab", () => {
+    expect(decideApptStatusServiceSync('confirmed', '2026-05-31T00:00:00Z')).toBe('clear');
+    expect(decideApptStatusServiceSync('pending',   { seconds: 1 })).toBe('clear');
+    expect(decideApptStatusServiceSync('cancelled', '2026-05-31T00:00:00Z')).toBe('clear');
+  });
+  it("none: already-consistent or no transition", () => {
+    expect(decideApptStatusServiceSync('done', '2026-05-31T00:00:00Z')).toBe('none'); // already done+stamped
+    expect(decideApptStatusServiceSync('confirmed', null)).toBe('none');               // already waiting
+    expect(decideApptStatusServiceSync(undefined, '2026-05-31T00:00:00Z')).toBe('none'); // no status in patch → no clobber
+    expect(decideApptStatusServiceSync('', null)).toBe('none');
+    expect(decideApptStatusServiceSync(123, null)).toBe('none');
+  });
+});
+
+describe('V139 · backendClient coupling source-grep (3 chokepoints)', () => {
+  const src = readFileSync('src/lib/backendClient.js', 'utf8');
+  it('markAppointmentServiceCompleted sets status:done', () => {
+    const fn = src.slice(src.indexOf('export async function markAppointmentServiceCompleted'), src.indexOf('export async function unmarkAppointmentServiceCompleted'));
+    expect(fn).toMatch(/status:\s*'done'/);
+  });
+  it('unmarkAppointmentServiceCompleted sets status:confirmed', () => {
+    const fn = src.slice(src.indexOf('export async function unmarkAppointmentServiceCompleted'), src.indexOf('export async function unmarkAppointmentServiceCompleted') + 600);
+    expect(fn).toMatch(/status:\s*'confirmed'/);
+  });
+  it('updateBackendAppointment calls decideApptStatusServiceSync', () => {
+    expect(src).toMatch(/decideApptStatusServiceSync\s*\(/);
+    expect(src).toMatch(/import\s*\{[^}]*decideApptStatusServiceSync/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run — verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-appt-status-service-sync.test.js</code> → FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Append pure helper to appointmentDisplay.js</strong></label></div>
+<pre><code>/**
+ * V139 (2026-05-31) — couple appt.status ↔ serviceCompletedAt so the "กำลังรอ /
+ * ✓ เสร็จแล้ว" tab (driven by serviceCompletedAt) stays in sync with the status
+ * dropdown / mark-complete buttons. serviceCompletedAt remains the tab SSOT.
+ *   'stamp' → caller adds serviceCompletedAt=serverTimestamp (+ wasServiceCompleted)
+ *   'clear' → caller adds serviceCompletedAt=null (+ serviceCompletedBy:'')
+ *   'none'  → no coupling change (no status in patch OR already consistent OR no transition)
+ * @param {*} patchStatus  appt.status in the incoming update patch
+ * @param {*} oldServiceCompletedAt  existing serviceCompletedAt (truthy = currently in done tab)
+ * @returns {'stamp'|'clear'|'none'}
+ */
+export function decideApptStatusServiceSync(patchStatus, oldServiceCompletedAt) {
+  if (typeof patchStatus !== 'string' || !patchStatus) return 'none';
+  const inDoneTab = !!oldServiceCompletedAt;
+  if (patchStatus === 'done' && !inDoneTab) return 'stamp';
+  if (patchStatus !== 'done' && inDoneTab) return 'clear';
+  return 'none';
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Wire backendClient.js — import + 3 chokepoints</strong></label></div>
+  <p>(a) Add to the appointmentDisplay import at top of backendClient.js: <code>decideApptStatusServiceSync</code> (find the existing <code>from './appointmentDisplay.js'</code> import; if none, add one). (b) In <code>markAppointmentServiceCompleted</code> updateDoc payload add <code>status: 'done',</code>. (c) In <code>unmarkAppointmentServiceCompleted</code> updateDoc payload add <code>status: 'confirmed',</code>. (d) In <code>updateBackendAppointment</code>, BEFORE the updateDoc (after the _v128 block), compute the sync fields and merge:</p>
+<pre><code>// V139 — couple status ↔ serviceCompletedAt (tab stays in sync w/ status dropdown).
+let _v139Sync = {};
+try {
+  const decision = decideApptStatusServiceSync(data && data.status, oldData && oldData.serviceCompletedAt);
+  if (decision === 'stamp') _v139Sync = { serviceCompletedAt: serverTimestamp(), wasServiceCompleted: true };
+  else if (decision === 'clear') _v139Sync = { serviceCompletedAt: null, serviceCompletedBy: '' };
+} catch { /* non-fatal — never block the appointment update */ }
+
+await updateDoc(appointmentDoc(appointmentId), {
+  ...data,
+  ...(_v128UpdPhone ? { customerPhone: _v128UpdPhone } : {}),
+  ..._v139Sync,
+  updatedAt: new Date().toISOString(),
+});
+</code></pre>
+  <p><strong>Note:</strong> the existing slot-maintenance block reads <code>merged = {...oldData, ...data}</code> and <code>becameCancelled = data?.status === 'cancelled'</code> — UNCHANGED (cancelled still releases slots; _v139Sync only affects serviceCompletedAt). Confirm <code>serverTimestamp</code> is already imported in backendClient (it is — used by markAppointmentServiceCompleted).</p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Run — verify PASS + existing V71 / appt tests green</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-appt-status-service-sync.test.js</code> → PASS. Then grep + run impacted: <code>grep -rln "markAppointmentServiceCompleted\|unmarkAppointmentServiceCompleted\|updateBackendAppointment" tests/</code> → run those files (V71 / V126 / appt-hub) → all PASS; fix any V21 lock that asserted the old payloads exactly (update with V139 marker).</p>
+</div>
+
+<!-- ===================== TASK 5 ===================== -->
+<div class="task">
+  <h3>Task 5: AV159 invariant + cross-cutting source-grep</h3>
+  <p><strong>Files:</strong> Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> · append to <code>tests/v139-appt-status-service-sync.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Add AV159 to the skill</strong></label></div>
+  <p>AV159 (two-part): <strong>(course)</strong> any reader rendering "did this OPD deduct a course" MUST use <code>resolveCourseDeducted</code> (SSOT, reads <code>detail.courseItems</code>/<code>detail.treatmentItems</code>) — never inline a different predicate. <strong>(status-sync)</strong> any writer of appt <code>status</code> via <code>updateBackendAppointment</code> inherits <code>decideApptStatusServiceSync</code>; the mark/unmark fns MUST keep <code>status</code> coupled to <code>serviceCompletedAt</code>. Grep targets + closed sanctioned-exception list (CDV history stepper = withCourseStep:false, intentional).</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Add source-grep regression block + run</strong></label></div>
+<pre><code>// append to tests/v139-appt-status-service-sync.test.js
+describe('V139 · AV159 regression', () => {
+  it('AppointmentOpdStepperRow uses resolveCourseDeducted (SSOT, no inline predicate)', () => {
+    const s = readFileSync('src/components/admin/AppointmentOpdStepperRow.jsx', 'utf8');
+    expect(s).toMatch(/resolveCourseDeducted\s*\(/);
+    expect(s).not.toMatch(/detail\.courseItems/); // must go through the helper, not inline
+  });
+  it('AV159 documented in audit skill', () => {
+    expect(readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8')).toMatch(/AV159/);
+  });
+});
+</code></pre>
+  <p>Run: <code>npm test -- --run tests/v139-appt-status-service-sync.test.js</code> → PASS.</p>
+</div>
+
+<!-- ===================== TASK 6 ===================== -->
+<div class="task">
+  <h3>Task 6: Rule I flow-simulate + adversarial edge cases (both features)</h3>
+  <p><strong>Files:</strong> Create <code>tests/v139-flow-simulate.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write flow-sim + adversarial tests</strong></label></div>
+<pre><code>// tests/v139-flow-simulate.test.js — chains the REAL helpers (no mounting)
+import { describe, it, expect } from 'vitest';
+import { resolveCourseDeducted, resolveCourseStepState, getTreatmentLifecycle } from '../src/lib/treatmentDisplayResolvers.js';
+import { decideApptStatusServiceSync } from '../src/lib/appointmentDisplay.js';
+
+// F1 — course step end-to-end (deduct → live doc → step state)
+describe('V139.F1 · course-step flow', () => {
+  const completedDone = (t) => getTreatmentLifecycle(t).some(s => s.key === 'completed');
+  it('buy-and-deduct-this-visit → done', () => {
+    const t = { completedAt: '2026-05-31T03:40:00Z', detail: { courseItems: [{ rowId: 'r1' }], purchasedItems: [{ id: 'p1' }] } };
+    expect(resolveCourseStepState({ courseDeducted: resolveCourseDeducted(t), completedDone: completedDone(t) })).toBe('done');
+  });
+  it('deduct-existing-only → done', () => {
+    const t = { completedAt: '2026-05-31T03:40:00Z', detail: { treatmentItems: [{ id: 'x' }] } };
+    expect(resolveCourseStepState({ courseDeducted: resolveCourseDeducted(t), completedDone: completedDone(t) })).toBe('done');
+  });
+  it('purchase-only-no-deduct + completed → warn (the bug we want to catch)', () => {
+    const t = { completedAt: '2026-05-31T03:40:00Z', detail: { purchasedItems: [{ id: 'p1' }], courseItems: [], treatmentItems: [] } };
+    expect(resolveCourseStepState({ courseDeducted: resolveCourseDeducted(t), completedDone: completedDone(t) })).toBe('warn');
+  });
+  it('no-course + not-completed (in progress) → pending (no false warn)', () => {
+    const t = { doctorRecordedAt: '2026-05-31T03:20:00Z', detail: {} };
+    expect(resolveCourseStepState({ courseDeducted: resolveCourseDeducted(t), completedDone: completedDone(t) })).toBe('pending');
+  });
+});
+
+// F2 — status↔tab coupling round-trips
+describe('V139.F2 · status/tab coupling round-trip', () => {
+  it('mark-complete: confirmed+null → done (stamp)', () => {
+    expect(decideApptStatusServiceSync('done', null)).toBe('stamp');
+  });
+  it('modal sets done from confirmed → stamp → done tab', () => {
+    expect(decideApptStatusServiceSync('done', undefined)).toBe('stamp');
+  });
+  it('back-to-queue: confirmed while stamped → clear', () => {
+    expect(decideApptStatusServiceSync('confirmed', { toMillis: () => 1 })).toBe('clear');
+  });
+  it('symmetric: modal sets confirmed from done → clear → waiting', () => {
+    expect(decideApptStatusServiceSync('confirmed', '2026-05-31T00:00:00Z')).toBe('clear');
+  });
+  it('idempotent: re-saving a done appt (status=done, already stamped) → none (no churn)', () => {
+    expect(decideApptStatusServiceSync('done', '2026-05-31T00:00:00Z')).toBe('none');
+  });
+  it('no-clobber: edit time/room only (no status in patch) → none', () => {
+    expect(decideApptStatusServiceSync(undefined, '2026-05-31T00:00:00Z')).toBe('none');
+  });
+});
+
+// F3 — adversarial
+describe('V139.F3 · adversarial', () => {
+  it('resolveCourseDeducted tolerates poison shapes', () => {
+    for (const x of [null, undefined, 0, '', [], { detail: null }, { detail: 'x' }, { detail: { courseItems: {} } }, { detail: { courseItems: [], treatmentItems: [] } }])
+      expect(resolveCourseDeducted(x)).toBe(false);
+  });
+  it('decide tolerates weird status', () => {
+    for (const s of [null, undefined, '', 0, 1, {}, [], 'DONE', 'Done'])
+      expect(['stamp','clear','none']).toContain(decideApptStatusServiceSync(s, null));
+    expect(decideApptStatusServiceSync('DONE', null)).toBe('none'); // case-sensitive — only lowercase 'done'
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → PASS; investigate ANY surprise (don't dismiss as flake — Rule Q-honest)</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v139-flow-simulate.test.js</code>. If any edge fails, that's a real bug → fix the helper, re-run. (e.g. if 'DONE' uppercase should also couple, decide + document.)</p>
+</div>
+
+<!-- ===================== TASK 7 ===================== -->
+<div class="task">
+  <h3>Task 7: TRUE-L2 real-prod e2e (Rule Q — coupling + course detection on real data)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-v139-status-sync-course-step.mjs</code></p>
+  <p>Admin-SDK against real prod with <code>TEST-APPT-</code>/<code>TEST-</code> prefixed fixtures (V33.13). Drives the REAL <code>updateBackendAppointment</code> coupling decision + REAL <code>resolveCourseDeducted</code> on a seeded be_treatments doc, then reads back. Cleanup zero-orphan.</p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the e2e</strong></label></div>
+<pre><code>// scripts/e2e-v139-status-sync-course-step.mjs (sketch — mirror scripts/e2e-negative-batch-directions.mjs harness)
+// Phase A: seed TEST-APPT-V139 appt (status:confirmed, no serviceCompletedAt) + TEST be_treatments
+//          (one with detail.courseItems, one purchase-only).
+// Phase B: import { decideApptStatusServiceSync } + { resolveCourseDeducted } from src and assert:
+//   - decide('done', null)==='stamp' ; apply → appt has serviceCompletedAt → would be in done tab
+//   - decide('confirmed', stamp)==='clear' → back to waiting
+//   - resolveCourseDeducted(courseTreatment)===true ; resolveCourseDeducted(purchaseOnly)===false
+//   - whole-doc read-back: status + serviceCompletedAt coherent
+// Phase C: delete all TEST-V139 fixtures; assert zero orphans.
+// Use canonical artifacts/${APP_ID}/public/data/* paths; admin SDK = setup/verify ONLY.
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run on real prod (Rule R/M env)</strong></label></div>
+  <p>Run: <code>node scripts/e2e-v139-status-sync-course-step.mjs</code> → all assertions PASS + cleanup confirmed. <strong>Rule Q-honest note:</strong> this proves the SHIPPED pure decisions + field path on real data; UI-click L1 (mark-complete + modal cross-surface live in a real browser) = user hands-on post-deploy.</p>
+</div>
+
+<!-- ===================== TASK 8 ===================== -->
+<div class="task">
+  <h3>Task 8: Full suite + build + theme AA (Chrome MCP) + session docs</h3>
+  <p><strong>Files:</strong> none new — verification + docs</p>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Full vitest + build (Rule N batch-end)</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → 0 fail (V138 tests still green; new V139 green; no V21 regressions). Then <code>npm run build</code> → clean. Fix anything red.</p>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Theme AA verification (Rule Q-vis, Chrome MCP)</strong></label></div>
+  <p>Render the stepper variants (reuse the mockup HTML / a dev-server card) and screenshot dark + light. Confirm: violet ✓ readable both themes; amber "ยังไม่ตัด" ≥ AA on the light red-tint footer band (amber-700 text); 4 dots fit desktop + don't overflow on narrow card (flex-wrap ok). Use computed-color scan if screenshot unavailable. Fix tones if any sub-AA.</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Update session docs (NOT commit)</strong></label></div>
+  <p>Update <code>.agents/active.md</code> + a checkpoint in <code>.agents/sessions/</code> with V139 status (DONE+verified, HELD with V138). Leave ALL source uncommitted in the working tree. Report to user: test counts, build, e2e result, the honest L1 gap, and the held commit/deploy.</p>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> AC1-3 (course step) → Tasks 2-3; AC4-6 (status sync) → Task 4; AC7 (no regression) → Tasks 3,4,8; real-time → inherited (Flow), proven Task 7; theme → Task 8. Risk #1 (field path) → Task 1. ✓</li>
+  <li><strong>Type consistency:</strong> <code>resolveCourseDeducted</code>/<code>resolveCourseStepState</code>/<code>decideApptStatusServiceSync</code> names identical across tasks; stepper props <code>withCourseStep</code>+<code>courseDeducted</code> consistent. ✓</li>
+  <li><strong>No placeholders:</strong> all code blocks concrete. The e2e (Task 7) is a sketch by design (mirrors an existing harness) — implementer fills the boilerplate from <code>scripts/e2e-negative-batch-directions.mjs</code>. ✓</li>
+  <li><strong>HELD:</strong> no commit/deploy steps — per V18 + V138-held. ✓</li>
+</ul>
+
+</body>
+</html>

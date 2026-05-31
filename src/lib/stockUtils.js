@@ -194,6 +194,37 @@ export function buildQtyNumeric(qty) {
   return { remaining: n, total: n };
 }
 
+/**
+ * Resolve a batch's active/depleted status from its new `remaining` after a
+ * qty change. SINGLE SOURCE OF TRUTH for the active/depleted decision across
+ * every stock-mutation writer (Rule C1 — was duplicated inline at 6+ sites).
+ *
+ * INVARIANT (the "negative batch must stay visible" rule, 2026-05-31):
+ *   - remaining  >  0  → ACTIVE   (stock on hand)
+ *   - remaining === 0  → DEPLETED (no stock, no debt)
+ *   - remaining  <  0  → ACTIVE   (NEGATIVE = active DEBT — MUST stay visible
+ *                                  so it surfaces in StockBalancePanel
+ *                                  (status:'active' filter) AND is repayable by
+ *                                  _repayNegativeBalances (status:ACTIVE filter))
+ *
+ * The bug this fixes: writers used `remaining <= 0 ? DEPLETED : ACTIVE`, which
+ * flipped a negative batch to DEPLETED when ADJUST_ADD bumped it up but not yet
+ * to ≥0 (e.g. -13 + 1 = -12). A depleted batch is excluded from the active-only
+ * balance query → the product VANISHED from "ยอดคงเหลือ" + became invisible to
+ * the import/transfer/withdrawal repay sweep (compounding the debt permanently).
+ * User report (E.P.T.Q S500: ปรับ +1 จาก -13 → ควรเหลือ -12 แต่หายไปจากยอดคงเหลือ).
+ *
+ * Does NOT touch CANCELLED / EXPIRED — those are terminal states set explicitly
+ * elsewhere; this helper only decides ACTIVE-vs-DEPLETED after a qty mutation on
+ * an otherwise-live batch. Callers guard cancelled/expired before calling.
+ *
+ * @param {number} remaining — the batch's new qty.remaining after the change
+ * @returns {'active' | 'depleted'}
+ */
+export function resolveBatchStatusForRemaining(remaining) {
+  return toNumber(remaining) === 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+}
+
 // ─── Display helpers ────────────────────────────────────────────────────────
 
 /**

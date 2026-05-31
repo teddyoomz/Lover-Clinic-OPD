@@ -38,6 +38,9 @@ describe('V71 markAppointmentServiceCompleted', () => {
     const [docRef, payload] = updateDoc.mock.calls[0];
     expect(docRef).toBeDefined();
     expect(payload).toEqual({
+      // V139 (2026-05-31) — coupling: mark-complete now also sets status:'done'
+      // so the badge + a modal/Backend reader stay in sync with the done tab.
+      status: 'done',
       serviceCompletedAt: '__SERVER_TS__',
       serviceCompletedBy: 'uid-staff-1',
       wasServiceCompleted: true,

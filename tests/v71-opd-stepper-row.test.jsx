@@ -28,9 +28,10 @@ describe('V71 AppointmentOpdStepperRow', () => {
     render(<AppointmentOpdStepperRow latestTreatment={null} isTodayTab={true} />);
     expect(screen.getByTestId('appt-row-opd-stepper')).toBeInTheDocument();
     expect(screen.getByTestId('treatment-lifecycle-stepper')).toBeInTheDocument();
-    // Muted: all 3 dots present, none have done state
+    // V139 (2026-05-31) — OPD card stepper now has 4 dots (added "course" step).
+    // Muted: all 4 dots present, none have done state.
     const dots = screen.getAllByTestId('stepper-dot');
-    expect(dots).toHaveLength(3);
+    expect(dots).toHaveLength(4);
   });
 
   it('R1.3 renders null when no treatment + non-today tab', () => {
