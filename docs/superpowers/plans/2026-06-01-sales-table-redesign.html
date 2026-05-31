@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales table redesign Implementation Plan</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-task:#fafafa; --bg-pre:#f5f5f5; --tx-muted:#666; }
+    body{font-family:-apple-system,'Segoe UI','Sarabun',sans-serif;max-width:980px;margin:2em auto;padding:1em;line-height:1.6;color:#222}
+    h1{color:#111;border-bottom:2px solid var(--accent);padding-bottom:.3em} h2{color:#111;border-bottom:1px solid var(--bd);padding-bottom:.2em;margin-top:2em} h3{color:#222}
+    pre{background:var(--bg-pre);padding:1em;border-radius:6px;overflow-x:auto;font-size:.85em} code{font-family:'SF Mono',Menlo,Consolas,monospace}
+    blockquote{border-left:4px solid var(--accent);padding:.5em 1em;color:var(--tx-muted);background:var(--bg-meta);border-radius:0 6px 6px 0;margin:1em 0}
+    .header-meta{background:var(--bg-meta);padding:1em 1.5em;border-radius:8px;margin:1em 0} .header-meta p{margin:.4em 0}
+    .task{border-left:4px solid var(--accent);padding:.8em 1.2em;margin:1.2em 0;background:var(--bg-task);border-radius:0 6px 6px 0}
+    .step{margin:.6em 0} .step input{margin-right:.6em;transform:scale(1.2);accent-color:var(--accent)}
+    .mockup{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:1.2em;margin:1em 0;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    .mockup-label{font-size:.75em;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-muted);margin-bottom:.5em}
+    table{border-collapse:collapse;width:100%;margin:1em 0} th,td{border:1px solid var(--bd);padding:.4em .7em;text-align:left;vertical-align:top;font-size:.92em} th{background:var(--bg-meta)}
+    .pan{border-radius:10px;padding:10px}.td{--s:#0a0a0a;--e:#111;--b:#222;--t:#e5e7eb;--sec:#9ca3af;--mut:#6b7280;--h:#fff;background:#050505}.tl{--s:#fff;--e:#f8fafc;--b:#e2e8f0;--t:#0f172a;--sec:#334155;--mut:#5b6675;--h:#0f172a;background:#eef2f7}
+    .pl{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--mut);margin:0 0 6px}.mc{background:var(--s);border:1px solid var(--b);border-radius:8px;overflow-x:auto}
+    .mt{width:100%;border-collapse:collapse;font-size:10.5px}.mt thead tr{background:var(--e);border-bottom:1px solid var(--b)}.mt th{padding:6px;text-align:left;font-weight:700;font-size:9px;text-transform:uppercase;color:var(--mut);border:none;white-space:nowrap}.mt td{padding:6px;color:var(--t);border:none;border-bottom:1px solid color-mix(in srgb,var(--b) 50%,transparent)}.mt .r{text-align:right}.mn{font-family:monospace}
+    .src{font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:4px;display:inline-flex;gap:3px;width:fit-content;margin-bottom:2px}.td .src{background:rgba(124,45,18,.28);color:#fb923c}.tl .src{background:#fff7ed;color:#c2410c}
+    .net{color:var(--h);font-weight:600;white-space:nowrap}.td .pf{color:#34d399}.tl .pf{color:#047857}.td .pp{color:#fbbf24}.tl .pp{color:#b45309}.pf,.pp{font-weight:600;white-space:nowrap}
+    .stat{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}.stat .sd{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.8}.td .sp{background:rgba(6,78,59,.22);color:#34d399}.tl .sp{background:#ecfdf5;color:#047857}.td .so{background:rgba(124,45,18,.22);color:#fbbf24}.tl .so{background:#fffbeb;color:#b45309}
+    .acts{display:flex;gap:2px;justify-content:flex-end}.ab{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px}
+    .fb{display:inline-block;background:#fff;border:1px solid var(--bd);border-radius:6px;padding:5px 9px;font-size:.84em;margin:2px}.fa{color:var(--accent);font-weight:700;margin:0 3px}
+  </style>
+</head>
+<body>
+
+<h1>Sales table redesign Implementation Plan</h1>
+<blockquote><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline TDD). Spec: <code>docs/superpowers/specs/2026-06-01-sales-table-redesign-design.html</code>.</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ทำตารางหน้าการขายให้สวย + responsive ทุกขนาด desktop — แก้ 4 ปัญหา (money 2-บรรทัด/status ตัดบรรทัด/ปุ่มใหญ่/แถวไม่เท่า).</p>
+  <p><strong>Architecture:</strong> Cosmetic-shell. NEW <code>src/components/backend/SaleRowParts.jsx</code> (pure <code>SaleSourceTag</code> + <code>SaleStatusPill</code> → RTL-testable + trims 2000-line SaleTab). <code>SaleTab.jsx</code> restyle: money nowrap, source→tag, status→pill, actions compact, fluid responsive cols. ไม่แตะ handler/state/data/row-click.</p>
+  <p><strong>Decisions:</strong> Q1=A clean&compact · Q2=A compact-icons-always · Q3=A source→tag · Responsive fluid+truncate+min-w.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">AFTER (locked) — Dark | Light</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="pan td"><div class="pl">Dark</div><div class="mc"><table class="mt"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r">ยอดชำระจริง</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead><tbody id="d"></tbody></table></div></div>
+    <div class="pan tl"><div class="pl">Light</div><div class="mc"><table class="mt"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r">ยอดชำระจริง</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead><tbody id="l"></tbody></table></div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Cell restyle (cosmetic — handler/state/data/row-click เดิมครบ)</div>
+  <p><span class="fb">money td (flex-wrap + 4 source badges)</span><span class="fa">→</span><span class="fb">net = <code>nowrap</code> mono ชิดขวา; source badges ลบออก</span></p>
+  <p><span class="fb">source</span><span class="fa">→</span><span class="fb"><code>&lt;SaleSourceTag source isDark/&gt;</code> บนสุดของ รายการขาย td</span></p>
+  <p><span class="fb">status td (inline 6-color ternary)</span><span class="fa">→</span><span class="fb"><code>&lt;SaleStatusPill color={st.color} label={st.label} isDark/&gt;</code> nowrap pill+dot</span></p>
+  <p><span class="fb">actions <code>gap-1</code> + <code>p-2.5</code>×5</span><span class="fa">→</span><span class="fb"><code>gap-0.5 justify-end</code> + <code>p-1.5</code> (เล็ก, ชิดขวา)</span></p>
+  <p><span class="fb">responsive</span><span class="fa">→</span><span class="fb">table <code>min-w-[920px]</code> + ลูกค้า/รายการขาย <code>truncate</code> + คง <code>overflow-x-auto</code></span></p>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/components/backend/SaleRowParts.jsx</code></td><td>NEW — pure <code>SaleSourceTag</code> + <code>SaleStatusPill</code> + maps (same labels/colors as the current inline badges/chip).</td></tr>
+  <tr><td><code>src/components/backend/SaleTab.jsx</code></td><td>import the parts; row restyle (money nowrap @~1301; source→tag @~1294; status→pill @~1322; actions compact @~1326-1342; customer truncate; <code>table min-w</code> @~1217).</td></tr>
+  <tr><td><code>tests/sale-row-parts-rtl.test.jsx</code></td><td>NEW — RTL unit for both components (Task 1).</td></tr>
+  <tr><td><code>tests/sale-table-redesign-wiring.test.js</code></td><td>NEW — source-grep regression (Task 2).</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: SaleRowParts.jsx (TDD via RTL)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/SaleRowParts.jsx</code> · Test <code>tests/sale-row-parts-rtl.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1: Write failing RTL test</strong></div>
+<pre><code class="language-jsx">// tests/sale-row-parts-rtl.test.jsx
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import { SaleSourceTag, SaleStatusPill } from '../src/components/backend/SaleRowParts.jsx';
+
+describe('SaleSourceTag', () => {
+  it('renders จาก OPD Card for treatment', () => {
+    const { getByTestId } = render(&lt;SaleSourceTag source="treatment" isDark={true} /&gt;);
+    const el = getByTestId('sale-source-tag-treatment');
+    expect(el.textContent).toContain('จาก OPD Card');
+    expect(el.className).toMatch(/text-orange-400/);
+  });
+  it('exchange / share / addRemaining labels', () => {
+    expect(render(&lt;SaleSourceTag source="exchange" isDark /&gt;).getByTestId('sale-source-tag-exchange').textContent).toContain('เปลี่ยนสินค้า');
+    expect(render(&lt;SaleSourceTag source="share" isDark /&gt;).getByTestId('sale-source-tag-share').textContent).toContain('แชร์คอร์ส');
+    expect(render(&lt;SaleSourceTag source="addRemaining" isDark /&gt;).getByTestId('sale-source-tag-addRemaining').textContent).toContain('เพิ่มคงเหลือ');
+  });
+  it('light theme uses light classes', () => {
+    expect(render(&lt;SaleSourceTag source="treatment" isDark={false} /&gt;).getByTestId('sale-source-tag-treatment').className).toMatch(/text-orange-700/);
+  });
+  it('returns null for plain form sale / unknown', () => {
+    expect(render(&lt;SaleSourceTag source="" isDark /&gt;).container.firstChild).toBeNull();
+    expect(render(&lt;SaleSourceTag source="weird" isDark /&gt;).container.firstChild).toBeNull();
+  });
+});
+
+describe('SaleStatusPill', () => {
+  it('renders label + nowrap rounded pill + dot', () => {
+    const { container, getByText } = render(&lt;SaleStatusPill color="emerald" label="ชำระแล้ว" isDark /&gt;);
+    expect(getByText('ชำระแล้ว')).toBeTruthy();
+    const pill = container.firstChild;
+    expect(pill.className).toMatch(/whitespace-nowrap/);
+    expect(pill.className).toMatch(/rounded-full/);
+    expect(pill.className).toMatch(/text-emerald-400/);
+    expect(pill.querySelector('[aria-hidden]')).toBeTruthy(); // dot
+  });
+  it('6-color map (amber/red/gray/purple/sky) + light', () => {
+    expect(render(&lt;SaleStatusPill color="amber" label="ค้างชำระ" isDark /&gt;).container.firstChild.className).toMatch(/text-orange-400/);
+    expect(render(&lt;SaleStatusPill color="red" label="ยกเลิก" isDark /&gt;).container.firstChild.className).toMatch(/text-red-400/);
+    expect(render(&lt;SaleStatusPill color="purple" label="x" isDark={false} /&gt;).container.firstChild.className).toMatch(/text-purple-700/);
+    expect(render(&lt;SaleStatusPill color="weird" label="x" isDark /&gt;).container.firstChild.className).toMatch(/text-sky-400/); // fallback
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: Run → FAIL</strong></div>
+  <p><code>npm test -- --run tests/sale-row-parts-rtl.test.jsx</code> → FAIL (module/exports missing).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: Implement SaleRowParts.jsx</strong></div>
+<pre><code class="language-jsx">// src/components/backend/SaleRowParts.jsx
+// 2026-06-01 — pure presentational bits for the SaleTab row (redesign).
+// Extracted so they're RTL-testable in isolation + trims the 2000-line SaleTab.
+// Same labels + per-source/per-status colors as the prior inline badges/chip.
+
+const SALE_SOURCE_TAGS = {
+  treatment:    { label: 'จาก OPD Card', dark: 'bg-orange-900/30 text-orange-400',   light: 'bg-orange-50 text-orange-700' },
+  exchange:     { label: 'เปลี่ยนสินค้า', dark: 'bg-sky-900/30 text-sky-400',          light: 'bg-sky-50 text-sky-700' },
+  share:        { label: 'แชร์คอร์ส',     dark: 'bg-violet-900/30 text-violet-400',    light: 'bg-violet-50 text-violet-700' },
+  addRemaining: { label: 'เพิ่มคงเหลือ',  dark: 'bg-emerald-900/30 text-emerald-400',  light: 'bg-emerald-50 text-emerald-700' },
+};
+
+export function SaleSourceTag({ source, isDark }) {
+  const cfg = SALE_SOURCE_TAGS[source];
+  if (!cfg) return null;
+  return (
+    &lt;span
+      data-testid={`sale-source-tag-${source}`}
+      className={`flex w-fit items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded mb-1 whitespace-nowrap ${isDark ? cfg.dark : cfg.light}`}
+    &gt;{cfg.label}&lt;/span&gt;
+  );
+}
+
+const SALE_STATUS_PILL = {
+  emerald: { dark: 'bg-emerald-900/30 text-emerald-400', light: 'bg-emerald-50 text-emerald-700' },
+  amber:   { dark: 'bg-orange-900/30 text-orange-400',   light: 'bg-orange-50 text-orange-700' },
+  red:     { dark: 'bg-red-900/30 text-red-400',         light: 'bg-red-50 text-red-700' },
+  gray:    { dark: 'bg-gray-900/30 text-gray-400',       light: 'bg-gray-100 text-gray-600' },
+  purple:  { dark: 'bg-purple-900/30 text-purple-400',   light: 'bg-purple-50 text-purple-700' },
+  sky:     { dark: 'bg-sky-900/30 text-sky-400',         light: 'bg-sky-50 text-sky-700' },
+};
+
+export function SaleStatusPill({ color, label, isDark }) {
+  const cfg = SALE_STATUS_PILL[color] || SALE_STATUS_PILL.sky;
+  return (
+    &lt;span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${isDark ? cfg.dark : cfg.light}`}&gt;
+      &lt;span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" aria-hidden /&gt;
+      {label}
+    &lt;/span&gt;
+  );
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4: Run → PASS</strong></div>
+  <p><code>npm test -- --run tests/sale-row-parts-rtl.test.jsx</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 5: Commit</strong></div>
+<pre><code class="language-bash">git add src/components/backend/SaleRowParts.jsx tests/sale-row-parts-rtl.test.jsx
+git commit -m "feat(sales): SaleSourceTag + SaleStatusPill pure row parts (Task 1)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: SaleTab row restyle (cosmetic)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/SaleTab.jsx</code> · Test <code>tests/sale-table-redesign-wiring.test.js</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1: import the parts</strong> (near the financeUtils import)</div>
+<pre><code class="language-javascript">import { SaleSourceTag, SaleStatusPill } from './SaleRowParts.jsx';</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: table min-w</strong> (@~1217)</div>
+<pre><code class="language-jsx">{/* before */} &lt;table className="w-full text-xs"&gt;
+{/* after  */} &lt;table className="w-full min-w-[920px] text-xs"&gt;</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: รายการขาย td — add source tag + truncate</strong> (@~1294, REPLACE the td incl. its 2026-04-28 comment)</div>
+<pre><code class="language-jsx">&lt;td className="px-3 py-2 max-w-[300px]"&gt;
+  &lt;SaleSourceTag source={sale.source} isDark={isDark} /&gt;
+  &lt;SaleItemsCell items={flattenSaleItemsForSummary(sale)} isDark={isDark} /&gt;
+&lt;/td&gt;</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4: money/net td — clean nowrap, drop the flex-wrap + 4 source badges</strong> (REPLACE lines @~1297-1317 incl. the 2026-04-28 comment)</div>
+<pre><code class="language-jsx">&lt;td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)] whitespace-nowrap"&gt;{fmtMoney(sale.billing?.netTotal)} ฿&lt;/td&gt;</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 5: paid td — add nowrap</strong> (@~1319)</div>
+<pre><code class="language-jsx">&lt;td className="px-3 py-2 text-right font-mono whitespace-nowrap"&gt;
+  &lt;span className={`font-semibold ${_paidCls}`} data-testid={`saletab-paid-${sale.saleId || sale.id || i}`}&gt;{fmtMoney(_paidAmt)} ฿&lt;/span&gt;
+&lt;/td&gt;</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 6: status td → SaleStatusPill</strong> (REPLACE the inline 6-color ternary td @1322)</div>
+<pre><code class="language-jsx">&lt;td className="px-3 py-2"&gt;&lt;SaleStatusPill color={st.color} label={st.label} isDark={isDark} /&gt;&lt;/td&gt;</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 7: actions — compact + right-align</strong> (@~1326 the wrapper div; + ALL 5 buttons <code>p-2.5</code> → <code>p-1.5</code>)</div>
+<pre><code class="language-jsx">{/* wrapper: */}  &lt;div className="flex gap-0.5 justify-end" onClick={e =&gt; e.stopPropagation()}&gt;
+{/* each button: */} className="p-1.5 rounded hover:bg-violet-900/20 text-violet-400"   {/* ...same for each, only p-2.5→p-1.5 */}</code></pre>
+  <p>Keep EVERY button's onClick / title / aria-label / data-testid / conditional render (pay $ for unpaid|split, cancel for non-cancelled) UNCHANGED — only the <code>p-2.5</code>→<code>p-1.5</code> and the wrapper <code>gap-1</code>→<code>gap-0.5 justify-end</code>.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 8: customer td truncate (responsive)</strong> — wrap the displayed name so it ellipsizes (@~1252 the customer td)</div>
+<pre><code class="language-jsx">{/* add to the customer &lt;td&gt;: */} className="px-3 py-2 text-[var(--tx-heading)] font-medium max-w-[220px]"
+{/* and the name link/text gets: */} className="... truncate inline-block max-w-[170px] align-bottom"</code></pre>
+  <p>(Apply <code>truncate inline-block max-w-[170px] align-bottom</code> to the existing <code>&lt;a&gt;</code> teal link AND the plain-text fallback span; keep the HN span after it.)</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 9: Build check</strong></div>
+  <p><code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 10: source-grep regression</strong></div>
+<pre><code class="language-javascript">// tests/sale-table-redesign-wiring.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs'; import path from 'node:path';
+const SRC = fs.readFileSync(path.join(process.cwd(), 'src/components/backend/SaleTab.jsx'), 'utf8');
+
+describe('SaleTab redesign wiring', () => {
+  it('imports SaleSourceTag + SaleStatusPill', () => {
+    expect(SRC).toMatch(/import\s*\{[^}]*SaleSourceTag[^}]*SaleStatusPill[^}]*\}\s*from\s*'\.\/SaleRowParts\.jsx'/);
+  });
+  it('source tag in items cell + status pill used; inline status ternary gone', () => {
+    expect(SRC).toContain('&lt;SaleSourceTag source={sale.source}');
+    expect(SRC).toContain('&lt;SaleStatusPill color={st.color} label={st.label}');
+    expect(SRC).not.toMatch(/st\.color === 'emerald' \?/); // old inline status ternary removed
+  });
+  it('money columns nowrap + source badges removed from money cell', () => {
+    expect(SRC).toMatch(/netTotal\)\} ฿&lt;\/td&gt;/);                       // net = bare nowrap td
+    expect(SRC).not.toContain('จาก OPD Card');                       // source label moved to SaleRowParts.jsx
+    expect(SRC).not.toMatch(/justify-end gap-1\.5 flex-wrap/);        // old money-cell flex-wrap gone
+    expect(SRC).toMatch(/text-right font-mono whitespace-nowrap/);    // paid cell nowrap
+  });
+  it('actions compact + right-aligned (row eye button p-1.5)', () => {
+    expect(SRC).toContain('flex gap-0.5 justify-end');
+    expect(SRC).toMatch(/setViewingSale\(sale\)\} className="p-1\.5 rounded hover:bg-violet/); // eye btn compacted
+  });
+  it('responsive: table min-w + truncate present', () => {
+    expect(SRC).toContain('min-w-[920px]');
+    expect(SRC).toMatch(/truncate inline-block max-w-\[170px\]/);
+  });
+});
+</code></pre>
+  <p><code>npm test -- --run tests/sale-table-redesign-wiring.test.js</code> → PASS. Commit:</p>
+<pre><code class="language-bash">git add src/components/backend/SaleTab.jsx tests/sale-table-redesign-wiring.test.js
+git commit -m "feat(sales): redesign table — clean money, source→tag, status pill, compact actions, responsive (Task 2)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Full suite + build + Rule Q-vis</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Full vitest</strong> — <code>npm test -- --run</code>. Watch for V21 lock-ins (tests asserting the OLD money source badge "จาก OPD Card" in money col, the inline status chip classes, or <code>p-2.5</code>). Fix inline (Rule P): update the assertion to the new contract + marker comment.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: Build</strong> — <code>npm run build</code> clean.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: Rule Q-vis</strong> — re-open <code>public/brainstorm-sales-table-redesign.html</code> in Chrome MCP; verify AFTER both themes; resize the inner table preview to ~1024/1280 (fixed-width container) to confirm fluid truncation. (Honest: assembled L1 on real admin SaleTab + real scaled screen = USER post-deploy.)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: Commit any V21 fixups</strong></div>
+<pre><code class="language-bash">git add tests/ && git commit -m "test(sales): V21 fixups for table redesign (Task 3)"</code></pre>
+</div>
+
+<h2>Verification (Rule Q honest)</h2>
+<ul>
+  <li>RTL unit (both components, labels + nowrap + 6 colors + 2 themes + null) + source-grep wiring + full suite + build.</li>
+  <li>Rule Q-vis: AFTER pixels both themes (mockup, Chrome MCP) + fluid at 1024/1280 via fixed-width preview.</li>
+  <li><strong>Honest gap → USER:</strong> assembled L1 on real admin-gated SaleTab + real Windows-scaled screen (smoothness + responsive feel). Cosmetic-shell — no flow change.</li>
+</ul>
+
+<script>
+const R=[
+ {inv:'INV-…0005',nm:'บัญญูดิ',it:[['#f87171','IV Drip Fat Burn 5 ครั้ง ×1'],['#f87171','IV Drip Liver Detox 5 ครั้ง ×1']],more:0,src:'จาก OPD Card',net:0,paid:0},
+ {inv:'INV-…0003',nm:'เกรียงไกร',it:[['#f87171','Testoviron 1 ครั้ง ×1'],['#fbbf24','ปรึกษาโรคทั่วไป ×1']],more:2,src:'จาก OPD Card',net:6490,paid:6490},
+ {inv:'INV-…0009',nm:'มาลี',it:[['#f87171','ร้อยไหมยกกระชับหน้า 10 เส้น ×1']],more:0,src:'จาก OPD Card',net:12000,paid:5000},
+ {inv:'INV-…0004',nm:'ธิระวุฒิ',it:[['#fbbf24','Ibuprofen ×10']],more:0,src:'',net:150,paid:150},
+];
+const f=n=>Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const items=r=>`<div style="display:flex;flex-direction:column;gap:2px">${r.src?`<span class="src">● ${r.src}</span>`:''}${r.it.slice(0,2).map(([c,t])=>`<div style="display:flex;align-items:center;gap:5px;font-size:10.5px"><span style="width:6px;height:6px;border-radius:50%;background:${c}"></span><span style="color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${t}</span></div>`).join('')}${r.more?`<div style="color:#a78bfa;font-size:9px;font-weight:700;padding-left:11px">+${r.more} รายการ</div>`:''}</div>`;
+const paid=r=>{const c=r.paid+0.01>=r.net?'pf':'pp';return `<td class="r mn"><span class="${c}">${f(r.paid)} ฿</span></td>`;};
+const stat=r=>r.paid+0.01>=r.net?'<span class="stat sp"><span class="sd"></span>ชำระแล้ว</span>':'<span class="stat so"><span class="sd"></span>ค้างชำระ</span>';
+const acts=`<div class="acts"><span class="ab" style="color:#a78bfa">👁</span><span class="ab" style="color:#34d399">🖨</span><span class="ab" style="color:#38bdf8">✎</span><span class="ab" style="color:#f87171">✕</span></div>`;
+const row=r=>`<tr><td class="mn" style="color:var(--sec)">${r.inv}</td><td style="color:var(--h)">${r.nm}</td><td>${items(r)}</td><td class="r mn"><span class="net">${f(r.net)} ฿</span></td>${paid(r)}<td>${stat(r)}</td><td class="r">${acts}</td></tr>`;
+for(const s of['d','l'])document.getElementById(s).innerHTML=R.map(row).join('');
+</script>
+</body>
+</html>
