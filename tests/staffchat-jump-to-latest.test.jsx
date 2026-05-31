@@ -6,6 +6,8 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { StaffChatMessageList } from '../src/components/staffchat/StaffChatMessageList.jsx';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // --- controllable IntersectionObserver mock ---
 let ioInstances = [];
@@ -100,5 +102,46 @@ describe('J1-J7 jump-to-latest button behavior', () => {
     fireIntersect(true);
     expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
     expect(onScrolledToBottom).toHaveBeenCalled();
+  });
+});
+
+describe('SG source-grep regression locks', () => {
+  const ROOT = process.cwd();
+  const listSrc = fs.readFileSync(path.resolve(ROOT, 'src/components/staffchat/StaffChatMessageList.jsx'), 'utf8');
+  const widgetSrc = fs.readFileSync(path.resolve(ROOT, 'src/components/staffchat/StaffChatWidget.jsx'), 'utf8');
+
+  it('SG1: MessageList imports ChevronDown from lucide-react', () => {
+    expect(listSrc).toMatch(/import\s*\{[^}]*ChevronDown[^}]*\}\s*from\s*['"]lucide-react['"]/);
+  });
+  it('SG2: button has the testid + Thai aria-label', () => {
+    expect(listSrc).toContain('data-testid="staff-chat-jump-latest"');
+    expect(listSrc).toContain('aria-label="ลงไปข้อความล่าสุด"');
+  });
+  it('SG3: button gated on !isAtBottom', () => {
+    expect(listSrc).toMatch(/!isAtBottom\s*&&/);
+  });
+  it('SG4: isAtBottom driven by the SAME observer (one observer, reuse)', () => {
+    expect(listSrc).toMatch(/setIsAtBottom\(entry\.isIntersecting\)/);
+    expect((listSrc.match(/new IntersectionObserver/g) || []).length).toBe(1);
+  });
+  it('SG5: V82 onScrolledToBottom still fires only on intersect', () => {
+    expect(listSrc).toMatch(/entry\.isIntersecting\s*&&\s*typeof onScrolledToBottom === 'function'/);
+  });
+  it('SG6: tap scrolls endRef smooth to bottom via scrollToLatest', () => {
+    expect(listSrc).toMatch(/scrollToLatest/);
+    expect(listSrc).toMatch(/scrollIntoView\(\{ behavior: 'smooth', block: 'end' \}\)/);
+  });
+  it('SG7: badge caps at "9+"', () => {
+    expect(listSrc).toMatch(/unreadCount > 9 \? '9\+' : unreadCount/);
+  });
+  it('SG8: Widget threads chat.unreadCount into the MessageList element (not just the bubble)', () => {
+    // Scope to the <StaffChatMessageList ... /> element — a bare widgetSrc match
+    // would false-pass on the pre-existing <StaffChatBubble unreadCount={chat.unreadCount} />.
+    const mlBlock = widgetSrc.match(/<StaffChatMessageList[\s\S]*?\/>/);
+    expect(mlBlock).toBeTruthy();
+    expect(mlBlock[0]).toMatch(/unreadCount=\{chat\.unreadCount\}/);
+  });
+  it('SG9: scroll list keeps its data-testid (consumers depend on it)', () => {
+    expect(listSrc).toContain('data-testid="staff-chat-message-list"');
   });
 });
