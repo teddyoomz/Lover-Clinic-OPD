@@ -1,33 +1,29 @@
 ---
-updated_at: "2026-06-01 EOD+1 — Staff-chat jump-to-latest button SHIPPED + DEPLOYED + L1-verified on LIVE prod."
-status: "DEPLOYED (vercel-only, no Probe-Deploy-Probe). L1 DONE on real prod (read-only). prod = current code."
+updated_at: "2026-06-01 EOD+1 — Staff-chat jump-to-latest button + cold-open-scroll fix SHIPPED + DEPLOYED + L1-verified on LIVE prod."
+status: "DEPLOYED (vercel-only, no Probe-Deploy-Probe). Cold-open L1 DONE on real prod (metrics + screenshot). prod = current code."
 branch: "master"
-last_commit: "416e8341 (strip dev mockup pre-deploy). Feature code: de6f322b + 0c26e21a."
-tests: "15527/0 full suite (ran this session). +17 new (J1-J7 + SG1-SG9 + F1)."
+last_commit: "ede847dd (cold-open scroll fix). Jump-button feature: de6f322b + 0c26e21a. prod bundle = ede847dd."
+tests: "Full suite 15533/15534 (the 1 = known flake phase-17-1-cross-branch-import-rtl, PASS 7/0 isolated). +24 staff-chat-scroll/jump tests this session."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "416e8341 LIVE (aliased; vercel --prod). Was 0628f91a (sales paid-column batch)."
-firestore_rules_version: "UNCHANGED. No rules/storage/index/cron/functions touched (verified in diff)."
+production_commit: "ede847dd LIVE (aliased; vercel --prod). Was 416e8341 (jump button), 0628f91a (sales)."
+firestore_rules_version: "UNCHANGED. No rules/storage/index/cron/functions touched (both deploys vercel-only)."
 ---
 
-# Active Context — staff-chat jump-to-latest button DEPLOYED (2026-06-01 EOD+1)
+# Active Context — staff-chat jump-button + cold-open scroll fix DEPLOYED (2026-06-01 EOD+1)
 
 ## State
-- Shipped a Messenger-style "ลงไปข้อความล่าสุด" (jump-to-latest) button on the staff-chat message list. Full `/brainstorming → spec → /writing-plans → execute` (TDD, cosmetic-shell). Subagent-driven was blocked by a "1M context credits" account error → fell back to inline execution (controller review per task).
-- Deployed vercel-only (diff = 0 rules/storage/index/cron → no Probe-Deploy-Probe). Dev mockup stripped pre-deploy (416e8341).
-- Full suite 15527/0; build clean.
-
-## What shipped (detail → checkpoint 2026-06-01-staffchat-jump-to-latest.md if created)
-- Decisions: Q1=C (circle + rose unread badge, "9+" cap) · Q2=A (appears whenever scrolled up from bottom).
-- `StaffChatMessageList.jsx` — `isAtBottom` piggybacked on the EXISTING V82 bottomSentinel IntersectionObserver (read-cursor timing unchanged); floating ChevronDown button when `!isAtBottom`; tap → `endRef.scrollIntoView({smooth})`; new `unreadCount` prop. `StaffChatWidget.jsx` — threads `chat.unreadCount` (1 line).
-- `tests/staffchat-jump-to-latest.test.jsx` — 17 tests (J1-J7 behavior + SG1-SG9 source-grep + F1 flow-simulate). Caught + fixed an SG8 false-positive (was matching the pre-existing StaffChatBubble prop; scoped to the MessageList element).
+- Two staff-chat changes shipped + deployed (both vercel-only):
+  1. **Jump-to-latest button** (Messenger-style circle + unread badge, appears when scrolled up) — `de6f322b`/`0c26e21a`.
+  2. **Cold-open scroll fix** (`/systematic-debugging`) — `ede847dd`. On a cold tab open the chat opened scrolled UP (stuck, image 1); root cause (real-prod evidence) = auto-scroll `endRef.scrollIntoView({smooth})` undershot ~1158px (4538/5695) on cold mount (animation interrupted by mount re-renders), never self-corrected. Fix = `scrollContainerToBottom(listRef.current)` → `scrollTop = scrollHeight` (instant), immediate + rAF, deps unchanged `[lastMessageId]` (V140 no-yank preserved). **AV169** + new regression test + V140 V21-fixup.
+- The V82 read cursor was NOT the bug (it IS saved per-device); nothing used it to scroll. Both pre-existing-surfaced + fixed.
 
 ## Verification (Rule Q)
-- L1 on harness (real component + real IO + real scroll, both themes) AND **L1 on LIVE prod** (real admin-gated widget + real Firestore data, read-only): at-bottom→no button / scroll-up→⌄ / set 15→"9+" / tap→smooth-scroll-to-latest→hides. Honest gap CLOSED.
-- Targeted staff-chat 297/0 (no V21 regression from observer-guard relaxation / relative wrapper / Widget prop). Full 15527/0. Build clean.
+- **Cold-open L1 on LIVE prod (the deployed fix)**: fresh tab → open chat → `scrollTop 5695 / scrollHeight 6064` → `distanceFromBottom 0`, `atBottom true`, jump button hidden + screenshot = image 2 (latest "ok" 19:21). Before fix: 4538/5695, dist 1158, image 1.
+- Full suite 15533/15534 (1 = known flake, confirmed 7/0 isolated); build clean; targeted staff-chat 95/0.
 
 ## Next action
-- None pending for this feature (deployed + L1-verified). Awaiting next task.
+- None pending — both deployed + L1-verified on real prod. Awaiting next task.
 
 ## Outstanding (carryover, user-triggered)
 - cron `stock-lot-cleanup` active 03:45 BKK (V143-quater) — optional CRON_SECRET hit to verify.
-- Prior sessions' ship-artifact V-log entries still unwritten (sales paid-column + redesign; EOD+5/+6 resizable-panel/V73-BS1/course-step). This jump-button feature needs no V-/AV-entry (clean additive, no class-of-bug).
+- Prior sessions' ship-artifact V-log entries still unwritten (sales paid-column + redesign; EOD+5/+6 resizable-panel/V73-BS1/course-step). This session's jump-button + scroll-fix: AV169 written; no V-entry needed (additive feature + localized bugfix, no class-of-bug saga).
