@@ -35,8 +35,8 @@ describe('V139 · resolveCourseStepState', () => {
     expect(resolveCourseStepState({ courseDeducted: true, completedDone: false })).toBe('done');
     expect(resolveCourseStepState({ courseDeducted: true, completedDone: true })).toBe('done');
   });
-  it('warn when completed but not deducted (Q1=B "ยังไม่ตัด")', () => {
-    expect(resolveCourseStepState({ courseDeducted: false, completedDone: true })).toBe('warn');
+  it('not-deducted when completed but not deducted (② 2026-05-31 — was warn "ยังไม่ตัด")', () => {
+    expect(resolveCourseStepState({ courseDeducted: false, completedDone: true })).toBe('not-deducted');
   });
   it('pending when not deducted and not completed (no false warn mid-flow)', () => {
     expect(resolveCourseStepState({ courseDeducted: false, completedDone: false })).toBe('pending');
@@ -68,9 +68,10 @@ describe('V139 · OPD card course step (RTL)', () => {
     expect(screen.getByText('คอร์ส')).toBeInTheDocument();
     expect(screen.getAllByTestId('stepper-dot')).toHaveLength(4);
   });
-  it('shows amber "ยังไม่ตัด" when completed but not deducted', () => {
+  it('shows muted "ไม่ตัดคอร์ส" when completed but not deducted (② 2026-05-31 — was amber "ยังไม่ตัด")', () => {
     render(<AppointmentOpdStepperRow isTodayTab latestTreatment={mkTreatment()} />);
-    expect(screen.getByText('ยังไม่ตัด')).toBeInTheDocument();
+    expect(screen.getByText('ไม่ตัดคอร์ส')).toBeInTheDocument();
+    expect(screen.queryByText('ยังไม่ตัด')).toBeNull();
     expect(screen.queryByText('คอร์ส')).toBeNull();
   });
   it('shows neutral "คอร์ส" (no warn) when in-progress (doctor done, not completed)', () => {
@@ -78,9 +79,9 @@ describe('V139 · OPD card course step (RTL)', () => {
     expect(screen.getByText('คอร์ส')).toBeInTheDocument();
     expect(screen.queryByText('ยังไม่ตัด')).toBeNull();
   });
-  it('purchase-only (ซื้อแต่ไม่ตัด) + completed → still warns', () => {
+  it('purchase-only (ซื้อแต่ไม่ตัด) + completed → muted "ไม่ตัดคอร์ส" (② 2026-05-31 — was warn)', () => {
     render(<AppointmentOpdStepperRow isTodayTab latestTreatment={mkTreatment({ detail: { treatmentDate: '2026-05-31', purchasedItems: [{ id: 'p' }], courseItems: [], treatmentItems: [] } })} />);
-    expect(screen.getByText('ยังไม่ตัด')).toBeInTheDocument();
+    expect(screen.getByText('ไม่ตัดคอร์ส')).toBeInTheDocument();
   });
   it('no-treatment today → 4 muted dots incl. course', () => {
     render(<AppointmentOpdStepperRow isTodayTab latestTreatment={null} />);

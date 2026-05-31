@@ -23,18 +23,18 @@ describe('V139.F1 · course-step flow (real getTreatmentLifecycle + resolvers)',
   it('treatmentItems-only (fill-later) → done', () => {
     expect(stepFor({ completedAt: '2026-05-31T03:40:00Z', detail: { treatmentItems: [{ id: 't1' }] } })).toBe('done');
   });
-  it('purchase-only-no-deduct + completed → warn (THE bug we catch)', () => {
-    expect(stepFor({ completedAt: '2026-05-31T03:40:00Z', detail: { purchasedItems: [{ id: 'p1' }], courseItems: [], treatmentItems: [] } })).toBe('warn');
+  it('purchase-only-no-deduct + completed → not-deducted (THE bug we catch · ② 2026-05-31 — was warn)', () => {
+    expect(stepFor({ completedAt: '2026-05-31T03:40:00Z', detail: { purchasedItems: [{ id: 'p1' }], courseItems: [], treatmentItems: [] } })).toBe('not-deducted');
   });
-  it('no-course + completed → warn', () => {
-    expect(stepFor({ completedAt: '2026-05-31T03:40:00Z', detail: {} })).toBe('warn');
+  it('no-course + completed → not-deducted (② 2026-05-31 — was warn)', () => {
+    expect(stepFor({ completedAt: '2026-05-31T03:40:00Z', detail: {} })).toBe('not-deducted');
   });
   it('no-course + in-progress (doctor done, not completed) → pending (no false warn)', () => {
     expect(stepFor({ doctorRecordedAt: '2026-05-31T03:20:00Z', detail: {} })).toBe('pending');
   });
-  it('completed via the !status fallback (editedAt, no top-level status) + no deduct → warn', () => {
+  it('completed via the !status fallback (editedAt, no top-level status) + no deduct → not-deducted (② 2026-05-31 — was warn)', () => {
     // mirrors real prod shape: status:'(none)', completedAt present
-    expect(stepFor({ editedAt: '2026-05-31T03:40:00Z', detail: {} })).toBe('warn');
+    expect(stepFor({ editedAt: '2026-05-31T03:40:00Z', detail: {} })).toBe('not-deducted');
   });
 });
 
@@ -72,7 +72,7 @@ describe('V139.F3 · adversarial', () => {
   it('resolveCourseStepState tolerates missing/partial args → pending unless explicit', () => {
     expect(resolveCourseStepState()).toBe('pending');
     expect(resolveCourseStepState({ courseDeducted: undefined, completedDone: undefined })).toBe('pending');
-    expect(resolveCourseStepState({ completedDone: true })).toBe('warn');
+    expect(resolveCourseStepState({ completedDone: true })).toBe('not-deducted'); // ② (2026-05-31) was 'warn'
   });
   it('decideApptStatusServiceSync only couples lowercase "done"; tolerates weird input', () => {
     for (const s of [null, undefined, '', 0, 1, {}, [], 'DONE', 'Done', 'done ', ' done'])
