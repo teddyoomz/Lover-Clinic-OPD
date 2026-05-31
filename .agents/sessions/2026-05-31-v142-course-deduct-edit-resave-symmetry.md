@@ -52,5 +52,61 @@ User asked to test a DISTINCT multi-stage flow: admin vitals-save → doctor-sav
 - **Verified**: `scripts/e2e-v142ter-*` **7/0** real prod (A typical 5/5→4/5+stock · B buy 0/1 · C over-credit FIXED 4/5→3/5 · D V142 preserved 0/1) + `tests/v142-quater-*` 8/0 (incl. B2 pre-fix repro = over-credit proven + B5 V142 preserved + SG source-grep). 1 V21 fixup (v136 L2 reverse-gate source-grep). Build clean.
 - **Historical heal**: `scripts/diag-course-over-credit.mjs` (READ-ONLY) — flagged candidates are DOMINATED by duplicate-course (Shock Wave promo) name+product double-counting + already-handled V142 cases; NO clean over-credit victim (balance genuinely too-high, expected≥0) confirmable. Over-credit favors the customer (free use) → revenue-review, not data-corruption. NOT auto-healed.
 
+## EXHAUSTIVE TFP FLOW-MATRIX (final gate, same session) — user's last request
+User: "ทดสอบมาทุก flow … ที่ TFP เราทำได้ และตรวจสอบความถูกต้องขั้นสุดมาทุกการเปลี่ยนแปลงของข้อมูล
+… 100% Perfectly แล้วก็ deploy และ session end ได้เลยถ้าไม่เจอปัญหา" + "จะทำข้ามขั้นตอนไปมายังไง
+ข้อมูลก็ต้องถูกต้องทุกครั้ง". = exhaustive verification of EVERY TFP permutation before deploy+end.
+- **`scripts/e2e-tfp-full-flow-matrix.mjs` — 26/0 REAL prod, zero orphans.** 15 phases driving the
+  SHIPPED mutation fns (deduct/reverse/assign/stock) + SHIPPED helpers through a faithful
+  `applyTfpSave()` mirror of TFP.handleSubmit (TFP:2520-3270), asserting course balance + stock
+  batch + audit (kind=use/qtyBefore/qtyAfter) at every change:
+  - G1 create: P1 std · P2 buy-this-visit · P3 buffet(no-decrement) · P4 fill-later(→0) · P5 meds-only
+  - G2 step-skip: P6 vitals→fin · P7 doctor→fin(over-credit guard) · P8 vitals→doctor→fin · P9 +edit-refinalize
+    — every multistage deducts EXACTLY ONCE (the user's "ข้ามขั้นตอน" concern)
+  - G3 edit-resave: P10 image-only(course holds + stock NOT reversed) · P11 un-check(refund) · P12 stock-change(reverse+re-deduct)
+  - G4 adversarial: P13 dup-course preferNewest(exactly 1) · P14 3× multi-edit(no drift) · P15 shortfall(atomic throw)
+- **`tests/tfp-flow-matrix-mirror-fidelity.test.js` — 7/0** — Rule Q-honest DRIFT LOCK: source-greps
+  that the e2e `applyTfpSave` gates MATCH TFP's actual gates + the e2e imports the SHIPPED fns →
+  "the matrix is faithful to TFP" is auditable, not just claimed.
+- Full vitest **15379/0** + build clean. **0 problems found** → deploy authorized by the user's message.
+- **Honest gap (Rule Q)**: the matrix verifies the DATA-MUTATION logic (where every saga bug lived)
+  end-to-end on real prod; the React auth-gated UI wiring is the user's L1 hands-on (the fidelity
+  test proves the orchestration matches TFP).
+
+## V142-quinquies (same session) — finalize→doctor→finalize DOUBLE-DEDUCT (NEW BUG, real prod) + ROOT-CAUSE fix
+User escalated the matrix into an adversarial /systematic-debugging hunt ("ข้ามขั้นตอนไปมา … ข้อมูล
+ก็ต้องถูกต้องทุกครั้ง") + clarified "ปุ่มบันทึกสำหรับแพทย์ ไม่ต้องบันทึกพวกข้อมูลการตัดคอร์ส …
+บันทึกตัดคอร์สจะเป็นบันทึกด้านล่างของ TFP". The hunt found a REAL bug where the user pointed.
+- **BUG (CONFIRMED real prod, `scripts/diag-finalize-doctor-finalize-double-deduct.mjs` R1/R2 → 3/5)**:
+  finalize (deduct 5/5→4/5) → re-open → กดบันทึกสำหรับแพทย์ (doctor, "always shown" Phase 27.2-bis →
+  status='doctor-recorded') → re-open → finalize again → the V142-quater `priorSaveDeducted` STATUS
+  heuristic reads 'doctor-recorded' → FALSE → reverse SKIPPED → re-deduct → **4/5→3/5 DOUBLE-DEDUCT**
+  (customer loses a session never used). The V142-quater comment "finalize→doctor→finalize cannot
+  occur" was FALSE. The heuristic can't distinguish "never deducted" from "deducted-then-doctor-rerecorded"
+  (both = 'doctor-recorded'). V142-quater traded over-credit for double-deduct.
+- **FIX (root cause, per user directive)**: (A) doctor/vitals saves are course-NEUTRAL —
+  `courseItems: (doctor|vitals) ? existingCourseItems : buildCourseItemsForSave(...)` (don't write course
+  data). (B) persisted `_courseDeducted` flag (in detail) — SET by deducting saves (`willDeductCourses`),
+  PRESERVED by doctor/vitals; `priorSaveDeducted = loadedCourseDeducted` (loaded with backward-compat
+  fallback to the status heuristic for pre-fix docs). Reverse decision now independent of status flips.
+  **AV165** (supersedes AV164 heuristic). 5 TFP edits.
+- **Verified (Rule Q L2 real prod)**: matrix `scripts/e2e-tfp-full-flow-matrix.mjs` **30/0** (17 phases;
+  NEW G5 P16 finalize→DOCTOR→finalize=4/5 + P17 vitals variant; all V142/quater/buffet/fill-later/dup/
+  shortfall preserved) + **110 targeted** (v142-quinquies NEW + v142-quater updated-to-flag + bis/v142/
+  v136/v104/v101 + fidelity F1-F9). Repro diag R1/R2=bug, R3/R4=regress-intact. Build clean.
+- **Tests**: NEW `tests/v142-quinquies-finalize-doctor-finalize-double-deduct.test.js` (flag state-machine
+  F1-F6 + heuristic-repro F3 + SG1-5 + backward-compat) + `scripts/diag-finalize-doctor-finalize-double-deduct.mjs`
+  (forensic repro). Updated: matrix mirror + fidelity (F2/F3 + new F8/F9) + v142-quater (→ flag) + v101/v142-bis
+  V21 source-grep (Part-A ternary). v136 UNCHANGED (reverse-condition line verbatim).
+- **Honest gap (Rule Q)**: data-mutation logic verified end-to-end on real prod; React auth-gated UI wiring
+  = user L1 (fidelity F1-F9 proves the orchestration matches TFP).
+
 ## Resume Prompt
-Resume LoverClinic — V142 (course-deduct edit-resave symmetry) DONE+verified (real-prod L2 10/0 + unit 20/0 + full vitest 15356/0), UNCOMMITTED/HELD on top of V140+V141. prod=3342a9f0. When authorized: commit V140+V141+V142 → vercel --prod → heal `--apply` (LC-26000115). No commit/deploy/heal without explicit word THIS turn (V18 + Rule M).
+Resume LoverClinic — V142 family + V142-quinquies COMPLETE. /systematic-debugging found+fixed a REAL
+prod DOUBLE-DEDUCT (finalize→doctor→finalize, reproduced 3/5) — root cause: V142-quater status heuristic
+→ replaced with persisted `_courseDeducted` flag + course-neutral doctor/vitals (user directive). Verified
+matrix 30/0 real prod (17 phases, P16/P17 = the fix) + 110 targeted + full vitest. V142-quater committed;
+V142-quinquies HELD. prod LIVE = 8c3a9047 (lacks quater/quinquies). User authorized deploy if no problems —
+a problem WAS found+fixed → surface it, then on explicit "deploy": `vercel --prod` (frontend/lib only, no
+Probe-Deploy-Probe) → session-end. Post-deploy L1: finalize-using-course → doctor-save → finalize-again →
+course stays deducted ONCE (not twice).

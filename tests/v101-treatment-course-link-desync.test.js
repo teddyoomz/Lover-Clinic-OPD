@@ -33,7 +33,9 @@ const HELPER_SRC = readFileSync(HELPER_PATH, 'utf8');
 describe('V101.A — V101 source-grep regression (locks anti-regression)', () => {
   it('A1: TFP wires V101 two-pass serialization via buildCourseItemsForSave (V142-bis: extracted from inline IIFE)', () => {
     // V142-bis extracted the inline IIFE → buildCourseItemsForSave; TFP calls it.
-    expect(TFP_SRC).toMatch(/courseItems: buildCourseItemsForSave\(selectedCourseItems, options\?\.customerCourses, treatmentItems\)/);
+    // V142-quinquies wrapped it in a course-neutral ternary (doctor/vitals preserve),
+    // so the helper is now the ELSE branch — still called with the same args.
+    expect(TFP_SRC).toMatch(/: buildCourseItemsForSave\(selectedCourseItems, options\?\.customerCourses, treatmentItems\)/);
     expect(TFP_SRC).not.toContain('courseItems: (() => {'); // inline IIFE gone
     // the helper carries the V101 two-pass shape
     expect(HELPER_SRC).toMatch(/V101 two-pass/i);

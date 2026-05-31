@@ -111,7 +111,9 @@ describe('V142-bis.SG — source-grep: TFP uses the extracted helper (no inline 
   const tfp = readFileSync(path.resolve('src/components/TreatmentFormPage.jsx'), 'utf8');
   const helper = readFileSync(path.resolve('src/lib/treatmentBuyHelpers.js'), 'utf8');
   it('SG1 — TFP calls buildCourseItemsForSave(selectedCourseItems, options?.customerCourses, treatmentItems)', () => {
-    expect(tfp).toMatch(/courseItems: buildCourseItemsForSave\(selectedCourseItems, options\?\.customerCourses, treatmentItems\)/);
+    // V142-quinquies wrapped the call in a course-neutral ternary (doctor/vitals
+    // preserve existingCourseItems); the helper is the ELSE branch, same args.
+    expect(tfp).toMatch(/: buildCourseItemsForSave\(selectedCourseItems, options\?\.customerCourses, treatmentItems\)/);
   });
   it('SG2 — the inline courseItems IIFE is GONE', () => {
     expect(tfp).not.toMatch(/courseItems: \(\(\) => \{/);

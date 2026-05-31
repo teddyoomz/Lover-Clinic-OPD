@@ -500,6 +500,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // reference to `loadedTreatment?.status` resolved here since TFP has no
   // full-doc state — only individually destructured fields from existing.detail.
   const [loadedTreatmentStatus, setLoadedTreatmentStatus] = useState(undefined);
+  // V142-quinquies (2026-05-31) — the PRECISE "this treatment currently has an
+  // active course deduction" flag, loaded from the persisted `_courseDeducted`
+  // field (backward-compat fallback to the status heuristic for pre-fix docs).
+  // Replaces the V142-quater status-based `priorSaveDeducted` heuristic, which
+  // mis-classified finalize→doctor→finalize as "never deducted" → skipped the
+  // reverse → DOUBLE-DEDUCT (real-prod repro). The flag is set by the deducting
+  // (bottom) save + PRESERVED by course-neutral doctor/vitals saves, so the
+  // reverse decision is independent of status flips. AV165.
+  const [loadedCourseDeducted, setLoadedCourseDeducted] = useState(false);
   // V136 (2026-05-31) — captured at edit-load: true iff this finalized
   // treatment deducted NO course (detail.courseItems AND detail.treatmentItems
   // both empty). Gates canEditCourseUsageRetro (computed after canAddNewItems).
@@ -1023,6 +1032,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // loadedTreatmentStatus state declaration) can unlock add-ops
             // when admin finalizes a doctor-recorded treatment.
             if (existing?.status) setLoadedTreatmentStatus(existing.status);
+            // V142-quinquies (2026-05-31) — load the precise course-deduction flag.
+            // Stored in detail (via detailRest) by save; backward-compat: pre-fix
+            // docs without the flag fall back to the V142-quater status heuristic
+            // (completed → was deducted; doctor/vitals → not). AV165.
+            setLoadedCourseDeducted(
+              typeof existing?.detail?._courseDeducted === 'boolean'
+                ? existing.detail._courseDeducted
+                : (existing?.status !== 'doctor-recorded' && existing?.status !== 'vitalsigns-recorded')
+            );
             // Phase 27.2 (2026-05-14) — capture completedAt so submit handler
             // can preserve it (won't re-stamp on subsequent edits).
             if (existing?.completedAt) setLoadedTreatmentCompletedAt(existing.completedAt);
@@ -2517,7 +2535,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // V142-bis (2026-05-31) — extracted VERBATIM to buildCourseItemsForSave
           // (treatmentBuyHelpers.js) so the create-flow buy→deduct serialization
           // is directly testable; behavior-identical to the prior inline IIFE.
-          courseItems: buildCourseItemsForSave(selectedCourseItems, options?.customerCourses, treatmentItems),
+          // V142-quinquies (2026-05-31) — course-NEUTRAL doctor/vitals saves MUST
+          // NOT write course-deduction data (user directive: "ปุ่มบันทึกสำหรับแพทย์
+          // ไม่ต้องบันทึกพวกข้อมูลการตัดคอร์ส ที่จะบันทึกตัดคอร์สด้วยจะเป็นบันทึกด้านล่างของ TFP").
+          // The bottom (deducting) save owns the course-item record; doctor/vitals
+          // PRESERVE the existing record instead of re-serializing the selection.
+          courseItems: (saveMode === 'doctor' || saveMode === 'vitals')
+            ? (existingCourseItems || [])
+            : buildCourseItemsForSave(selectedCourseItems, options?.customerCourses, treatmentItems),
         });
         // Phase 6: Course deduction BEFORE save — only deduct EXISTING courses (not purchased-in-session).
         // Reversal on edit: split old deductions into existing + purchased so the reversal algorithm
@@ -2540,21 +2565,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // below). Mirror: skip the reverse so we don't refund a balance that was
         // never deducted in this save path.
         //
-        // V142-quater (2026-05-31) — OVER-CREDIT fix. A doctor/vitals save PERSISTS
-        // courseItems (the V101 serialization runs) but SKIPS the deduct (gates).
-        // So when the admin finalizes a treatment whose LAST save was doctor/vitals,
-        // `existingCourseItems` carries courses that were NEVER deducted — reversing
-        // them refunds a deduction that never happened, and the finalize then
-        // re-deducts → NET the course balance does NOT drop (user-confirmed real
-        // bug: admin ลงซักประวัติ → แพทย์ลงบันทึก(เลือกคอร์ส) → admin finalize → คอร์สไม่ลด).
-        // Only reverse when the prior save ACTUALLY deducted, i.e. the loaded
-        // treatment was NOT last saved as doctor/vitals. A completed treatment has
-        // its status cleared (deleteField) so loadedTreatmentStatus is undefined →
-        // reverse runs (V142 edit-resave preserved). The doctor-save UI is gated on
-        // status==='doctor-recorded' only, so finalize→doctor→finalize (the lone
-        // case where skipping the reverse would be wrong) cannot occur. AV164.
-        const priorSaveDeducted = loadedTreatmentStatus !== 'doctor-recorded'
-          && loadedTreatmentStatus !== 'vitalsigns-recorded';
+        // V142-quater (2026-05-31) — OVER-CREDIT fix used a status heuristic
+        // (priorSaveDeducted = status !== doctor/vitals). Its comment asserted
+        // "finalize→doctor→finalize cannot occur because the doctor-save UI is gated
+        // on status==='doctor-recorded'" — but that was FALSE: the doctor-save button
+        // is "always shown" (Phase 27.2-bis, TFP ~3756). So a COMPLETED treatment
+        // (already deducted) could be re-saved as doctor (status→'doctor-recorded')
+        // then finalized again → the heuristic read 'doctor-recorded' → priorSaveDeducted
+        // FALSE → reverse SKIPPED → re-deduct → DOUBLE-DEDUCT (real-prod repro:
+        // scripts/diag-finalize-doctor-finalize-double-deduct.mjs R1/R2 → 3/5).
+        //
+        // V142-quinquies (2026-05-31) — ROOT-CAUSE fix. The status heuristic can't
+        // distinguish "never deducted" (vitals→doctor→finalize) from "deducted then
+        // doctor-rerecorded" (finalize→doctor→finalize) — both show 'doctor-recorded'.
+        // Replace it with the precise persisted `_courseDeducted` flag (loadedCourseDeducted,
+        // loaded above): set TRUE by the deducting (bottom) save, PRESERVED by the
+        // course-neutral doctor/vitals saves → the reverse decision is independent of
+        // status flips. Handles ALL histories: V142 (completed re-save → flag true →
+        // reverse), V142-quater (vitals/doctor never set flag → no reverse → no
+        // over-credit), and the new double-deduct (finalize sets flag → preserved
+        // through doctor → 2nd finalize reverses → no double). AV165.
+        const priorSaveDeducted = loadedCourseDeducted;
         if (saveMode !== 'doctor' && saveMode !== 'vitals' && isEdit && priorSaveDeducted && (oldExisting.length > 0 || oldPurchased.length > 0)) {
           const { reverseCourseDeduction } = await import('../lib/scopedDataLayer.js');
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
@@ -2657,7 +2688,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             editedAt: serverTimestamp(),
           } : {}),
         };
-        const finalBackendDetail = { ...backendDetail, ...v26StatusPatch };
+        // V142-quinquies (2026-05-31) — persist the precise course-deduction flag.
+        // Deducting saves (staff/course) OWN it = whether this save leaves an active
+        // course deduction (existing OR purchased, carry-forward-aware). Course-neutral
+        // doctor/vitals saves PRESERVE the loaded value (must not touch course state).
+        // Stored in detail (via detailRest) → read at edit-load → drives the reverse
+        // gate (priorSaveDeducted) independent of status. AV165.
+        const _freshPurchasedForFlag = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
+        const _purchasedDedForFlag = isEdit
+          ? buildReDeductListWithCarryForward(_freshPurchasedForFlag, oldPurchased, selectedCourseItems)
+          : _freshPurchasedForFlag;
+        const willDeductCourses = existingDeductions.length > 0 || _purchasedDedForFlag.length > 0;
+        const courseDeductedAfter = (saveMode === 'doctor' || saveMode === 'vitals')
+          ? loadedCourseDeducted
+          : willDeductCourses;
+        const finalBackendDetail = { ...backendDetail, ...v26StatusPatch, _courseDeducted: courseDeductedAfter };
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, finalBackendDetail)
           : await createBackendTreatment(customerId, finalBackendDetail);

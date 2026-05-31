@@ -1,40 +1,62 @@
 ---
-updated_at: "2026-05-31 EOD+4 — V142 (+V140/V141) DEPLOYED 8c3a9047 + healed; V142-bis (single-save verify + serialization extract) done, held."
-status: "V142+V140+V141 DEPLOYED LIVE (8c3a9047) + heals applied (V141 109; V142 no-op self-corrected). V142-bis (create-flow single-save proven on real prod + IIFE extracted) committed-pending. Full vitest 15364/0."
+updated_at: "2026-05-31 EOD+4 LATE+1 — V142-quinquies: finalize→doctor→finalize DOUBLE-DEDUCT found on real prod + FIXED (persisted _courseDeducted flag) + matrix 30/0."
+status: "V142 family + V142-quinquies COMPLETE. /systematic-debugging found a REAL double-deduct (finalize→doctor→finalize, reproduced on prod 3/5) → root-cause fix (status heuristic → persisted flag + course-neutral doctor/vitals per user directive). Matrix 30/0 real prod + 110 targeted. Awaiting full-suite + deploy."
 branch: "master"
-last_commit: "fff79e32 (deployed-state docs). V142-bis source (treatmentBuyHelpers + TFP + 4 tests + e2e) HELD uncommitted. prod code = 8c3a9047."
-tests: "Full vitest 15364/0. V142 unit 20/0 + L2 e2e 10/0; V142-bis unit 8/0 + L2 single-save e2e 7/0 (buy+deduct+charge+meds: course 1/1→0/1, stock 10→9, sale 2140); v101 18/0 (real helper, no replica) + v104 13/0. Build clean."
+last_commit: "V142-quater committed (058849c0 = V142-bis; V142-quater after). V142-quinquies HELD uncommitted. prod LIVE = 8c3a9047 (does NOT have V142-quater/quinquies)."
+tests: "Matrix e2e 30/0 real prod (17 phases incl. P16/P17 double-deduct fix) + repro diag R1/R2 (bug) R3/R4 (regress) + 110 targeted (v142-quinquies/quater/bis/v142/v136/v104/v101/fidelity). Full suite running."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8c3a9047 LIVE (V138+V139 + V140+V141+V142). V142-bis = behavior-identical refactor (not yet deployed; optional)."
-firestore_rules_version: "UNCHANGED — V142 frontend/lib only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
+production_commit: "8c3a9047 LIVE. PENDING DEPLOY: V142-bis + V142-quater + V142-quinquies (the double-deduct fix = REAL prod-correctness bug, should go live)."
+firestore_rules_version: "UNCHANGED — V142 family frontend/lib only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
 ---
 
-# Active Context — V142 (2026-05-31 EOD+4) — SHIPPED + DEPLOYED
+# Active Context — V142-quinquies (2026-05-31 EOD+4 LATE+1)
 
-## State
-- `/systematic-debugging` on a user-reported course-deduction bug (real prod LC-26000115 / BT-1780203508072). DONE + verified by **real-prod L2** (the bug was reproduced AND the fix verified with the SHIPPED `assign/deduct/reverse` functions — NOT mocks/simulate, addressing the exact Rule-Q-honest failure the user was furious about).
-- UNCOMMITTED/HELD on top of the held V140 + V141 (3 features in the working tree).
+## /systematic-debugging — found + fixed a REAL prod double-deduct
+User escalated: "ทดสอบมาทุก flow … ข้ามขั้นตอนไปมา … ข้อมูลก็ต้องถูกต้องทุกครั้ง" + clarified
+"ปุ่มบันทึกสำหรับแพทย์ ไม่ต้องบันทึกพวกข้อมูลการตัดคอร์ส … บันทึกตัดคอร์สจะเป็นบันทึกด้านล่าง".
+The adversarial hunt found a real bug exactly where the user pointed (go-backward flows).
 
-## What this session fixed (detail → checkpoint 2026-05-31-v142-course-deduct-edit-resave-symmetry.md)
-- **Root cause**: edit-RESAVE reverse/re-deduct ASYMMETRY. On a 2nd+ save, `handleSubmit` reverses the prior course deduction (`oldPurchased`) but the fresh re-deduct serialization comes up EMPTY for purchased courses (in-session `purchased-…` rowIds regenerate to `be-row-N` → Pass-1 miss; productId stripped → Pass-2 skip; rem=0 → Pass-2 gate). Refund-without-rededuct → balance reverts to full. (Audit kept the stale "0/1"; customer.courses showed "1/1".)
-- **Fix**: NEW `buildReDeductListWithCarryForward` (treatmentBuyHelpers.js) re-applies every reversed deduction still selected → reverse + re-deduct symmetric. TFP wires both sites, create-mode bypassed. **AV163**.
-- **Stock parallel**: investigated, NOT affected (gated by `hasStockChange` + `_resolveProductIdByName`).
+## The bug (CONFIRMED real prod — `scripts/diag-finalize-doctor-finalize-double-deduct.mjs`)
+- **finalize → บันทึกสำหรับแพทย์ (doctor) → finalize again = DOUBLE-DEDUCT** (R1: 5/5→4/5→**3/5**; R2 same via vitals).
+- The doctor-save button is "always shown" (Phase 27.2-bis) — contradicting the V142-quater comment's
+  "finalize→doctor→finalize cannot occur". A completed (already-deducted) treatment re-saved as doctor
+  flips `loadedTreatmentStatus`→'doctor-recorded' → the V142-quater `priorSaveDeducted` status heuristic
+  reads false → reverse SKIPPED → re-deduct → the course is deducted TWICE for one use.
+- The status heuristic can't distinguish "never deducted" (vitals→doctor→finalize) from "deducted then
+  doctor-rerecorded" (finalize→doctor→finalize) — both show 'doctor-recorded'. V142-quater traded
+  over-credit for double-deduct.
 
-## V142-bis (same session) — single-save create flow verified + serialization extracted
-- User follow-up: "ทดสอบ ซื้อคอร์สใน TFP ที่เพิ่งสร้าง + ตัดคอร์สเลย + คิดเงิน + เอายากลับบ้าน ในกดบันทึกครั้งเดียว … ดูจำนวนที่เหลือทุกอย่าง". The CREATE (single-save) path is distinct from the edit-resave (V142).
-- Extracted the V101 two-pass courseItems IIFE VERBATIM → `buildCourseItemsForSave` (treatmentBuyHelpers.js) so the create-flow serialization is testable (behavior-identical; deployed 8c3a9047 has the inline IIFE = same logic → re-deploy NOT required). 2 V21 fixups (v104 SG3 + v101 A1/A2/A5; v101 replica → real-helper adapter).
-- **`tests/v142-bis-*` 8/0** + **TRUE-L2 `scripts/e2e-v142bis-single-save-buy-deduct-charge-meds.mjs` 7/0** on real prod: คอร์ส Testoviron 1/1→0/1 (ตัดจริง) · Talafil สต็อก 10→9 · ใบขาย 2,140 · audit kind=use 1. **Empirical**: real-prod BT-1780203508072 CREATE save DID deduct → the create path was never the bug; the revert was the 2nd/edit save (V142).
-- Full vitest **15364/0** + build clean.
+## The fix (V142-quinquies — root cause, aligned with the user directive)
+- **Part A**: doctor/vitals saves are course-NEUTRAL — `courseItems: (doctor|vitals) ? existingCourseItems
+  : buildCourseItemsForSave(...)` (don't write course-deduction data; the bottom save owns it).
+- **Part B**: persisted `_courseDeducted` flag (in detail) — SET by the deducting save (`willDeductCourses`),
+  PRESERVED by doctor/vitals; `priorSaveDeducted = loadedCourseDeducted` (loaded with backward-compat
+  fallback to the status heuristic for pre-fix docs). The reverse decision is now independent of status flips.
+- **AV165** (supersedes AV164's heuristic). 5 TFP edits (state + load + serialize-ternary + gate + flag-write).
 
-## Heal outcomes (Rule M, applied)
-- **V141 visitReasons: APPLIED 109 customers** (audit `v141-heal-visit-reasons-…eff2805c`).
-- **V142 course balances: 0 healed (correct)** — LC-26000115's 3 courses are already `0/1`: a 2nd treatment **BT-1780214479261** (~15:01) re-deducted them (the bug had reverted them to full so staff re-used them in a new treatment). LC-26000009 (Shock-Wave promo ×N) = ambiguous → manual review (untouched). ⚠ FLAG for user: BT-1780214479261 may be a duplicate-of-BT-1780203508072 to review (clinical call; NOT auto-deleted).
+## Verification (Rule Q L2 — real prod, MULTIPLE DIFFERENT methods per user "เทสที่ไม่เหมือนกัน")
+- **`scripts/e2e-tfp-full-flow-matrix.mjs` 30/0** (17 phases, MIRROR threads the flag): G1 create · G2
+  step-skip · G3 edit-resave · G4 adversarial · **G5 P16 finalize→DOCTOR→finalize = 4/5 + P17 vitals**.
+- **`scripts/e2e-tfp-flag-roundtrip-fuzz-stock.mjs` 30/0** (DIFFERENT methods — the gap the mirror missed):
+  A flag persistence ROUND-TRIP through REAL createBackendTreatment→getTreatment→update · **B3 ★★★
+  go-backward driving the flag through REAL Firestore (read-back, NOT threaded) = 4/5 — proves the flag
+  survives persistence** · C stock go-backward (hasStockChange gate) · D backward-compat derivation ·
+  **E 14/14 randomized fuzz vs an INDEPENDENT conservation reference**.
+- **`scripts/diag-finalize-doctor-finalize-double-deduct.mjs`** repro (R1/R2=3/5 bug, R3/R4=4/5 regress).
+- **`scripts/diag-double-deduct-victims.mjs`** (Rule R): 0 clean prod victims (1 known-ambiguous LC-26000009).
+- **113 targeted** (v142-quinquies incl. FZ1 200-seq fuzz + FZ2 go-backward stress + v142-quater→flag + bis
+  + v142 + v136 + v104 + v101 + fidelity F1-F9). Full suite + build: running.
+- **No new product bug found this round** (the round-trip COULD have exposed a persistence break — it didn't).
+
+## Honest gap (Rule Q)
+Matrix verifies the DATA-MUTATION logic end-to-end on real prod (where every saga bug lived); the React
+auth-gated UI wiring is the user's L1 (the mirror-fidelity test F1-F9 proves the orchestration matches TFP).
 
 ## Next action
-Idle / await user. master ahead of prod by V142-bis (behavior-identical). REMAINING: commit V142-bis + L1 hands-on + (optional) review BT-1780214479261 duplicate.
+Full-suite green → commit V142-quinquies → DEPLOY (user authorized "deploy ถ้าไม่เจอปัญหา"; a real bug WAS
+found + fixed → surface it, then deploy on confirm) → session-end.
 
 ## Outstanding user-triggered actions
-- **L1 hands-on** (prod): buy course in TFP → ตัด → คิดเงิน → เอายากลับบ้าน → กดบันทึกครั้งเดียว → course deducts; + edit→save again → stays deducted. (V140 chat-scroll 50+ thread + lightbox; V141 intake visit-reason — healed.)
-- **(optional) Review BT-1780214479261** (LC-26000115 possible duplicate treatment from the bug window).
-- **(optional) re-deploy** V142-bis (behavior-identical to live — only if you want the cleaner extracted code in prod).
-- Pre-existing (large, NOT deploy-gating): extended-suite 280 stale tests.
+- **L1 hands-on** (post-deploy): finalize a treatment that uses a course → re-open → กดบันทึกสำหรับแพทย์ →
+  re-open → finalize again → course must stay deducted ONCE (not deducted twice).
+- Pre-existing (NOT deploy-gating): extended-suite ~280 stale tests.
