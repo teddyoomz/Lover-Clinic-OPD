@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales — “ยอดชำระจริง” column + 30/page pagination · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, 'Segoe UI', 'Sarabun', sans-serif; max-width: 1040px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+
+    /* ── grounded mockup (real SaleTab.jsx classes + real index.css tokens) ── */
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .panel { border-radius:12px; padding:12px; }
+    .theme-dark  { --m-surface:#0a0a0a; --m-elev:#111111; --m-card:#0f0f0f; --m-bd:#222222; --m-tx:#e5e7eb; --m-sec:#9ca3af; --m-mut:#6b7280; --m-head:#ffffff; background:#050505; }
+    .theme-light { --m-surface:#ffffff; --m-elev:#f8fafc; --m-card:#f8fafc; --m-bd:#e2e8f0; --m-tx:#0f172a; --m-sec:#334155; --m-mut:#5b6675; --m-head:#0f172a; background:#eef2f7; }
+    .plabel { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin:0 0 8px; color:var(--m-mut); }
+    .mcard { background:var(--m-surface); border:1px solid var(--m-bd); border-radius:10px; overflow:hidden; }
+    .mtbl { width:100%; border-collapse:collapse; font-size:11px; }
+    .mtbl thead tr { background:var(--m-elev); border-bottom:1px solid var(--m-bd); }
+    .mtbl th { padding:7px 8px; text-align:left; font-weight:700; font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--m-mut); white-space:nowrap; border:none; }
+    .mtbl td { padding:7px 8px; color:var(--m-tx); border:none; border-bottom:1px solid color-mix(in srgb,var(--m-bd) 55%,transparent); vertical-align:middle; }
+    .mtbl .r { text-align:right; } .mono { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    .lk { color:#2dd4bf; } .theme-light .lk{ color:#0d9488; } .hn{ color:var(--m-mut); font-size:10px; margin-left:3px; }
+    .dot{ display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; }
+    .net{ color:var(--m-head); font-weight:600; }
+    .bopd{ font-size:9px; font-weight:700; padding:1px 5px; border-radius:4px; } .theme-dark .bopd{ background:rgba(124,45,18,.3); color:#fb923c; } .theme-light .bopd{ background:#fff7ed; color:#c2410c; }
+    .chip{ font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:4px; white-space:nowrap; }
+    .cpaid{ } .theme-dark .cpaid{ background:rgba(6,78,59,.3); color:#34d399; } .theme-light .cpaid{ background:#ecfdf5; color:#047857; }
+    .cowe{ } .theme-dark .cowe{ background:rgba(124,45,18,.3); color:#fb923c; } .theme-light .cowe{ background:#fff7ed; color:#c2410c; }
+    .colnew{ box-shadow: inset 3px 0 0 -1px #f43f5e55, inset -3px 0 0 -1px #f43f5e55; }
+    .pfull{ font-weight:600; } .theme-dark .pfull{ color:#34d399; } .theme-light .pfull{ color:#047857; }
+    .ppart{ font-weight:600; } .theme-dark .ppart{ color:#fbbf24; } .theme-light .ppart{ color:#b45309; }
+    .pzero{ font-weight:600; } .theme-dark .pzero{ color:#6b7280; } .theme-light .pzero{ color:#94a3b8; }
+    .pager{ display:flex; align-items:center; justify-content:center; gap:10px; padding:9px; }
+    .pbtn{ padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; border:1px solid var(--m-bd); background:var(--m-surface); color:var(--m-tx); }
+    .pbtn.dis{ opacity:.3; } .pstat{ font-size:10px; font-weight:700; color:var(--m-mut); }
+    .flowbox{ display:inline-block; background:#fff; border:1px solid var(--bd); border-radius:6px; padding:6px 10px; font-size:0.84em; margin:2px; }
+    .flowarr{ color:var(--accent); font-weight:700; margin:0 2px; }
+    .tagnew{ font-size:8px; background:#f43f5e; color:#fff; padding:1px 4px; border-radius:4px; margin-left:4px; }
+  </style>
+</head>
+<body>
+
+<h1>Sales — “ยอดชำระจริง” column + 30/page pagination</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-31 · <strong>Status:</strong> Approved by user (Q1=A · Q2=B · Q3=rename) · <strong>Plan:</strong> docs/superpowers/plans/2026-05-31-sales-paid-column-pagination.html (next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>หน้าการขาย (<code>tab=sales</code>, <code>SaleTab.jsx</code>) ตารางขายตอนนี้แสดงเฉพาะ <strong>ยอดสุทธิ</strong> (column label เดิม “ยอดรวม”, ค่าจริง = <code>billing.netTotal</code>) — มองไม่ออกทันทีว่าแต่ละใบ <em>เก็บเงินได้จริงเท่าไหร่</em> (จ่ายครบ / บางส่วน / ยังไม่จ่าย). และตารางเลื่อนยาวทั้งหมดไม่มีแบ่งหน้า (48+ รายการในภาพ) อ่านยาก. เพิ่ม:</p>
+<ol>
+  <li>คอลัมน์ <strong>“ยอดชำระจริง”</strong> ข้าง ๆ ยอดสุทธิ — เงินที่รับจริง พร้อมสีบ่งสถานะการเก็บเงิน.</li>
+  <li><strong>แบ่งหน้า 30 รายการ/หน้า</strong> + ปุ่มเปลี่ยนหน้าด้านล่าง.</li>
+  <li>สวย + เห็นชัดทั้ง 2 ตีม (Dark / Light).</li>
+</ol>
+
+<h2>Mockup Design</h2>
+<p style="font-size:.9em;color:#666">ลอกสี/badge/layout จริงจาก <code>SaleTab.jsx</code> + tokens จริงจาก <code>index.css</code> (§S-design). BEFORE → AFTER, ซ้าย=Dark · ขวา=Light.</p>
+
+<div class="section" style="background:#fff">
+  <div class="plabel" style="color:#666">BEFORE — ตารางจริงตอนนี้ (ไม่มี “ยอดชำระจริง”, ไม่มีแบ่งหน้า)</div>
+  <div class="grid2">
+    <div class="panel theme-dark"><div class="plabel">Dark</div><div class="mcard">
+      <table class="mtbl"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดรวม</th><th>สถานะ</th></tr></thead><tbody id="b-d"></tbody></table>
+    </div></div>
+    <div class="panel theme-light"><div class="plabel">Light</div><div class="mcard">
+      <table class="mtbl"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดรวม</th><th>สถานะ</th></tr></thead><tbody id="b-l"></tbody></table>
+    </div></div>
+  </div>
+</div>
+
+<div class="section" style="background:#fff">
+  <div class="plabel" style="color:#666">AFTER (Q2=B) — rename “ยอดรวม”→“ยอดสุทธิ” + คอลัมน์ “ยอดชำระจริง” ทำสีตามสถานะ + pager 30/หน้า</div>
+  <p style="font-size:.84em;color:#666;margin:.2em 0 .8em">ยอดชำระจริง = ผลรวม <code>payment.channels</code> (fallback <code>totalPaidAmount</code>). <b style="color:#047857">เขียว</b>=จ่ายครบ(≥ยอดสุทธิ) · <b style="color:#b45309">เหลืองอำพัน</b>=จ่ายบางส่วน · <b style="color:#94a3b8">เทา</b>=0. ไม่มีบรรทัด “ค้าง” (status chip “ค้างชำระ” บอกแล้ว) · เหลืองอำพัน ไม่ใช่แดง (กฎไทย).</p>
+  <div class="grid2">
+    <div class="panel theme-dark"><div class="plabel">Dark</div><div class="mcard">
+      <table class="mtbl"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r colnew">ยอดชำระจริง<span class="tagnew">ใหม่</span></th><th>สถานะ</th></tr></thead><tbody id="a-d"></tbody></table>
+      <div class="pager"><span class="pbtn dis">‹ ก่อนหน้า</span><span class="pstat">หน้า 1 / 2 · 48 รายการ</span><span class="pbtn">ถัดไป ›</span></div>
+    </div></div>
+    <div class="panel theme-light"><div class="plabel">Light</div><div class="mcard">
+      <table class="mtbl"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r colnew">ยอดชำระจริง<span class="tagnew">ใหม่</span></th><th>สถานะ</th></tr></thead><tbody id="a-l"></tbody></table>
+      <div class="pager"><span class="pbtn dis">‹ ก่อนหน้า</span><span class="pstat">หน้า 1 / 2 · 48 รายการ</span><span class="pbtn">ถัดไป ›</span></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="section" style="background:#fff">
+  <div class="plabel" style="color:#666">Render flow (ไม่มี fetch/write ใหม่ — paginate + 1 คอลัมน์ จากข้อมูลที่โหลดอยู่แล้ว)</div>
+  <p>
+    <span class="flowbox">listener/loadSales → <code>sales[]</code></span><span class="flowarr">→</span>
+    <span class="flowbox"><code>filtered</code> = subTab + search + status</span><span class="flowarr">→</span>
+    <span class="flowbox"><code>usePagination(filtered,{pageSize:30, key})</code></span><span class="flowarr">→</span>
+    <span class="flowbox"><code>visibleItems</code> (≤30)</span>
+  </p>
+  <p style="margin-left:1.5em">
+    <span class="flowarr">└→</span> <span class="flowbox">ต่อแถว: <code>netTotal = sale.billing.netTotal</code></span>
+    <span class="flowbox"><code>paid = resolveSalePaidAmount(sale)</code></span><span class="flowarr">→</span>
+    <span class="flowbox">render 2 cells (net + paid·สีตาม paid-vs-net)</span>
+  </p>
+  <p>
+    <span class="flowbox"><code>&lt;Pagination page totalPages onPageChange totalCount /&gt;</code></span>
+    <span class="flowarr">→</span> auto-hide เมื่อ ≤1 หน้า · filter เปลี่ยน → <code>key</code> เปลี่ยน → page reset = 1
+  </p>
+  <div class="plabel" style="color:#666;margin-top:1em">Helper flow — <code>resolveSalePaidAmount(sale)</code></div>
+  <p>
+    <span class="flowbox"><code>sale.payment.channels[]</code> มี?</span>
+    <span class="flowarr">→ ใช่ →</span> <span class="flowbox">Σ <code>parseFloat(c.amount)</code> (round 2dp)</span>
+  </p>
+  <p style="margin-left:1.5em">
+    <span class="flowarr">→ ไม่/ว่าง →</span> <span class="flowbox"><code>sale.totalPaidAmount</code> (legacy fallback)</span>
+    <span class="flowarr">→ ไม่มี →</span> <span class="flowbox"><code>0</code></span>
+  </p>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>หน้าที่ · boundary</th></tr>
+  <tr><td><code>src/lib/financeUtils.js</code><br><b>NEW</b> <code>resolveSalePaidAmount(sale)</code> + <code>resolveSaleOutstanding(sale)</code></td>
+      <td>Pure. paid = Σ <code>payment.channels[].amount</code> (round); fallback <code>totalPaidAmount</code>; else 0. outstanding = <code>max(0, netTotal − paid)</code>. รับ sale shape ใด ๆ (null-safe). <b>Rule of 3</b>: สูตรเดียวกันซ้ำใน <code>markSalePaid</code> (backendClient) + pay-modal “ยอดค้าง” → extract เป็น canonical helper; ใช้ในคอลัมน์ใหม่ + ดึง pay-modal ในไฟล์เดียวกันมาใช้ helper (ไม่แตะ backendClient/aggregators — out of scope).</td></tr>
+  <tr><td><code>src/components/backend/SaleTab.jsx</code><br>(cosmetic-shell)</td>
+      <td>(1) header array: rename <code>'ยอดรวม'→'ยอดสุทธิ'</code> + insert <code>'ยอดชำระจริง'</code> หลังมัน. (2) <code>&lt;td&gt;</code> ใหม่: <code>fmtMoney(paid)</code> + class สี (<code>pfull/ppart/pzero</code> by <code>paid≥net / 0&lt;paid&lt;net / paid==0</code>), <code>isDark</code> conditional มิเรอร์ status-chip เดิม. (3) <code>usePagination(filtered,{pageSize:30,key})</code> → <code>visibleItems.map</code> + <code>&lt;Pagination/&gt;</code> ใต้ตาราง. ทั้ง sub-tab การขาย + ยกเลิกแล้ว.</td></tr>
+  <tr><td><code>usePagination</code> + <code>Pagination.jsx</code></td>
+      <td><b>REUSE</b> (Rule C1 canonical — 6 panels ใช้อยู่). <code>pageSize:30</code>. theme-aware ผ่าน CSS var. auto-hide ≤1 หน้า. ไม่แก้ไฟล์ทั้งสอง.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> “ยอดชำระจริง” = เงินที่รับจริง = Σ <code>payment.channels[].amount</code> (= <code>totalPaidAmount</code>). มัดจำ/wallet ที่หักก่อน netTotal ไม่นับซ้ำ (ไม่สร้าง gap ปลอม).</li>
+  <li><strong>Q2 = B:</strong> ตัวเลขยอดชำระจริงทำสีตามสถานะ (เขียว/เหลืองอำพัน/เทา) อย่างเดียว — <em>ไม่มี</em>บรรทัด “ค้าง ฿X”.</li>
+  <li><strong>Q3 = rename:</strong> หัวคอลัมน์ <code>'ยอดรวม' → 'ยอดสุทธิ'</code> (ตรงค่า netTotal + ตรงที่ user เรียก).</li>
+  <li><strong>Pagination:</strong> 30/หน้า, reuse canonical <code>usePagination</code>+<code>Pagination</code>.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Header ตารางอ่านว่า … <strong>ยอดสุทธิ · ยอดชำระจริง</strong> · สถานะ … (rename + คอลัมน์ใหม่หลังยอดสุทธิ).</li>
+  <li>cell ยอดชำระจริง = <code>fmtMoney(resolveSalePaidAmount(sale))</code> + “ ฿”.</li>
+  <li>สี: <code>paid+0.01 ≥ net</code> → เขียว (รวม 0฿ ที่จ่ายครบ) · <code>0 &lt; paid &lt; net</code> → เหลืองอำพัน · <code>paid == 0 &amp;&amp; net &gt; 0</code> → เทา. legible AA ทั้ง 2 ตีม; ไม่ใช้แดง.</li>
+  <li>&gt;30 รายการ → แสดง 30 + pager “หน้า X / Y · N รายการ”; ≤30 → ไม่มี pager.</li>
+  <li>เปลี่ยน search / status / sub-tab / branch → reset page = 1.</li>
+  <li><code>resolveSalePaidAmount</code> ทน adversarial: null/undefined sale, channels ว่าง→totalPaidAmount, ทั้งคู่ไม่มี→0, amount เป็น string/ติดลบ, over-paid (paid&gt;net → ยังเขียว).</li>
+  <li>ไม่เปลี่ยน flow ขาย/แก้/รับชำระ/ยกเลิก (cosmetic-shell); ไม่มี fetch/write ใหม่; ทุก handler/state/testid เดิมคงอยู่.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><b>Data-shape (Rule R diag ตอน plan):</b> ยืนยันบน prod ว่าใบที่ <code>ชำระแล้ว</code> มี <code>payment.channels</code> จริง (หรือใช้ <code>totalPaidAmount</code>) → lock ลำดับ fallback ให้ตรง. OPD auto-sale / exchange / share shape ต้องเช็คด้วย.</li>
+  <li><b>ใบยกเลิก:</b> ยอดชำระจริง = ยอดที่เคยรับ (refund บันทึกแยก) → ยอมรับได้; cancelled sub-tab แยกอยู่แล้ว.</li>
+  <li><b>0฿ OPD sale:</b> net 0 / paid 0 → เขียว “ชำระแล้ว” (ถูกต้อง).</li>
+  <li><b>Rule Q gap:</b> assembled L1 บน SaleTab จริง (admin-gated) = USER post-deploy; logic+pixels คุมด้วย unit/RTL/source-grep/flow-simulate + mockup นี้.</li>
+</ul>
+
+<script>
+const ROWS = [
+  { inv:'INV-20260531-0003', nm:'นาย เกรียงไกร พืชนไพบูลย์', hn:'LC-26000115', dt:'31 พ.ค. 2569', it:[['#f87171','Testoviron 1 ครั้ง ×1'],['#fbbf24','ปรึกษาโรคทั่วไป ×1']], more:'+2', opd:1, net:6490, paid:6490 },
+  { inv:'INV-20260531-0001', nm:'นาย สุรพันธุ์ จันทรประภา', hn:'LC-26000064', dt:'31 พ.ค. 2569', it:[['#f87171','Shock Wave 6 ครั้ง + …']], more:'', opd:1, net:8900, paid:5000 },
+  { inv:'INV-20260530-0001', nm:'นาย อุทิศ สอนทา', hn:'LC-26000061', dt:'29 พ.ค. 2569', it:[['#f87171','เลาะสารเหลวขั้นตอนที่1 …']], more:'', opd:1, net:42500, paid:0 },
+  { inv:'INV-20260528-0001', nm:'นาย ดนุพล นาคบุตรศรี', hn:'LC-26000025', dt:'28 พ.ค. 2569', it:[['#fbbf24','Talafil 5 mg ×1']], more:'', opd:1, net:2900, paid:2900 },
+];
+const fmt = n => Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const items = r => `${r.it.map(([c,t])=>`<div><span class="dot" style="background:${c}"></span>${t}</div>`).join('')}${r.more?`<div style="color:#a78bfa;font-size:10px;font-weight:600">${r.more} รายการ</div>`:''}`;
+const cust = r => `<span class="lk" style="font-weight:500">${r.nm}</span><span class="hn">${r.hn}</span>`;
+const status = r => r.paid+0.01>=r.net ? `<span class="chip cpaid">ชำระแล้ว</span>` : `<span class="chip cowe">ค้างชำระ</span>`;
+const netCell = r => `<td class="r mono net">${r.opd?`<span class="bopd">จาก OPD Card</span> `:''}${fmt(r.net)} ฿</td>`;
+const paidCell = r => { const cls = r.paid+0.01>=r.net?'pfull':(r.paid>0?'ppart':'pzero');
+  return `<td class="r mono colnew"><span class="${cls}">${fmt(r.paid)} ฿</span></td>`; };
+const before = r => `<tr><td class="mono" style="color:var(--m-sec)">${r.inv}</td><td>${cust(r)}</td><td style="color:var(--m-sec)">${r.dt}</td><td>${items(r)}</td>${netCell(r)}<td>${status(r)}</td></tr>`;
+const after  = r => `<tr><td class="mono" style="color:var(--m-sec)">${r.inv}</td><td>${cust(r)}</td><td style="color:var(--m-sec)">${r.dt}</td><td>${items(r)}</td>${netCell(r)}${paidCell(r)}<td>${status(r)}</td></tr>`;
+for (const s of ['d','l']) {
+  document.getElementById('b-'+s).innerHTML = ROWS.map(before).join('');
+  document.getElementById('a-'+s).innerHTML = ROWS.map(after).join('');
+}
+</script>
+</body>
+</html>
