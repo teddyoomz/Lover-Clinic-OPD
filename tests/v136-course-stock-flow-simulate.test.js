@@ -239,8 +239,11 @@ describe('V136.LOCK mirror gates are locked to real TreatmentFormPage source', (
     expect(TFP).toMatch(/if \(saveMode !== 'doctor' && saveMode !== 'vitals'\) \{[\s\S]{0,400}if \(selectedCourseItems\.size > 0\)/);
     expect(TFP).toMatch(/if \(overDeductions\.length > 0\) \{[\s\S]{0,160}setSaving\(false\);[\s\S]{0,40}return;/);
   });
-  it('L2 reverse-old-course gate (saveMode-agnostic for course)', () => {
-    expect(TFP).toMatch(/if \(saveMode !== 'doctor' && saveMode !== 'vitals' && isEdit && \(oldExisting\.length > 0 \|\| oldPurchased\.length > 0\)\)/);
+  it('L2 reverse-old-course gate (saveMode + V142-quater priorSaveDeducted)', () => {
+    // V142-quater (2026-05-31) — the reverse is now ALSO gated on priorSaveDeducted
+    // (loaded status not doctor/vitals-recorded) to avoid refunding a deduction a
+    // doctor/vitals save persisted-but-never-applied (over-credit).
+    expect(TFP).toMatch(/if \(saveMode !== 'doctor' && saveMode !== 'vitals' && isEdit && priorSaveDeducted && \(oldExisting\.length > 0 \|\| oldPurchased\.length > 0\)\)/);
   });
   it('L3 reverse-stock gate', () => {
     expect(TFP).toMatch(/if \(isEdit && stockChanged\) \{/);

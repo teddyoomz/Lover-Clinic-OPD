@@ -2539,7 +2539,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Doctor-save doesn't touch course balances on save (skips deductCourseItems
         // below). Mirror: skip the reverse so we don't refund a balance that was
         // never deducted in this save path.
-        if (saveMode !== 'doctor' && saveMode !== 'vitals' && isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
+        //
+        // V142-quater (2026-05-31) — OVER-CREDIT fix. A doctor/vitals save PERSISTS
+        // courseItems (the V101 serialization runs) but SKIPS the deduct (gates).
+        // So when the admin finalizes a treatment whose LAST save was doctor/vitals,
+        // `existingCourseItems` carries courses that were NEVER deducted — reversing
+        // them refunds a deduction that never happened, and the finalize then
+        // re-deducts → NET the course balance does NOT drop (user-confirmed real
+        // bug: admin ลงซักประวัติ → แพทย์ลงบันทึก(เลือกคอร์ส) → admin finalize → คอร์สไม่ลด).
+        // Only reverse when the prior save ACTUALLY deducted, i.e. the loaded
+        // treatment was NOT last saved as doctor/vitals. A completed treatment has
+        // its status cleared (deleteField) so loadedTreatmentStatus is undefined →
+        // reverse runs (V142 edit-resave preserved). The doctor-save UI is gated on
+        // status==='doctor-recorded' only, so finalize→doctor→finalize (the lone
+        // case where skipping the reverse would be wrong) cannot occur. AV164.
+        const priorSaveDeducted = loadedTreatmentStatus !== 'doctor-recorded'
+          && loadedTreatmentStatus !== 'vitalsigns-recorded';
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && isEdit && priorSaveDeducted && (oldExisting.length > 0 || oldPurchased.length > 0)) {
           const { reverseCourseDeduction } = await import('../lib/scopedDataLayer.js');
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
           if (oldPurchased.length > 0) await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
