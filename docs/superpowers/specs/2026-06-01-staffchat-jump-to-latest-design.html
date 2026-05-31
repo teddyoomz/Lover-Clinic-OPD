@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat — Jump-to-Latest Button Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+
+    /* ---- Faithful staff-chat panel (real src/index.css dark tokens) ---- */
+    .panels { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+    .pcol { font-size:12px; color:#555; max-width:280px; }
+    .pcol .t { font-weight:700; margin-bottom:6px; color:#111; }
+    .panel{ --rose600:#e11d48;--rose700:#be123c;--rose500:#f43f5e;--sky:#0ea5e9;
+      --bg-card:#0f0f0f;--bg-surface:#0a0a0a;--bg-input:#141414;--bg-hover:#1a1a1a;
+      --bd-s:#333;--bdd:#222;--tx:#e5e7eb;--mut:#6b7280;
+      width:280px;height:360px;background:var(--bg-card);border:1px solid var(--bd-s);
+      border-radius:12px;overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 14px 32px rgba(0,0,0,.5);}
+    .panel.light{ --bg-card:#f8fafc;--bg-surface:#fff;--bg-input:#fff;--bg-hover:#f1f5f9;--bd-s:#cbd5e1;--bdd:#e2e8f0;--tx:#0f172a;--mut:#5b6675;}
+    .hd{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 11px;background:var(--rose600);color:#fff;border-bottom:1px solid var(--rose700);font-size:12px;}
+    .hd .tt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .hd .ic{opacity:.9;}
+    .lst{flex:1;overflow:hidden;padding:8px 11px;display:flex;flex-direction:column;gap:7px;position:relative;}
+    .day{align-self:center;font-size:10px;color:var(--mut);background:rgba(0,0,0,.3);padding:1px 11px;border-radius:99px;}
+    .panel.light .day{background:rgba(0,0,0,.08);}
+    .m{display:flex;flex-direction:column;max-width:84%;}
+    .m.o{align-items:flex-start;align-self:flex-start;} .m.s{align-items:flex-end;align-self:flex-end;}
+    .nm{font-size:9px;font-weight:700;margin-bottom:2px;padding:0 3px;}
+    .b{padding:6px 10px;border-radius:15px;font-size:12.5px;border:1px solid;color:var(--tx);}
+    .o .nm{color:var(--sky);} .o .b{background:rgba(14,165,233,.20);border-color:rgba(14,165,233,.45);border-bottom-left-radius:4px;}
+    .s .nm{color:var(--rose500);} .s .b{background:rgba(244,63,94,.20);border-color:rgba(244,63,94,.45);border-bottom-right-radius:4px;}
+    .tm{font-size:8px;color:var(--mut);margin-top:1px;padding:0 3px;}
+    .cmp{border-top:1px solid var(--bdd);background:var(--bg-surface);padding:6px 8px;display:flex;align-items:center;gap:7px;}
+    .cmp .e{font-size:14px;color:var(--mut);} .cmp .i{flex:1;height:28px;border-radius:7px;background:var(--bg-input);border:1px solid var(--bdd);color:var(--mut);font-size:11px;display:flex;align-items:center;padding:0 9px;}
+    .cmp .sd{width:28px;height:28px;border-radius:7px;background:var(--rose600);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;}
+    /* NEW jump button */
+    .jw{position:absolute;right:11px;bottom:9px;z-index:5;display:inline-block;}
+    .jb{width:34px;height:34px;border-radius:99px;background:var(--bg-hover);border:1px solid var(--bd-s);color:var(--tx);display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 6px 16px rgba(0,0,0,.5);}
+    .panel.light .jb{box-shadow:0 6px 16px rgba(0,0,0,.18);}
+    .cnt{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--rose600);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg-card);}
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat — Jump-to-Latest Button Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-01 · <strong>Status:</strong> Approved by user · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-01-staffchat-jump-to-latest.html (next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>In the staff-chat panel, once you scroll up to read older messages there is no fast way back to the latest message — you must scroll manually, and if new messages arrive while you're scrolled up there is no signal. User ask (verbatim): <em>"ทำให้ staff chat box มีปุ่มเล็กๆเพื่อกดลงไปแชทล่าสุด เหมือนแอปแชทดังๆที่เขามีกัน"</em>. Add the familiar floating "jump to latest" affordance (Messenger / LINE / Slack), with an unread-count badge for new messages below the fold. Purely additive — the existing send / receive / day-grouping / read-cursor (V82) flow is untouched.</p>
+
+<h2>Mockup Design</h2>
+<p>Backdrop = the REAL panel rendered with the exact <code>src/index.css</code> dark tokens + real component classes (rose-600 header, sender-colored bubbles, day-divider pill, composer). Only the floating circle button is new (§S-design: unchanged parts depicted verbatim).</p>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · dark · the 3 states</div>
+  <div class="panels">
+
+    <div class="pcol">
+      <div class="t">1 · At bottom → button HIDDEN</div>
+      <div class="panel">
+        <div class="hd"><span class="tt">💬 แชทสาขา · นครราชสีมา</span><span class="ic">🔔 ━</span></div>
+        <div class="lst">
+          <div class="day">วันนี้</div>
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">คนไข้ห้อง 2 พร้อมแล้วนะคะ</div><div class="tm">14:02</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">รับทราบค่า 🙏</div><div class="tm">14:03</div></div>
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">ขอบคุณค่ะ</div><div class="tm">14:03</div></div>
+        </div>
+        <div class="cmp"><span class="e">😀</span><span class="e">📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div>
+    </div>
+
+    <div class="pcol">
+      <div class="t">2 · Scrolled up, no new → bare circle</div>
+      <div class="panel">
+        <div class="hd"><span class="tt">💬 แชทสาขา · นครราชสีมา</span><span class="ic">🔔 ━</span></div>
+        <div class="lst">
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">โอเคค่า</div><div class="tm">09:12</div></div>
+          <div class="m o"><div class="nm">พี่เคาน์เตอร์</div><div class="b">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+          <div class="jw"><div class="jb">⌄</div></div>
+        </div>
+        <div class="cmp"><span class="e">😀</span><span class="e">📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div>
+    </div>
+
+    <div class="pcol">
+      <div class="t">3 · Scrolled up + new msgs → circle + "N"</div>
+      <div class="panel">
+        <div class="hd"><span class="tt">💬 แชทสาขา · นครราชสีมา</span><span class="ic">🔔 ━</span></div>
+        <div class="lst">
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">โอเคค่า</div><div class="tm">09:12</div></div>
+          <div class="m o"><div class="nm">พี่เคาน์เตอร์</div><div class="b">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+          <div class="jw"><div class="jb">⌄</div><span class="cnt">3</span></div>
+        </div>
+        <div class="cmp"><span class="e">😀</span><span class="e">📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div>
+    </div>
+
+    <div class="pcol">
+      <div class="t">Light theme (auto via tokens)</div>
+      <div class="panel light">
+        <div class="hd"><span class="tt">💬 แชทสาขา · นครราชสีมา</span><span class="ic">🔔 ━</span></div>
+        <div class="lst">
+          <div class="m o"><div class="nm">หมอ A</div><div class="b">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+          <div class="m s"><div class="nm">มิ้นท์</div><div class="b">โอเคค่า</div><div class="tm">09:12</div></div>
+          <div class="m o"><div class="nm">พี่เคาน์เตอร์</div><div class="b">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+          <div class="jw"><div class="jb">⌄</div><span class="cnt">3</span></div>
+        </div>
+        <div class="cmp"><span class="e">😀</span><span class="e">📎</span><span class="i">พิมพ์ข้อความ...</span><span class="sd">➤</span></div>
+      </div>
+    </div>
+
+  </div>
+  <p style="font-size:12px;color:#666;margin:6px 0 0;">Button: <code>w-9 h-9</code> circle, <code>bg-[var(--bg-hover)]</code> + <code>border-[var(--bd-strong)]</code>, <code>ChevronDown</code> (lucide), <code>absolute bottom-3 right-3 z-[5]</code>. Badge: rose-600 pill top-right, caps at "9+".</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State machine — show / hide / reset</div>
+  <table>
+    <tr><th>#</th><th>Trigger</th><th>Source signal</th><th>Result</th></tr>
+    <tr><td>1</td><td>Panel at bottom (pinned to latest)</td><td><code>bottomSentinelRef</code> IntersectionObserver → <code>isIntersecting === true</code> → <code>isAtBottom = true</code></td><td>Button NOT rendered</td></tr>
+    <tr><td>2</td><td>User scrolls up</td><td>sentinel leaves viewport → <code>isIntersecting === false</code> → <code>isAtBottom = false</code></td><td>Button renders (bare circle)</td></tr>
+    <tr><td>3</td><td>New message arrives while scrolled up</td><td><code>chat.unreadCount</code> &gt; 0 (V82 cursor: only own/at-bottom advances it)</td><td>Circle + rose "N" badge (caps "9+")</td></tr>
+    <tr><td>4</td><td>User taps the button</td><td>onClick → <code>endRef.scrollIntoView({behavior:'smooth', block:'end'})</code> (same call as auto-scroll)</td><td>Smooth-scrolls to latest</td></tr>
+    <tr><td>5</td><td>Landed at bottom</td><td>sentinel intersects → fires existing <code>onScrolledToBottom()</code> → <code>markScrolledToBottom()</code> → cursor advances → <code>unreadCount → 0</code>; <code>isAtBottom → true</code></td><td>Badge clears + button hides — self-resetting, no extra wiring</td></tr>
+  </table>
+  <div class="mockup-label" style="margin-top:1em;">Data flow (additive paths in bold)</div>
+  <pre>useStaffChat ──unreadCount──▶ StaffChatWidget ──unreadCount(NEW prop)──▶ StaffChatMessageList
+                                                                              │
+ bottomSentinelRef ──IntersectionObserver(existing)──┬─▶ onScrolledToBottom()  (UNCHANGED → V82 cursor)
+                                                     └─▶ <b>setIsAtBottom(isIntersecting)</b>  (NEW boolean, same callback)
+                                                              │
+                                          <b>!isAtBottom &amp;&amp; render &lt;JumpButton count={unreadCount} /&gt;</b>
+                                                              │ onClick
+                                          endRef.scrollIntoView({smooth}) ──▶ (lands) ──▶ observer ──▶ markScrolledToBottom</pre>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>Two source files. No new module, no new observer, no Firestore/rules/storage/cron.</strong></p>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/components/staffchat/StaffChatMessageList.jsx</code></td><td>(a) Wrap the existing scroll <code>&lt;div&gt;</code> in a <code>relative flex-1 min-h-0</code> parent so the button floats over the list (the scroll div, <code>endRef</code>, <code>bottomSentinelRef</code> stay verbatim inside, made <code>h-full overflow-y-auto</code>). (b) Add <code>isAtBottom</code> state, set inside the EXISTING observer callback via <code>setIsAtBottom(entry.isIntersecting)</code> — <code>onScrolledToBottom()</code> still fires only on intersect (V82 unchanged); relax the effect guard so the observer runs for the boolean even if no callback passed. (c) New prop <code>unreadCount = 0</code>. (d) Render the floating jump button (circle + ChevronDown + conditional rose badge) when <code>!isAtBottom</code>; onClick scrolls <code>endRef</code> to bottom. <code>data-testid="staff-chat-jump-latest"</code> + <code>staff-chat-jump-latest-count</code>.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatWidget.jsx</code></td><td>One line: pass <code>unreadCount={chat.unreadCount}</code> to <code>&lt;StaffChatMessageList&gt;</code>.</td></tr>
+</table>
+<p><strong>Component boundary:</strong> the jump button is internal to <code>StaffChatMessageList</code> (a small inline element, not a new exported component — it has no reuse elsewhere). It depends only on local <code>isAtBottom</code> + the <code>unreadCount</code> prop + <code>endRef</code>. Consumers (Widget) are unaffected beyond the one new optional prop (defaults to 0 → backward-compatible).</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = C:</strong> Circle icon + unread-count badge (Messenger style). Superset of a bare circle — degrades to plain circle when <code>unreadCount === 0</code>.</li>
+  <li><strong>Q2 = A:</strong> Button appears whenever scrolled up from bottom (regardless of new messages); hidden at bottom. Matches Messenger/LINE/Slack. (Rejected B = only-when-new — would strand the user with no jump-back after reading history.)</li>
+  <li>Reuse the EXISTING <code>bottomSentinelRef</code> IntersectionObserver (piggyback the boolean) rather than adding a second observer/scroll-listener → zero change to V82 read-cursor timing + minimal code.</li>
+  <li>Count source = <code>chat.unreadCount</code> (already computed by V82 cursor) — no new counting logic.</li>
+  <li>Button is neutral (<code>--bg-hover</code> + <code>--bd-strong</code>) so it doesn't compete with the rose send button / rose header; only the count badge is rose. Auto dark+light via tokens.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>When the list is scrolled to the bottom, no jump button is rendered (<code>staff-chat-jump-latest</code> absent).</li>
+  <li>When scrolled up (bottom sentinel not intersecting), the jump button renders.</li>
+  <li>When <code>unreadCount &gt; 0</code> AND scrolled up, the rose count badge renders with the count; caps display at "9+" for counts &gt; 9. When <code>unreadCount === 0</code>, no badge (bare circle).</li>
+  <li>Clicking the jump button calls <code>endRef.scrollIntoView({behavior:'smooth', block:'end'})</code> (smooth scroll to latest).</li>
+  <li>After reaching the bottom, the existing <code>onScrolledToBottom()</code> still fires (V82 read-cursor advances) and the button hides — verified unchanged.</li>
+  <li><code>StaffChatWidget</code> passes <code>chat.unreadCount</code> to <code>StaffChatMessageList</code>.</li>
+  <li>Button is keyboard-focusable with <code>aria-label="ลงไปข้อความล่าสุด"</code>; theme tokens render correctly in dark AND light.</li>
+  <li>No regression: full vitest suite green; build clean; existing staff-chat tests (message list, read cursor, panel) unchanged-or-green.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Edge flicker at the very bottom:</strong> the sentinel is 1px @ threshold 0.5, so the button toggles right at the bottom edge. Acceptable (standard behavior); if it ever feels jumpy, a future tweak could add a small <code>rootMargin</code> — but that would shift V82 read timing, so deliberately NOT done now.</li>
+  <li><strong>jsdom has no IntersectionObserver:</strong> RTL tests mock it (as existing MessageList tests already do) and drive <code>isIntersecting</code> true/false to exercise show/hide.</li>
+  <li><strong>Honest Rule Q gap:</strong> assembled real-browser L1 inside the admin-gated AdminDashboard panel (live unreadCount + real smooth-scroll + reset) = USER after deploy. Pre-deploy L1 = sandbox-mounted real <code>StaffChatMessageList</code> in Chrome (real scroll container + real IntersectionObserver), like the EOD+6 resizable-panel L1.</li>
+  <li><strong>Mobile:</strong> same MessageList drives the fullscreen mobile overlay → button works there too; verified via the shared component (no separate mobile path).</li>
+</ul>
+
+</body>
+</html>

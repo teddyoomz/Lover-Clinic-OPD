@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff Chat — ปุ่มลงล่างสุด (jump to latest)</title>
+<style>
+  /* Faithful real dark tokens from src/index.css (default Fire/Ember theme) */
+  :root{
+    --bg-surface:#0a0a0a; --bg-card:#0f0f0f; --bg-input:#141414; --bg-hover:#1a1a1a;
+    --bd:#222222; --bd-strong:#333333; --tx-primary:#e5e7eb; --tx-muted:#6b7280; --tx-heading:#fff;
+    --rose600:#e11d48; --rose700:#be123c; --rose500:#f43f5e; --rose400:#fb7185; --rose300:#fda4af;
+    --sky:#0ea5e9;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'Segoe UI',-apple-system,sans-serif;background:#18181b;color:#e5e7eb;margin:0;padding:24px;line-height:1.5;}
+  h1{font-size:20px;margin:0 0 4px;color:#fff;}
+  .sub{color:#9ca3af;font-size:13px;margin:0 0 18px;}
+  .legend{display:flex;gap:18px;font-size:12px;margin:0 0 20px;flex-wrap:wrap;}
+  .legend b{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;}
+  .row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;}
+  .col-title{font-size:13px;font-weight:700;margin:0 0 8px;color:#fff;}
+  .col-note{font-size:11.5px;color:#9ca3af;margin:8px 2px 0;max-width:300px;}
+  .badge-new{background:var(--rose600);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:6px;}
+  .badge-same{background:#374151;color:#cbd5e1;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:6px;}
+
+  /* ---- Faithful staff-chat panel (360x480, real classes) ---- */
+  .panel{width:300px;height:430px;background:var(--bg-card);border:1px solid var(--bd-strong);
+    border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;
+    overflow:hidden;position:relative;}
+  .panel.light{--bg-surface:#fff;--bg-card:#f8fafc;--bg-input:#fff;--bg-hover:#f1f5f9;--bd:#e2e8f0;
+    --bd-strong:#cbd5e1;--tx-primary:#0f172a;--tx-muted:#5b6675;}
+  /* header bg-rose-600 */
+  .hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;
+    background:var(--rose600);color:#fff;border-bottom:1px solid var(--rose700);}
+  .hd .ttl{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hd .chip{display:inline-flex;align-items:center;gap:4px;background:rgba(190,18,60,.6);font-size:10px;
+    font-weight:700;padding:2px 7px;border-radius:99px;}
+  .hd .icons{display:flex;gap:4px;}
+  .hd .ic{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:.92;}
+  /* list flex-1 overflow-y-auto px-3 py-2 space-y-2 */
+  .list{flex:1;overflow:hidden;padding:8px 12px;display:flex;flex-direction:column;gap:8px;background:var(--bg-card);position:relative;}
+  .day{align-self:center;font-size:11px;color:var(--tx-muted);background:rgba(0,0,0,.3);padding:1px 12px;border-radius:99px;margin:2px 0;}
+  .panel.light .day{background:rgba(0,0,0,.08);}
+  .msg{display:flex;flex-direction:column;max-width:84%;}
+  .msg.other{align-items:flex-start;align-self:flex-start;}
+  .msg.own{align-items:flex-end;align-self:flex-end;}
+  .nm{font-size:10px;font-weight:700;margin:0 0 2px;padding:0 4px;}
+  .bub{padding:7px 11px;border-radius:16px;font-size:13.5px;border:1px solid;color:var(--tx-primary);}
+  .other .nm{color:var(--sky);}
+  .other .bub{background:rgba(14,165,233,.20);border-color:rgba(14,165,233,.45);border-bottom-left-radius:5px;}
+  .own .nm{color:var(--rose500);}
+  .own .bub{background:rgba(244,63,94,.20);border-color:rgba(244,63,94,.45);border-bottom-right-radius:5px;}
+  .tm{font-size:9px;color:var(--tx-muted);margin-top:2px;padding:0 4px;}
+  /* composer border-t bg-surface */
+  .cmp{border-top:1px solid var(--bd);background:var(--bg-surface);padding:7px 8px;display:flex;align-items:center;gap:8px;}
+  .cmp .cbtn{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--tx-muted);}
+  .cmp .inp{flex:1;height:32px;border-radius:8px;background:var(--bg-input);border:1px solid var(--bd);
+    color:var(--tx-muted);font-size:12px;display:flex;align-items:center;padding:0 10px;}
+  .cmp .send{width:30px;height:30px;border-radius:8px;background:var(--rose600);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+  /* ---- NEW: jump-to-latest button (the proposal) ---- */
+  .jump{position:absolute;right:12px;bottom:10px;z-index:5;}
+  /* variant A: circle icon */
+  .jbtn{height:34px;border-radius:99px;background:var(--bg-hover);border:1px solid var(--bd-strong);
+    color:var(--tx-primary);display:inline-flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 16px rgba(0,0,0,.5);cursor:pointer;font-size:16px;}
+  .jbtn.circle{width:34px;}
+  .jbtn.pill{padding:0 12px 0 14px;gap:7px;font-size:12.5px;font-weight:700;}
+  .jbtn .chev{font-size:15px;line-height:1;}
+  .panel.light .jbtn{box-shadow:0 6px 16px rgba(0,0,0,.18);}
+  /* unread count badge on the button (variant C) */
+  .jwrap{position:relative;display:inline-block;}
+  .cnt{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;
+    background:var(--rose600);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+    border:2px solid var(--bg-card);}
+  /* pill with count (variant C-pill alt, shown small) */
+  .jbtn.rose{background:var(--rose600);border-color:var(--rose700);color:#fff;}
+</style>
+</head>
+<body>
+
+<h1>Staff Chat · ปุ่ม “ลงไปข้อความล่าสุด” <span class="badge-new">NEW</span></h1>
+<p class="sub">เลื่อนแชทขึ้นไปอ่านของเก่า แล้วมีปุ่มเล็กๆ ลอยอยู่มุมขวาล่าง กดทีเดียวเด้งกลับล่างสุด — เหมือน Messenger / LINE / Slack. ทุกอย่างอื่นในกล่องแชท (หัวข้อแดง, ฟอง, ช่องพิมพ์) <b>เหมือนเดิมเป๊ะ</b> ไม่แตะ.</p>
+<div class="legend">
+  <span><b style="background:#374151;"></b> ส่วนเดิม (วาดตามจริง ไม่เปลี่ยน)</span>
+  <span><b style="background:#e11d48;"></b> ส่วนใหม่ที่จะเพิ่ม (ปุ่มลงล่างสุด)</span>
+</div>
+
+<div class="row">
+
+  <!-- BEFORE -->
+  <div>
+    <div class="col-title">ตอนนี้ (อยู่ล่างสุด) <span class="badge-same">ของเดิม</span></div>
+    <div class="panel">
+      <div class="hd"><span class="ttl">💬 แชทสาขา · นครราชสีมา</span>
+        <span style="display:flex;gap:6px;align-items:center;"><span class="chip">👤 มิ้นท์ ✏</span>
+        <span class="icons"><span class="ic">🔔</span><span class="ic">━</span></span></span></div>
+      <div class="list">
+        <div class="day">วันนี้</div>
+        <div class="msg other"><div class="nm">หมอ A</div><div class="bub">คนไข้ห้อง 2 พร้อมแล้วนะคะ</div><div class="tm">14:02</div></div>
+        <div class="msg own"><div class="nm">มิ้นท์</div><div class="bub">รับทราบค่า กำลังไป 🙏</div><div class="tm">14:03</div></div>
+        <div class="msg other"><div class="nm">หมอ A</div><div class="bub">ขอบคุณค่ะ</div><div class="tm">14:03</div></div>
+      </div>
+      <div class="cmp"><span class="cbtn">😀</span><span class="cbtn">📎</span><span class="inp">พิมพ์ข้อความ...</span><span class="send">➤</span></div>
+    </div>
+    <div class="col-note">อยู่ล่างสุดอยู่แล้ว → ไม่มีปุ่ม (เหมือนแอปดังๆ ปุ่มจะโผล่เฉพาะตอนเลื่อนขึ้น)</div>
+  </div>
+
+  <!-- A: circle -->
+  <div>
+    <div class="col-title">A · วงกลมไอคอน <span class="badge-new">เลือก A</span></div>
+    <div class="panel">
+      <div class="hd"><span class="ttl">💬 แชทสาขา · นครราชสีมา</span>
+        <span style="display:flex;gap:6px;align-items:center;"><span class="chip">👤 มิ้นท์ ✏</span>
+        <span class="icons"><span class="ic">🔔</span><span class="ic">━</span></span></span></div>
+      <div class="list">
+        <div class="msg other"><div class="nm">หมอ A</div><div class="bub">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+        <div class="msg own"><div class="nm">มิ้นท์</div><div class="bub">โอเคค่า</div><div class="tm">09:12</div></div>
+        <div class="msg other"><div class="nm">พี่หน้าเคาน์เตอร์</div><div class="bub">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+        <div class="jump"><div class="jbtn circle"><span class="chev">⌄</span></div></div>
+      </div>
+      <div class="cmp"><span class="cbtn">😀</span><span class="cbtn">📎</span><span class="inp">พิมพ์ข้อความ...</span><span class="send">➤</span></div>
+    </div>
+    <div class="col-note">แบบ Messenger/LINE/IG — วงกลมเล็ก มีลูกศรลง โผล่เฉพาะตอนเลื่อนขึ้น กดแล้วเด้งล่างสุด. เรียบที่สุด.</div>
+  </div>
+
+  <!-- B: text pill -->
+  <div>
+    <div class="col-title">B · ป้ายมีข้อความ <span class="badge-new">เลือก B</span></div>
+    <div class="panel">
+      <div class="hd"><span class="ttl">💬 แชทสาขา · นครราชสีมา</span>
+        <span style="display:flex;gap:6px;align-items:center;"><span class="chip">👤 มิ้นท์ ✏</span>
+        <span class="icons"><span class="ic">🔔</span><span class="ic">━</span></span></span></div>
+      <div class="list">
+        <div class="msg other"><div class="nm">หมอ A</div><div class="bub">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+        <div class="msg own"><div class="nm">มิ้นท์</div><div class="bub">โอเคค่า</div><div class="tm">09:12</div></div>
+        <div class="msg other"><div class="nm">พี่หน้าเคาน์เตอร์</div><div class="bub">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+        <div class="jump"><div class="jbtn pill"><span>ข้อความล่าสุด</span><span class="chev">⌄</span></div></div>
+      </div>
+      <div class="cmp"><span class="cbtn">😀</span><span class="cbtn">📎</span><span class="inp">พิมพ์ข้อความ...</span><span class="send">➤</span></div>
+    </div>
+    <div class="col-note">แบบ Slack — ป้ายยาวมีคำว่า “ข้อความล่าสุด ⌄” อ่านง่ายชัดเจน แต่กินที่กว้างกว่า.</div>
+  </div>
+
+  <!-- C: circle + unread count -->
+  <div>
+    <div class="col-title">C · วงกลม + ตัวเลขข้อความใหม่ <span class="badge-new">เลือก C (แนะนำ)</span></div>
+    <div class="panel">
+      <div class="hd"><span class="ttl">💬 แชทสาขา · นครราชสีมา</span>
+        <span style="display:flex;gap:6px;align-items:center;"><span class="chip">👤 มิ้นท์ ✏</span>
+        <span class="icons"><span class="ic">🔔</span><span class="ic">━</span></span></span></div>
+      <div class="list">
+        <div class="msg other"><div class="nm">หมอ A</div><div class="bub">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+        <div class="msg own"><div class="nm">มิ้นท์</div><div class="bub">โอเคค่า</div><div class="tm">09:12</div></div>
+        <div class="msg other"><div class="nm">พี่หน้าเคาน์เตอร์</div><div class="bub">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+        <div class="jump"><div class="jwrap"><div class="jbtn circle"><span class="chev">⌄</span></div><span class="cnt">3</span></div></div>
+      </div>
+      <div class="cmp"><span class="cbtn">😀</span><span class="cbtn">📎</span><span class="inp">พิมพ์ข้อความ...</span><span class="send">➤</span></div>
+    </div>
+    <div class="col-note">แบบ Messenger — วงกลม + ป้ายเลข “มีข้อความใหม่ N ข้อความ” (ใช้ unreadCount ที่มีอยู่แล้ว). ไม่มีใหม่ = วงกลมเปล่า = เหมือน A. <b>เป็น superset ของ A</b>.</div>
+  </div>
+
+  <!-- C light theme -->
+  <div>
+    <div class="col-title">C · ธีมสว่าง (Light) <span class="badge-new">ดูธีมขาว</span></div>
+    <div class="panel light">
+      <div class="hd"><span class="ttl">💬 แชทสาขา · นครราชสีมา</span>
+        <span style="display:flex;gap:6px;align-items:center;"><span class="chip">👤 มิ้นท์ ✏</span>
+        <span class="icons"><span class="ic">🔔</span><span class="ic">━</span></span></span></div>
+      <div class="list">
+        <div class="msg other"><div class="nm">หมอ A</div><div class="bub">เคสเช้านี้รีพอร์ตแล้วนะ</div><div class="tm">09:11</div></div>
+        <div class="msg own"><div class="nm">มิ้นท์</div><div class="bub">โอเคค่า</div><div class="tm">09:12</div></div>
+        <div class="msg other"><div class="nm">พี่หน้าเคาน์เตอร์</div><div class="bub">ของเข้าสต็อกแล้วน้า</div><div class="tm">09:40</div></div>
+        <div class="jump"><div class="jwrap"><div class="jbtn circle"><span class="chev">⌄</span></div><span class="cnt">3</span></div></div>
+      </div>
+      <div class="cmp"><span class="cbtn">😀</span><span class="cbtn">📎</span><span class="inp">พิมพ์ข้อความ...</span><span class="send">➤</span></div>
+    </div>
+    <div class="col-note">ปุ่มใช้ token --bg-hover/--bd-strong → คุมโทนทั้งมืด/สว่างเองอัตโนมัติ.</div>
+  </div>
+
+</div>
+
+</body>
+</html>
