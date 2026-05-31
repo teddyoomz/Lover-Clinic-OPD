@@ -145,3 +145,35 @@ describe('SG source-grep regression locks', () => {
     expect(listSrc).toContain('data-testid="staff-chat-message-list"');
   });
 });
+
+describe('F1 Rule I flow-simulate — full jump-to-latest cycle', () => {
+  it('cycles: at-bottom hidden → scroll-up bare → new-msg badge → tap → land → reset', () => {
+    const onScrolledToBottom = vi.fn();
+    const props = { messages: MSGS, ownDeviceId: 'dev-me', onScrolledToBottom };
+    const { rerender } = render(<StaffChatMessageList {...props} unreadCount={0} />);
+
+    // 1. at bottom → hidden
+    fireIntersect(true);
+    expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
+
+    // 2. scroll up, no new → bare circle (no badge)
+    fireIntersect(false);
+    expect(screen.getByTestId('staff-chat-jump-latest')).toBeTruthy();
+    expect(screen.queryByTestId('staff-chat-jump-latest-count')).toBeNull();
+
+    // 3. new messages arrive while scrolled up → badge "2"
+    rerender(<StaffChatMessageList {...props} unreadCount={2} />);
+    expect(screen.getByTestId('staff-chat-jump-latest-count').textContent).toBe('2');
+
+    // 4. tap → smooth scroll to latest
+    Element.prototype.scrollIntoView.mockClear();
+    fireEvent.click(screen.getByTestId('staff-chat-jump-latest'));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'end' });
+
+    // 5. landed at bottom → cursor advances (V82) + button hides
+    rerender(<StaffChatMessageList {...props} unreadCount={0} />);
+    fireIntersect(true);
+    expect(onScrolledToBottom).toHaveBeenCalled();
+    expect(screen.queryByTestId('staff-chat-jump-latest')).toBeNull();
+  });
+});
