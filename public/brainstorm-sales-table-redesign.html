@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales table redesign — BEFORE → AFTER (grounded, responsive)</title>
+<style>
+  /* Grounded in REAL SaleTab.jsx classes + index.css tokens (§S-design) */
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI','Sarabun',sans-serif;margin:0;background:#1c1c1c;color:#ddd}
+  .wrap{max-width:1700px;margin:0 auto;padding:18px}
+  h1{font-size:17px;margin:0 0 4px} h2{font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#9aa;margin:24px 0 6px}
+  .note{font-size:12px;color:#9aa;margin:0 0 4px;line-height:1.6}
+  .prob{font-size:11.5px;color:#fca5a5;margin:2px 0 0} .good{font-size:11.5px;color:#86efac;margin:2px 0 0}
+
+  /* theme panels (exact hex from index.css) */
+  .pan{border-radius:12px;padding:12px;margin:8px 0}
+  .td{--s:#0a0a0a;--e:#111;--c:#0f0f0f;--hv:#1a1a1a;--b:#222;--bs:#333;--t:#e5e7eb;--sec:#9ca3af;--mut:#6b7280;--h:#fff;background:#050505}
+  .tl{--s:#fff;--e:#f8fafc;--c:#f8fafc;--hv:#f1f5f9;--b:#e2e8f0;--bs:#cbd5e1;--t:#0f172a;--sec:#334155;--mut:#5b6675;--h:#0f172a;background:#eef2f7}
+  .plabel{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin:0 0 8px;color:var(--mut)}
+  .card{background:var(--s);border:1px solid var(--b);border-radius:12px;overflow-x:auto}
+
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead tr{background:var(--e);border-bottom:1px solid var(--b)}
+  th{padding:9px 10px;text-align:left;font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
+  th.r,td.r{text-align:right}
+  tbody tr{border-bottom:1px solid color-mix(in srgb,var(--b) 50%,transparent)}
+  tbody tr.alt{background:color-mix(in srgb,var(--c) 35%,transparent)}
+  tbody tr:hover{background:color-mix(in srgb,#7c3aed 12%,transparent)}
+  td{padding:9px 10px;vertical-align:middle;color:var(--t)}
+  .mono{font-family:'SF Mono',Menlo,Consolas,monospace}
+  .inv{color:var(--sec);font-size:11px}
+  .lk{color:#2dd4bf} .tl .lk{color:#0d9488}
+  .hn{color:var(--mut);font-size:10.5px}
+  .date{color:var(--sec);font-size:11px;white-space:nowrap}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle;flex:0 0 auto}
+  .it{display:flex;align-items:center;gap:6px;line-height:1.3;font-size:11.5px}
+  .itn{color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .more{color:#a78bfa;font-size:10px;font-weight:700;padding-left:12px} .tl .more{color:#7c3aed}
+  .net{color:var(--h);font-weight:600;white-space:nowrap}
+
+  /* ── BEFORE problem styles (faithful to current) ── */
+  .b-opdwrap{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+  .b-opd{font-size:9.5px;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap}
+  .td .b-opd{background:rgba(124,45,18,.3);color:#fb923c} .tl .b-opd{background:#fff7ed;color:#c2410c}
+  .b-chip{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;display:inline-block}  /* NO nowrap → wraps in narrow col */
+  .td .b-cp{background:rgba(6,78,59,.3);color:#34d399} .tl .b-cp{background:#ecfdf5;color:#047857}
+  .b-acts{display:flex;gap:4px}
+  .b-btn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;font-size:14px} /* p-2.5 ≈ 34px */
+  .b-eye{color:#a78bfa}.b-pr{color:#34d399}.b-ed{color:#38bdf8}.b-x{color:#f87171}
+
+  /* ── AFTER redesign styles ── */
+  .a-items{display:flex;flex-direction:column;gap:2px;max-width:min(34vw,300px)}
+  .src{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.02em;display:inline-flex;align-items:center;gap:3px;width:fit-content;margin-bottom:1px}
+  .td .src-opd{background:rgba(124,45,18,.28);color:#fb923c;border:1px solid rgba(251,146,60,.25)} .tl .src-opd{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+  .pfull{font-weight:600;white-space:nowrap} .td .pfull{color:#34d399} .tl .pfull{color:#047857}
+  .ppart{font-weight:600;white-space:nowrap} .td .ppart{color:#fbbf24} .tl .ppart{color:#b45309}
+  .pzero{font-weight:600;white-space:nowrap} .td .pzero{color:#6b7280} .tl .pzero{color:#94a3b8}
+  .stat{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+  .stat .sd{width:6px;height:6px;border-radius:50%}
+  .td .s-paid{background:rgba(6,78,59,.22);color:#34d399} .tl .s-paid{background:#ecfdf5;color:#047857}
+  .td .s-paid .sd{background:#34d399} .tl .s-paid .sd{background:#059669}
+  .td .s-owe{background:rgba(124,45,18,.22);color:#fbbf24} .tl .s-owe{background:#fffbeb;color:#b45309}
+  .td .s-owe .sd{background:#fbbf24} .tl .s-owe .sd{background:#d97706}
+  .a-acts{display:flex;gap:2px;justify-content:flex-end}
+  .a-btn{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:12.5px;transition:background .12s}
+  .td .a-btn:hover{background:#1a1a1a} .tl .a-btn:hover{background:#f1f5f9}
+  .a-eye{color:#a78bfa}.a-pr{color:#34d399}.a-ed{color:#38bdf8}.a-x{color:#f87171}
+  .colpaid{box-shadow:inset 2px 0 0 -1px #f43f5e44,inset -2px 0 0 -1px #f43f5e44}
+  .tag{font-size:8px;background:#f43f5e;color:#fff;padding:1px 4px;border-radius:4px;margin-left:4px}
+  /* width helpers so columns are smart at every resolution */
+  col.c-inv{width:1%}col.c-date{width:1%}col.c-net{width:1%}col.c-paid{width:1%}col.c-stat{width:1%}col.c-act{width:1%}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>หน้าการขาย (tab=sales) · redesign ตาราง — สวย + responsive ทุกขนาด desktop</h1>
+  <p class="note">ลอกสี/badge/layout จริงจาก <code>SaleTab.jsx</code> + tokens จริงจาก <code>index.css</code> (§S-design). BEFORE = ของจริงตอนนี้ · AFTER = ดีไซน์ใหม่. ผมจะ resize หน้าต่างให้ดูว่าสวยทุกความกว้าง.</p>
+
+  <!-- ════════ DARK: BEFORE → AFTER ════════ -->
+  <h2>Dark · BEFORE (ปัญหา 4 จุด)</h2>
+  <div class="pan td"><div class="plabel">Dark · ของจริงตอนนี้</div>
+    <div class="card"><table><thead><tr>
+      <th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r">ยอดชำระจริง</th><th>สถานะ</th><th>จัดการ</th>
+    </tr></thead><tbody id="bd"></tbody></table></div>
+  </div>
+  <p class="prob">✗ badge "จาก OPD Card" ดันยอดเงินเป็น 2 บรรทัด · ✗ "ชำระแล้ว" ตัดบรรทัด · ✗ ปุ่มจัดการ 5 ปุ่ม p-2.5 ใหญ่+ยาว · ✗ แถวสูงไม่เท่ากัน</p>
+
+  <h2>Dark · AFTER (clean &amp; compact &amp; responsive)</h2>
+  <div class="pan td"><div class="plabel">Dark · ดีไซน์ใหม่</div>
+    <div class="card"><table>
+      <colgroup><col class="c-inv"><col><col class="c-date"><col><col class="c-net"><col class="c-paid"><col class="c-stat"><col class="c-act"></colgroup>
+      <thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r colpaid">ยอดชำระจริง<span class="tag">ใหม่</span></th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead>
+      <tbody id="ad"></tbody></table></div>
+  </div>
+  <p class="good">✓ ยอดเงิน 1 บรรทัดสะอาด ชิดขวาเรียงตรง · ✓ source "OPD" ย้ายไปเป็น tag ในรายการขาย · ✓ status pill จุด+ข้อความบรรทัดเดียว · ✓ ปุ่มจัดการกะทัดรัด 26px · ✓ แถวสูงเท่ากัน</p>
+
+  <!-- ════════ LIGHT: BEFORE → AFTER ════════ -->
+  <h2>Light · BEFORE</h2>
+  <div class="pan tl"><div class="plabel">Light · ของจริงตอนนี้</div>
+    <div class="card"><table><thead><tr>
+      <th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r">ยอดชำระจริง</th><th>สถานะ</th><th>จัดการ</th>
+    </tr></thead><tbody id="bl"></tbody></table></div>
+  </div>
+
+  <h2>Light · AFTER</h2>
+  <div class="pan tl"><div class="plabel">Light · ดีไซน์ใหม่</div>
+    <div class="card"><table>
+      <colgroup><col class="c-inv"><col><col class="c-date"><col><col class="c-net"><col class="c-paid"><col class="c-stat"><col class="c-act"></colgroup>
+      <thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r colpaid">ยอดชำระจริง<span class="tag">ใหม่</span></th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead>
+      <tbody id="al"></tbody></table></div>
+  </div>
+</div>
+
+<script>
+const R = [
+  {inv:'INV-20260531-0005',nm:'นาย บัญญูดิ ประจง',hn:'LC-26000007',dt:'31 พ.ค. 2569',it:[['#f87171','IV Drip Fat Burn เร่งการเผาผลาญไขมัน 5 ครั้ง ×1'],['#f87171','IV Drip Liver Detox ล้างสารพิษที่ตับ 5 ครั้ง ×1']],more:0,opd:1,net:0,paid:0},
+  {inv:'INV-20260531-0004',nm:'นาย ธิระวุฒิ โปยขุนทด',hn:'LC-26000093',dt:'31 พ.ค. 2569',it:[['#fbbf24','Ibuprofen ×10']],more:0,opd:0,net:150,paid:150},
+  {inv:'INV-20260531-0003',nm:'นาย เกรียงไกร พืชนไพบูลย์',hn:'LC-26000115',dt:'31 พ.ค. 2569',it:[['#f87171','Testoviron 1 ครั้ง ×1'],['#fbbf24','ปรึกษาโรคทั่วไป (20นาที) 1 ครั้ง ×1']],more:2,opd:1,net:6490,paid:6490},
+  {inv:'INV-20260531-0001',nm:'นาย สุรพันธุ์ จันทรประภา',hn:'LC-26000064',dt:'31 พ.ค. 2569',it:[['#f87171','Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง']],more:0,opd:1,net:8900,paid:8900},
+  {inv:'INV-20260530-0009',nm:'นาง มาลี ใจดีงาม',hn:'LC-26000088',dt:'30 พ.ค. 2569',it:[['#f87171','ร้อยไหมยกกระชับหน้า 10 เส้น ×1']],more:0,opd:1,net:12000,paid:5000},  /* split → ค้างชำระ */
+  {inv:'INV-20260530-0001',nm:'นาย อุทิศ สอนทา',hn:'LC-26000061',dt:'29 พ.ค. 2569',it:[['#f87171','เลาะสารเหลวขั้นตอนที่1 สารเหลวบริเวณลำและคุ…']],more:0,opd:1,net:42500,paid:42500},
+];
+const f=n=>Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// BEFORE: faithful current
+const bItems=r=>`<div style="max-width:260px">${r.it.slice(0,2).map(([c,t])=>`<div class="it"><span class="dot" style="background:${c}"></span><span class="itn" style="max-width:220px">${t}</span></div>`).join('')}${r.more?`<div class="more">+${r.more} รายการ</div>`:''}</div>`;
+const bMoney=r=>`<td class="r mono"><div class="b-opdwrap">${r.opd?'<span class="b-opd">จาก OPD Card</span>':''}<span class="net">${f(r.net)} ฿</span></div></td>`;
+const bStatus=r=>r.paid+0.01>=r.net?'<span class="b-chip b-cp">ชำระแล้ว</span>':'<span class="b-chip" style="background:rgba(124,45,18,.3);color:#fb923c">ค้างชำระ</span>';
+const bActs=`<div class="b-acts"><span class="b-btn b-eye">👁</span><span class="b-btn b-pr">🖨</span><span class="b-btn b-ed">✎</span><span class="b-btn b-x">✕</span></div>`;
+const bRow=(r,i)=>`<tr class="${i%2?'alt':''}"><td class="mono inv">${r.inv}</td><td><span class="lk">${r.nm}</span> <span class="hn">${r.hn}</span></td><td class="date">${r.dt}</td><td>${bItems(r)}</td>${bMoney(r)}<td class="r mono"><span class="net">${f(r.paid)} ฿</span></td><td><div style="max-width:54px">${bStatus(r)}</div></td><td>${bActs}</td></tr>`;
+
+// AFTER: clean + compact + responsive
+const aItems=r=>`<div class="a-items">${r.opd?'<span class="src src-opd">● OPD</span>':''}${r.it.slice(0,2).map(([c,t])=>`<div class="it"><span class="dot" style="background:${c}"></span><span class="itn">${t}</span></div>`).join('')}${r.more?`<div class="more">+${r.more} รายการ</div>`:''}</div>`;
+const aPaid=r=>{const c=r.paid+0.01>=r.net?'pfull':(r.paid>0?'ppart':'pzero');return `<td class="r mono colpaid"><span class="${c}">${f(r.paid)} ฿</span></td>`;};
+const aStatus=r=>r.paid+0.01>=r.net?'<span class="stat s-paid"><span class="sd"></span>ชำระแล้ว</span>':'<span class="stat s-owe"><span class="sd"></span>ค้างชำระ</span>';
+const aActs=`<div class="a-acts"><span class="a-btn a-eye" title="ดู">👁</span><span class="a-btn a-pr" title="พิมพ์">🖨</span><span class="a-btn a-ed" title="แก้ไข">✎</span><span class="a-btn a-x" title="ยกเลิก">✕</span></div>`;
+const aRow=(r,i)=>`<tr class="${i%2?'alt':''}"><td class="mono inv">${r.inv}</td><td><span class="lk" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:160px;vertical-align:bottom">${r.nm}</span> <span class="hn">${r.hn}</span></td><td class="date">${r.dt}</td><td>${aItems(r)}</td><td class="r mono"><span class="net">${f(r.net)} ฿</span></td>${aPaid(r)}<td>${aStatus(r)}</td><td class="r">${aActs}</td></tr>`;
+
+document.getElementById('bd').innerHTML=R.map(bRow).join('');
+document.getElementById('bl').innerHTML=R.map(bRow).join('');
+document.getElementById('ad').innerHTML=R.map(aRow).join('');
+document.getElementById('al').innerHTML=R.map(aRow).join('');
+</script>
+</body>
+</html>

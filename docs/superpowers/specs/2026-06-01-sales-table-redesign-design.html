@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales table redesign — clean &amp; compact &amp; responsive · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system,'Segoe UI','Sarabun',sans-serif; max-width: 1040px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: .3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: .2em; margin-top: 2em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+    table { border-collapse:collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+    th { background:var(--bg-meta); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+    /* grounded mockup (real SaleTab + index.css tokens) */
+    .pan{border-radius:10px;padding:10px;margin:6px 0}
+    .td{--s:#0a0a0a;--e:#111;--c:#0f0f0f;--b:#222;--t:#e5e7eb;--sec:#9ca3af;--mut:#6b7280;--h:#fff;background:#050505}
+    .tl{--s:#fff;--e:#f8fafc;--c:#f8fafc;--b:#e2e8f0;--t:#0f172a;--sec:#334155;--mut:#5b6675;--h:#0f172a;background:#eef2f7}
+    .pl{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--mut);margin:0 0 6px}
+    .mc{background:var(--s);border:1px solid var(--b);border-radius:10px;overflow-x:auto}
+    .mt{width:100%;border-collapse:collapse;font-size:11px}
+    .mt thead tr{background:var(--e);border-bottom:1px solid var(--b)}
+    .mt th{padding:6px 8px;text-align:left;font-weight:700;font-size:9px;text-transform:uppercase;color:var(--mut);white-space:nowrap;border:none}
+    .mt td{padding:7px 8px;color:var(--t);border:none;border-bottom:1px solid color-mix(in srgb,var(--b) 50%,transparent);vertical-align:middle}
+    .mt .r{text-align:right} .mn{font-family:monospace}
+    .lk{color:#2dd4bf}.tl .lk{color:#0d9488}.hn{color:var(--mut);font-size:10px}.date{color:var(--sec);font-size:10px;white-space:nowrap}
+    .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px}
+    .it{display:flex;align-items:center;gap:5px;line-height:1.3;font-size:11px}.itn{color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
+    .src{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:4px;display:inline-flex;gap:3px;width:fit-content;margin-bottom:2px}
+    .td .src{background:rgba(124,45,18,.28);color:#fb923c}.tl .src{background:#fff7ed;color:#c2410c}
+    .net{color:var(--h);font-weight:600;white-space:nowrap}
+    .td .pfull{color:#34d399}.tl .pfull{color:#047857}.td .ppart{color:#fbbf24}.tl .ppart{color:#b45309}.pfull,.ppart{font-weight:600;white-space:nowrap}
+    .stat{font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}.stat .sd{width:5px;height:5px;border-radius:50%}
+    .td .s-paid{background:rgba(6,78,59,.22);color:#34d399}.tl .s-paid{background:#ecfdf5;color:#047857}.td .s-paid .sd,.tl .s-paid .sd{background:currentColor}
+    .td .s-owe{background:rgba(124,45,18,.22);color:#fbbf24}.tl .s-owe{background:#fffbeb;color:#b45309}.td .s-owe .sd,.tl .s-owe .sd{background:currentColor}
+    .acts{display:flex;gap:2px;justify-content:flex-end}.abtn{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px}
+    .a-eye{color:#a78bfa}.a-pr{color:#34d399}.a-ed{color:#38bdf8}.a-x{color:#f87171}
+    .fb{display:inline-block;background:#fff;border:1px solid var(--bd);border-radius:6px;padding:5px 9px;font-size:.84em;margin:2px}.fa{color:var(--accent);font-weight:700;margin:0 3px}
+  </style>
+</head>
+<body>
+
+<h1>Sales table redesign — clean &amp; compact &amp; responsive</h1>
+<blockquote><strong>Date:</strong> 2026-06-01 · <strong>Status:</strong> Approved by user (Q1=A clean&amp;compact · Q2=A compact-icons · Q3=A source→tag) · <strong>Plan:</strong> docs/superpowers/plans/2026-06-01-sales-table-redesign.html (next)</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>ตารางหน้าการขาย (<code>SaleTab.jsx</code>) ดูไม่สวย (user verbatim: “ตอนนี้แม่งไม่สวยจริงๆ จะออกแบบใหม่ทั้งตารางก็ได้”). ปัญหา 4 จุด: (1) badge “จาก OPD Card” อยู่ในคอลัมน์เงิน + <code>flex-wrap</code> ดันยอดเป็น 2 บรรทัด; (2) status chip ไม่มี <code>nowrap</code> → “ชำระแล้ว” ตัดบรรทัดในคอลัมน์แคบ; (3) ปุ่มจัดการ 5 ปุ่ม <code>p-2.5</code> ใหญ่+ยาว; (4) แถวสูงไม่เท่ากัน. + ต้อง <strong>responsive ฉลาดทุกขนาด desktop</strong> รวม Windows DPI scaling (125/150% → CSS px แคบลง) + ทุก resolution.</p>
+
+<h2>Mockup Design</h2>
+<p style="font-size:.88em;color:#666">AFTER (locked) — ลอกจริงจาก SaleTab.jsx + index.css tokens. ซ้าย=Dark · ขวา=Light.</p>
+<div class="mockup">
+  <div class="mockup-label">AFTER — money 1 บรรทัดชิดขวา · source=tag ในรายการขาย · status pill nowrap · actions 26px</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="pan td"><div class="pl">Dark</div><div class="mc"><table class="mt"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r">ยอดชำระจริง</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead><tbody id="d"></tbody></table></div></div>
+    <div class="pan tl"><div class="pl">Light</div><div class="mc"><table class="mt"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>รายการขาย</th><th class="r">ยอดสุทธิ</th><th class="r">ยอดชำระจริง</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead><tbody id="l"></tbody></table></div></div>
+  </div>
+  <p style="font-size:.8em;color:#666;margin:.6em 0 0">Responsive: คอลัมน์ fixed (เลขที่/เงิน/สถานะ/จัดการ) <code>nowrap</code> · flexible (ลูกค้า/รายการขาย) <code>truncate ellipsis</code> · table <code>min-w</code> กันยุบ · <code>overflow-x-auto</code> fallback → สวยตั้งแต่ ~1024 CSS-px ถึง 2560.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Cell restyle map (cosmetic — ไม่แตะ handler/state/data/row-click)</div>
+  <p><span class="fb">source badge (เดิมในคอลัมน์เงิน, flex-wrap)</span><span class="fa">→</span><span class="fb"><code>&lt;SaleSourceTag source isDark/&gt;</code> บนสุดของ <code>SaleItemsCell</code></span></p>
+  <p><span class="fb">money cell (เดิม flex-wrap+badge)</span><span class="fa">→</span><span class="fb">เลข <code>font-mono</code> ชิดขวา <code>whitespace-nowrap</code> บรรทัดเดียว (net=tx-heading · paid=tone สีเดิม)</span></p>
+  <p><span class="fb">status (เดิม inline color-ternary, ไม่ nowrap)</span><span class="fa">→</span><span class="fb"><code>&lt;SaleStatusPill status isDark/&gt;</code> = <code>resolveSaleStatus</code> เดิม + pill nowrap + dot</span></p>
+  <p><span class="fb">actions (เดิม p-2.5 ×5)</span><span class="fa">→</span><span class="fb">compact <code>w-7 h-7 gap-0.5</code> ชิดขวา · onClick/testid/conditional-pay/stopPropagation เดิมครบ</span></p>
+  <div class="mockup-label" style="margin-top:1em">Responsive column behavior (1 table, fluid)</div>
+  <p><span class="fb">viewport กว้าง (≥1440)</span><span class="fa">→</span><span class="fb">ลูกค้า/รายการขาย ได้ที่ว่าง เต็ม</span><span class="fa">|</span><span class="fb">~1024 (150% scale)</span><span class="fa">→</span><span class="fb">flexible cols truncate ellipsis, fixed cols nowrap คงรูป</span><span class="fa">|</span><span class="fb">&lt; min-w</span><span class="fa">→</span><span class="fb">overflow-x-auto scroll นุ่ม (rare)</span></p>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>หน้าที่ · boundary</th></tr>
+  <tr><td><code>SaleTab.jsx</code> · <b>NEW</b> <code>SaleSourceTag({source, isDark})</code></td><td>Pure presentational. map <code>treatment→"จาก OPD Card"</code> / <code>exchange→"เปลี่ยนสินค้า"</code> / <code>share→"แชร์คอร์ส"</code> / <code>addRemaining→"เพิ่มคงเหลือ"</code> → tag เล็ก (dot+label, isDark สีเดิม); source อื่น/ว่าง → null. วางบนสุดของ <code>SaleItemsCell</code>.</td></tr>
+  <tr><td><code>SaleTab.jsx</code> · <b>NEW</b> <code>SaleStatusPill({status, isDark})</code></td><td>Pure. รับ <code>resolveSaleStatus(sale)</code> result ({color,label}) → rounded-full pill, <code>whitespace-nowrap</code>, dot นำ, color map 6 สีเดิม (emerald/orange/red/gray/purple/sky) × isDark.</td></tr>
+  <tr><td><code>SaleTab.jsx</code> · row render (cosmetic)</td><td>money cells → nowrap clean number (badge ถอด); status td → <code>&lt;SaleStatusPill/&gt;</code>; actions → compact + right-align; รายการขาย → <code>&lt;SaleSourceTag/&gt;</code> + truncate; ลูกค้า → truncate; table → <code>min-w</code> + คง <code>overflow-x-auto</code>.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Clean &amp; compact table (คงโครงตาราง, แก้ 4 จุด + fluid responsive). ไม่ใช่ card-row.</li>
+  <li><strong>Q2 = A:</strong> ปุ่มจัดการ = ไอคอนกะทัดรัดโชว์ตลอด (~28px, hover highlight). ไม่ซ่อน hover, ไม่ overflow menu.</li>
+  <li><strong>Q3 = A:</strong> source badge → tag ในรายการขาย (คอลัมน์เงินสะอาด).</li>
+  <li><strong>Responsive:</strong> fluid + truncate(ลูกค้า/รายการขาย) + min-w + overflow-x-auto. สวย 1024→2560 + Windows DPI scale.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>คอลัมน์ ยอดสุทธิ + ยอดชำระจริง = เลข font-mono ชิดขวา <strong>บรรทัดเดียว (nowrap)</strong>, <strong>ไม่มี source badge</strong>; paid คงสี tone (green/amber/gray).</li>
+  <li><code>SaleSourceTag</code> โชว์ tag บนสุดของ รายการขาย สำหรับ source ∈ {treatment, exchange, share, addRemaining}; source ว่าง/form → ไม่โชว์; ทั้ง 2 ตีม.</li>
+  <li><code>SaleStatusPill</code>: nowrap, dot+label, rounded-full, 6 สีตาม <code>resolveSaleStatus</code>; “ชำระแล้ว” ไม่ตัดบรรทัด; ทั้ง 2 ตีม AA.</li>
+  <li>ปุ่มจัดการ compact (~28px, gap-0.5, hover bg, ชิดขวา); ทุก onClick/testid/conditional-pay/stopPropagation เดิมครบ.</li>
+  <li>Responsive: ลูกค้า+รายการขาย truncate ellipsis; เลขที่/เงิน/สถานะ/จัดการ nowrap; table min-w กันยุบ; ไม่ overflow ตั้งแต่ ~1024 CSS-px; scroll นุ่มเมื่อแคบกว่า min-w. ดูดี 1024/1280/1440/1920.</li>
+  <li>Cosmetic-shell: ไม่เปลี่ยน flow/logic/data; ไม่มี fetch/write; row-click (เปิด detail) + ทุก handler/testid เดิมคงอยู่. pagination 30/หน้า (เพิ่งเพิ่ม) คงทำงาน.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><b>Rule Q-vis gap:</b> live window-resize ใน harness ผม limited → responsive verify ผ่าน fixed-width preview (1024/1280/1440) + assembled L1 บน SaleTab จริง + จอ scale จริง = USER post-deploy.</li>
+  <li><b>min-w จูน:</b> ต้องเลือก min-width ที่ fixed-cols ไม่เบียด (≈ เลขที่ + 2×money + status + actions ≈ 560-620px) + flexible cols truncate ได้ — จูนตอน impl.</li>
+  <li><b>วันที่ column:</b> mockup ตัด วันที่ ออกเพื่อโชว์กว้าง — ของจริงคงไว้ (nowrap, narrow).</li>
+</ul>
+
+<script>
+const R=[
+ {inv:'INV-20260531-0005',nm:'นาย บัญญูดิ ประจง',hn:'LC-26000007',it:[['#f87171','IV Drip Fat Burn 5 ครั้ง ×1'],['#f87171','IV Drip Liver Detox 5 ครั้ง ×1']],more:0,src:'จาก OPD Card',net:0,paid:0},
+ {inv:'INV-20260531-0003',nm:'นาย เกรียงไกร พืชนไพบูลย์',hn:'LC-26000115',it:[['#f87171','Testoviron 1 ครั้ง ×1'],['#fbbf24','ปรึกษาโรคทั่วไป ×1']],more:2,src:'จาก OPD Card',net:6490,paid:6490},
+ {inv:'INV-20260530-0009',nm:'นาง มาลี ใจดีงาม',hn:'LC-26000088',it:[['#f87171','ร้อยไหมยกกระชับหน้า 10 เส้น ×1']],more:0,src:'จาก OPD Card',net:12000,paid:5000},
+ {inv:'INV-20260531-0004',nm:'นาย ธิระวุฒิ โปยขุนทด',hn:'LC-26000093',it:[['#fbbf24','Ibuprofen ×10']],more:0,src:'',net:150,paid:150},
+];
+const f=n=>Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const items=r=>`<div style="display:flex;flex-direction:column;gap:2px">${r.src?`<span class="src">● ${r.src}</span>`:''}${r.it.slice(0,2).map(([c,t])=>`<div class="it"><span class="dot" style="background:${c}"></span><span class="itn">${t}</span></div>`).join('')}${r.more?`<div style="color:#a78bfa;font-size:10px;font-weight:700;padding-left:11px">+${r.more} รายการ</div>`:''}</div>`;
+const paid=r=>{const c=r.paid+0.01>=r.net?'pfull':'ppart';return `<td class="r mn"><span class="${c}">${f(r.paid)} ฿</span></td>`;};
+const stat=r=>r.paid+0.01>=r.net?'<span class="stat s-paid"><span class="sd"></span>ชำระแล้ว</span>':'<span class="stat s-owe"><span class="sd"></span>ค้างชำระ</span>';
+const acts=`<div class="acts"><span class="abtn a-eye">👁</span><span class="abtn a-pr">🖨</span><span class="abtn a-ed">✎</span><span class="abtn a-x">✕</span></div>`;
+const row=r=>`<tr><td class="mn" style="color:var(--sec);font-size:10px">${r.inv}</td><td><span class="lk" style="display:inline-block;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${r.nm}</span> <span class="hn">${r.hn}</span></td><td>${items(r)}</td><td class="r mn"><span class="net">${f(r.net)} ฿</span></td>${paid(r)}<td>${stat(r)}</td><td class="r">${acts}</td></tr>`;
+for(const s of['d','l'])document.getElementById(s).innerHTML=R.map(row).join('');
+</script>
+</body>
+</html>
