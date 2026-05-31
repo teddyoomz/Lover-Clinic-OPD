@@ -161,16 +161,16 @@ export function resolveCourseDeducted(t) {
 
 /**
  * V139 — display state for the OPD-card "course" step (TreatmentLifecycleStepper).
- *   done    → ตัดคอร์สแล้ว (violet ✓)
- *   warn    → OPD เสร็จแล้วแต่ไม่ได้ตัด (amber "ยังไม่ตัด")  [Q1=B locked]
- *   pending → ยังไม่เสร็จ (stepper upgrades to pending-now pulse upstream)
+ *   done         → ตัดคอร์สแล้ว (violet ✓)
+ *   not-deducted → OPD เสร็จแล้วแต่ไม่ได้ตัด (muted "ไม่ตัดคอร์ส")  [② 2026-05-31, was 'warn'/amber Q1=B]
+ *   pending      → ยังไม่เสร็จ (stepper upgrades to pending-now pulse upstream)
  *
  * @param {{courseDeducted:boolean, completedDone:boolean}} [a]
- * @returns {'done'|'warn'|'pending'}
+ * @returns {'done'|'not-deducted'|'pending'}
  */
 export function resolveCourseStepState({ courseDeducted = false, completedDone = false } = {}) {
   if (courseDeducted) return 'done';
-  if (completedDone) return 'warn';
+  if (completedDone) return 'not-deducted';   // ② (2026-05-31) was 'warn' (amber "ยังไม่ตัด")
   return 'pending';
 }
 

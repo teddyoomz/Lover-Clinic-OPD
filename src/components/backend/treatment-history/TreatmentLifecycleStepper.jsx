@@ -14,12 +14,12 @@ const COURSE_STEPS = ['vitalsigns', 'doctor', 'course', 'completed'];
  * V139 (2026-05-31) — opt-in 4th "course" step (between doctor + completed) for the
  * "นัดหมาย วันนี้" OPD card. The course step is driven by `courseDeducted` (a boolean
  * from resolveCourseDeducted — NOT a lifecycle timestamp):
- *   done(violet) = ตัดคอร์สแล้ว · warn(amber "ยังไม่ตัด") = OPD เสร็จแต่ไม่ตัด · pending = ระหว่างทาง.
+ *   done(violet) = ตัดคอร์สแล้ว · not-deducted(muted "ไม่ตัดคอร์ส") = OPD เสร็จแต่ไม่ตัด · pending = ระหว่างทาง.
  * CDV treatment-history keeps the 3-step default (withCourseStep=false → unchanged).
  *
  * State per step:
  * - 'done': filled gradient + ✓ + glow per stage color (teal/amber/violet/emerald)
- * - 'warn' (course only): amber outline + "!" + "ยังไม่ตัด" label  [V139 Q1=B]
+ * - 'not-deducted' (course only): muted dim dot + "–" + "ไม่ตัดคอร์ส" label  [② 2026-05-31, was 'warn'/amber Q1=B]
  * - 'pending-now' (only when isLatest && previous stage done): pulse animation
  * - 'pending-future': dim + step number
  * - 'skipped' (later stage done but this one not): "−" symbol + dim
@@ -57,7 +57,7 @@ export function TreatmentLifecycleStepper({
         completedDone: keys.has('completed'),
       });
       if (cs === 'done') return 'done';
-      if (cs === 'warn') return 'warn';
+      if (cs === 'not-deducted') return 'not-deducted';
       // pending → pulse when doctor done + latest, else dim number
       return isLatest && keys.has('doctor') ? 'pending-now' : 'pending-future';
     }
@@ -88,30 +88,26 @@ export function TreatmentLifecycleStepper({
       };
       return `${base} ${tones[key]}`;
     }
-    // V139 — course warn ("ยังไม่ตัด"): amber, AA in BOTH themes (amber-700 light / amber-300 dark).
-    if (state === 'warn') {
-      return `${base} bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300`;
-    }
+    // ② (2026-05-31) — V139 'warn' (amber) block REMOVED. 'not-deducted' uses the default muted style below.
     if (state === 'pending-now') {
       return `${base} bg-amber-500/5 border-amber-300 text-amber-300 animate-pulse`;
     }
-    // pending-future + skipped use same dim style; content differs
+    // pending-future + skipped + not-deducted: dim
     return `${base} bg-[var(--bg-base)] border-[var(--bd-strong)] text-[var(--tx-faint)]`;
   };
 
   const labelClasses = (state) => {
     if (state === 'done')
       return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-[var(--tx-primary)]';
-    if (state === 'warn')
-      return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-amber-700 dark:text-amber-300';
+    // ② (2026-05-31) — 'warn' (amber) label block REMOVED → 'not-deducted' uses the default muted label below.
     if (state === 'pending-now')
       return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-amber-300';
     return 'text-[10px] font-bold mt-1.5 text-center leading-tight text-[var(--tx-muted)]';
   };
 
-  // V139 — course label flips to "ยังไม่ตัด" in the warn state.
+  // ② (2026-05-31) — course label: muted "ไม่ตัดคอร์ส" when not-deducted, else "คอร์ส".
   const labelFor = (key, state) =>
-    key === 'course' ? (state === 'warn' ? 'ยังไม่ตัด' : 'คอร์ส') : labelMap[key];
+    key === 'course' ? (state === 'not-deducted' ? 'ไม่ตัดคอร์ส' : 'คอร์ส') : labelMap[key];
 
   // Connector at index `idx` is BETWEEN STEP_KEYS[idx] and STEP_KEYS[idx+1]
   const connClasses = (idx) => {
@@ -152,7 +148,7 @@ export function TreatmentLifecycleStepper({
         const formattedTime = time ? formatBadgeTime(time) : null;
         let dotContent;
         if (state === 'done') dotContent = <Check size={11} aria-hidden="true" />;
-        else if (state === 'warn') dotContent = <span>!</span>;
+        else if (state === 'not-deducted') dotContent = <span>–</span>;
         else if (state === 'skipped') dotContent = <span>−</span>;
         else dotContent = <span>{idx + 1}</span>;
         return (
