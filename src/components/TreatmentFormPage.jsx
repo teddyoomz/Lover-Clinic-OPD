@@ -14,7 +14,7 @@ import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/
 // saveTarget default changed below from 'proclinic' to 'backend' so admin/
 // backend code paths converge — one unified system, branch-aware via BSA.
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster, buildReDeductListWithCarryForward } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster, buildReDeductListWithCarryForward, buildCourseItemsForSave } from '../lib/treatmentBuyHelpers.js';
 import { chartEntryForPersist } from '../lib/tabletChartTools.js';
 import { aaAccent } from '../lib/themeAccent.js';
 // 2026-05-25 — Storage-ref for ALL treatment blobs (photos / lab images / PDFs).
@@ -2514,76 +2514,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           //     lookup in customerCourses misses post-confirmBuyModal append.
           // V101 backstop: Pass 1 = original rowId-based lookup; Pass 2 =
           // productId-based fallback that catches all 3 channels.
-          courseItems: (() => {
-            const liveCustomerCourses = options?.customerCourses || [];
-            const out = [];
-            const usedRowIds = new Set();
-            // Pass 1 — original rowId-based serialization (happy path)
-            for (const rowId of selectedCourseItems) {
-              let found = false;
-              for (const course of liveCustomerCourses) {
-                const product = course.products?.find(p => p.rowId === rowId);
-                if (product) {
-                  out.push({
-                    courseName: course.courseName,
-                    productName: product.name,
-                    rowId: product.rowId,
-                    courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
-                    deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
-                    unit: product.unit || '',
-                  });
-                  usedRowIds.add(rowId);
-                  found = true;
-                  break;
-                }
-              }
-              // If not found in customerCourses but rowId is still tracked,
-              // log for forensic debugging (Pass 2 may still rescue via productId).
-              if (!found && typeof console !== 'undefined') {
-                try { console.warn(`[TFP V101] selectedCourseItems rowId="${rowId}" not found in options.customerCourses — Pass 2 will attempt productId fallback`); } catch {}
-              }
-            }
-            // Pass 2 — V101 defensive auto-link via productId for any
-            // treatmentItem not yet covered. Catches ALL desync channels.
-            for (const ti of treatmentItems) {
-              if (!ti.id || !ti.productId) continue;
-              if (usedRowIds.has(ti.id)) continue;
-              // Already in out via Pass 1 lookup by-rowId or by treatmentItems with
-              // matching id? skip
-              if (out.some(c => String(c.rowId) === String(ti.id))) continue;
-              // Find first customer.courses[].products[] entry with matching productId
-              // and remaining > 0 (or fillLater / buffet). FIFO across customerCourses
-              // order — mapRawCoursesToForm preserves customer.courses array order.
-              let match = null;
-              for (const course of liveCustomerCourses) {
-                for (const product of (course.products || [])) {
-                  if (String(product.productId) === String(ti.productId)) {
-                    const rem = parseFloat(product.remaining);
-                    const isFillLater = !!product.fillLater;
-                    const isBuffet = !!product.isBuffet;
-                    if (isFillLater || isBuffet || (Number.isFinite(rem) && rem > 0)) {
-                      match = { course, product };
-                      break;
-                    }
-                  }
-                }
-                if (match) break;
-              }
-              if (match) {
-                out.push({
-                  courseName: match.course.courseName,
-                  productName: match.product.name,
-                  rowId: match.product.rowId,
-                  courseIndex: typeof match.product.courseIndex === 'number' ? match.product.courseIndex : undefined,
-                  deductQty: Number(ti.qty) || 1,
-                  unit: match.product.unit || ti.unit || '',
-                  _v101AutoLinked: true, // forensic marker — admin can see which
-                                          // deductions were rescued by Pass 2
-                });
-              }
-            }
-            return out;
-          })(),
+          // V142-bis (2026-05-31) — extracted VERBATIM to buildCourseItemsForSave
+          // (treatmentBuyHelpers.js) so the create-flow buy→deduct serialization
+          // is directly testable; behavior-identical to the prior inline IIFE.
+          courseItems: buildCourseItemsForSave(selectedCourseItems, options?.customerCourses, treatmentItems),
         });
         // Phase 6: Course deduction BEFORE save — only deduct EXISTING courses (not purchased-in-session).
         // Reversal on edit: split old deductions into existing + purchased so the reversal algorithm

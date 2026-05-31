@@ -18,24 +18,32 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+// V142-bis: the V101 two-pass serialization was extracted VERBATIM from the TFP
+// inline IIFE to buildCourseItemsForSave — these tests now exercise the REAL
+// helper (no replica) + assert the helper carries the V101 contract.
+import { buildCourseItemsForSave } from '../src/lib/treatmentBuyHelpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TFP_PATH = resolve(__dirname, '../src/components/TreatmentFormPage.jsx');
 const TFP_SRC = readFileSync(TFP_PATH, 'utf8');
+const HELPER_PATH = resolve(__dirname, '../src/lib/treatmentBuyHelpers.js');
+const HELPER_SRC = readFileSync(HELPER_PATH, 'utf8');
 
 // ─── A. Source-grep regression — V101 markers ───────────────────────
 describe('V101.A — V101 source-grep regression (locks anti-regression)', () => {
-  it('A1: TFP contains V101 two-pass serialization IIFE shape', () => {
-    // The IIFE must exist
-    expect(TFP_SRC).toMatch(/V101.*two-pass/i);
-    expect(TFP_SRC).toContain('courseItems: (() => {');
-    expect(TFP_SRC).toContain('// Pass 1');
-    expect(TFP_SRC).toContain('// Pass 2');
+  it('A1: TFP wires V101 two-pass serialization via buildCourseItemsForSave (V142-bis: extracted from inline IIFE)', () => {
+    // V142-bis extracted the inline IIFE → buildCourseItemsForSave; TFP calls it.
+    expect(TFP_SRC).toMatch(/courseItems: buildCourseItemsForSave\(selectedCourseItems, options\?\.customerCourses, treatmentItems\)/);
+    expect(TFP_SRC).not.toContain('courseItems: (() => {'); // inline IIFE gone
+    // the helper carries the V101 two-pass shape
+    expect(HELPER_SRC).toMatch(/V101 two-pass/i);
+    expect(HELPER_SRC).toContain('// Pass 1');
+    expect(HELPER_SRC).toContain('// Pass 2');
   });
 
-  it('A2: Pass 2 uses productId-based fallback', () => {
-    expect(TFP_SRC).toContain('_v101AutoLinked');
-    expect(TFP_SRC).toMatch(/String\(product\.productId\)\s*===\s*String\(ti\.productId\)/);
+  it('A2: Pass 2 uses productId-based fallback (in the helper)', () => {
+    expect(HELPER_SRC).toContain('_v101AutoLinked');
+    expect(HELPER_SRC).toMatch(/String\(product\.productId\)\s*===\s*String\(ti\.productId\)/);
   });
 
   it('A3: Edit-load rebind exists (closes self-perpetuating loop)', () => {
@@ -51,65 +59,18 @@ describe('V101.A — V101 source-grep regression (locks anti-regression)', () =>
     expect(badPattern.test(TFP_SRC)).toBe(false);
   });
 
-  it('A5: Forensic markers preserved (_v101AutoLinked + warn log)', () => {
-    expect(TFP_SRC).toContain('_v101AutoLinked: true');
-    expect(TFP_SRC).toMatch(/console\.warn\([^)]*V101/);
+  it('A5: Forensic markers preserved (_v101AutoLinked + warn log) in the helper', () => {
+    expect(HELPER_SRC).toContain('_v101AutoLinked: true');
+    expect(HELPER_SRC).toMatch(/console\.warn\([^)]*V101/);
   });
 });
 
-// ─── B. Pure simulator — V101 two-pass serialization correctness ────
-// Mirrors the IIFE logic precisely so we can chain mock state through it
-// without mounting React (Rule I item b).
+// ─── B. V101 two-pass serialization correctness — exercises the REAL helper ──
+// V142-bis: this was a hand-mirror of the inline IIFE (Rule I item b). The IIFE
+// is now extracted to buildCourseItemsForSave, so v101Serialize is a thin
+// adapter over the SHIPPED helper — the B-tests verify the real logic, no replica.
 function v101Serialize({ selectedCourseItems, liveCustomerCourses, treatmentItems }) {
-  const out = [];
-  const usedRowIds = new Set();
-  for (const rowId of selectedCourseItems) {
-    for (const course of liveCustomerCourses) {
-      const product = (course.products || []).find(p => p.rowId === rowId);
-      if (product) {
-        out.push({
-          courseName: course.courseName,
-          productName: product.name,
-          rowId: product.rowId,
-          courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
-          deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
-          unit: product.unit || '',
-        });
-        usedRowIds.add(rowId);
-        break;
-      }
-    }
-  }
-  for (const ti of treatmentItems) {
-    if (!ti.id || !ti.productId) continue;
-    if (usedRowIds.has(ti.id)) continue;
-    if (out.some(c => String(c.rowId) === String(ti.id))) continue;
-    let match = null;
-    for (const course of liveCustomerCourses) {
-      for (const product of (course.products || [])) {
-        if (String(product.productId) === String(ti.productId)) {
-          const rem = parseFloat(product.remaining);
-          if (product.fillLater || product.isBuffet || (Number.isFinite(rem) && rem > 0)) {
-            match = { course, product };
-            break;
-          }
-        }
-      }
-      if (match) break;
-    }
-    if (match) {
-      out.push({
-        courseName: match.course.courseName,
-        productName: match.product.name,
-        rowId: match.product.rowId,
-        courseIndex: typeof match.product.courseIndex === 'number' ? match.product.courseIndex : undefined,
-        deductQty: Number(ti.qty) || 1,
-        unit: match.product.unit || ti.unit || '',
-        _v101AutoLinked: true,
-      });
-    }
-  }
-  return out;
+  return buildCourseItemsForSave(selectedCourseItems, liveCustomerCourses, treatmentItems);
 }
 
 const FIXT_SHOCK_COURSE = {

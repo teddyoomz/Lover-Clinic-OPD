@@ -32,6 +32,9 @@ import { readFileSync } from 'node:fs';
 
 const TFP_PATH = 'src/components/TreatmentFormPage.jsx';
 const TFP_SRC = readFileSync(TFP_PATH, 'utf8');
+// V142-bis: the V101 courseItems serialization was extracted from the TFP inline
+// IIFE to this helper (testability) — SG3 verifies the contract moved here.
+const HELPER_SRC = readFileSync('src/lib/treatmentBuyHelpers.js', 'utf8');
 
 describe('V104.SG — source-grep lockdown for shadow + silent-swallow', () => {
   it('SG1: handleSubmit 2nd param renamed to submitOpts (NOT options)', () => {
@@ -51,11 +54,18 @@ describe('V104.SG — source-grep lockdown for shadow + silent-swallow', () => {
     expect(TFP_SRC).not.toMatch(/let editorContext = options\.editorContext \|\| null/);
   });
 
-  it('SG3: V101 IIFE still reads options?.customerCourses (now resolves to React state)', () => {
-    // The V101 IIFE itself is correct — it MUST keep reading `options?.X`
-    // because the React state is named `options`. Post-V104 with param
-    // renamed, this resolves to React state correctly.
-    expect(TFP_SRC).toMatch(/const liveCustomerCourses = options\?\.customerCourses \|\| \[\]/);
+  it('SG3: V101 serialization reads React-state options?.customerCourses (V142-bis: extracted to buildCourseItemsForSave)', () => {
+    // V104 intent: the V101 serialization MUST read `options?.customerCourses`
+    // (React state), NOT the shadowed `submitOpts` param. V142-bis (2026-05-31)
+    // extracted the inline IIFE to buildCourseItemsForSave(...) for testability;
+    // the TFP call-site still passes `options?.customerCourses` → same
+    // non-shadowed read preserved.
+    expect(TFP_SRC).toMatch(/buildCourseItemsForSave\(selectedCourseItems, options\?\.customerCourses, treatmentItems\)/);
+    // the inline IIFE must be GONE (logic now lives in the helper)
+    expect(TFP_SRC).not.toMatch(/courseItems: \(\(\) => \{/);
+    // and the helper carries the V101 two-pass serialization
+    expect(HELPER_SRC).toMatch(/export function buildCourseItemsForSave\(/);
+    expect(HELPER_SRC).toMatch(/Pass 2 — V101 defensive auto-link via productId/);
   });
 
   it('SG4: purchased-course deduction NO LONGER silently swallows errors', () => {

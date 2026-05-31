@@ -538,6 +538,100 @@ export function buildReDeductListWithCarryForward(fresh, oldReversed, selectedRo
 }
 
 /**
+ * V101 two-pass course-item serialization for the treatment SAVE payload
+ * (`backendDetail.courseItems`). Extracted VERBATIM from TreatmentFormPage
+ * handleSubmit (2026-05-31, V142-bis) so the deduct-list serialization — the
+ * piece that decides WHICH customer.courses entries get deducted — is directly
+ * testable instead of being an inline IIFE inside a 3000-line React save.
+ *
+ * Pass 1 (happy path): for each selected rowId, find the matching product in
+ * `customerCourses` by rowId and emit a deduction. This is what fires for the
+ * "buy course in-session + use immediately" CREATE flow — the just-bought
+ * course is in customerCourses (post-confirmBuyModal append) with the same
+ * purchased-… rowId that's in selectedCourseItems → matched → deducted.
+ * Pass 2 (V101 productId fallback): for any treatmentItem with a productId not
+ * covered by Pass 1, find the first customerCourses product with that productId
+ * AND remaining>0 (or fillLater/buffet) → rescue. Catches the desync channels
+ * (edit-load id regen, state-sync race, post-buy rowId miss).
+ *
+ * NOTE the asymmetry that V142 fixes elsewhere: on an EDIT-reload a previously
+ * purchased+consumed course has a regenerated be-row-N rowId (Pass-1 miss),
+ * stripped productId (Pass-2 can't run), and rem=0 (Pass-2 gate) → empty for
+ * that course. That empty list is correct for serialization; the symmetry is
+ * restored at the re-deduct step via buildReDeductListWithCarryForward.
+ *
+ * @param {Set|Array} selectedCourseItems
+ * @param {Array} customerCourses - options.customerCourses (form shape)
+ * @param {Array} treatmentItems
+ * @returns {Array} courseItems deduction list
+ */
+export function buildCourseItemsForSave(selectedCourseItems, customerCourses, treatmentItems) {
+  const liveCustomerCourses = customerCourses || [];
+  const selected = selectedCourseItems instanceof Set
+    ? selectedCourseItems
+    : new Set(Array.isArray(selectedCourseItems) ? selectedCourseItems : []);
+  const items = Array.isArray(treatmentItems) ? treatmentItems : [];
+  const out = [];
+  const usedRowIds = new Set();
+  // Pass 1 — original rowId-based serialization (happy path)
+  for (const rowId of selected) {
+    let found = false;
+    for (const course of liveCustomerCourses) {
+      const product = course.products?.find(p => p.rowId === rowId);
+      if (product) {
+        out.push({
+          courseName: course.courseName,
+          productName: product.name,
+          rowId: product.rowId,
+          courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
+          deductQty: Number(items.find(t => t.id === rowId)?.qty || 1),
+          unit: product.unit || '',
+        });
+        usedRowIds.add(rowId);
+        found = true;
+        break;
+      }
+    }
+    if (!found && typeof console !== 'undefined') {
+      try { console.warn(`[TFP V101] selectedCourseItems rowId="${rowId}" not found in customerCourses — Pass 2 will attempt productId fallback`); } catch {}
+    }
+  }
+  // Pass 2 — V101 defensive auto-link via productId for any treatmentItem not yet covered.
+  for (const ti of items) {
+    if (!ti.id || !ti.productId) continue;
+    if (usedRowIds.has(ti.id)) continue;
+    if (out.some(c => String(c.rowId) === String(ti.id))) continue;
+    let match = null;
+    for (const course of liveCustomerCourses) {
+      for (const product of (course.products || [])) {
+        if (String(product.productId) === String(ti.productId)) {
+          const rem = parseFloat(product.remaining);
+          const isFillLater = !!product.fillLater;
+          const isBuffet = !!product.isBuffet;
+          if (isFillLater || isBuffet || (Number.isFinite(rem) && rem > 0)) {
+            match = { course, product };
+            break;
+          }
+        }
+      }
+      if (match) break;
+    }
+    if (match) {
+      out.push({
+        courseName: match.course.courseName,
+        productName: match.product.name,
+        rowId: match.product.rowId,
+        courseIndex: typeof match.product.courseIndex === 'number' ? match.product.courseIndex : undefined,
+        deductQty: Number(ti.qty) || 1,
+        unit: match.product.unit || ti.unit || '',
+        _v101AutoLinked: true,
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Phase 12.2b follow-up (2026-04-24): resolve a purchased course item
  * into the shape `assignCourseToCustomer` expects, preferring the
  * doctor's in-session picks over the master options list.

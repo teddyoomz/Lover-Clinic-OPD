@@ -37,5 +37,12 @@ Helper + the assign/deduct/reverse MUTATION sequence proven on real prod with th
 3. Heal `--apply` (Rule M — restores LC-26000115 3 courses to 0/1; review LC-26000009 manually). NOTE: heal makes sense AFTER deploy so the fix prevents re-occurrence; pre-deploy heal would be re-reverted on the next buggy save.
 4. L1 hands-on: buy course in TFP → use → save → re-open → save again → course stays deducted.
 
+## V142-bis (same session) — single-save create buy→deduct→charge→meds (user follow-up)
+User: "ทดสอบแบบซื้อคอร์สใน TFP ที่เพิ่งสร้างแล้วตัดคอร์สเลย คิดเงิน เอายากลับบ้าน ภายในการกดบันทึกครั้งเดียว … ดูจำนวนที่เหลือของทุกอย่าง". The create-mode (single-save) path is distinct from the edit-resave I fixed. To test the REAL serialization (not a mock — user is skeptical post-V104), I **extracted the V101 two-pass courseItems IIFE VERBATIM** from TFP `handleSubmit` → `buildCourseItemsForSave(selectedCourseItems, customerCourses, treatmentItems)` (treatmentBuyHelpers.js); TFP now calls it (behavior-identical). 1 V21 fixup (v104 SG3 → assert the call-site + helper, not the inline IIFE).
+- **Empirical**: real-prod BT-1780203508072 shows the CREATE save DID deduct ("0/1"); the revert was the 2nd/edit save (= V142).
+- **`tests/v142-bis-create-buy-deduct-serialization.test.js` 8/0** — B1 ★ buy+use in one save → deduct list NON-empty (the user's worry disproven at the serialization layer) + B2 (3 courses) + B3 (Pass-2 productId) + B4 (edit-reload empty = V142 premise) + B5 adversarial + SG source-grep.
+- **TRUE-L2 `scripts/e2e-v142bis-single-save-buy-deduct-charge-meds.mjs` 7/0** on real prod — drives createBackendSale + deductStockForSale + assignCourseToCustomer + the REAL buildCourseItemsForSave + deductCourseItems. Output: **คอร์ส Testoviron 1/1→0/1 (ตัดจริง) · Talafil สต็อก 10→9 · ใบขาย 2,140 · audit kind=use 1**. Zero-orphan.
+- Behavior-preserving (deployed 8c3a9047 has the inline IIFE = the extracted helper logically) → NOT urgent to re-deploy; committed for testability + master-current.
+
 ## Resume Prompt
 Resume LoverClinic — V142 (course-deduct edit-resave symmetry) DONE+verified (real-prod L2 10/0 + unit 20/0 + full vitest 15356/0), UNCOMMITTED/HELD on top of V140+V141. prod=3342a9f0. When authorized: commit V140+V141+V142 → vercel --prod → heal `--apply` (LC-26000115). No commit/deploy/heal without explicit word THIS turn (V18 + Rule M).
