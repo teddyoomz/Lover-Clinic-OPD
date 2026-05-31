@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales — ยอดชำระจริง column + 30/page pagination · Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, 'Segoe UI', 'Sarabun', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color:#111; border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { color:#111; border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { color:#222; }
+    pre { background:var(--bg-pre); padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); padding:.5em 1em; color:var(--tx-muted); margin:1em 0; background:var(--bg-meta); border-radius:0 6px 6px 0; }
+    .header-meta { background:var(--bg-meta); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .header-meta p { margin:.4em 0; }
+    .task { border-left:4px solid var(--accent); padding:.8em 1.2em; margin:1.2em 0; background:var(--bg-task); border-radius:0 6px 6px 0; }
+    .step { margin:.6em 0; padding-left:.5em; }
+    .step input[type=checkbox]{ margin-right:.6em; transform:scale(1.2); accent-color:var(--accent); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:.4em .7em; text-align:left; vertical-align:top; font-size:.92em; }
+    th { background:var(--bg-meta); }
+    /* grounded mockup tokens (real index.css) */
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .pan { border-radius:10px; padding:10px; }
+    .td { --s:#0a0a0a;--e:#111;--b:#222;--t:#e5e7eb;--sec:#9ca3af;--mut:#6b7280;--h:#fff; background:#050505; }
+    .tl { --s:#fff;--e:#f8fafc;--b:#e2e8f0;--t:#0f172a;--sec:#334155;--mut:#5b6675;--h:#0f172a; background:#eef2f7; }
+    .pl { font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin:0 0 6px;color:var(--mut); }
+    .mc { background:var(--s);border:1px solid var(--b);border-radius:8px;overflow:hidden; }
+    .mt { width:100%;border-collapse:collapse;font-size:10.5px; }
+    .mt thead tr{ background:var(--e);border-bottom:1px solid var(--b); }
+    .mt th{ padding:6px;text-align:left;font-weight:700;font-size:9px;text-transform:uppercase;color:var(--mut);border:none;white-space:nowrap; }
+    .mt td{ padding:6px;color:var(--t);border:none;border-bottom:1px solid color-mix(in srgb,var(--b) 55%,transparent); }
+    .mt .r{ text-align:right; } .mn{ font-family:monospace; }
+    .net{ color:var(--h);font-weight:600; }
+    .bopd{ font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px; } .td .bopd{ background:rgba(124,45,18,.3);color:#fb923c; } .tl .bopd{ background:#fff7ed;color:#c2410c; }
+    .chip{ font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px; } .td .cp{ background:rgba(6,78,59,.3);color:#34d399; } .tl .cp{ background:#ecfdf5;color:#047857; } .td .co{ background:rgba(124,45,18,.3);color:#fb923c; } .tl .co{ background:#fff7ed;color:#c2410c; }
+    .cn{ box-shadow:inset 3px 0 0 -1px #f43f5e55,inset -3px 0 0 -1px #f43f5e55; }
+    .td .pfull{color:#34d399}.tl .pfull{color:#047857}.td .ppart{color:#fbbf24}.tl .ppart{color:#b45309}.td .pzero{color:#6b7280}.tl .pzero{color:#94a3b8}
+    .pfull,.ppart,.pzero{font-weight:600}
+    .pager{display:flex;align-items:center;justify-content:center;gap:8px;padding:7px}
+    .pbtn{padding:4px 8px;border-radius:5px;font-size:9px;font-weight:700;border:1px solid var(--b);background:var(--s);color:var(--t)} .pbtn.dis{opacity:.3}
+    .pstat{font-size:9px;font-weight:700;color:var(--mut)}
+    .fb{display:inline-block;background:#fff;border:1px solid var(--bd);border-radius:6px;padding:5px 9px;font-size:.82em;margin:2px}
+    .fa{color:var(--accent);font-weight:700;margin:0 2px}
+    .tag{font-size:8px;background:#f43f5e;color:#fff;padding:1px 4px;border-radius:4px;margin-left:4px}
+  </style>
+</head>
+<body>
+
+<h1>Sales — ยอดชำระจริง column + 30/page pagination Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline TDD). Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-05-31-sales-paid-column-pagination-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> เพิ่มคอลัมน์ “ยอดชำระจริง” ในตารางหน้าการขาย (rename “ยอดรวม”→“ยอดสุทธิ”) + แบ่งหน้า 30/หน้า สวยทั้ง Dark/Light.</p>
+  <p><strong>Architecture:</strong> Cosmetic-shell + 3 pure helpers ใน <code>financeUtils.js</code> (reuse <code>roundTHB</code>). <code>SaleTab.jsx</code> เพิ่ม 1 คอลัมน์ + reuse canonical <code>usePagination</code>/<code>Pagination</code> (Rule C1) ที่ <code>pageSize:30</code>. ไม่มี fetch/write ใหม่; ไม่แตะ flow ขาย/ชำระ.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vitest, existing <code>src/lib/{financeUtils,usePagination}.js</code> + <code>src/components/backend/Pagination.jsx</code>.</p>
+  <p><strong>Decisions:</strong> Q1=A (paid = Σ payment.channels → totalPaidAmount fallback; <em>Rule R diag confirmed 35/35 real sales</em>) · Q2=B (number color-coded full/partial/zero, no subline) · Q3=rename → ยอดสุทธิ.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p style="font-size:.88em;color:#666">Option B (locked), ลอกจริงจาก SaleTab.jsx + index.css tokens. ซ้าย=Dark · ขวา=Light.</p>
+<div class="mockup">
+  <div class="mockup-label">AFTER — ยอดสุทธิ | ยอดชำระจริง (สี) + pager 30/หน้า</div>
+  <div class="grid2">
+    <div class="pan td"><div class="pl">Dark</div><div class="mc">
+      <table class="mt"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th class="r">ยอดสุทธิ</th><th class="r cn">ยอดชำระจริง<span class="tag">ใหม่</span></th><th>สถานะ</th></tr></thead><tbody id="d"></tbody></table>
+      <div class="pager"><span class="pbtn dis">‹ ก่อนหน้า</span><span class="pstat">หน้า 1 / 2 · 48 รายการ</span><span class="pbtn">ถัดไป ›</span></div>
+    </div></div>
+    <div class="pan tl"><div class="pl">Light</div><div class="mc">
+      <table class="mt"><thead><tr><th>เลขที่</th><th>ลูกค้า</th><th class="r">ยอดสุทธิ</th><th class="r cn">ยอดชำระจริง<span class="tag">ใหม่</span></th><th>สถานะ</th></tr></thead><tbody id="l"></tbody></table>
+      <div class="pager"><span class="pbtn dis">‹ ก่อนหน้า</span><span class="pstat">หน้า 1 / 2 · 48 รายการ</span><span class="pbtn">ถัดไป ›</span></div>
+    </div></div>
+  </div>
+  <p style="font-size:.8em;color:#666;margin:.6em 0 0"><b style="color:#047857">เขียว</b>=จ่ายครบ(paid≥net, รวม 0฿) · <b style="color:#b45309">เหลืองอำพัน</b>=บางส่วน(0&lt;paid&lt;net) · <b style="color:#94a3b8">เทา</b>=0. status chip “ค้างชำระ” บอกว่ามีค้าง.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Render flow — no fetch/write; paginate + 1 col จากข้อมูลที่โหลดอยู่แล้ว</div>
+  <p><span class="fb">listener → <code>sales[]</code></span><span class="fa">→</span><span class="fb"><code>filtered</code> (subTab+search+status, มีอยู่แล้ว @519)</span><span class="fa">→</span><span class="fb"><code>usePagination(filtered,{pageSize:30,key})</code></span><span class="fa">→</span><span class="fb"><code>visibleItems</code> (≤30)</span></p>
+  <p style="margin-left:1.4em"><span class="fa">└→</span><span class="fb">row: <code>net=sale.billing.netTotal</code></span><span class="fb"><code>paid=resolveSalePaidAmount(sale)</code></span><span class="fa">→</span><span class="fb"><code>tone=resolveSalePaidTone(paid,net)</code></span><span class="fa">→</span><span class="fb">2 cells (net + paid·tone-color)</span></p>
+  <p><span class="fb"><code>&lt;Pagination .../&gt;</code></span><span class="fa">→</span> auto-hide ≤1 หน้า · key เปลี่ยน(filter/branch) → page=1</p>
+  <div class="mockup-label" style="margin-top:1em">Helper flow — resolveSalePaidAmount(sale)</div>
+  <p><span class="fb"><code>payment.channels[]</code> length&gt;0?</span><span class="fa">→ ใช่ →</span><span class="fb">Σ <code>parseFloat(amount)</code> · <code>roundTHB</code></span></p>
+  <p style="margin-left:1.4em"><span class="fa">→ ไม่ →</span><span class="fb"><code>Number.isFinite(totalPaidAmount)</code> → <code>roundTHB(totalPaidAmount)</code></span><span class="fa">→ ไม่ →</span><span class="fb"><code>0</code></span></p>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/lib/financeUtils.js</code></td><td>ADD <code>resolveSalePaidAmount</code> + <code>resolveSaleOutstanding</code> + <code>resolveSalePaidTone</code> (pure; reuse existing <code>roundTHB</code> @L9).</td></tr>
+  <tr><td><code>src/components/backend/SaleTab.jsx</code></td><td>import helpers + <code>usePagination</code> + <code>Pagination</code>; header rename+insert (@1220); new <code>&lt;td&gt;</code> (after @1299) + hoisted tone consts; <code>filtered.map</code>→<code>visibleItems.map</code> (@1226); pager after table; pay-modal DRY (@1704).</td></tr>
+  <tr><td><code>tests/sale-paid-amount-helpers.test.js</code></td><td>NEW — unit (Task 1).</td></tr>
+  <tr><td><code>tests/sale-paid-column-wiring.test.js</code></td><td>NEW — source-grep regression (Task 4).</td></tr>
+  <tr><td><code>tests/sale-paid-column-flow-simulate.test.js</code></td><td>NEW — Rule I flow-simulate + real <code>usePagination</code> renderHook (Task 4).</td></tr>
+  <tr><td><code>scripts/diag-sale-paid-shape.mjs</code></td><td>UPDATE post-Task-1 to import SHIPPED helper → Rule Q L2 re-run on real prod (Task 4).</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: financeUtils paid resolvers (TDD unit)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/financeUtils.js</code> · Test <code>tests/sale-paid-amount-helpers.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-javascript">// tests/sale-paid-amount-helpers.test.js
+import { describe, it, expect } from 'vitest';
+import { resolveSalePaidAmount, resolveSaleOutstanding, resolveSalePaidTone } from '../src/lib/financeUtils.js';
+
+describe('resolveSalePaidAmount', () => {
+  it('paid in full — sums channels = net', () => expect(resolveSalePaidAmount({ billing:{netTotal:8900}, payment:{channels:[{amount:8900,enabled:true}]} })).toBe(8900));
+  it('split — sums partial channels', () => expect(resolveSalePaidAmount({ billing:{netTotal:8900}, payment:{channels:[{amount:3000},{amount:2000}]} })).toBe(5000));
+  it('unpaid — empty channels => 0', () => expect(resolveSalePaidAmount({ billing:{netTotal:8900}, payment:{channels:[]} })).toBe(0));
+  it('0baht sale => 0', () => expect(resolveSalePaidAmount({ billing:{netTotal:0}, payment:{channels:[{amount:0}]} })).toBe(0));
+  it('fallback to totalPaidAmount when no channels', () => expect(resolveSalePaidAmount({ billing:{netTotal:5000}, totalPaidAmount:5000 })).toBe(5000));
+  it('channels win over totalPaidAmount', () => expect(resolveSalePaidAmount({ payment:{channels:[{amount:3000}]}, totalPaidAmount:9999 })).toBe(3000));
+  it('amount as string', () => expect(resolveSalePaidAmount({ payment:{channels:[{amount:'1500.50'}]} })).toBe(1500.5));
+  it('null/garbage safe', () => { expect(resolveSalePaidAmount(null)).toBe(0); expect(resolveSalePaidAmount({})).toBe(0); expect(resolveSalePaidAmount({ payment:{channels:[{amount:null},{amount:'x'}]} })).toBe(0); });
+  it('negative channel tolerated', () => expect(resolveSalePaidAmount({ payment:{channels:[{amount:5000},{amount:-1000}]} })).toBe(4000));
+  it('rounds 2dp', () => expect(resolveSalePaidAmount({ payment:{channels:[{amount:33.333},{amount:33.333}]} })).toBe(66.67));
+});
+describe('resolveSaleOutstanding', () => {
+  it('full => 0', () => expect(resolveSaleOutstanding({ billing:{netTotal:8900}, payment:{channels:[{amount:8900}]} })).toBe(0));
+  it('split => remainder', () => expect(resolveSaleOutstanding({ billing:{netTotal:8900}, payment:{channels:[{amount:5000}]} })).toBe(3900));
+  it('unpaid => full net', () => expect(resolveSaleOutstanding({ billing:{netTotal:42500}, payment:{channels:[]} })).toBe(42500));
+  it('over-paid => 0 never negative', () => expect(resolveSaleOutstanding({ billing:{netTotal:1000}, payment:{channels:[{amount:1500}]} })).toBe(0));
+  it('null safe', () => expect(resolveSaleOutstanding(null)).toBe(0));
+});
+describe('resolveSalePaidTone', () => {
+  it('full when paid>=net', () => expect(resolveSalePaidTone(8900,8900)).toBe('full'));
+  it('full for 0baht paid-in-full', () => expect(resolveSalePaidTone(0,0)).toBe('full'));
+  it('full when over-paid', () => expect(resolveSalePaidTone(1500,1000)).toBe('full'));
+  it('partial when 0&lt;paid&lt;net', () => expect(resolveSalePaidTone(5000,8900)).toBe('partial'));
+  it('zero when paid 0 net>0', () => expect(resolveSalePaidTone(0,8900)).toBe('zero'));
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/sale-paid-amount-helpers.test.js</code> · Expected: FAIL (helpers not exported).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement (append to financeUtils.js, reuse roundTHB @L9)</strong></label></div>
+<pre><code class="language-javascript">// ─── Sale actual-paid resolvers (2026-05-31, spec Q1=A) ───────────────────────
+// Rule R diag 2026-05-31: 35/35 recent real sales (form + OPD treatment) store
+// the paid amount in payment.channels; 0 use totalPaidAmount (only markSalePaid
+// writes that). Primary = Σ channels; totalPaidAmount = legacy/edge fallback.
+export function resolveSalePaidAmount(sale) {
+  const channels = sale?.payment?.channels;
+  if (Array.isArray(channels) && channels.length > 0) {
+    return roundTHB(channels.reduce((s, c) => s + (parseFloat(c?.amount) || 0), 0));
+  }
+  const tpa = Number(sale?.totalPaidAmount);
+  if (Number.isFinite(tpa)) return roundTHB(tpa);
+  return 0;
+}
+
+// Unpaid remainder (never negative).
+export function resolveSaleOutstanding(sale) {
+  const net = Number(sale?.billing?.netTotal ?? sale?.netTotal) || 0;
+  return Math.max(0, roundTHB(net - resolveSalePaidAmount(sale)));
+}
+
+// Color tone for the ยอดชำระจริง cell: 'full' | 'partial' | 'zero'.
+// 'full' covers paid-in-full incl 0฿ (paid 0 >= net 0).
+export function resolveSalePaidTone(paid, net) {
+  const p = Number(paid) || 0;
+  const n = Number(net) || 0;
+  if (p + 0.01 >= n) return 'full';
+  if (p > 0) return 'partial';
+  return 'zero';
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → verify PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/sale-paid-amount-helpers.test.js</code> · Expected: PASS (20).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/financeUtils.js tests/sale-paid-amount-helpers.test.js
+git commit -m "feat(sales): resolveSalePaidAmount/Outstanding/Tone helpers (Task 1)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: SaleTab — ยอดชำระจริง column + rename + pay-modal DRY</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/SaleTab.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Add import</strong> (near top imports)</label></div>
+<pre><code class="language-javascript">import { resolveSalePaidAmount, resolveSalePaidTone, resolveSaleOutstanding } from '../../lib/financeUtils.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Header — rename + insert</strong> (@~1220)</label></div>
+<pre><code class="language-jsx">{['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดสุทธิ','ยอดชำระจริง','สถานะ','จัดการ'].map(h =&gt; (</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Hoist tone consts</strong> (in the <code>filtered.map</code> body, right after the <code>_v105DisplayHN</code> const, before <code>return</code>)</label></div>
+<pre><code class="language-javascript">const _paidAmt = resolveSalePaidAmount(sale);
+const _paidTone = resolveSalePaidTone(_paidAmt, sale.billing?.netTotal);
+const _paidCls = _paidTone === 'full'
+  ? (isDark ? 'text-emerald-400' : 'text-emerald-700')
+  : _paidTone === 'partial'
+  ? (isDark ? 'text-amber-400' : 'text-amber-700')
+  : (isDark ? 'text-gray-500' : 'text-slate-400');</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: New <code>&lt;td&gt;</code></strong> — insert immediately AFTER the net-total <code>&lt;/td&gt;</code> (the one ending @~1299), BEFORE the status <code>&lt;td&gt;</code> (@1300)</label></div>
+<pre><code class="language-jsx">&lt;td className="px-3 py-2 text-right font-mono"&gt;
+  &lt;span className={`font-semibold ${_paidCls}`} data-testid={`saletab-paid-${sale.saleId || sale.id || i}`}&gt;{fmtMoney(_paidAmt)} ฿&lt;/span&gt;
+&lt;/td&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Pay-modal DRY</strong> — replace the inline outstanding (@1704)</label></div>
+<pre><code class="language-jsx">{/* before */}
+&lt;p className="text-xs text-[var(--tx-muted)]"&gt;ยอดค้าง: {fmtMoney(Math.max(0, (payModal.billing?.netTotal||0) - (payModal.payment?.channels||[]).reduce((s,c) =&gt; s + (parseFloat(c.amount)||0), 0)))} บาท&lt;/p&gt;
+{/* after */}
+&lt;p className="text-xs text-[var(--tx-muted)]"&gt;ยอดค้าง: {fmtMoney(resolveSaleOutstanding(payModal))} บาท&lt;/p&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Build check</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean (catches JSX/import errors). Commit:</p>
+<pre><code class="language-bash">git add src/components/backend/SaleTab.jsx
+git commit -m "feat(sales): ยอดชำระจริง column (color-coded) + rename ยอดรวม→ยอดสุทธิ + pay-modal DRY (Task 2)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: SaleTab — pagination 30/page (reuse canonical)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/SaleTab.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add imports</strong></label></div>
+<pre><code class="language-javascript">import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Paginate</strong> — right AFTER <code>const filtered = useMemo(...)</code> closes (@~519)</label></div>
+<pre><code class="language-javascript">const _pageKey = `${subTab}|${filterQuery}|${filterStatus}|${BRANCH_ID}`;
+const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(filtered, { pageSize: 30, key: _pageKey });</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Render the slice</strong> — table body (@1226): <code>filtered.map</code> → <code>visibleItems.map</code></label></div>
+<pre><code class="language-jsx">{visibleItems.map((sale, i) =&gt; {</code></pre>
+  <p>(Leave <code>filtered.length</code> @1166 header count + @1173 empty-state untouched — pagination only slices the render.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Pager</strong> — insert after the <code>overflow-x-auto</code> closing <code>&lt;/div&gt;</code> (@~1342), inside the table card, before the card's closing <code>&lt;/div&gt;</code> (@1343)</label></div>
+<pre><code class="language-jsx">          &lt;/div&gt;{/* close overflow-x-auto */}
+          &lt;Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} testId="saletab-pagination" /&gt;
+        &lt;/div&gt;{/* close table card */}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Build check + commit</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean.</p>
+<pre><code class="language-bash">git add src/components/backend/SaleTab.jsx
+git commit -m "feat(sales): paginate sales table 30/page via canonical usePagination+Pagination (Task 3)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Regression (source-grep) + Rule I flow-simulate + Rule Q L2 + full suite</h3>
+  <p><strong>Files:</strong> NEW <code>tests/sale-paid-column-wiring.test.js</code> + <code>tests/sale-paid-column-flow-simulate.test.js</code> · UPDATE <code>scripts/diag-sale-paid-shape.mjs</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: source-grep regression</strong></label></div>
+<pre><code class="language-javascript">// tests/sale-paid-column-wiring.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+const SRC = readFileSync(new URL('../src/components/backend/SaleTab.jsx', import.meta.url), 'utf8');
+// the table-header array line (anchor: starts with 'เลขที่' + ends with 'จัดการ')
+const HEADER = SRC.match(/\[\s*'เลขที่'[^\]]*'จัดการ'\s*\]/)?.[0] || '';
+
+describe('SaleTab paid-column + rename wiring', () => {
+  it('header has ยอดสุทธิ + ยอดชำระจริง, no ยอดรวม', () => {
+    expect(HEADER).toContain("'ยอดสุทธิ'");
+    expect(HEADER).toContain("'ยอดชำระจริง'");
+    expect(HEADER).not.toContain("'ยอดรวม'");
+  });
+  it('imports the helpers from financeUtils', () => {
+    expect(SRC).toMatch(/import\s*\{[^}]*resolveSalePaidAmount[^}]*\}\s*from\s*'\.\.\/\.\.\/lib\/financeUtils\.js'/);
+    expect(SRC).toContain('resolveSalePaidTone');
+    expect(SRC).toContain('resolveSaleOutstanding');
+  });
+  it('new cell uses helper + tone classes (both themes)', () => {
+    expect(SRC).toContain('resolveSalePaidAmount(sale)');
+    expect(SRC).toContain('resolveSalePaidTone(');
+    expect(SRC).toMatch(/text-emerald-400/); expect(SRC).toMatch(/text-emerald-700/);
+    expect(SRC).toMatch(/text-amber-400/);   expect(SRC).toMatch(/text-amber-700/);
+    expect(SRC).toMatch(/text-gray-500/);    expect(SRC).toMatch(/text-slate-400/);
+  });
+  it('pay-modal uses resolveSaleOutstanding (inline reduce gone)', () => {
+    expect(SRC).toContain('resolveSaleOutstanding(payModal)');
+    expect(SRC).not.toMatch(/payModal\.payment\?\.channels\|\|\[\]\)\.reduce/);
+  });
+});
+describe('SaleTab pagination wiring', () => {
+  it('usePagination at pageSize 30 + Pagination imported/rendered', () => {
+    expect(SRC).toMatch(/import\s+Pagination\s+from\s+'\.\/Pagination\.jsx'/);
+    expect(SRC).toMatch(/usePagination\(filtered,\s*\{\s*pageSize:\s*30/);
+    expect(SRC).toContain('visibleItems.map(');
+    expect(SRC).toMatch(/&lt;Pagination\b/);
+  });
+  it('table render no longer maps filtered directly', () => {
+    expect(SRC).not.toContain('filtered.map(');
+  });
+});
+</code></pre>
+  <p>Run: <code>npm test -- --run tests/sale-paid-column-wiring.test.js</code> · Expected: PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Rule I flow-simulate</strong> (real helpers + real usePagination renderHook)</label></div>
+<pre><code class="language-javascript">// tests/sale-paid-column-flow-simulate.test.js
+import { describe, it, expect } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { resolveSalePaidAmount, resolveSalePaidTone } from '../src/lib/financeUtils.js';
+import { usePagination } from '../src/lib/usePagination.js';
+
+const SALES = [
+  { saleId:'A-full',  billing:{netTotal:8900},  payment:{channels:[{amount:8900}]} },
+  { saleId:'B-split', billing:{netTotal:8900},  payment:{channels:[{amount:5000}]} },
+  { saleId:'C-unpaid',billing:{netTotal:42500}, payment:{channels:[]} },
+  { saleId:'D-zero',  billing:{netTotal:0},     payment:{channels:[{amount:0}]} },
+  { saleId:'E-tpa',   billing:{netTotal:5000},  totalPaidAmount:5000 },
+];
+
+describe('F1 row paid + tone chain (mirrors SaleTab row render)', () => {
+  it('paid + tone per row', () => {
+    const out = SALES.map(s => { const p = resolveSalePaidAmount(s); return [s.saleId, p, resolveSalePaidTone(p, s.billing.netTotal)]; });
+    expect(out).toEqual([
+      ['A-full', 8900, 'full'],
+      ['B-split', 5000, 'partial'],
+      ['C-unpaid', 0, 'zero'],
+      ['D-zero', 0, 'full'],   // 0฿ paid-in-full = full (green)
+      ['E-tpa', 5000, 'full'],
+    ]);
+  });
+});
+describe('F2 pagination 30/page (real usePagination)', () => {
+  const big = Array.from({ length: 35 }, (_, i) => ({ saleId:`S${i}` }));
+  it('page 1 shows 30, totals correct', () => {
+    const { result } = renderHook(() => usePagination(big, { pageSize: 30, key: 'k1' }));
+    expect(result.current.visibleItems).toHaveLength(30);
+    expect(result.current.totalPages).toBe(2);
+    expect(result.current.totalCount).toBe(35);
+  });
+  it('<=30 → 1 page (Pagination auto-hides)', () => {
+    const { result } = renderHook(() => usePagination(big.slice(0, 30), { pageSize: 30, key: 'k2' }));
+    expect(result.current.totalPages).toBe(1);
+  });
+});
+</code></pre>
+  <p>Run: <code>npm test -- --run tests/sale-paid-column-flow-simulate.test.js</code> · Expected: PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Rule Q L2 — re-run diag importing the SHIPPED helper on REAL prod</strong></label></div>
+  <p>Edit <code>scripts/diag-sale-paid-shape.mjs</code>: add <code>import { resolveSalePaidAmount } from '../src/lib/financeUtils.js';</code> and, per sale, assert the SHIPPED helper equals the inline channel-sum:</p>
+<pre><code class="language-javascript">const helperPaid = resolveSalePaidAmount(s);   // SHIPPED helper
+const inlinePaid = cs != null ? cs : (tpa != null ? tpa : 0);
+if (Math.abs(helperPaid - inlinePaid) >= 0.01) console.log(`  ⚠HELPER≠INLINE ${s.saleId}: ${helperPaid} vs ${inlinePaid}`);</code></pre>
+  <p>Run: <code>node scripts/diag-sale-paid-shape.mjs 40</code> · Expected: 0 ⚠HELPER≠INLINE (SHIPPED helper == real-prod paid). This is the Rule Q L2 evidence on real data.</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Full suite + build</strong> (end-of-batch, Rule N)</label></div>
+  <p>Run: <code>npm test -- --run</code> (expect 15469 + new = ~15494, 0 fail; watch for V21 lock-ins on header/render — fix inline if any) · <code>npm run build</code> (clean).</p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/sale-paid-column-wiring.test.js tests/sale-paid-column-flow-simulate.test.js scripts/diag-sale-paid-shape.mjs
+git commit -m "test(sales): source-grep + Rule I flow-simulate + Rule Q L2 diag for paid column + pagination (Task 4)"</code></pre>
+</div>
+
+<h2>Verification (Rule Q honest)</h2>
+<ul>
+  <li><strong>L2 (real data):</strong> diag re-run = SHIPPED <code>resolveSalePaidAmount</code> matches real-prod paid on 40 sales (Task 4 Step 3).</li>
+  <li><strong>Pixels:</strong> Option-B both themes verified in the grounded mockup (Chrome MCP, this session).</li>
+  <li><strong>Logic/wiring:</strong> unit (20) + source-grep + Rule I flow-simulate + real <code>usePagination</code> renderHook + full suite + build.</li>
+  <li><strong>Honest gap → USER post-deploy:</strong> assembled L1 on the real admin-gated <code>SaleTab</code> (column + pager interaction + smoothness on real data, both themes). Cosmetic-shell; no flow change.</li>
+</ul>
+
+<script>
+const R = [
+  ['INV-…0003','เกรียงไกร',6490,6490,1],
+  ['INV-…0001','สุรพันธุ์',8900,5000,1],
+  ['INV-…0001','อุทิศ',42500,0,1],
+  ['INV-…0001','ดนุพล',2900,2900,1],
+];
+const f = n => Number(n).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const stat = (p,n) => p+0.01>=n ? '<span class="chip cp">ชำระแล้ว</span>' : '<span class="chip co">ค้างชำระ</span>';
+const paid = (p,n) => { const c = p+0.01>=n?'pfull':(p>0?'ppart':'pzero'); return `<td class="r mn cn"><span class="${c}">${f(p)} ฿</span></td>`; };
+const row = ([inv,nm,net,p,opd]) => `<tr><td class="mn" style="color:var(--sec)">${inv}</td><td>${nm}</td><td class="r mn net">${opd?'<span class="bopd">OPD</span> ':''}${f(net)} ฿</td>${paid(p,net)}<td>${stat(p,net)}</td></tr>`;
+for (const s of ['d','l']) document.getElementById(s).innerHTML = R.map(row).join('');
+</script>
+</body>
+</html>
