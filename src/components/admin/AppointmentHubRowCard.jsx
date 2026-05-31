@@ -133,6 +133,13 @@ export default function AppointmentHubRowCard({
   })();
   const isPastDate = typeof appt.date === 'string' && appt.date < todayBangkok;
   const isMissed = !hasTreatmentForDay && (baseMissed || (isPastDate && rawStatus === 'pending'));
+  // (2026-05-31) — "คอนเฟิร์มนัด" gate, mirroring showMarkCompleteBtn (confirmed) /
+  // showUnmarkBtn (done): a STATUS-driven gate INDEPENDENT of hasTreatmentForDay. Fixes the
+  // V73-BS1-class bug where the treatment-first button dispatch hid the confirm button once a
+  // treatment record existed for the day (e.g. after un-mark → revert status to "รอยืนยัน").
+  // Confirm now follows rawStatus like the other status actions. Not tab-gated (matches the
+  // prior dispatch behaviour — an appt can be confirmed in advance on tomorrow/future tabs).
+  const showConfirmBtn = rawStatus === 'pending' && !isPastDate;
   const linkedTreatmentId = latestTreatment?.id || appt.linkedTreatmentId || '';
   const hasLinkedTreatment = !!linkedTreatmentId;
   const depositPurpose = apptDeposit
@@ -427,7 +434,7 @@ export default function AppointmentHubRowCard({
             1. hasTreatmentForDay → "แก้ไขบันทึกการรักษา" (PRIMARY ember)
             2. rawStatus='done' → "แก้ไขการรักษา"/"บันทึกการรักษา" (PRIMARY)
             3. pending|confirmed && isPastDate → "สร้างบันทึกการรักษา" + missed
-            4. pending && !isPastDate → "คอนเฟิร์มนัด" (PRIMARY) + edit + cancel
+            4. pending && !isPastDate → edit + cancel ("คอนเฟิร์มนัด" = separate showConfirmBtn gate above)
             5. confirmed && !isPastDate → "บันทึกการรักษา" (PRIMARY) + edit + cancel
             6. cancelled → read-only badge
            V64-fix11 — buttons mapped to 3-tier:
@@ -435,6 +442,19 @@ export default function AppointmentHubRowCard({
               SECONDARY (sky): edit-appointment (navigation/contextual)
               DESTRUCTIVE (rose ghost): cancel
         */}
+        {/* (2026-05-31) — status-driven confirm gate (mirrors mark-complete / un-mark):
+            shows "คอนเฟิร์มนัด" whenever pending + not-past, even if a treatment record
+            exists. Leads the dispatch so it appears first (PRIMARY call-to-action). */}
+        {showConfirmBtn && (
+          <button
+            type="button"
+            data-testid="row-action-confirm"
+            onClick={() => onConfirm?.(appt)}
+            className={BTN_PRIMARY}
+          >
+            คอนเฟิร์มนัด
+          </button>
+        )}
         {hasTreatmentForDay && (
           <>
             <button
@@ -500,13 +520,7 @@ export default function AppointmentHubRowCard({
         )}
         {!hasTreatmentForDay && rawStatus === 'pending' && !isPastDate && (
           <>
-            <button
-              data-testid="row-action-confirm"
-              onClick={() => onConfirm?.(appt)}
-              className={BTN_PRIMARY}
-            >
-              คอนเฟิร์มนัด
-            </button>
+            {/* confirm lives in the showConfirmBtn gate above (2026-05-31) */}
             <button
               data-testid="row-action-edit"
               onClick={() => onEdit?.(appt)}
