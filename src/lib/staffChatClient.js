@@ -162,18 +162,38 @@ export function extractMentions(text) {
 }
 
 // V73 Features B + H (2026-05-16) — Parse message text into renderable segments.
-// Returns array of { type: 'text' | 'mention' | 'customer' | 'appt', content/refId }.
+// V137 (2026-05-31) — added 'url' segment so http/https links render clickable.
+// Returns array of { type: 'text' | 'url' | 'mention' | 'customer' | 'appt',
+// content/href/refId }.
+//
+// The URL branch is FIRST in the alternation: a URL like
+// `https://host/?customer=LC-26000022` must be captured WHOLE (not split into a
+// url + a customer chip), so the http(s) match must win at the URL's start
+// position and consume through to the next whitespace. Only http/https schemes
+// match (`javascript:` / `data:` / `vbscript:` can't → no XSS via href; the
+// renderer also pins target=_blank + rel=noopener noreferrer).
 export function parseMessageBody(text) {
   if (typeof text !== 'string' || !text) return [{ type: 'text', content: '' }];
   const out = [];
-  const re = /(@[^\s@]+)|(\bLC-\d{8}\b)|(\bBA-\d+\b)/g;
+  const re = /(https?:\/\/[^\s]+)|(@[^\s@]+)|(\bLC-\d{8}\b)|(\bBA-\d+\b)/g;
   let lastIndex = 0;
   let m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > lastIndex) out.push({ type: 'text', content: text.slice(lastIndex, m.index) });
-    if (m[1]) out.push({ type: 'mention', content: m[1].slice(1) });
-    else if (m[2]) out.push({ type: 'customer', content: m[2], refId: m[2] });
-    else if (m[3]) out.push({ type: 'appt', content: m[3], refId: m[3] });
+    if (m[1]) {
+      // Strip trailing sentence punctuation so "ดูที่ https://x.com/a." →
+      // link `https://x.com/a` + text ".". Closing bracket/quote/period etc.
+      // are far more likely sentence punctuation than part of the URL.
+      let url = m[1];
+      const trail = url.match(/[.,;:!?)\]}'"»]+$/);
+      let tail = '';
+      if (trail) { tail = trail[0]; url = url.slice(0, url.length - tail.length); }
+      out.push({ type: 'url', content: url, href: url });
+      if (tail) out.push({ type: 'text', content: tail });
+    }
+    else if (m[2]) out.push({ type: 'mention', content: m[2].slice(1) });
+    else if (m[3]) out.push({ type: 'customer', content: m[3], refId: m[3] });
+    else if (m[4]) out.push({ type: 'appt', content: m[4], refId: m[4] });
     lastIndex = m.index + m[0].length;
   }
   if (lastIndex < text.length) out.push({ type: 'text', content: text.slice(lastIndex) });

@@ -500,6 +500,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // reference to `loadedTreatment?.status` resolved here since TFP has no
   // full-doc state — only individually destructured fields from existing.detail.
   const [loadedTreatmentStatus, setLoadedTreatmentStatus] = useState(undefined);
+  // V136 (2026-05-31) — captured at edit-load: true iff this finalized
+  // treatment deducted NO course (detail.courseItems AND detail.treatmentItems
+  // both empty). Gates canEditCourseUsageRetro (computed after canAddNewItems).
+  // Default false → before-load + treatments-with-usage stay locked (no flash).
+  const [loadedHasNoCourseUsage, setLoadedHasNoCourseUsage] = useState(false);
   // Phase 27.2 (2026-05-14) — completedAt timestamp from edit-mode load.
   // Used by v26StatusPatch to preserve "first completion" time across
   // re-edits (Rule: completedAt is set ONCE per treatment, never updated).
@@ -545,6 +550,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const canAddNewItems = (mode === 'create')
     || (loadedTreatmentStatus === 'doctor-recorded')
     || (loadedTreatmentStatus === 'vitalsigns-recorded');
+
+  // V136 (2026-05-31) — retroactive course-usage edit. Unlock the
+  // ข้อมูลการใช้คอร์ส picker on an ALREADY-finalized treatment ONLY when it
+  // deducted NO course (loadedHasNoCourseUsage = courseItems AND treatmentItems
+  // both empty at load — matches the user's "ไม่พบรายการรักษา" screenshot).
+  // User: "edit ข้อมูลการใช้คอร์สย้อนหลังได้ ถ้ายังไม่มีการใช้/ตัดคอร์สใดๆ;
+  // ถ้ามีการใช้อะไรไปแล้ว แก้ไม่ได้เหมือนเดิม". Decisions: Q1=A (no course
+  // deducted) / Q2=A (course section ONLY) / Q3=B (record use of EXISTING
+  // courses; NO buy → no auto-sale/INV). Distinct from canAddNewItems (which
+  // ALSO unlocks buy + consumables + meds). The save uses saveMode='course'
+  // (staff-save MINUS the auto-sale path). The ซื้อ buttons + consumables/meds
+  // sections stay gated on canAddNewItems ONLY (so they stay locked here).
+  const canEditCourseUsageRetro = isEdit && !canAddNewItems && loadedHasNoCourseUsage;
+  // Drives the course-section locked-table-vs-interactive-grid branch ONLY.
+  const courseUsageInteractive = canAddNewItems || canEditCourseUsageRetro;
 
   // Doctor & Date
   const [doctorId, setDoctorId] = useState('');
@@ -1008,6 +1028,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             if (existing?.completedAt) setLoadedTreatmentCompletedAt(existing.completedAt);
             if (existing?.detail) {
               const t = existing.detail;
+              // V136 (2026-05-31) — retro course-usage unlock eligibility.
+              // "No course used" = NEITHER the deduction ledger (courseItems)
+              // NOR the displayed treatment-items list has any entry. Captured
+              // once here (stable across live edits) so canEditCourseUsageRetro
+              // doesn't re-lock mid-edit. Treatments WITH any course usage keep
+              // the read-only locked table (default false).
+              setLoadedHasNoCourseUsage(!(t.courseItems?.length) && !(t.treatmentItems?.length));
               if (t.doctorId) setDoctorId(t.doctorId);
               if (t.assistants?.length) setAssistantIds(t.assistants.map(a => a.id || a).filter(Boolean));
               if (t.treatmentDate) setTreatmentDate(t.treatmentDate);
@@ -2179,8 +2206,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     if (typeof eventOrSaveMode === 'string') {
       // Phase 26.0 form: handleSubmit('doctor') OR handleSubmit('staff')
       // Phase 26.2f: handleSubmit('vitals') added for vitals-only saves
+      // V136 (2026-05-31): handleSubmit('course') — retroactive course-usage
+      // edit on a finalized treatment that deducted NO course. Deducts the
+      // selected existing courses but SKIPS the auto-sale path (no INV/money).
       saveMode = (eventOrSaveMode === 'doctor') ? 'doctor'
                : (eventOrSaveMode === 'vitals') ? 'vitals'
+               : (eventOrSaveMode === 'course') ? 'course'
                : 'staff';
     } else if (
       eventOrSaveMode &&
@@ -2189,8 +2220,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     ) {
       // Phase 26.1 internal re-invoke: handleSubmit({saveMode, editorContext})
       // Phase 26.2f: 'vitals' accepted in object form too
+      // V136: 'course' accepted in object form too
       saveMode = (eventOrSaveMode.saveMode === 'doctor') ? 'doctor'
                : (eventOrSaveMode.saveMode === 'vitals') ? 'vitals'
+               : (eventOrSaveMode.saveMode === 'course') ? 'course'
                : 'staff';
       if (eventOrSaveMode.editorContext) {
         editorContext = eventOrSaveMode.editorContext;
@@ -2632,6 +2665,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           recordedAt: serverTimestamp(),
           vitalsignsRecordedAt: serverTimestamp(),
           vitalsignsRecordedBy: auth.currentUser?.uid || null,
+        } : saveMode === 'course' ? {
+          // V136 (2026-05-31) — retroactive course-usage edit. Forensic-only:
+          // stamp WHO recorded the course usage retroactively + WHEN. Do NOT
+          // touch `status` (preserve the treatment's finalized lifecycle — this
+          // is a course-usage backfill, not a re-completion) and do NOT
+          // re-stamp completedAt. No deleteField() → safe in edit mode.
+          courseUsageEditedAt: serverTimestamp(),
+          courseUsageEditedBy: auth.currentUser?.uid || null,
         } : {
           // admin/staff save clears status (advances to "completed" state)
           // V96 (2026-05-19) — deleteField() ONLY in EDIT mode. For CREATE mode
@@ -2759,7 +2800,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // (createBackendSale + deductStockForSale + applyDepositToSale +
         // deductWallet + earnPoints + assignCourseToCustomer + promo-assign).
         // Doctor-save defers all billing/sale creation to admin finalize.
-        if (saveMode !== 'doctor' && saveMode !== 'vitals' && hasSale && !isEdit) {
+        // V136 (2026-05-31) — saveMode='course' (retro course-usage edit) ALSO
+        // skips the auto-sale chain: it records existing-course usage only, no
+        // buy/INV/money (Q3=B). [Moot for create-path (!isEdit) but explicit.]
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && saveMode !== 'course' && hasSale && !isEdit) {
           try {
             const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, setTreatmentLinkedSaleId } = await import('../lib/scopedDataLayer.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
@@ -2941,7 +2985,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // is a defensive backstop — if a future code path invokes handleSubmit('doctor')
         // in edit mode (e.g. via API), this prevents accidentally touching the linked
         // sale's deposits/wallet/points/stock.
-        if (saveMode !== 'doctor' && saveMode !== 'vitals' && hasSale && isEdit) {
+        // V136 (2026-05-31) — KEY guard for retro course-usage edit. saveMode==
+        // 'course' MUST skip this path: a consumables-only treatment has
+        // hasSale=true, and this block CREATES a new sale on the !linkedSale
+        // transition + runs the full deposit/wallet/points reverse-reapply
+        // saga. A course-usage backfill must touch ZERO money/INV (Q3=B).
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && saveMode !== 'course' && hasSale && isEdit) {
           try {
             const {
               getSaleByTreatmentId, updateBackendSale,
@@ -4524,8 +4573,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             {/* Phase 26.0c (V26.0, 2026-05-13) — Pattern β branch swap: gate
                 interactive 3-column picker vs read-only items table on
                 canAddNewItems instead of isEdit. doctor-recorded edits get the
-                interactive shape so admin can pick course/product/promotion. */}
-            {!canAddNewItems ? (
+                interactive shape so admin can pick course/product/promotion.
+                V136 (2026-05-31) — ALSO open the interactive grid when
+                canEditCourseUsageRetro (finalized treatment that used no
+                course). courseUsageInteractive = canAddNewItems ||
+                canEditCourseUsageRetro. The ซื้อ buttons above stay gated on
+                canAddNewItems ONLY, so retro mode shows the existing-course
+                picker WITHOUT the buy buttons (Q3=B). */}
+            {!courseUsageInteractive ? (
               /* ── Read-only (locked) mode: treatment items table (matching ProClinic) ── */
               <div>
                 <p className="text-xs font-bold text-gray-500 mb-2">รายการรักษา</p>
@@ -5493,10 +5548,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               className={`px-6 py-2.5 rounded-xl text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
               ยกเลิก
             </button>
-            <button onClick={handleSubmit} disabled={saving}
+            {/* V136 (2026-05-31) — retro course-usage edit uses saveMode='course'
+                (deduct existing course, NO auto-sale). Otherwise the canonical
+                staff save (SyntheticEvent → saveMode='staff'). */}
+            <button
+              onClick={canEditCourseUsageRetro ? () => handleSubmit('course') : handleSubmit}
+              disabled={saving}
+              data-testid={canEditCourseUsageRetro ? 'tfp-save-course-retro' : 'tfp-save'}
               className="px-8 py-2.5 rounded-xl text-sm font-black bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-all flex items-center gap-2 shadow-lg shadow-purple-600/20">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              {saving ? 'กำลังบันทึก...' : isEdit ? 'บันทึกการแก้ไข' : 'ยืนยันการรักษา'}
+              {saving ? 'กำลังบันทึก...' : canEditCourseUsageRetro ? 'บันทึกการใช้คอร์ส' : isEdit ? 'บันทึกการแก้ไข' : 'ยืนยันการรักษา'}
             </button>
           </div>
         </div>

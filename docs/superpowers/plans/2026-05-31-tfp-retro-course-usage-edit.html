@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>V136 — TFP retroactive course-usage edit (plan)</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #18181b; line-height: 1.5; }
+  h1 { color: #c2410c; border-bottom: 3px solid #f97316; padding-bottom: 6px; }
+  h2 { color: #c2410c; margin-top: 26px; border-left: 4px solid #f97316; padding-left: 10px; }
+  code { background: #f4f4f5; padding: 1px 5px; border-radius: 4px; font-family: 'Cascadia Code', monospace; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #d4d4d8; padding: 7px 10px; text-align: left; font-size: 0.92em; vertical-align: top; }
+  th { background: #fff7ed; }
+  .mockup { border: 1px solid #27272a; border-radius: 12px; padding: 14px; margin: 10px 0; background: #0a0a0a; color: #e5e5e5; font-size: 0.85em; }
+  .mockup .sec { border: 1px solid #f97316; border-radius: 10px; padding: 10px; }
+  .mockup .hdr { color: #f97316; font-weight: bold; }
+  .strike { opacity: 0.35; text-decoration: line-through; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .col { border: 1px solid #222; border-radius: 6px; padding: 4px 6px; min-height: 50px; }
+  .done { color: #15803d; }
+</style>
+</head>
+<body>
+<h1>V136 plan — TFP retroactive course-usage edit</h1>
+<p>Spec: <code>docs/superpowers/specs/2026-05-31-tfp-retro-course-usage-edit-design.html</code> · Decisions Q1=A (no course deducted) / Q2=A (course section only) / Q3=B (existing-use only, no buy/sale).</p>
+
+<h2>Tasks</h2>
+<table>
+<tr><th>#</th><th>Task</th><th>Where</th></tr>
+<tr><td>T1</td><td>TDD red: write <code>tests/v136-retro-course-usage-edit.test.jsx</code> (gate logic + RTL unlock/lock + flow-simulate of 'course' save decision + source-grep)</td><td>tests/</td></tr>
+<tr><td>T2</td><td><code>loadedHasNoCourseUsage</code> state + set at edit-load (<code>!(courseItems.length)&amp;&amp;!(treatmentItems.length)</code>)</td><td>TFP ~707 / ~1009</td></tr>
+<tr><td>T3</td><td><code>canEditCourseUsageRetro</code> + <code>courseUsageInteractive</code> gate (after canAddNewItems ~547)</td><td>TFP ~547</td></tr>
+<tr><td>T4</td><td>Course-section: locked-vs-grid branch keys on <code>courseUsageInteractive</code>; ซื้อ buttons STAY <code>canAddNewItems</code>; consumables/meds sections UNTOUCHED</td><td>TFP ~4509 / ~4528</td></tr>
+<tr><td>T5</td><td><code>saveMode='course'</code>: parser recognizes it (~2176); forensic status-patch branch (~2623); sale gates 2762 + 2944 gain <code>&amp;&amp; saveMode!=='course'</code></td><td>TFP handleSubmit</td></tr>
+<tr><td>T6</td><td>Main save button: retro → <code>handleSubmit('course')</code> + label "บันทึกการใช้คอร์ส"</td><td>TFP ~5496</td></tr>
+<tr><td>T7</td><td>AV156 invariant in audit-anti-vibe-code; targeted tests + <code>npm run build</code> green</td><td>.agents/skills + tests</td></tr>
+</table>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="sec">
+    <div class="hdr">🛒 ข้อมูลการใช้คอร์ส
+      <span style="float:right" class="strike">+ ซื้อคอร์ส / + ซื้อสินค้า / + ซื้อโปรโมชัน (ซ่อนใน retro)</span></div>
+    <div class="grid3">
+      <div class="col" style="color:#2dd4bf">คอร์ส<br>☐ Botox · 3/5<br>☐ Filler · 1/2</div>
+      <div class="col" style="color:#fbbf24">โปรโมชัน<br><span style="color:#71717a">ไม่มี</span></div>
+      <div class="col" style="color:#fb923c">รายการรักษา<br><span style="color:#71717a">เลือกจากซ้าย</span></div>
+    </div>
+    <div style="background:#14b8a6;color:#042f2e;text-align:center;padding:6px;border-radius:6px;margin-top:8px;font-weight:bold">บันทึกการใช้คอร์ส → handleSubmit('course')</div>
+  </div>
+</div>
+<p>(empty treatment → grid unlocks; used treatment → existing read-only table, unchanged. Full per-state mockup in spec.)</p>
+
+<h2>Flow</h2>
+<table>
+<tr><th>Step</th><th>Action</th></tr>
+<tr><td>1</td><td>edit-load → set <code>loadedHasNoCourseUsage</code></td></tr>
+<tr><td>2</td><td><code>canEditCourseUsageRetro</code> true ⇒ render grid (buy hidden)</td></tr>
+<tr><td>3</td><td>tick existing course → selectedCourseItems</td></tr>
+<tr><td>4</td><td>save → <code>handleSubmit('course')</code> → validate → updateBackendTreatment → deductCourseItems → <strong>sale SKIPPED</strong></td></tr>
+<tr><td>5</td><td>CDV reload → course remaining decremented; no new sale/INV</td></tr>
+</table>
+
+<h2>Verify</h2>
+<p>Rule N targeted (v136 + phase16/26 TFP source-grep that touch canAddNewItems/saveMode) + <code>npm run build</code>. Rule I flow-simulate asserts 'course' save deducts course but sale gates evaluate false (incl. consumables-present fixture). L1 = USER (admin+PHI): real empty treatment → tick course → save → remaining ↓, no sale.</p>
+</body>
+</html>

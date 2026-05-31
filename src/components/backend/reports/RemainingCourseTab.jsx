@@ -29,6 +29,7 @@ import { loadAllCustomersForReport } from '../../../lib/reportsLoaders.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { fmtMoney } from '../../../lib/financeUtils.js';
+import { openCustomerInNewTab } from '../../../lib/customerNavigation.js';
 import CancelCourseModal from '../CancelCourseModal.jsx';
 // Phase 16.5-ter (2026-04-29): RefundCourseModal removed — refund flow lives in tab=sales only.
 // Phase 16.5-quater (2026-04-29): ExchangeCourseModal removed from this tab —
@@ -118,6 +119,16 @@ export default function RemainingCourseTab({ clinicSettings }) {
   const handleAction = useCallback((kind, row) => {
     setModalKind(kind);
     setModalRow(row);
+  }, []);
+
+  // V135 (2026-05-31) — open the customer's detail in a NEW tab, mirroring
+  // every other report tab (SaleReportTab/CustomerReportTab/Appointment*/
+  // CRMInsightTab). Uses the canonical `openCustomerInNewTab` helper
+  // (`?backend=1&customer=<id>`, `_blank`, `noopener,noreferrer`) — safer
+  // than the inline `window.open(...)` shape the sibling reports still use
+  // (V21 tech-debt to migrate separately; NOT in scope here).
+  const handleOpenCustomer = useCallback((customerId) => {
+    openCustomerInNewTab(customerId);
   }, []);
 
   const handleModalSuccess = useCallback(() => {
@@ -229,7 +240,12 @@ export default function RemainingCourseTab({ clinicSettings }) {
             </thead>
             <tbody>
               {pagedRows.map((row) => (
-                <RemainingCourseRow key={`${row.customerId}-${row.courseId}-${row.courseIndex}`} row={row} onAction={handleAction} />
+                <RemainingCourseRow
+                  key={`${row.customerId}-${row.courseId}-${row.courseIndex}`}
+                  row={row}
+                  onAction={handleAction}
+                  onOpenCustomer={handleOpenCustomer}
+                />
               ))}
             </tbody>
           </table>

@@ -30,7 +30,7 @@ function fmtDate(iso) {
   return `${d}/${m}/${y}`;
 }
 
-export default function RemainingCourseRow({ row, onAction }) {
+export default function RemainingCourseRow({ row, onAction, onOpenCustomer }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -44,12 +44,35 @@ export default function RemainingCourseRow({ row, onAction }) {
   const terminal = isTerminalRow(row);
   const badgeClass = STATUS_BADGE_CLASS[row.status] || STATUS_BADGE_CLASS[STATUS_ACTIVE];
   const fire = (kind) => { setOpen(false); onAction?.(kind, row); };
+  // V135 (2026-05-31) — clickable customer name opens the detail tab in a
+  // NEW browser tab. Same pattern as CustomerReportTab/SaleReportTab cells.
+  // Guards: render plain text when `onOpenCustomer` is not supplied OR the
+  // row carries no `customerId` (defensive — flattenCustomerCourses always
+  // populates customerId for real rows; this also keeps tests that mount
+  // <RemainingCourseRow> without the prop rendering correctly).
+  const canOpen = typeof onOpenCustomer === 'function' && !!row.customerId;
+  const openCustomer = (e) => {
+    e?.stopPropagation?.();
+    onOpenCustomer?.(row.customerId);
+  };
 
   return (
     <tr className="border-b border-[var(--bd)] hover:bg-[var(--bg-hover)]" data-testid={`remaining-course-row-${row.courseId}`}>
       <td className="px-3 py-2 text-xs">
         <div className="font-bold text-[var(--tx-primary)]">{row.customerHN}</div>
-        <div className="text-[var(--tx-muted)]">{row.customerName}</div>
+        {canOpen ? (
+          <button
+            type="button"
+            onClick={openCustomer}
+            className="text-left text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2"
+            title="คลิกเพื่อเปิดข้อมูลลูกค้าในแท็บใหม่"
+            data-testid={`remaining-course-customer-link-${row.customerId}`}
+          >
+            {row.customerName}
+          </button>
+        ) : (
+          <div className="text-[var(--tx-muted)]">{row.customerName}</div>
+        )}
       </td>
       <td className="px-3 py-2 text-xs">
         <div className="font-bold text-[var(--tx-primary)]">{row.courseName}</div>

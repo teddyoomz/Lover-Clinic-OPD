@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>V136 — TFP retroactive course-usage edit (spec)</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; color: #18181b; line-height: 1.5; }
+  h1 { color: #c2410c; border-bottom: 3px solid #f97316; padding-bottom: 6px; }
+  h2 { color: #c2410c; margin-top: 28px; border-left: 4px solid #f97316; padding-left: 10px; }
+  h3 { color: #9a3412; }
+  code { background: #f4f4f5; padding: 1px 5px; border-radius: 4px; font-family: 'Cascadia Code', monospace; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #d4d4d8; padding: 7px 10px; text-align: left; font-size: 0.92em; vertical-align: top; }
+  th { background: #fff7ed; }
+  .mockup { border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin: 12px 0; background: #0a0a0a; color: #e5e5e5; }
+  .mockup .sec { border: 1px solid #f97316; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .mockup .hdr { color: #f97316; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+  .mockup .locked { border: 1px solid #222; border-radius: 8px; margin-top: 8px; }
+  .mockup .locked .row { display: flex; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid #1a1a1a; font-size: 0.85em; }
+  .mockup .empty { text-align: center; color: #71717a; padding: 16px; font-size: 0.85em; }
+  .mockup .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .mockup .col { border: 1px solid #222; border-radius: 8px; min-height: 90px; }
+  .mockup .colh { padding: 5px 8px; border-bottom: 1px solid #222; background: #111; font-size: 0.8em; font-weight: bold; }
+  .mockup .teal { color: #2dd4bf; } .mockup .amber { color: #fbbf24; } .mockup .orange { color: #fb923c; }
+  .mockup .chk { padding: 5px 8px; font-size: 0.8em; display: flex; gap: 6px; align-items: center; }
+  .mockup .btnrow { display: flex; gap: 6px; }
+  .mockup .btn { font-size: 0.72em; padding: 2px 7px; border-radius: 6px; border: 1px solid; }
+  .mockup .save { background: #14b8a6; color: #042f2e; font-weight: bold; padding: 8px 16px; border-radius: 8px; text-align: center; margin-top: 10px; }
+  .strike { opacity: 0.35; text-decoration: line-through; }
+  .note { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; font-size: 0.9em; }
+  .danger { background: #fef2f2; border-left: 4px solid #dc2626; padding: 8px 12px; margin: 10px 0; font-size: 0.9em; }
+  .ok { color: #15803d; font-weight: bold; } .no { color: #b91c1c; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>V136 — TFP retroactive course-usage edit</h1>
+<p><strong>Date:</strong> 2026-05-31 · <strong>File:</strong> <code>src/components/TreatmentFormPage.jsx</code> · <strong>Trigger:</strong> user — "ในหน้า TFP ทำให้ edit ข้อมูลการใช้คอร์สย้อนหลังได้ ถ้ายังไม่มีการใช้คอร์ส/ตัดคอร์สใดๆในใบนั้น แต่ถ้ามีการใช้อะไรไปแล้ว จะ edit ไม่ได้เหมือนเดิม".</p>
+
+<h2>Problem / current behaviour</h2>
+<p>Opening a finalized treatment opens TFP in edit mode, but the <strong>ข้อมูลการใช้คอร์ส</strong> section renders a <strong>locked read-only table</strong> (the user's screenshot: "รายการรักษา → ไม่พบรายการรักษา"). The gate:</p>
+<pre><code>const canAddNewItems = (mode === 'create')
+  || (loadedTreatmentStatus === 'doctor-recorded')
+  || (loadedTreatmentStatus === 'vitalsigns-recorded');</code></pre>
+<p>A normal finalized treatment → <code>canAddNewItems === false</code> → locked. This lock is a deliberate guard: editing a treatment that <em>deducted</em> courses requires reverse-then-reapply (the V43–V49 / V104 course-balance danger zone).</p>
+
+<h2>Locked decisions (brainstorm 2026-05-31)</h2>
+<table>
+<tr><th>#</th><th>Question</th><th>Answer</th></tr>
+<tr><td>Q1</td><td>What counts as "no usage" (unlock condition)?</td><td><strong>No course deducted</strong> — <code>courseItems</code> &amp; <code>treatmentItems</code> empty at load. note/vitals/images don't count; consumables/meds present don't block. (matches screenshot)</td></tr>
+<tr><td>Q2</td><td>What becomes editable when unlocked?</td><td><strong>Only the ข้อมูลการใช้คอร์ส section.</strong> consumables / take-home meds / OPD notes stay as-is.</td></tr>
+<tr><td>Q3</td><td>Buy buttons / auto-sale?</td><td><strong>Record use of EXISTING courses only.</strong> Hide ซื้อคอร์ส/สินค้า/โปรโมชัน → no auto-sale, no INV, zero money impact.</td></tr>
+</table>
+
+<h2>Design</h2>
+<h3>Render gate (NEW, distinct from canAddNewItems)</h3>
+<pre><code>// captured once at edit-load:
+loadedHasNoCourseUsage = !(t.courseItems?.length) && !(t.treatmentItems?.length)
+
+const canEditCourseUsageRetro = isEdit && !canAddNewItems && loadedHasNoCourseUsage;
+const courseUsageInteractive  = canAddNewItems || canEditCourseUsageRetro;</code></pre>
+<ul>
+<li>The course-section locked-vs-grid branch keys on <code>courseUsageInteractive</code>.</li>
+<li>The ซื้อ buttons stay on <code>canAddNewItems</code> ONLY → hidden in retro mode (Q3).</li>
+<li>consumables (สินค้าสิ้นเปลือง) + take-home meds (ยากลับบ้าน) sections keep their own <code>canAddNewItems</code> gate → stay locked (Q2).</li>
+</ul>
+
+<h3>Save: dedicated <code>saveMode = 'course'</code> = staff-save MINUS auto-sale</h3>
+<p>The interactive grid (คอร์ส / โปรโมชัน / รายการรักษา columns) is entirely "use existing courses" (checkbox → <code>toggleCourseItem</code> → <code>selectedCourseItems</code>). The 3 ซื้อ buttons (hidden) are the only buy path. So the only remaining risk is the sale path firing when a pre-existing sale exists (consumables present → <code>hasSale=true</code>). <code>saveMode='course'</code> closes that:</p>
+<table>
+<tr><th>Save step (handleSubmit)</th><th>'staff'</th><th>'course' (retro)</th></tr>
+<tr><td>Course over-deduction validation (2352)</td><td>✓</td><td class="ok">✓ (runs)</td></tr>
+<tr><td>Reverse old course deduction (2566)</td><td>✓</td><td>✓ no-op (empty)</td></tr>
+<tr><td>deductCourseItems — the new selection (2674)</td><td>✓</td><td class="ok">✓ deducts</td></tr>
+<tr><td>Stock reverse + re-deduct treatment-items (2600/2731)</td><td>✓</td><td>✓ (same as staff)</td></tr>
+<tr><td>Auto-sale create (2762, <code>!isEdit</code>)</td><td>✓</td><td class="no">SKIP</td></tr>
+<tr><td>Auto-sale edit / create-on-transition (2944)</td><td>✓</td><td class="no">SKIP (key guard)</td></tr>
+<tr><td>Status patch</td><td>clear status + completedAt</td><td>forensic <code>courseUsageEditedAt/By</code> only; preserve status/completedAt</td></tr>
+<tr><td>Editor-attribution modal (needsEditorAttribution)</td><td>✓ (staff)</td><td>— (not 'staff')</td></tr>
+</table>
+<div class="danger"><strong>Why a dedicated mode, not reuse 'staff':</strong> the 2944 edit-sale path <em>creates a new sale</em> when <code>!linkedSale</code> and runs the full deposit/wallet/points reverse-reapply saga. For a consumables-only treatment (<code>hasSale=true</code>, no course) that would fire on a course-only retro-edit — violating Q3's "zero money impact". Skipping only the sale path keeps course-balance + stock correct (matching the existing finalize path) while guaranteeing no money/INV side-effects.</div>
+<div class="note"><strong>Scope (Rule P):</strong> the locked course table exists ONLY in TFP. <code>TreatmentReadOnlyPanel</code> (timeline/split-screen) is intentionally read-only and out of scope. Single surface, single gate. No class-of-bug expansion.</div>
+
+<h2>Mockup Design</h2>
+<h3>State 1 — finalized treatment, NO course used (UNLOCKS — the screenshot case)</h3>
+<div class="mockup">
+  <div class="sec">
+    <div class="hdr">🛒 ข้อมูลการใช้คอร์ส
+      <span style="margin-left:auto" class="btnrow">
+        <span class="btn strike teal">+ ซื้อคอร์ส</span>
+        <span class="btn strike amber">+ ซื้อสินค้า</span>
+        <span class="btn strike orange">+ ซื้อโปรโมชัน</span>
+      </span>
+    </div>
+    <div style="font-size:0.75em;color:#71717a;margin:6px 0">คอร์ส/สินค้า/โปรโมชัน · <span style="color:#2dd4bf">บันทึกการใช้คอร์สเดิมของลูกค้า (ปุ่มซื้อถูกซ่อน)</span></div>
+    <div class="grid3">
+      <div class="col"><div class="colh teal">คอร์ส</div>
+        <div class="chk"><input type="checkbox"> Botox 50u · เหลือ 3/5</div>
+        <div class="chk"><input type="checkbox"> Filler · เหลือ 1/2</div>
+      </div>
+      <div class="col"><div class="colh amber">โปรโมชัน</div><div class="empty">ไม่มีโปรโมชัน</div></div>
+      <div class="col"><div class="colh orange">รายการรักษา</div><div class="empty">เลือกรายการจากคอร์ส/โปรโมชันด้านซ้าย</div></div>
+    </div>
+    <div class="save">บันทึกการใช้คอร์ส</div>
+  </div>
+</div>
+<p style="font-size:0.85em">ปุ่มซื้อ <span class="strike">ขีดฆ่า</span> = ซ่อนจริง (ไม่ render). ปุ่มบันทึก → <code>handleSubmit('course')</code>.</p>
+
+<h3>State 2 — finalized treatment that DID use a course (STAYS LOCKED — unchanged)</h3>
+<div class="mockup">
+  <div class="sec">
+    <div class="hdr">🛒 ข้อมูลการใช้คอร์ส</div>
+    <div style="font-size:0.75em;color:#71717a;margin-top:6px">รายการรักษา</div>
+    <div class="locked">
+      <div class="row"><span style="color:#f97316;font-weight:bold">รายการ</span><span style="color:#71717a">จำนวน</span></div>
+      <div class="row"><span>Botox 50u</span><span style="color:#71717a">1 ครั้ง</span></div>
+    </div>
+  </div>
+</div>
+<p style="font-size:0.85em">มีการตัดคอร์ส → read-only table เหมือนเดิม (ไม่มีปุ่มซื้อ, ไม่มี checkbox, แก้ไม่ได้).</p>
+
+<h3>Data shape (unchanged collections)</h3>
+<table>
+<tr><th>field</th><th>role in unlock / save</th></tr>
+<tr><td><code>be_treatments/{id}.detail.courseItems</code></td><td>empty ⇒ no deduction ⇒ unlock eligible</td></tr>
+<tr><td><code>...detail.treatmentItems</code></td><td>empty ⇒ "รายการรักษา" empty in UI (matches screenshot)</td></tr>
+<tr><td><code>be_customers/{id}.courses[]</code></td><td>deductCourseItems decrements remaining on save (course balance)</td></tr>
+<tr><td><code>...detail.courseUsageEditedAt/By</code> (NEW forensic)</td><td>stamps who recorded the retro course usage + when</td></tr>
+<tr><td>be_sales</td><td><span class="no">NOT touched</span> in 'course' mode</td></tr>
+</table>
+
+<h2>Flow</h2>
+<table>
+<tr><th>Stage</th><th>What happens</th></tr>
+<tr><td>1. Open</td><td>CDV/history แก้ไข chip → <code>onEditTreatment(id)</code> → TFP edit mode (existing).</td></tr>
+<tr><td>2. Edit-load</td><td>load <code>existing.detail</code>; set <code>loadedHasNoCourseUsage = !(courseItems.length) &amp;&amp; !(treatmentItems.length)</code>.</td></tr>
+<tr><td>3. Render gate</td><td><code>canEditCourseUsageRetro = isEdit &amp;&amp; !canAddNewItems &amp;&amp; loadedHasNoCourseUsage</code>. If true → course section shows the interactive grid; ซื้อ buttons stay hidden.</td></tr>
+<tr><td>4. User action</td><td>tick existing course product(s) → <code>toggleCourseItem</code> → <code>selectedCourseItems</code> + treatmentItems basket; set qty.</td></tr>
+<tr><td>5. Save click</td><td>retro → <code>handleSubmit('course')</code>.</td></tr>
+<tr><td>6a. Validate</td><td>over-deduction check vs LIVE customer.courses (2352) — blocks if exceeding remaining.</td></tr>
+<tr><td>6b. Persist</td><td><code>updateBackendTreatment</code> (courseItems + treatmentItems) + forensic status patch.</td></tr>
+<tr><td>6c. Deduct</td><td><code>deductCourseItems</code> → customer.courses[] remaining ↓ + audit (kind='use').</td></tr>
+<tr><td>6d. Sale</td><td><span class="no">SKIPPED</span> (saveMode='course') — no createBackendSale, no INV, no deposit/wallet/points.</td></tr>
+<tr><td>7. Close</td><td>onSaved → CDV reloads (live listeners) → the now-used course shows in รายการรักษา + remaining decremented.</td></tr>
+</table>
+
+<h2>Verification (Rule Q)</h2>
+<ul>
+<li><strong>Source-grep</strong>: gate exists; buy-buttons stay <code>canAddNewItems</code>; sale gates carry <code>saveMode !== 'course'</code>; parser recognizes 'course'.</li>
+<li><strong>Rule I flow-simulate</strong>: pure mirror of the 'course' save decision — asserts course deduction runs &amp; sale gates are false for a consumables-present fixture (the danger case).</li>
+<li><strong>RTL</strong>: empty treatment → grid + checkboxes rendered, ซื้อ buttons absent; used treatment → locked table, no checkboxes.</li>
+<li><strong>L1 (USER)</strong>: open a real finalized treatment with empty course section → tick a course → save → verify customer.courses remaining decremented + NO new sale/INV. (admin-gated + PHI.)</li>
+</ul>
+</body>
+</html>
