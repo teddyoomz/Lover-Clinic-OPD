@@ -166,8 +166,18 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
       // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration
       // script rewrites all legacy `branchId='main'` batches to real branch
       // IDs. Strict branchId filter via listStockBatches.
-      const list = await listStockBatches({ branchId: locationId, status: 'active' });
-      setBatches(list);
+      // V143 (2026-05-31) — load WITHOUT the status filter, then keep both
+      // 'active' AND 'depleted'. `resolveBatchStatusForRemaining` flips a batch
+      // to 'depleted' at remaining===0 (e.g. when an admin clears a negative
+      // balance to exactly 0, or a positive batch drains to 0). The prior
+      // `{status:'active'}` query EXCLUDED those → the product VANISHED from
+      // ยอดคงเหลือ entirely. User: "เคลียสินค้าจากติดลบเป็น 0 แล้วสินค้านั้นหายไป
+      // ... สินค้าไหนที่เคยคีย์เข้าระบบสต็อคต้องแสดงจำนวนเสมอแม้เป็น 0". Including
+      // 'depleted' shows the product at 0 ("หมด"). 'cancelled'/'expired' stay
+      // excluded (voided import / past-expiry — not current stock). AV166.
+      const list = await listStockBatches({ branchId: locationId });
+      const visible = (Array.isArray(list) ? list : []).filter(b => b.status === 'active' || b.status === 'depleted');
+      setBatches(visible);
     } catch (e) { console.error('[StockBalance] load failed:', e); setBatches([]); }
     finally { setLoading(false); }
   }, [locationId]);
