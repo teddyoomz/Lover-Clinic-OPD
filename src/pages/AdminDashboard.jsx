@@ -6029,8 +6029,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   return (
     /* V86 (EOD10, 2026-05-18) — admin-frontend-zone + data-section drives per-section
        neon glow (appointments tint for queue/chat/calendar). Cosmetic-shell: display
-       metadata only, NO handler/state/prop touch. */
-    <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-hidden admin-frontend-zone" data-section="appointments">
+       metadata only, NO handler/state/prop touch.
+       2026-06-01 (AV170): overflow-x-CLIP (not -hidden). `overflow-x: hidden` coerces
+       computed `overflow-y: auto`, turning this zone into a scroll-container that
+       captures the sticky top menu ([data-testid="admin-top-menu"]) → sticky silently
+       no-ops. `overflow-x: clip` clips horizontally WITHOUT creating a scroll-container,
+       so the sticky header sticks to the viewport. Verified in a real browser. DO NOT
+       revert to overflow-x-hidden while the menu is sticky. */
+    <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-clip admin-frontend-zone" data-section="appointments">
 
       {toastMsg && (
         <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] flex items-center gap-4 animate-in slide-in-from-bottom-5 z-[100] border border-blue-400">
@@ -6047,7 +6053,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
            badges (chat/queue/no-dep/dep) with same colors + same blink for chat, Notif popover
            preserved verbatim, BranchSelector / ThemeToggle / ClinicLogo / online indicator /
            signOut all wired through identical props. */}
-      <header className="menu-shell mb-6 sm:mb-8 relative z-20" data-testid="admin-top-menu">
+      {/* 2026-06-01 (AV170): sticky top-0 — the top menu stays pinned while the page
+          scrolls (was `relative`, which scrolled away with content). Requires the parent
+          .admin-frontend-zone to use overflow-x-CLIP not -hidden (see note above). z-20
+          keeps it above page-flow content; overlays (modals z-[60]+, toast z-[100],
+          bottom dock z-[90]) stay above it. */}
+      <header className="menu-shell mb-6 sm:mb-8 sticky top-0 z-20" data-testid="admin-top-menu">
         <div className="menu-grad-line h-[3px] w-full rounded-t-2xl"></div>
 
         {/* ─── Original mobile Row 1 — REMOVED, replaced by .menu-mobile + .menu-bottom-dock ─── */}
@@ -7464,7 +7475,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1" id="qr-panel">
-            <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
+            {/* 2026-06-01 (AV170): top-24 (was top-8) — clears the now-sticky ~60px top
+                menu so this sticky QR sidebar doesn't overlap it when scrolling. */}
+            <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-24 shadow-[var(--shadow-panel)] flex flex-col items-center">
               <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} style={{color: ac}} /> QR Code / ลิงก์
               </h2>
