@@ -1,30 +1,29 @@
 ---
-updated_at: "2026-05-28 EOD+6 — V132 + V133/V133-bis + V134 (reports-revenue: course category, chart, deposit display) SHIPPED + DEPLOYED + prod-verified."
-status: "Deployed + live. Reports-revenue (6c99a3d7) deployed. Extended-suite spawned WIP now committed + runnable (4419 pass / 280 pre-existing stale — follow-up). Default suite 15154/0 = deploy gate, unaffected."
+updated_at: "2026-05-31 — V135 + V136 + V137 SHIPPED + DEPLOYED + prod-verified."
+status: "Deployed + live. master = prod = 409804fc @ lover-clinic-app.vercel.app. Frontend/lib/CSS only → no Probe-Deploy-Probe."
 branch: "master"
-last_commit: "64c75247 (docs). Code: 6c99a3d7 (V132+V133+V134, DEPLOYED) + 11793503 (extended-suite runnable, not deployed — test/config only)."
-tests: "NO re-run at session-end (per rule). This session: default suite 15154 pass / 0 fail + build clean; phase10-revenue 27/27 (extended, via temp config); real-prod Rule R diags (categories surface; money conserved, no fractions); chart full-bar+colors+100%-legend measured in real browser. Screenshot tool timed out (infra) — DOM-measured instead."
+last_commit: "409804fc (V135 reports-link + V136 TFP retro course-usage + V137 staff-chat URLs)."
+tests: "NO re-run at session-end (per rule). This session: full vitest 15199/0 (V136 impl turn) + targeted 350/0 (V136 + deduct/stock siblings) + V135 54/0 + V137 43/0 + build clean + V136 TRUE-L2 e2e on real prod 14/0 (shipped deductCourseItems/deductStockForTreatment via custom-token auth)."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "6c99a3d7 LIVE (vercel --prod, aliased) — V132/V133/V133-bis/V134 all live."
+production_commit: "409804fc LIVE (vercel --prod, aliased) — V135/V136/V137 all live."
 firestore_rules_version: "UNCHANGED — frontend/lib/CSS only (no rules/storage/index/cron → no Probe-Deploy-Probe)."
 ---
 
-# Active Context — V132 + V133/bis + V134 reports-revenue (2026-05-28 EOD+6)
+# Active Context — V135 + V136 + V137 (2026-05-31)
 
 ## State
-- master = `6c99a3d7` deployed; prod LIVE @ lover-clinic-app.vercel.app. Reports-revenue: course-category resolution + RadialBars chart + deposit display all fixed + live.
-- Four `/systematic-debugging` rounds this session, all reports-revenue, triggered by the user viewing the tab.
-- ⚠ Working tree has ~150 uncommitted `tests/extended/**` + `package.json` + `vitest.extended.config.js` + `scripts/_tmp-fix-extended-imports.mjs` — from the SPAWNED "fix extended suite" task, NOT this session + NOT verified by me + NOT deployed.
+- master = prod = `409804fc` deployed + aliased @ lover-clinic-app.vercel.app. First CODE deploy since prod 6c99a3d7 (was docs-only ahead).
+- 3 independent features shipped this session, all frontend/lib/CSS only.
+- Working tree clean; everything committed + pushed.
 
-## What this session shipped (detail → checkpoint 2026-05-28-reports-revenue-category-chart-deposit.md)
-- **V132** — course หมวดหมู่ showed "ไม่ระบุ" everywhere → canonical `resolveCourseCategory/ProcedureType/DisplayName` (reads live `be_courses.courseCategory`; future categories auto-surface, no enum). AV153.
-- **V133/V133-bis** — RadialBars legend summed ~279% + distorted spiral → `computeRadialBarLayout` (legend %=value/total Σ100%; arc=value/max → biggest=full ring; fit-to-radius) + max-distinct palette. AV154.
-- **V134** — หักมัดจำ fractions (4,941.35) from proportional split of ROUND deposits → gross-per-row + sale-level footer summary + net. Money was already correct + conserved (real-prod 8,000=8,000). AV155.
-- Also fixed `tests/extended/phase10-revenue.test.js` broken imports (`../`→`../../`) so the V134 contract test runs (27/27).
+## What this session shipped (detail → checkpoint 2026-05-31-v135-v136-v137-clickables-retro-course.md)
+- **V135** — reports-remaining-course customer name → `openCustomerInNewTab` (was plain text). Class-of-bug sweep: sole report tab missing the link. `tests/v135-*` (54/0).
+- **V136** — TFP: edit ข้อมูลการใช้คอร์ส retroactively ONLY when no course deducted (`canEditCourseUsageRetro`). NEW `saveMode='course'` = staff-save MINUS auto-sale (course balance + branch stock deduct identically; skips createBackendSale/INV/wallet/deposit/points). ซื้อ buttons + consumables/meds stay `canAddNewItems`. AV156. brainstorm Q1=A/Q2=A/Q3=B. flow-simulate (source-locked, 23) + TRUE-L2 e2e real prod 14/0.
+- **V137** — staff chat: http/https URLs → clickable new-tab links (`parseMessageBody` 'url' segment + `<a target=_blank rel=noopener>`); scheme-restricted (no XSS). AV157. `tests/v137-*` (43/0).
 
 ## Next action
 Idle / await user.
 
 ## Outstanding user-triggered actions
-- **Extended suite (`tests/extended/`) — handled this session**: spawned-task fix committed (NEW `vitest.extended.config.js` + `package.json` `--config` + 148 import-path fixes `../`→`../../`). `npm run test:extended` RUNS now → **4419 pass / 280 fail**. The 280 = PRE-EXISTING stale-assertion drift (suite frozen since session-11; ~1yr refactors: V50/branch-scope/V132/Phase28/marketing). NOT import errors, NOT deploy-gating. **Follow-up (large): triage → rewrite/delete obsolete extended assertions.** Default `npm test` = 15154/0 green, unaffected.
-- L1 hands-on (auth-gated): reports-revenue tab — categories show real names; chart full-bar + distinct colors + legend 100%; table gross-per-row + footer net.
+- **L1 hands-on (prod, all 3)**: V136 — open finalized treatment with empty course section → tick course → save → course remaining ↓ + branch stock ↓ + NO new sale (TRUE-L2 proved the shipped fns; UI-click L1 = user). V135 — click customer name in reports-remaining-course → new tab. V137 — send a URL in staff chat → blue link → opens new tab.
+- **Pre-existing (not this session)**: extended-suite 280 PRE-EXISTING stale tests — triage/delete (large; NOT deploy-gating; npm test=15199/0 green).
