@@ -15,9 +15,23 @@ import { ChevronDown } from 'lucide-react';
 import { StaffChatMessage } from './StaffChatMessage.jsx';
 import { groupMessagesByDay } from '../../lib/staffChatDayGroups.js';
 
+// (2026-06-01) Reliable scroll-to-bottom. The list previously auto-scrolled via a
+// single endRef.scrollIntoView({behavior:'smooth'}) keyed on [lastMessageId]; on a
+// COLD tab open that smooth animation was interrupted by mount re-renders (cursor
+// hydration + IntersectionObserver + unread memo) and UNDERSHOT the true bottom —
+// prod evidence: scrollTop settled 4538 of 5695 (~1158px short) and stuck there
+// because the effect only re-fires on a NEW last-message id, so it never
+// self-corrected (user: opened "scrolled up", had to press the jump button every
+// time). Setting container.scrollTop = scrollHeight clamps to the true bottom
+// instantly — no animation to interrupt. Verified on prod (→ distanceFromBottom 0).
+export function scrollContainerToBottom(el) {
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
 export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete, onScrolledToBottom, unreadCount = 0 }) {
   const endRef = useRef(null);
   const bottomSentinelRef = useRef(null);
+  const listRef = useRef(null);
   // (2026-06-01) true when the bottom sentinel is in view. Default true so the
   // button is hidden on first mount (the auto-scroll effect pins to the bottom).
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -26,8 +40,16 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   // listener caps at 50, so messages.length stops changing past the cap).
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
 
+  // (2026-06-01) Auto-scroll to the TRUE bottom on open + on every new last
+  // message. Instant container scroll (immediate + one rAF to catch a 1-frame-late
+  // layout) — replaces the undershoot-prone smooth scrollIntoView. Still keyed on
+  // [lastMessageId] so a same-snapshot re-fire never yanks a user who scrolled up
+  // (V140 contract preserved).
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    scrollContainerToBottom(listRef.current);
+    if (typeof requestAnimationFrame !== 'function') return undefined;
+    const id = requestAnimationFrame(() => scrollContainerToBottom(listRef.current));
+    return () => cancelAnimationFrame(id);
   }, [lastMessageId]);
 
   // V82 observer — fires onScrolledToBottom on intersect (read cursor).
@@ -74,6 +96,7 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   return (
     <div className="relative flex-1 flex flex-col min-h-0">
       <div
+        ref={listRef}
         data-testid="staff-chat-message-list"
         className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-2"
         style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}

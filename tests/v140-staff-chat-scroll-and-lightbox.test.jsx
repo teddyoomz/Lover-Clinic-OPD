@@ -31,30 +31,50 @@ const mk = (n, lastId) =>
     createdAt: 1000 + i,
   }));
 
+// (2026-06-01 V21-fixup) The auto-scroll MECHANISM changed from
+// endRef.scrollIntoView({behavior:'smooth'}) → container.scrollTop = scrollHeight
+// (cold-tab-open undershoot fix; prod evidence scrollTop 4538/5695). V140's INTENT
+// is unchanged + still asserted below, now outcome-based: a new last-message id
+// drives the container to its true bottom (scrollHeight); a same-snapshot re-render
+// does NOT (no yank-while-reading). patchScroll mocks the layout-less jsdom element.
+function patchScroll(el, height) {
+  let top = 0;
+  Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(el, 'scrollTop', { configurable: true, get: () => top, set: (v) => { top = v; } });
+  return {
+    setTop: (v) => { top = v; },
+    getTop: () => top,
+  };
+}
+const listEl = () => document.querySelector('[data-testid="staff-chat-message-list"]');
+
 describe('V140.Bug1 · staff-chat auto-scroll fires on a new message even at the 50-cap (AV160)', () => {
-  it('re-scrolls when the last message changes but length stays 50 (the reported bug)', () => {
+  it('re-scrolls to the true bottom when the last message changes but length stays 50 (the reported bug)', () => {
     const { rerender } = render(<StaffChatMessageList messages={mk(50, 'old')} ownDeviceId="x" />);
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1); // initial mount
+    const sc = patchScroll(listEl(), 9999);
+    sc.setTop(0); // pretend not pinned to bottom
 
     // A new send at the cap: array length is STILL 50, only the last id changes.
     // Old code `[messages.length]` → would NOT fire (this is exactly the bug).
     rerender(<StaffChatMessageList messages={mk(50, 'new')} ownDeviceId="x" />);
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(sc.getTop()).toBe(9999); // scrolled to the true bottom
   });
 
   it('does NOT re-scroll when the same snapshot re-renders (new array ref, same last id)', () => {
     const msgs = mk(50, 'same');
     const { rerender } = render(<StaffChatMessageList messages={msgs} ownDeviceId="x" />);
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    const sc = patchScroll(listEl(), 9999);
+    sc.setTop(3000); // user scrolled up to read history
     rerender(<StaffChatMessageList messages={[...msgs]} ownDeviceId="x" />); // identity changes, last id same
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1); // no redundant yank
+    expect(sc.getTop()).toBe(3000); // no redundant yank — effect didn't re-fire
   });
 
-  it('still scrolls on the very first messages (length growing 0→N path unaffected)', () => {
+  it('still scrolls to the bottom on the very first messages (length growing 0→N path unaffected)', () => {
     const { rerender } = render(<StaffChatMessageList messages={mk(1, 'a')} ownDeviceId="x" />);
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    const sc = patchScroll(listEl(), 9999);
+    sc.setTop(0);
     rerender(<StaffChatMessageList messages={mk(2, 'b')} ownDeviceId="x" />);
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(sc.getTop()).toBe(9999);
   });
 
   it('source: scroll effect keys on lastMessageId, never [messages.length]', () => {
