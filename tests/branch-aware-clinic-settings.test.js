@@ -146,7 +146,9 @@ describe('BAC.B — print views use useEffectiveClinicSettings', () => {
 // ============================================================================
 describe('BAC.C — SaleTab table — รายการขาย column + amount+badge inline', () => {
   it('C.1 table header includes รายการขาย column', () => {
-    expect(saleTabSrc).toMatch(/\['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดรวม','สถานะ','จัดการ'\]/);
+    // V21 fixup (2026-05-31 + 2026-06-01): header now 8-col — added 'ยอดชำระจริง'
+    // and renamed 'ยอดรวม'→'ยอดสุทธิ'.
+    expect(saleTabSrc).toMatch(/\['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดสุทธิ','ยอดชำระจริง','สถานะ','จัดการ'\]/);
   });
 
   it('C.2 imports formatOrderItemsSummary helper', () => {
@@ -176,15 +178,13 @@ describe('BAC.C — SaleTab table — รายการขาย column + amoun
     expect(saleTabSrc).toMatch(/category:\s*['"]medication['"]/);
   });
 
-  it('C.4 ยอดรวม cell shows amount AND badge together (no XOR)', () => {
-    // Anti-regression: must NOT have the OLD ternary that hid amount when source was set
-    expect(saleTabSrc).not.toMatch(/sale\.source === 'treatment' \? <span[^>]+>จาก OPD<\/span>\s*: sale\.source === 'addRemaining'/);
-    // NEW: amount is always rendered + badge appears as inline tag (use && conditional)
-    expect(saleTabSrc).toMatch(/sale\.source === 'treatment' && \(/);
-    expect(saleTabSrc).toMatch(/sale\.source === 'exchange' && \(/);
-    expect(saleTabSrc).toMatch(/จาก OPD/);
-    expect(saleTabSrc).toMatch(/เปลี่ยนสินค้า/);
-    // Amount span exists alongside badges (always rendered)
-    expect(saleTabSrc).toMatch(/<span>\{fmtMoney\(sale\.billing\?\.netTotal\)\}\s*฿<\/span>/);
+  it('C.4 money cell is clean nowrap; source badge moved to SaleSourceTag (2026-06-01 redesign)', () => {
+    // V21 fixup: the 2026-06-01 redesign moved the source badge OUT of the money
+    // column into รายการขาย via <SaleSourceTag/>; the net amount is now a clean
+    // single-line nowrap td (no inline badge / flex-wrap).
+    expect(saleTabSrc).not.toMatch(/sale\.source === 'treatment' && \(/);            // badges no longer inline in money cell
+    expect(saleTabSrc).not.toMatch(/justify-end gap-1\.5 flex-wrap/);                // old money-cell flex-wrap gone
+    expect(saleTabSrc).toContain('<SaleSourceTag source={sale.source}');             // moved to รายการขาย
+    expect(saleTabSrc).toMatch(/fmtMoney\(sale\.billing\?\.netTotal\)\}\s*฿<\/td>/);  // clean nowrap td (no <span> wrapper)
   });
 });

@@ -114,11 +114,14 @@ describe('V33CR.C — AppointmentFormModal assistants picker (Phase 15.7: show a
 
 // ============================================================================
 describe('V33CR.D — SaleTab "จาก OPD Card" label', () => {
-  it('D.1 OPD badge text is "จาก OPD Card" (anti-regression on rename)', () => {
-    expect(saleTabSrc).toMatch(/จาก OPD Card/);
-    // Anti-regression: lone "จาก OPD" (without " Card") in the badge JSX
-    // must NOT exist. Use a more specific pattern.
-    const badgeBlock = saleTabSrc.match(/sale\.source === 'treatment' &&[\s\S]+?<\/span>/);
-    expect(badgeBlock?.[0]).toMatch(/จาก OPD Card/);
+  it('D.1 OPD badge text is "จาก OPD Card" (now in SaleRowParts — 2026-06-01 redesign)', () => {
+    // V21 fixup: the source tag moved out of SaleTab into SaleRowParts.jsx
+    // (SaleSourceTag). The full label "จาก OPD Card" is preserved there.
+    const saleRowPartsSrc = read('src/components/backend/SaleRowParts.jsx');
+    expect(saleRowPartsSrc).toMatch(/จาก OPD Card/);
+    // Anti-regression: the treatment tag label must be the full "จาก OPD Card" (not lone "จาก OPD")
+    expect(saleRowPartsSrc).toMatch(/treatment:\s*\{[^}]*label:\s*'จาก OPD Card'/);
+    // SaleTab wires it via <SaleSourceTag>
+    expect(saleTabSrc).toContain('<SaleSourceTag source={sale.source}');
   });
 });
