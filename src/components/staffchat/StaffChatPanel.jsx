@@ -11,8 +11,18 @@
 import React, { useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { StaffChatHeader } from './StaffChatHeader.jsx';
+import { useStaffChatPanelResize } from '../../hooks/useStaffChatPanelResize.js';
 
 export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
+  // (2026-05-31) Desktop-only resize: drag the top-left grip to resize
+  // (bottom-right anchored); size persisted per-device + restored on remount
+  // (minimize-reopen / auto-popup). Mobile (<768px) → isDesktop=false →
+  // existing fullscreen overlay unchanged (no grip, no inline size).
+  const { isDesktop, size, panelRef, gripProps } = useStaffChatPanelResize();
+  // Desktop only: inline size overrides md:w-[360px] md:h-[480px]. Mobile:
+  // null → the bottom-2/right-2/left-2/top-[20vh] overlay classes apply.
+  const desktopSize = isDesktop ? { width: size.width + 'px', height: size.height + 'px' } : null;
+
   // V82-fix7-bis — body scroll lock on mount, restore on unmount. CSS rule
   // in src/index.css `@media (max-width: 767px) { html[data-staff-chat-open] { overflow: hidden; touch-action: none; } }`
   // ensures the lock applies ONLY on mobile (desktop panel is 360×480 corner-anchored, doesn't need lock).
@@ -25,14 +35,27 @@ export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName
 
   return (
     <div
+      ref={panelRef}
       data-testid="staff-chat-panel"
       className="fixed
         bottom-2 right-2 left-2 top-[20vh] md:top-auto md:left-auto md:bottom-4 md:right-4
         md:w-[360px] md:h-[480px]
         bg-[var(--bg-card)] border border-[var(--bd-strong)] rounded-xl shadow-2xl
         flex flex-col overflow-hidden overscroll-contain z-[9000]"
-      style={{ touchAction: 'pan-y' }}
+      style={{ touchAction: 'pan-y', ...desktopSize }}
     >
+      {/* (2026-05-31) Desktop resize grip — top-left corner. Drag = resize
+          (bottom-right anchored); double-click = reset to 360×480. Mobile: not
+          rendered (isDesktop=false). z-10 so it sits above the rose header. */}
+      {isDesktop && (
+        <div
+          {...gripProps}
+          className="absolute top-0 left-0 w-[18px] h-[18px] z-[10] group"
+          title="ลากเพื่อปรับขนาด · ดับเบิลคลิกเพื่อรีเซ็ต"
+        >
+          <span className="absolute top-[4px] left-[4px] w-[9px] h-[9px] border-t-2 border-l-2 border-white/70 group-hover:border-white rounded-tl-sm pointer-events-none" />
+        </div>
+      )}
       <StaffChatHeader
         branchName={branchName}
         onMinimize={onMinimize}
