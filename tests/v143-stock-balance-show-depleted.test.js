@@ -17,9 +17,11 @@ import path from 'node:path';
 const PANEL = readFileSync(path.resolve(process.cwd(), 'src/components/backend/StockBalancePanel.jsx'), 'utf8');
 
 describe('V143.SG — StockBalancePanel shows depleted-at-0 products', () => {
-  it('SG1 — load() drops the {status:active} filter (loads all, then client-filters)', () => {
-    expect(PANEL).toMatch(/listStockBatches\(\{ branchId: locationId \}\)/);
-    // anti-regression: the old active-only query must NOT come back
+  it('SG1 — balance loads via the LIVE listener (V143-ter), drops the {status:active} filter', () => {
+    // V143-ter (Task B real-time) moved the load from one-shot listStockBatches to the
+    // live listenToStockBatchesByBranch; the active-only-filter anti-regression stands.
+    expect(PANEL).toMatch(/listenToStockBatchesByBranch\(\{ branchId: locationId \}/);
+    expect(PANEL).not.toMatch(/await listStockBatches\(/);
     expect(PANEL).not.toMatch(/listStockBatches\(\{ branchId: locationId, status: 'active' \}\)/);
   });
   it('SG2 — keeps status ∈ {active, depleted} (depleted = drained/cleared to 0)', () => {

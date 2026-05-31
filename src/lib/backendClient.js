@@ -5713,6 +5713,36 @@ export async function listStockBatches({ productId, branchId, status } = {}) {
   return batches;
 }
 
+// V143-ter (2026-05-31) — LIVE stock-balance listener. StockBalancePanel used a
+// one-shot listStockBatches getDocs → a deduction from ANY surface (treatment /
+// sale / adjust / import) on ANY device did NOT update the open ยอดคงเหลือ page
+// until manual reload. User: "หน้ายอดคงเหลือไม่แสดง real time ... ทุกคนที่เปิดหน้านี้
+// ต้องเห็นเหมือนกันแบบ real time ทันที". This onSnapshot pushes every batch change
+// to all viewers instantly. BS-13 safe-by-default (no whole-collection fallback
+// unless allBranches:true). Same query as listStockBatches (branchId only — the
+// caller client-filters status ∈ {active,depleted} per V143/AV166). AV167.
+export function listenToStockBatchesByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : '');
+  if (!effectiveBranchId && !allBranches) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  const constraints = [];
+  if (!allBranches && effectiveBranchId) constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  const q = constraints.length ? query(stockBatchesCol(), ...constraints) : stockBatchesCol();
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      list.sort((a, b) => (a.receivedAt || '').localeCompare(b.receivedAt || ''));
+      if (typeof onChange === 'function') onChange(list);
+    },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
 /** Fetch one order by id (includes items). */
 export async function getStockOrder(orderId) {
   const snap = await getDoc(stockOrderDoc(orderId));

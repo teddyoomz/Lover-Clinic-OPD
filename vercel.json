@@ -42,6 +42,9 @@
     "api/cron/stock-movement-retention.js": {
       "maxDuration": 300
     },
+    "api/cron/stock-lot-cleanup.js": {
+      "maxDuration": 300
+    },
     "api/cron/chart-edit-session-sweep.js": {
       "maxDuration": 60
     },
@@ -73,6 +76,7 @@
     { "path": "/api/cron/line-reminder-retry", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/whole-system-backup-daily", "schedule": "0 20 * * *" },
     { "path": "/api/cron/stock-movement-retention", "schedule": "30 20 * * *" },
+    { "path": "/api/cron/stock-lot-cleanup", "schedule": "45 20 * * *" },
     { "path": "/api/cron/chart-edit-session-sweep", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/staff-chat-retention-sweep", "schedule": "45 19 * * *" },
     { "path": "/api/cron/chat-history-retention-sweep", "schedule": "0 21 * * *" },

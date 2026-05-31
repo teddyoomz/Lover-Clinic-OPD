@@ -370,6 +370,19 @@ export const listenToChatHistoryByBranch = (opts = {}, onChange, onError) => {
   return raw.listenToChatHistoryByBranch(resolved, onChange, onError);
 };
 
+// V143-ter (2026-05-31) — LIVE stock-balance listener Layer 2 wrapper (Task B
+// real-time). Auto-injects the selected branchId when not explicit; passes
+// allBranches through. StockBalancePanel passes an explicit locationId (branch
+// OR central warehouse), so the auto-inject is a defensive default. AV167.
+export const listenToStockBatchesByBranch = (opts = {}, onChange, onError) => {
+  const hasExplicitBranchId = typeof opts.branchId === 'string' && opts.branchId.length > 0;
+  const isAllBranches = opts.allBranches === true;
+  const resolved = (hasExplicitBranchId || isAllBranches)
+    ? opts
+    : { ...opts, branchId: resolveSelectedBranchId() };
+  return raw.listenToStockBatchesByBranch(resolved, onChange, onError);
+};
+
 // V43-followup (2026-05-19 NIGHT+5 EOD+1) — Layer 2 wrapper for be_products
 // live listener. BS-18 invariant. Auto-injects resolveSelectedBranchId() when
 // caller passes {}; safe-by-default empty emit when no branch resolvable.
