@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirmed-card highlight + Course-step polish — Design Spec</title>
+<style>
+  :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666;
+          --sky:#0284c7; --amber:#d97706; --violet:#7c3aed; --emerald:#059669; --teal:#0d9488; }
+  body{font-family:-apple-system,'Segoe UI','Sarabun',sans-serif;max-width:980px;margin:2em auto;padding:1em;line-height:1.65;color:#222}
+  h1{border-bottom:2px solid var(--accent);padding-bottom:.3em}
+  h2{border-bottom:1px solid var(--bd);padding-bottom:.2em;margin-top:2em}
+  h3{margin-top:1.4em;font-size:1.02em}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:.9em}
+  pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;font-size:.86em}
+  blockquote{border-left:4px solid var(--accent);background:var(--bg-meta);padding:.5em 1em;border-radius:0 6px 6px 0;color:var(--tx-muted)}
+  table{border-collapse:collapse;width:100%;margin:1em 0}
+  th,td{border:1px solid var(--bd);padding:.5em .8em;text-align:left;vertical-align:top}
+  th{background:var(--bg-meta)}
+  .mockup{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:1.2em;margin:1em 0;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .mockup-label{font-size:.75em;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-muted);margin-bottom:.6em;font-weight:700}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  /* faithful-ish inline render of the real components (dark surface) */
+  .surf{background:#0f0f0f;border:1px solid #222;border-radius:12px;padding:12px;color:#e5e7eb}
+  .surfL{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;color:#0f172a}
+  .acard{position:relative;border-radius:12px;border:1px solid #222;background:#0f0f0f;padding:10px 12px 10px 16px;margin-bottom:8px;overflow:hidden}
+  .acard .nm{color:#7dd3fc;font-weight:800;font-size:15px}
+  .acard .sub{color:#6b7280;font-size:11px;margin-top:2px}
+  .acard .hn{color:#6b7280;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+  .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .bar.amber{background:linear-gradient(#fbbf24,#ea580c)} .bar.sky{background:linear-gradient(#38bdf8,#0891b2)}
+  .chip{float:right;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:700}
+  .chip.amber{background:rgba(245,158,11,.18);color:#fcd34d;border:1px solid rgba(245,158,11,.4)}
+  .chip.sky{background:rgba(56,189,248,.18);color:#bae6fd;border:1px solid rgba(56,189,248,.45)}
+  .confA{border-color:rgba(56,189,248,.5)!important;background:rgba(56,189,248,.06)!important}
+  /* stepper */
+  .stp{display:flex;align-items:flex-start;gap:2px;margin-top:8px}
+  .stp .lab{font-size:10px;color:#6b7280;font-weight:700;margin-right:6px;align-self:center}
+  .st{display:flex;flex-direction:column;align-items:center;min-width:58px}
+  .dot{width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;border:2px solid}
+  .d-amber{background:linear-gradient(135deg,#f59e0b,#b45309);border-color:#fcd34d;color:#fff}
+  .d-teal{background:linear-gradient(135deg,#14b8a6,#0f766e);border-color:#5eead4;color:#fff}
+  .d-emer{background:linear-gradient(135deg,#10b981,#047857);border-color:#6ee7b7;color:#fff}
+  .d-viol{background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-color:#c4b5fd;color:#fff}
+  .d-warn{background:rgba(245,158,11,.1);border-color:#f59e0b;color:#fcd34d}
+  .d-mut{background:#050505;border-color:#333;color:#4b5563}
+  .sl{font-size:10px;font-weight:700;margin-top:5px}
+  .sl.on{color:#e5e7eb}.sl.mut{color:#6b7280}.sl.warn{color:#fcd34d}
+  .stm{font-size:9px;color:#9ca3af;font-family:monospace;margin-top:2px}
+  .cn{flex:1;height:2px;margin-top:11px}
+  .cn.g{background:#222}.cn.teal{background:linear-gradient(90deg,#5eead4,#0f766e)}.cn.amber{background:linear-gradient(90deg,#fcd34d,#b45309)}.cn.av{background:linear-gradient(90deg,#fcd34d,#7c3aed)}
+  .new{color:#7c3aed;font-weight:800}
+  .del{color:#b91c1c;text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<h1>Confirmed-card highlight + reorder · Course-step polish (Frontend นัดหมาย + ประวัติการรักษา)</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-31 · <strong>Status:</strong> Approved by user (decisions locked) ·
+  <strong>Surfaces:</strong> Frontend "นัดหมาย วันนี้" card list + the OPD stepper + Customer-detail treatment history ·
+  <strong>Theme:</strong> Dark + Light · <strong>Live mockup:</strong> <code>public/brainstorm-v2-grounded.html</code> (grounded in real component source) ·
+  <strong>Plan:</strong> [link after writing-plans]
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Three user-requested refinements (all cosmetic-shell — no flow/logic change), grounded in the REAL components:</p>
+<ul>
+  <li><strong>① Confirmed appointments don't stand out + don't bubble up.</strong> In the Frontend "วันนี้" list, a confirmed (กดคอนเฟิร์มนัด → <code>status='confirmed'</code> = "ยืนยันแล้ว") appointment only gets a thin left accent bar — easy to miss. Staff want it to (a) change the whole card colour clearly (theme-correct both Dark + Light) and (b) jump to the TOP of "today" (then sorted by time among confirmed), real-time. Reason: late walk-ins mean staff confirm out of time-order and need the confirmed queue surfaced first.</li>
+  <li><strong>② The "course" OPD step looks like an alarm.</strong> The finished-but-no-course-deducted state renders amber <code>! ยังไม่ตัด</code> (warning styling). Some visits legitimately deduct no course (e.g. wound check / ดูแผล) → the amber "!" is too harsh / reads as an error. Make it a muted/faded dot like the neutral steps, labelled "ไม่ตัดคอร์ส".</li>
+  <li><strong>③ The course step is missing from the customer-detail treatment history.</strong> The Frontend "วันนี้" OPD card shows a 4-step stepper incl. "course"; the customer-detail (<code>customer=LC-…</code>) treatment-history row shows only 3 steps. Add the course step there too — keeping that view's existing coloured (teal/amber) connectors (option 3B).</li>
+</ul>
+
+<h2>Mockup Design</h2>
+<p>Faithful inline renders of the FINAL chosen states (real gradient dots / real tokens / real sky "ยืนยันแล้ว" colour). Full interactive comparison: <code>public/brainstorm-v2-grounded.html</code>.</p>
+
+<!-- ① -->
+<div class="mockup">
+  <div class="mockup-label">① A — confirmed = sky-tinted box + sky chip + sky bar, reordered to TOP (Dark)</div>
+  <div class="surf">
+    <div class="acard confA"><span class="bar sky"></span><span class="chip sky">ยืนยันแล้ว</span><div class="hn">HN · 000034</div><div class="nm">มานี รักเรียน</div><div class="sub">📅 10:30 · ฉีดฟิลเลอร์</div></div>
+    <div class="acard confA"><span class="bar sky"></span><span class="chip sky">ยืนยันแล้ว</span><div class="hn">HN · 000077</div><div class="nm">วีระ ทองดี</div><div class="sub">📅 13:00 · เลเซอร์</div></div>
+    <div class="acard"><span class="bar amber"></span><span class="chip amber">รอยืนยัน</span><div class="hn">HN · 000012</div><div class="nm">สมชาย ใจดี</div><div class="sub">📅 09:00 · ปรึกษา</div></div>
+    <div class="acard"><span class="bar amber"></span><span class="chip amber">รอยืนยัน</span><div class="hn">HN · 000051</div><div class="nm">ปิติ มั่นคง</div><div class="sub">📅 11:15 · ดูแผล</div></div>
+  </div>
+</div>
+
+<!-- ② -->
+<div class="pair">
+  <div class="mockup">
+    <div class="mockup-label">② BEFORE (real) — amber "! ยังไม่ตัด"</div>
+    <div class="surf"><div class="stp"><span class="lab">สถานะ OPD</span>
+      <div class="st"><div class="dot d-mut">−</div><div class="sl mut">ข้าม</div><div class="stm">—</div></div><div class="cn g"></div>
+      <div class="st"><div class="dot d-amber">✓</div><div class="sl on">แพทย์</div><div class="stm">13:02</div></div><div class="cn g"></div>
+      <div class="st"><div class="dot d-warn">!</div><div class="sl warn">ยังไม่ตัด</div><div class="stm">—</div></div><div class="cn g"></div>
+      <div class="st"><div class="dot d-emer">✓</div><div class="sl on">เสร็จ</div><div class="stm">11:42</div></div>
+    </div></div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">② A AFTER — muted "ไม่ตัดคอร์ส"</div>
+    <div class="surf"><div class="stp"><span class="lab">สถานะ OPD</span>
+      <div class="st"><div class="dot d-mut">−</div><div class="sl mut">ข้าม</div><div class="stm">—</div></div><div class="cn g"></div>
+      <div class="st"><div class="dot d-amber">✓</div><div class="sl on">แพทย์</div><div class="stm">13:02</div></div><div class="cn g"></div>
+      <div class="st"><div class="dot d-mut">–</div><div class="sl mut">ไม่ตัดคอร์ส</div><div class="stm">—</div></div><div class="cn g"></div>
+      <div class="st"><div class="dot d-emer">✓</div><div class="sl on">เสร็จ</div><div class="stm">11:42</div></div>
+    </div></div>
+  </div>
+</div>
+<p style="font-size:.9em;color:#555">เมื่อ <b>ตัดคอร์สแล้ว</b> ขั้นนี้ = ม่วง ✓ "คอร์ส" (เกรเดียนต์ violet จริง) เหมือนเดิม — เปลี่ยนเฉพาะตอน "ยังไม่ได้ตัด".</p>
+
+<!-- ③ -->
+<div class="pair">
+  <div class="mockup">
+    <div class="mockup-label">③ BEFORE (real ประวัติ) — 3 ขั้น, เส้น teal/amber</div>
+    <div class="surf"><div class="stp">
+      <div class="st"><div class="dot d-teal">✓</div><div class="sl on">ซักประวัติ</div><div class="stm">11:58</div></div><div class="cn teal"></div>
+      <div class="st"><div class="dot d-amber">✓</div><div class="sl on">แพทย์</div><div class="stm">13:04</div></div><div class="cn amber"></div>
+      <div class="st"><div class="dot d-emer">✓</div><div class="sl on">เสร็จ</div><div class="stm">13:09</div></div>
+    </div></div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">③ B AFTER — เพิ่มขั้น <span class="new">คอร์ส</span>, คงเส้น teal/amber</div>
+    <div class="surf"><div class="stp">
+      <div class="st"><div class="dot d-teal">✓</div><div class="sl on">ซักประวัติ</div><div class="stm">11:58</div></div><div class="cn teal"></div>
+      <div class="st"><div class="dot d-amber">✓</div><div class="sl on">แพทย์</div><div class="stm">13:04</div></div><div class="cn amber"></div>
+      <div class="st"><div class="dot d-mut">–</div><div class="sl mut">ไม่ตัดคอร์ส</div><div class="stm">—</div></div><div class="cn amber"></div>
+      <div class="st"><div class="dot d-emer">✓</div><div class="sl on">เสร็จ</div><div class="stm">13:09</div></div>
+    </div></div>
+  </div>
+</div>
+<p style="font-size:.9em;color:#555">③B = ใช้ <code>TreatmentLifecycleStepper</code> ตัวเดิมของหน้าประวัติ แต่เปิด <code>withCourseStep</code> (คงเส้นสีเดิม ไม่มี label "สถานะ OPD"). เมื่อตัดคอร์ส → ขั้นนี้เป็นม่วง ✓ + เส้นกลายเป็น amber→violet→emerald ตามลอจิก connector เดิม.</p>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">① confirm → recolour + reorder (real-time, no new listener)</div>
+<pre>กด "คอนเฟิร์มนัด" (AppointmentHubRowCard)
+  → onConfirm → handleConfirmOptimistic (AppointmentHubView): local status='confirmed' + updateBackendAppointment
+  → Firestore write → AdminDashboard listenToAppointmentsByMonth (onSnapshot) → appointmentDataVersion++
+  → AppointmentHubView loadAll(silent) → appts updated
+  → filteredAppts useMemo:  activeTab==='today'  ?  sortApptsConfirmedFirst(scoped)  :  sortApptsByDateTimeAsc(scoped)
+        • partition: confirmed-not-served (status==='confirmed' && !serviceCompletedAt)  →  TOP, by date+time asc
+        • rest  →  below, by date+time asc
+  → AppointmentHubRowCard re-render: effectiveStatus==='confirmed' → root gets sky tint+border (cosmetic)
+  ⇒ card turns sky + jumps to top, instantly, on every device (existing onSnapshot pipeline — NOTHING new)</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">② + ③ course-step state (single SSOT drives BOTH the Frontend card and ประวัติ)</div>
+<pre>resolveCourseDeducted(treatment)            → boolean (detail.courseItems|treatmentItems length &gt; 0)
+resolveCourseStepState({courseDeducted, completedDone})
+        courseDeducted            → 'done'           → violet ✓  "คอร์ส"
+        !deducted &amp;&amp; completedDone → 'not-deducted'   → MUTED dot "–"  "ไม่ตัดคอร์ส"   ← was 'warn'/amber "!ยังไม่ตัด"
+        else                      → 'pending'        → pulse/number
+TreatmentLifecycleStepper renders the course step the SAME on every surface:
+   • Frontend OPD card   : AppointmentOpdStepperRow (withCourseStep already on)   → ② applies automatically
+   • ประวัติการรักษา (3B) : TreatmentHistoryRow now passes withCourseStep + courseDeducted</pre>
+</div>
+
+<h2>Architecture (files + changes)</h2>
+<table>
+  <tr><th>#</th><th>File</th><th>Change</th></tr>
+  <tr><td>①</td><td><code>src/lib/appointmentHubFilters.js</code></td><td>NEW pure <code>sortApptsConfirmedFirst(appts)</code> — partition <code>status==='confirmed' &amp;&amp; !serviceCompletedAt</code> to front, each partition via existing <code>sortApptsByDateTimeAsc</code>. (Rule C1: reuse the existing comparator.)</td></tr>
+  <tr><td>①</td><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td><code>filteredAppts</code>: when <code>activeTab==='today'</code> use <code>sortApptsConfirmedFirst(scoped)</code>, else unchanged. (1-line branch; no other logic touched.)</td></tr>
+  <tr><td>①</td><td><code>src/components/admin/AppointmentHubRowCard.jsx</code></td><td>Root <code>&lt;div&gt;</code> className: when <code>effectiveStatus==='confirmed'</code> add <code>border-sky-500/50 bg-sky-500/[0.06]</code> (override the default <code>bg-[var(--bg-card)] border-[var(--bd)]</code>). Cosmetic only — uses the EXISTING <code>effectiveStatus</code>; no handler/state/prop change. Left accent bar + chip already sky for confirmed.</td></tr>
+  <tr><td>②</td><td><code>src/lib/treatmentDisplayResolvers.js</code></td><td><code>resolveCourseStepState</code>: rename return <code>'warn'</code> → <code>'not-deducted'</code> (semantic; same trigger).</td></tr>
+  <tr><td>②</td><td><code>src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx</code></td><td>Course step: state <code>'not-deducted'</code> → MUTED dot (reuse the existing <code>bg-[var(--bg-base)] border-[var(--bd-strong)] text-[var(--tx-faint)]</code> pending/skip style) + content "–" + muted label "ไม่ตัดคอร์ส". Remove the amber <code>'warn'</code> dot/label branches for the course step.</td></tr>
+  <tr><td>③</td><td><code>src/components/backend/CustomerDetailView.jsx</code></td><td><strong>VERIFIED root:</strong> the <code>treatmentSummary</code> mapper (~L564) builds rows from the raw <code>t</code> but <strong>drops <code>detail</code></strong> (keeps only cc/dx/doctor/status). Add <code>courseDeducted: resolveCourseDeducted(t)</code> in that primary-branch map (<code>t</code> there IS the raw doc — already reads <code>t.detail?.treatmentDate</code>). Fallback branch (<code>customer.treatmentSummary</code> cache, ~L606) has no detail → <code>courseDeducted</code> defaults <code>false</code> until the live <code>treatments[]</code> listener resolves (acceptable first-paint).</td></tr>
+  <tr><td>③</td><td><code>src/components/backend/treatment-history/TreatmentHistoryRow.jsx</code></td><td>Pass <code>withCourseStep</code> + <code>courseDeducted={t.courseDeducted}</code> to <code>&lt;TreatmentLifecycleStepper&gt;</code>. Keeps the row's native teal/amber connectors (3B). (<code>treatmentSummary</code> flows CDV → TreatmentHistoryCard → Row unchanged; only the new field rides along.)</td></tr>
+</table>
+
+<h2>Decisions (locked via visual Q&amp;A)</h2>
+<ul>
+  <li><strong>① = A</strong> — sky-tinted box (light wash + sky border + sky left bar) + reorder confirmed-to-top (today tab), real-time. Sky = the app's existing "ยืนยันแล้ว" colour language (cohesive). Recolour applies whenever confirmed (all tabs, cohesive); reorder is today-tab only.</li>
+  <li><strong>② = A</strong> — muted gray dot + label "ไม่ตัดคอร์ส" (drop amber + "!"). "ตัดแล้ว" stays violet ✓.</li>
+  <li><strong>③ = B</strong> — add the course step in the customer-detail history but KEEP that view's teal/amber coloured connectors (do NOT unify to the gray "สถานะ OPD" stepper).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Frontend "วันนี้": confirming an appt → its card turns clearly sky-tinted (AA-readable in Dark AND Light) AND moves above all not-yet-confirmed rows; among confirmed, ordered by time; reflects on a 2nd device with no refresh.</li>
+  <li>Pending/other-status cards + all existing buttons/handlers/data-testids unchanged (cosmetic-shell).</li>
+  <li>OPD "course" step when finished-without-deduction shows a muted "ไม่ตัดคอร์ส" (no amber, no "!") on BOTH the Frontend card and the customer-detail history; when deducted shows violet ✓ "คอร์ส".</li>
+  <li>Customer-detail treatment history shows 4 steps (incl. course) with its original teal/amber connectors; <code>courseDeducted</code> reflects the real treatment (verified on a row that DID deduct vs one that didn't).</li>
+  <li>Tests: V139 stepper tests updated to the new state name + muted contract; new tests for <code>sortApptsConfirmedFirst</code> + the card-tint className + the TreatmentHistoryRow course wiring; full vitest green + build clean.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>③ data availability — RESOLVED (verified via grep):</strong> the <code>treatmentSummary</code> mapper at <code>CustomerDetailView.jsx</code> ~L564 strips <code>detail</code> → <code>resolveCourseDeducted(summaryRow)</code> would be <code>false</code> forever (the V139/V104 trap). Confirmed fix located: add <code>courseDeducted: resolveCourseDeducted(t)</code> in that mapper (raw <code>t</code> has <code>.detail</code> there). Still verify on REAL prod data during implementation (Rule R): one treatment that DID deduct → violet ✓; one that didn't → muted "ไม่ตัดคอร์ส". The denormalized <code>customer.treatmentSummary</code> fallback won't carry it (first-paint shows false until the live listener fires) — optional polish: add <code>courseDeducted</code> to <code>rebuildTreatmentSummary</code> in backendClient.js (out of scope unless wanted).</li>
+  <li><strong>② shared surface:</strong> changing <code>resolveCourseStepState</code> affects every <code>TreatmentLifecycleStepper</code> consumer (Frontend card + history). That's intended (consistency) — but the V139 tests assert the old amber/"ยังไม่ตัด" contract → update them (expected V21-class fixups).</li>
+  <li><strong>① sort scope:</strong> confirmed-first is today-tab only; tomorrow/future/past keep pure time order. Confirm this matches intent (spec assumes yes).</li>
+  <li><strong>Light-theme contrast:</strong> <code>bg-sky-500/[0.06]</code> on a near-white card is subtle; the sky border + sky chip carry the signal. Verify AA + "clearly different from pending" in Light during implementation (Rule Q-vis).</li>
+</ul>
+
+</body>
+</html>

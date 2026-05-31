@@ -399,6 +399,17 @@ User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ c
 
 **Lesson lock**: real-browser viewing/testing is now a first-class, always-available tool. Reach for it whenever "does the user actually SEE this work?" is the question — that's the only verification that doesn't lie (Rule Q).
 
+#### S-design — Ground every mockup in the EXISTING design FIRST (iron-clad 2026-05-31)
+
+User directive (verbatim, angry): "ทำไมมึงไม่ดูดีไซน์เดิมกูก่อนค่อยทำตัวอย่างมาอะ ... มึงทำตัวอย่างมาโดยไม่อิงดีไซน์เดิมกู แล้วกูจะตัดสินใจยังไง ... ใส่ไว้ในกฎ ไว้ใน tools ในสกิล ในสมองมึงเลยนะ".
+
+For ANY design/UI brainstorm on an EXISTING screen/component, BEFORE authoring a mockup/example:
+1. **CAPTURE + faithfully replicate the user's REAL current design** — (a) the user's provided screenshots (= ground truth, replicate exactly), (b) a LIVE screenshot of the real app (Chrome MCP / Claude Preview, this Rule S), AND/OR (c) the **EXACT real component source** (copy the real Tailwind classes / colors / gradients / sizes / layout — never approximate).
+2. The mockup MUST render a faithful **BEFORE (the real design) → AFTER (the proposed change)** side-by-side, so the user compares apples-to-apples and can actually decide.
+3. **NEVER invent colors/layout from scratch.** An un-grounded mockup = useless for the decision + a Rule-S / Q-vis violation.
+
+**Origin (2026-05-31)**: I shipped a confirmed-card + course-step mockup invented from scratch (flat colors, wrong card structure) — ignoring the 2 real screenshots the user gave AND the real `AppointmentHubRowCard` / `TreatmentLifecycleStepper` source. The user couldn't decide because the options weren't based on their real design. Memory: `feedback_ground_mockups_in_existing_design.md`. Extends Rule F (Triangle — look at the real thing first) into the mockup-authoring step.
+
 ### Anti-patterns (all 4 rules)
 - Fix bug แต่ไม่เพิ่ม test + skill → regression guaranteed
 - Skill ไม่มี grep patterns / invariant numbers → documentation ไม่ใช่ audit

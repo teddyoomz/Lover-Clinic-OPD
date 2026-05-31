@@ -1,32 +1,31 @@
 ---
-updated_at: "2026-05-31 EOD+4 LATE+3 — V142 (course double-deduct) + V143 (stock show-0 + real-time + auto-clear) SHIPPED + DEPLOYED @ 0c607f68. Idle."
-status: "DEPLOYED. V142 family (course-deduct) + V143 stock family LIVE on prod. NK stock reset to 0 (1 lot/product) applied. No open work — awaiting next directive."
+updated_at: "2026-05-31 EOD+4 LATE+4 — Brainstorm→spec→PLAN: confirmed-card highlight/reorder + course-step muted (①A/②A/③B). NOT implemented (next session). + NEW rule ground-mockups-in-existing-design."
+status: "Plan ready for implementation next session. NO code shipped this session (docs/rule only). Prod UNCHANGED = 0c607f68."
 branch: "master"
-last_commit: "0c607f68 V21 fixup v34 INV.11.4 (balance-reader grep → listener). Prod LIVE = 0c607f68 (was 8c3a9047)."
-tests: "Full suite 15418/0 (JSON-reporter run, this session) + build clean (✓ 2.82s). NOT re-run at session-end (per rule)."
+last_commit: "EOD docs commit (on 0c607f68) — spec+plan+rule+mockups. Prod LIVE = 0c607f68."
+tests: "15418/0 (last full run PRIOR session; NOT re-run — session-end rule; no src changed this session)."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0c607f68 LIVE (deployed this session). Ships V142-quater/quinquies (course double-deduct) + V143/ter/quater (stock show-0 + real-time balance + auto-clear-lot cron)."
-firestore_rules_version: "UNCHANGED. vercel.json registered 1 NEW cron (stock-lot-cleanup, 03:45 BKK) — activated on deploy. No rules/storage/index → no Probe-Deploy-Probe."
+production_commit: "0c607f68 LIVE (V142 course double-deduct + V143 stock). UNCHANGED this session."
+firestore_rules_version: "UNCHANGED. No rules/storage/index/cron touched."
 ---
 
-# Active Context — V142 + V143 stock/course cluster SHIPPED+DEPLOYED (2026-05-31 EOD+4 LATE+3)
+# Active Context — Brainstorm + PLAN: confirmed-card + course-step (2026-05-31 EOD+4 LATE+4)
 
 ## State
-- Prod LIVE = `0c607f68`. Working tree clean. Full suite 15418/0 + build clean.
-- Two families shipped + deployed: V142 (course double-deduct) + V143 (stock show-0 / real-time / auto-clear).
-- NK stock reset to 0 (53 products = 53 lots) applied on prod earlier this session (Rule M, audited).
+- NO code shipped. Brainstorm (Visual Companion grounded in REAL component source) → spec → plan DONE. Implementation = NEXT session.
+- Decisions locked: **①A** sky-tint confirmed card + reorder-to-top (today tab) realtime · **②A** course "ยังไม่ตัด"(amber)→muted "ไม่ตัดคอร์ส" · **③B** add course step to CDV history, keep teal/amber connectors.
+- NEW iron-clad sub-rule **"ground every mockup in the EXISTING design FIRST"** encoded 4 places (memory + `.claude/rules/01-iron-clad.md` §S-design + brainstorming SKILL.md).
 
-## What this session shipped (detail → checkpoint 2026-05-31-v142-v143-deploy.md)
-- **V142-quinquies** course finalize→doctor→finalize DOUBLE-DEDUCT → persisted `_courseDeducted` flag. Verified matrix 30/0 + flag-roundtrip/fuzz/stock L2 e2e 30/0.
-- **V143** StockBalancePanel show products drained/cleared to exactly 0 (status∈{active,depleted}). AV166.
-- **V143-ter** real-time balance: NEW `listenToStockBatchesByBranch` (BS-13 safe-by-default + Layer-2). AV167. L2 e2e 5/0 real prod.
-- **V143-quater** auto-clear-lot: `planLotCleanup` + daily cron `stock-lot-cleanup` (03:45 BKK) + Rule M script. AV168. 14/0 + dry-run 0-redundant.
-- 3 V21 test-fixups (v143 SG1 + v138 N10.7 + v34 INV.11.4) — same V143-ter migration class; full suite confirmed no 4th.
+## What this session shipped (docs/rule only → checkpoint 2026-05-31-brainstorm-confirmed-card-course-step.md)
+- spec `docs/superpowers/specs/2026-05-31-appt-confirmed-card-and-course-step-design.html`
+- plan `docs/superpowers/plans/2026-05-31-appt-confirmed-card-and-course-step.html` (7 tasks, TDD, real line anchors)
+- rule "ground-mockups-in-existing-design": memory `feedback_ground_mockups_in_existing_design.md` + MEMORY.md + `01-iron-clad.md` §S-design + `~/.claude/skills/brainstorming/SKILL.md`
+- dev mockups `public/brainstorm-v2-grounded.html` + `public/brainstorm-confirmed-card-course-step.html` — **DELETE at deploy** (plan Task 7)
+- ③ root-cause VERIFIED: `CustomerDetailView` treatmentSummary mapper (~L564) strips `detail` → must compute `courseDeducted` in the mapper (V139/V104 class trap)
 
 ## Next action
-- None pending. Awaiting next user directive.
+- Implement the plan Task 1→7 via `subagent-driven-development`. All cosmetic-shell + 1 pure sort helper; frontend/lib only; NO Probe-Deploy-Probe; NO deploy until user types "deploy".
 
 ## Outstanding user-triggered actions
-- **L1 hands-on (user)**: open ยอดคงเหลือ on 2 devices → deduct on one → both update live; confirm NK products show at 0. (Code is L2-verified; L1 = user gold-standard.)
-- Cron `stock-lot-cleanup` now active (daily 03:45 BKK). Optional: hit once with CRON_SECRET to verify live (like V122).
-- Pre-existing (NOT deploy-gating): extended-suite ~280 stale tests.
+- Implement plan next session (above).
+- (carryover) L1 hands-on V142/V143 (2-device live balance + NK shows 0); cron stock-lot-cleanup active 03:45 BKK.

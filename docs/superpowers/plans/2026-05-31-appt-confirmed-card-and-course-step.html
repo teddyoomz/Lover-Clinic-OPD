@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Confirmed-card highlight + Course-step polish — Implementation Plan</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-task:#fafafa; --bg-pre:#f5f5f5; --tx-muted:#666; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Sarabun',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.6; color:#222; }
+    h1 { color:#111; border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { color:#111; border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { color:#222; }
+    pre { background:var(--bg-pre); padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); padding-left:1em; color:var(--tx-muted); margin:1em 0; background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; }
+    .header-meta { background:var(--bg-meta); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .header-meta p { margin:.4em 0; }
+    .task { border-left:4px solid var(--accent); padding:.8em 1.2em; margin:1.2em 0; background:var(--bg-task); border-radius:0 6px 6px 0; }
+    .step { margin:.6em 0; padding-left:.5em; }
+    .step input[type=checkbox]{ margin-right:.6em; transform:scale(1.2); accent-color:var(--accent); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+    table{border-collapse:collapse;width:100%;margin:1em 0}
+    th,td{border:1px solid var(--bd);padding:.45em .7em;text-align:left;vertical-align:top;font-size:.92em}
+    th{background:var(--bg-meta)}
+    /* faithful inline render */
+    .surf{background:#0f0f0f;border:1px solid #222;border-radius:12px;padding:12px;color:#e5e7eb}
+    .acard{position:relative;border-radius:12px;border:1px solid #222;background:#0f0f0f;padding:10px 12px 10px 16px;margin-bottom:8px;overflow:hidden}
+    .acard .nm{color:#7dd3fc;font-weight:800;font-size:15px}.acard .sub{color:#6b7280;font-size:11px;margin-top:2px}.acard .hn{color:#6b7280;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+    .bar{position:absolute;left:0;top:0;bottom:0;width:3px}.bar.amber{background:linear-gradient(#fbbf24,#ea580c)}.bar.sky{background:linear-gradient(#38bdf8,#0891b2)}
+    .chip{float:right;font-size:10px;padding:2px 8px;border-radius:999px;font-weight:700}.chip.amber{background:rgba(245,158,11,.18);color:#fcd34d;border:1px solid rgba(245,158,11,.4)}.chip.sky{background:rgba(56,189,248,.18);color:#bae6fd;border:1px solid rgba(56,189,248,.45)}
+    .confA{border-color:rgba(56,189,248,.5)!important;background:rgba(56,189,248,.06)!important}
+    .stp{display:flex;align-items:flex-start;gap:2px;margin-top:8px}.stp .lab{font-size:10px;color:#6b7280;font-weight:700;margin-right:6px;align-self:center}
+    .st{display:flex;flex-direction:column;align-items:center;min-width:58px}
+    .dot{width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;border:2px solid}
+    .d-amber{background:linear-gradient(135deg,#f59e0b,#b45309);border-color:#fcd34d;color:#fff}.d-teal{background:linear-gradient(135deg,#14b8a6,#0f766e);border-color:#5eead4;color:#fff}.d-emer{background:linear-gradient(135deg,#10b981,#047857);border-color:#6ee7b7;color:#fff}.d-viol{background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-color:#c4b5fd;color:#fff}.d-warn{background:rgba(245,158,11,.1);border-color:#f59e0b;color:#fcd34d}.d-mut{background:#050505;border-color:#333;color:#4b5563}
+    .sl{font-size:10px;font-weight:700;margin-top:5px}.sl.on{color:#e5e7eb}.sl.mut{color:#6b7280}.sl.warn{color:#fcd34d}.stm{font-size:9px;color:#9ca3af;font-family:monospace;margin-top:2px}
+    .cn{flex:1;height:2px;margin-top:11px}.cn.g{background:#222}.cn.teal{background:linear-gradient(90deg,#5eead4,#0f766e)}.cn.amber{background:linear-gradient(90deg,#fcd34d,#b45309)}
+    .new{color:#7c3aed;font-weight:800}.del{color:#b91c1c;text-decoration:line-through}
+  </style>
+</head>
+<body>
+
+<h1>Confirmed-card highlight + reorder · Course-step polish — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-31-appt-confirmed-card-and-course-step-design.html</code>. Live mockup: <code>public/brainstorm-v2-grounded.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ① Confirmed appts in Frontend "วันนี้" turn sky-tinted + jump to top (realtime); ② OPD "course" step "ยังไม่ตัด" amber→muted "ไม่ตัดคอร์ส"; ③ add the course step to the customer-detail treatment history (keep its teal/amber connectors).</p>
+  <p><strong>Architecture:</strong> Cosmetic-shell + one pure sort helper. NO handler/state/prop/data-flow change. Decisions locked: ①A · ②A · ③B (see spec). Course-step state is one SSOT (<code>resolveCourseStepState</code>) → ② applies to BOTH the Frontend card and the history automatically.</p>
+  <p><strong>Tech Stack:</strong> React 19, Tailwind (real component classes), Vitest + @testing-library/react. Theme via CSS vars (dark default / <code>[data-theme=light]</code>).</p>
+  <p><strong>Iron-clad gates:</strong> Rule Q (real-browser/real-prod before "verified") · Rule Q-vis (SEE pixels, both themes) · Rule N (targeted tests per task, full suite at end) · cosmetic-shell (zero logic change) · no deploy without explicit "deploy".</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">① A — confirmed = sky box + sky chip + sky bar, reordered to TOP (dark)</div>
+  <div class="surf">
+    <div class="acard confA"><span class="bar sky"></span><span class="chip sky">ยืนยันแล้ว</span><div class="hn">HN · 000034</div><div class="nm">มานี รักเรียน</div><div class="sub">📅 10:30 · ฉีดฟิลเลอร์</div></div>
+    <div class="acard confA"><span class="bar sky"></span><span class="chip sky">ยืนยันแล้ว</span><div class="hn">HN · 000077</div><div class="nm">วีระ ทองดี</div><div class="sub">📅 13:00 · เลเซอร์</div></div>
+    <div class="acard"><span class="bar amber"></span><span class="chip amber">รอยืนยัน</span><div class="hn">HN · 000012</div><div class="nm">สมชาย ใจดี</div><div class="sub">📅 09:00 · ปรึกษา</div></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">② course step — BEFORE amber "!ยังไม่ตัด"  →  AFTER muted "ไม่ตัดคอร์ส"  ·  ③ history gains the step (teal/amber connectors kept)</div>
+  <div class="surf"><div class="stp"><span class="lab">สถานะ OPD (before)</span>
+    <div class="st"><div class="dot d-amber">✓</div><div class="sl on">แพทย์</div></div><div class="cn g"></div>
+    <div class="st"><div class="dot d-warn">!</div><div class="sl warn">ยังไม่ตัด</div></div><div class="cn g"></div>
+    <div class="st"><div class="dot d-emer">✓</div><div class="sl on">เสร็จ</div></div>
+  </div></div>
+  <div class="surf" style="margin-top:8px"><div class="stp"><span class="lab">③ ประวัติ (after)</span>
+    <div class="st"><div class="dot d-teal">✓</div><div class="sl on">ซักประวัติ</div></div><div class="cn teal"></div>
+    <div class="st"><div class="dot d-amber">✓</div><div class="sl on">แพทย์</div></div><div class="cn amber"></div>
+    <div class="st"><div class="dot d-mut">–</div><div class="sl mut">ไม่ตัดคอร์ส</div></div><div class="cn amber"></div>
+    <div class="st"><div class="dot d-emer">✓</div><div class="sl on">เสร็จ</div></div>
+  </div></div>
+  <p style="font-size:.85em;color:#555;margin:.4em 0 0">ตัดคอร์สแล้ว → ขั้นนี้เป็น <span class="new">ม่วง ✓ "คอร์ส"</span> (เกรเดียนต์ violet จริง) ทั้งสองที่.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">① confirm → recolour + reorder (existing onSnapshot pipeline; NO new listener)</div>
+<pre>คอนเฟิร์มนัด → handleConfirmOptimistic (status='confirmed') → updateBackendAppointment
+  → AdminDashboard listenToAppointmentsByMonth(onSnapshot) → appointmentDataVersion++
+  → AppointmentHubView.loadAll(silent) → appts updated
+  → filteredAppts:  activeTab==='today' ? sortApptsConfirmedFirst(scoped) : sortApptsByDateTimeAsc(scoped)
+       confirmed-active (status==='confirmed' && !serviceCompletedAt) → TOP by date+time asc ; rest below by date+time asc
+  → AppointmentHubRowCard: effectiveStatus==='confirmed' → root className sky tint (cosmetic)
+  ⇒ card turns sky + jumps to top instantly, every device</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">② + ③ one SSOT drives both surfaces</div>
+<pre>resolveCourseDeducted(rawTreatment) → bool (detail.courseItems|treatmentItems length&gt;0)
+resolveCourseStepState({courseDeducted, completedDone})
+   courseDeducted            → 'done'         → violet ✓ "คอร์ส"
+   !ded && completedDone      → 'not-deducted' → MUTED "–" "ไม่ตัดคอร์ส"   (was 'warn'/amber "!ยังไม่ตัด")
+   else                      → 'pending'      → pulse/number
+TreatmentLifecycleStepper renders course step identically wherever called:
+   Frontend card  : AppointmentOpdStepperRow (withCourseStep already) → ② automatic
+   ประวัติ (3B)    : TreatmentHistoryRow passes withCourseStep + courseDeducted={t.courseDeducted}
+                    where t.courseDeducted is computed in CDV treatmentSummary mapper (raw t has .detail)</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+<tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+<tr><td><code>src/lib/appointmentHubFilters.js</code></td><td>Modify (append export)</td><td>NEW pure <code>sortApptsConfirmedFirst</code> (reuses existing <code>sortApptsByDateTimeAsc</code>).</td></tr>
+<tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>Modify (1 import + 1 line in <code>filteredAppts</code> ~L355-370)</td><td>Today tab uses the new sort.</td></tr>
+<tr><td><code>src/components/admin/AppointmentHubRowCard.jsx</code></td><td>Modify (root div className ~L158-164 + 1 derived const near L117)</td><td>Sky tint when <code>effectiveStatus==='confirmed'</code>.</td></tr>
+<tr><td><code>src/lib/treatmentDisplayResolvers.js</code></td><td>Modify (<code>resolveCourseStepState</code> L171-175)</td><td><code>'warn'</code> → <code>'not-deducted'</code>.</td></tr>
+<tr><td><code>src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx</code></td><td>Modify (course state/dot/label L54-62, 92-114, 154-157)</td><td>Muted course render + "ไม่ตัดคอร์ส".</td></tr>
+<tr><td><code>src/components/backend/CustomerDetailView.jsx</code></td><td>Modify (import + mapper ~L564)</td><td>Add <code>courseDeducted: resolveCourseDeducted(t)</code> to the primary <code>treatmentSummary</code> map.</td></tr>
+<tr><td><code>src/components/backend/treatment-history/TreatmentHistoryRow.jsx</code></td><td>Modify (stepper call L112)</td><td>Pass <code>withCourseStep courseDeducted={t.courseDeducted}</code>.</td></tr>
+<tr><td><code>tests/appt-confirmed-card-sort-and-tint.test.jsx</code></td><td>Create</td><td>① helper unit + card-tint source-grep.</td></tr>
+<tr><td><code>tests/course-step-not-deducted-muted.test.jsx</code></td><td>Create</td><td>② resolver + stepper RTL.</td></tr>
+<tr><td><code>tests/cdv-treatment-history-course-step.test.jsx</code></td><td>Create</td><td>③ mapper source-grep + TreatmentHistoryRow RTL.</td></tr>
+<tr><td><code>tests/v139-opd-course-step.test.jsx</code> (+ <code>v139-flow-simulate.test.js</code>, <code>opd-stepper-polish.test.jsx</code> if they assert 'warn'/'ยังไม่ตัด')</td><td>Modify (V21 fixups)</td><td>Update to <code>'not-deducted'</code>/"ไม่ตัดคอร์ส" contract.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>sortApptsConfirmedFirst</code> helper (① reorder)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/appointmentHubFilters.js</code> · Test <code>tests/appt-confirmed-card-sort-and-tint.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-js">// tests/appt-confirmed-card-sort-and-tint.test.jsx
+import { describe, test, expect } from 'vitest';
+import { sortApptsConfirmedFirst } from '../src/lib/appointmentHubFilters.js';
+
+const mk = (id, status, startTime, serviceCompletedAt = null, date = '2026-05-31') =>
+  ({ id, status, startTime, serviceCompletedAt, date });
+
+describe('sortApptsConfirmedFirst (①)', () => {
+  test('confirmed-active first, each partition by time asc', () => {
+    const out = sortApptsConfirmedFirst([
+      mk('a','pending','09:00'), mk('b','confirmed','10:30'),
+      mk('c','pending','11:15'), mk('d','confirmed','13:00'),
+    ]);
+    expect(out.map(x => x.id)).toEqual(['b','d','a','c']);
+  });
+  test('confirmed but already served (serviceCompletedAt) drops to rest', () => {
+    const out = sortApptsConfirmedFirst([
+      mk('a','confirmed','09:00','2026-05-31T05:00:00Z'), // served → rest
+      mk('b','confirmed','10:30'),                        // active → top
+    ]);
+    expect(out.map(x => x.id)).toEqual(['b','a']);
+  });
+  test('done/cancelled never bubble; empty safe', () => {
+    expect(sortApptsConfirmedFirst([])).toEqual([]);
+    const out = sortApptsConfirmedFirst([mk('a','done','09:00'), mk('b','cancelled','08:00'), mk('c','confirmed','12:00')]);
+    expect(out[0].id).toBe('c');
+  });
+  test('does not mutate input', () => {
+    const input = [mk('a','pending','09:00'), mk('b','confirmed','10:30')];
+    const copy = JSON.parse(JSON.stringify(input));
+    sortApptsConfirmedFirst(input);
+    expect(input).toEqual(copy);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run — expect FAIL</strong></label></div>
+  <p><code>npm test -- --run tests/appt-confirmed-card-sort-and-tint.test.jsx</code> → FAIL ("sortApptsConfirmedFirst is not a function").</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement (append to appointmentHubFilters.js)</strong></label></div>
+  <p>Append at end of file. <code>sortApptsByDateTimeAsc</code> already exists in this module (used by AppointmentHubView). Reuse it (Rule C1).</p>
+<pre><code class="language-js">// ① (2026-05-31) — confirmed-active appts to the TOP of the "today" list, then
+// the rest; each partition keeps the existing date+time ascending order. Pure;
+// does not mutate input. "confirmed-active" = status==='confirmed' AND not yet
+// service-completed (served rows leave the waiting queue / become 'done').
+export function sortApptsConfirmedFirst(appts) {
+  const list = Array.isArray(appts) ? appts : [];
+  const isConfirmedActive = (a) => !!a &amp;&amp; a.status === 'confirmed' &amp;&amp; !a.serviceCompletedAt;
+  return [
+    ...sortApptsByDateTimeAsc(list.filter(isConfirmedActive)),
+    ...sortApptsByDateTimeAsc(list.filter((a) => !isConfirmedActive(a))),
+  ];
+}</code></pre>
+  <p>⚠ If <code>sortApptsByDateTimeAsc</code> is defined BELOW this point in the file, place the new function AFTER its declaration (function declarations hoist, but keep it tidy — append at file end).</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run — expect PASS</strong></label></div>
+  <p><code>npm test -- --run tests/appt-confirmed-card-sort-and-tint.test.jsx</code> → 4 pass.</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/appointmentHubFilters.js tests/appt-confirmed-card-sort-and-tint.test.jsx
+git commit -m "feat(appt): sortApptsConfirmedFirst — confirmed-active to top (① reorder)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Wire today-tab sort (AppointmentHubView)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/admin/AppointmentHubView.jsx</code> (import block ~L26-30 + <code>filteredAppts</code> ~L355-370)</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Add import</strong></label></div>
+  <p>In the existing <code>import { applyTabFilter, dateRangeForTab, sortApptsByDateTimeAsc } from '../../lib/appointmentHubFilters.js';</code> add <code>sortApptsConfirmedFirst</code>:</p>
+<pre><code class="language-js">import {
+  applyTabFilter,
+  dateRangeForTab,
+  sortApptsByDateTimeAsc,
+  sortApptsConfirmedFirst,   // ① (2026-05-31)
+} from '../../lib/appointmentHubFilters.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Change the return in <code>filteredAppts</code> useMemo</strong></label></div>
+  <p>Find (~L369) <code>return sortApptsByDateTimeAsc(scoped);</code> and replace with:</p>
+<pre><code class="language-js">    // ① (2026-05-31) — today tab surfaces confirmed-active rows first (then time);
+    // other tabs keep pure time order.
+    return activeTab === 'today'
+      ? sortApptsConfirmedFirst(scoped)
+      : sortApptsByDateTimeAsc(scoped);</code></pre>
+  <p>Deps array unchanged (<code>activeTab</code> already a dep).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Add source-grep test (append to the Task-1 test file)</strong></label></div>
+<pre><code class="language-js">import { readFileSync } from 'fs';
+describe('② wiring — AppointmentHubView today sort', () => {
+  const src = readFileSync('src/components/admin/AppointmentHubView.jsx', 'utf8');
+  test('imports + uses sortApptsConfirmedFirst on today tab', () => {
+    expect(src).toMatch(/sortApptsConfirmedFirst/);
+    expect(src).toMatch(/activeTab === 'today'\s*\n?\s*\?\s*sortApptsConfirmedFirst/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run + build</strong></label></div>
+  <p><code>npm test -- --run tests/appt-confirmed-card-sort-and-tint.test.jsx</code> → pass. <code>npm run build</code> → clean (catches import typo).</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubView.jsx tests/appt-confirmed-card-sort-and-tint.test.jsx
+git commit -m "feat(appt): today tab orders confirmed-active first (① reorder wiring)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Confirmed-card sky tint (AppointmentHubRowCard)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/admin/AppointmentHubRowCard.jsx</code> (derived const near L117 <code>effectiveStatus</code>; root div className L158-164)</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add derived const</strong></label></div>
+  <p>After <code>const status = effectiveStatus;</code> (~L118) add:</p>
+<pre><code class="language-js">  // ① (2026-05-31) — confirmed (not yet served) gets a clear sky-tinted box
+  // (matches the existing sky "ยืนยันแล้ว" accent/chip). Cosmetic only — uses the
+  // already-derived effectiveStatus; no handler/state/prop change.
+  const isConfirmedHighlight = effectiveStatus === 'confirmed';
+  const surfaceCls = isConfirmedHighlight
+    ? 'border-sky-500/50 bg-sky-500/[0.06]'
+    : 'border-[var(--bd)] bg-[var(--bg-card)]';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Use it in the root div className (L159-160)</strong></label></div>
+  <p>Replace the literal <code>border border-[var(--bd)] ... bg-[var(--bg-card)]</code> portion with <code>border ${surfaceCls}</code> (move the border-color + bg into surfaceCls). Result:</p>
+<pre><code class="language-jsx">    &lt;div
+      className={`relative border ${surfaceCls} rounded-2xl overflow-hidden shadow-sm mb-3 flex flex-col transition-all duration-200 hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10${isFilledPending ? ' card-filled-pending' : ''}`}
+      data-testid="appt-hub-row"
+      data-appt-id={appt.id}
+      data-status-accent={accentKey}
+    &gt;</code></pre>
+  <p>The left accent bar (<code>ACCENT_BAR[accentKey]</code> = sky→cyan for confirmed) + status chip (sky) are already correct — unchanged.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Source-grep test (append to Task-1 test file)</strong></label></div>
+<pre><code class="language-js">describe('① card tint — AppointmentHubRowCard', () => {
+  const src = readFileSync('src/components/admin/AppointmentHubRowCard.jsx', 'utf8');
+  test('confirmed → sky surface; else var(--bg-card)', () => {
+    expect(src).toMatch(/isConfirmedHighlight\s*=\s*effectiveStatus === 'confirmed'/);
+    expect(src).toMatch(/border-sky-500\/50 bg-sky-500\/\[0\.06\]/);
+    expect(src).toMatch(/border \$\{surfaceCls\}/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run + build</strong></label></div>
+  <p><code>npm test -- --run tests/appt-confirmed-card-sort-and-tint.test.jsx</code> → pass. <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubRowCard.jsx tests/appt-confirmed-card-sort-and-tint.test.jsx
+git commit -m "feat(appt): confirmed card sky tint (①A)"</code></pre>
+  <p><em>(Visual AA in both themes is verified in Task 7 via real browser — Rule Q-vis.)</em></p>
+</div>
+
+<div class="task">
+  <h3>Task 4: Course step amber→muted (resolver + stepper) — ②A</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/treatmentDisplayResolvers.js</code> (L171-175) + <code>src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx</code> (L54-62, 92-114, 154-157) · Test <code>tests/course-step-not-deducted-muted.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-jsx">// tests/course-step-not-deducted-muted.test.jsx
+import { describe, test, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import { resolveCourseStepState } from '../src/lib/treatmentDisplayResolvers.js';
+import { TreatmentLifecycleStepper } from '../src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx';
+
+describe('resolveCourseStepState (②)', () => {
+  test('deducted → done', () => expect(resolveCourseStepState({ courseDeducted: true, completedDone: true })).toBe('done'));
+  test('finished, not deducted → not-deducted (was warn)', () =>
+    expect(resolveCourseStepState({ courseDeducted: false, completedDone: true })).toBe('not-deducted'));
+  test('not finished → pending', () => expect(resolveCourseStepState({ courseDeducted: false, completedDone: false })).toBe('pending'));
+});
+
+describe('TreatmentLifecycleStepper course step (②)', () => {
+  const lc = [{ key: 'vitalsigns', time: null }, { key: 'doctor', time: null }, { key: 'completed', time: null }];
+  test('not-deducted → muted "ไม่ตัดคอร์ส", no amber warn', () => {
+    const { container, getByText } = render(
+      &lt;TreatmentLifecycleStepper lifecycle={lc} withCourseStep courseDeducted={false} /&gt;);
+    expect(getByText('ไม่ตัดคอร์ส')).toBeTruthy();
+    expect(container.querySelector('.border-amber-500')).toBeNull();   // amber warn gone
+    expect(container.textContent).not.toContain('ยังไม่ตัด');
+  });
+  test('deducted → violet "คอร์ส"', () => {
+    const { getByText, container } = render(
+      &lt;TreatmentLifecycleStepper lifecycle={lc} withCourseStep courseDeducted={true} /&gt;);
+    expect(getByText('คอร์ส')).toBeTruthy();
+    expect(container.querySelector('[class*="violet"]')).toBeTruthy();
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run — expect FAIL</strong></label></div>
+  <p><code>npm test -- --run tests/course-step-not-deducted-muted.test.jsx</code> → FAIL (still 'warn'/'ยังไม่ตัด').</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3a: resolveCourseStepState (treatmentDisplayResolvers.js L171-175)</strong></label></div>
+<pre><code class="language-js">export function resolveCourseStepState({ courseDeducted = false, completedDone = false } = {}) {
+  if (courseDeducted) return 'done';
+  if (completedDone) return 'not-deducted';   // ② (2026-05-31) was 'warn' (amber "ยังไม่ตัด")
+  return 'pending';
+}</code></pre>
+  <p>Also update the JSDoc above it: <code>warn → not-deducted (muted "ไม่ตัดคอร์ส")</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 3b: TreatmentLifecycleStepper.jsx</strong></label></div>
+  <p><strong>(i)</strong> <code>stepStateForKey</code> (L59-60): <code>if (cs === 'warn') return 'warn';</code> → <code>if (cs === 'not-deducted') return 'not-deducted';</code></p>
+  <p><strong>(ii)</strong> <code>dotClasses</code> — DELETE the warn block (L92-94). <code>'not-deducted'</code> falls through to the default muted return (L99: <code>bg-[var(--bg-base)] border-[var(--bd-strong)] text-[var(--tx-faint)]</code>).</p>
+<pre><code class="language-js">    // V139 warn block REMOVED (②). 'not-deducted' uses the default muted style below.
+    if (state === 'pending-now') {
+      return `${base} bg-amber-500/5 border-amber-300 text-amber-300 animate-pulse`;
+    }
+    // pending-future + skipped + not-deducted: dim
+    return `${base} bg-[var(--bg-base)] border-[var(--bd-strong)] text-[var(--tx-faint)]`;</code></pre>
+  <p><strong>(iii)</strong> <code>labelClasses</code> — DELETE the warn block (L105-106). <code>'not-deducted'</code> falls to the default muted label (L109: <code>text-[var(--tx-muted)]</code>).</p>
+  <p><strong>(iv)</strong> <code>labelFor</code> (L113-114):</p>
+<pre><code class="language-js">  const labelFor = (key, state) =>
+    key === 'course' ? (state === 'not-deducted' ? 'ไม่ตัดคอร์ส' : 'คอร์ส') : labelMap[key];</code></pre>
+  <p><strong>(v)</strong> <code>dotContent</code> (L154-157): replace the warn line with a not-deducted dash:</p>
+<pre><code class="language-jsx">        if (state === 'done') dotContent = &lt;Check size={11} aria-hidden="true" /&gt;;
+        else if (state === 'not-deducted') dotContent = &lt;span&gt;–&lt;/span&gt;;
+        else if (state === 'skipped') dotContent = &lt;span&gt;−&lt;/span&gt;;
+        else dotContent = &lt;span&gt;{idx + 1}&lt;/span&gt;;</code></pre>
+  <p>Update the component's top JSDoc (L17, L91, L112): replace the <code>warn(amber "ยังไม่ตัด")</code> descriptions with <code>not-deducted (muted "ไม่ตัดคอร์ส")</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 4: Run — expect PASS</strong></label></div>
+  <p><code>npm test -- --run tests/course-step-not-deducted-muted.test.jsx</code> → pass. (V139 tests will now FAIL — fixed in Task 6.)</p>
+
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/treatmentDisplayResolvers.js src/components/backend/treatment-history/TreatmentLifecycleStepper.jsx tests/course-step-not-deducted-muted.test.jsx
+git commit -m "feat(opd): course step amber 'ยังไม่ตัด' -> muted 'ไม่ตัดคอร์ส' (②A)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Course step in customer-detail history — ③B</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/CustomerDetailView.jsx</code> (import + mapper ~L564) + <code>src/components/backend/treatment-history/TreatmentHistoryRow.jsx</code> (L112) · Test <code>tests/cdv-treatment-history-course-step.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-jsx">// tests/cdv-treatment-history-course-step.test.jsx
+import { describe, test, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { render } from '@testing-library/react';
+import { TreatmentHistoryRow } from '../src/components/backend/treatment-history/TreatmentHistoryRow.jsx';
+
+describe('③ CDV mapper computes courseDeducted', () => {
+  const src = readFileSync('src/components/backend/CustomerDetailView.jsx', 'utf8');
+  test('imports resolveCourseDeducted + maps it on the summary row', () => {
+    expect(src).toMatch(/resolveCourseDeducted/);
+    expect(src).toMatch(/courseDeducted:\s*resolveCourseDeducted\(t\)/);
+  });
+});
+
+describe('③ TreatmentHistoryRow renders course step (3B)', () => {
+  const base = {
+    id: 'BT-1', date: '2026-05-31',
+    vitalsignsRecordedAt: '2026-05-31T04:58:00Z',
+    doctorRecordedAt: '2026-05-31T06:04:00Z',
+    completedAt: '2026-05-31T06:09:00Z',
+  };
+  test('not-deducted → muted "ไม่ตัดคอร์ส"', () => {
+    const { getByText } = render(&lt;TreatmentHistoryRow t={{ ...base, courseDeducted: false }} /&gt;);
+    expect(getByText('ไม่ตัดคอร์ส')).toBeTruthy();
+  });
+  test('deducted → "คอร์ส"', () => {
+    const { getByText } = render(&lt;TreatmentHistoryRow t={{ ...base, courseDeducted: true }} /&gt;);
+    expect(getByText('คอร์ส')).toBeTruthy();
+  });
+  test('source: row passes withCourseStep + t.courseDeducted', () => {
+    const rsrc = readFileSync('src/components/backend/treatment-history/TreatmentHistoryRow.jsx', 'utf8');
+    expect(rsrc).toMatch(/withCourseStep/);
+    expect(rsrc).toMatch(/courseDeducted=\{t\.courseDeducted\}/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Run — expect FAIL</strong></label></div>
+  <p><code>npm test -- --run tests/cdv-treatment-history-course-step.test.jsx</code> → FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3a: CustomerDetailView — import + mapper</strong></label></div>
+  <p>Add <code>resolveCourseDeducted</code> to the existing import from <code>../../lib/treatmentDisplayResolvers.js</code> (CDV already imports resolvers; if no such import exists, add: <code>import { resolveCourseDeducted } from '../../lib/treatmentDisplayResolvers.js';</code>). Then in the PRIMARY <code>treatmentSummary</code> map (<code>treatments.map(t =&gt; ({ ... }))</code> ~L564-604) add one field (raw <code>t</code> here HAS <code>.detail</code>):</p>
+<pre><code class="language-js">        cc: t.detail?.symptoms || '',
+        dx: t.detail?.diagnosis || '',
+        // ③ (2026-05-31) — raw t has .detail here; summary row keeps the deduction
+        // signal so the history stepper's course step is accurate.
+        courseDeducted: resolveCourseDeducted(t),
+        createdBy: t.createdBy || 'cloned',</code></pre>
+  <p>The fallback branch (<code>list = [...(customer?.treatmentSummary || [])]</code> ~L606) is left as-is → rows there have <code>courseDeducted: undefined</code> → muted on first paint until the live <code>treatments[]</code> listener resolves (acceptable; documented in spec).</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 3b: TreatmentHistoryRow.jsx (L112)</strong></label></div>
+<pre><code class="language-jsx">        &lt;TreatmentLifecycleStepper lifecycle={lifecycle} isDark={isDark} isLatest={isLatest} withCourseStep courseDeducted={t.courseDeducted} /&gt;</code></pre>
+  <p>Keeps the row's native teal/amber connectors (3B) — the 4-step <code>connClasses</code> in the stepper already produce teal (vitals→doctor) + amber→violet / violet→emerald when steps are done; when course is not-deducted the surrounding connectors stay gray per existing logic.</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 4: Run + build</strong></label></div>
+  <p><code>npm test -- --run tests/cdv-treatment-history-course-step.test.jsx</code> → pass. <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t5s6"> <label for="t5s6"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/CustomerDetailView.jsx src/components/backend/treatment-history/TreatmentHistoryRow.jsx tests/cdv-treatment-history-course-step.test.jsx
+git commit -m "feat(opd): add course step to customer-detail history, keep teal/amber connectors (③B)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: V21 fixups + full suite + build</h3>
+  <p><strong>Files:</strong> Modify the V139 tests that assert the old contract.</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Find every stale assertion</strong></label></div>
+<pre><code class="language-bash">grep -rln "ยังไม่ตัด\|'warn'\|\"warn\"" tests/ | grep -iE "v139|opd-stepper|course"
+# Expect: tests/v139-opd-course-step.test.jsx (+ maybe v139-flow-simulate.test.js, opd-stepper-polish.test.jsx)</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Update each to the new contract</strong></label></div>
+  <p>In each flagged test, replace: state <code>'warn'</code> → <code>'not-deducted'</code>; expected label <code>'ยังไม่ตัด'</code> → <code>'ไม่ตัดคอร์ส'</code>; any amber-class assertion (<code>border-amber-500</code>/<code>text-amber-300</code> on the course dot) → muted (<code>border-[var(--bd-strong)]</code> / <code>text-[var(--tx-faint)]</code> / <code>text-[var(--tx-muted)]</code>); dot content <code>'!'</code> → <code>'–'</code>. Add a comment <code>// ② (2026-05-31) updated: warn→not-deducted muted "ไม่ตัดคอร์ส"</code> at each fixup site.</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Full suite + build (Rule N batch-end)</strong></label></div>
+<pre><code class="language-bash">npm test -- --run        # full vitest — expect 0 fail (baseline 15418 + new ± fixups)
+npm run build            # clean</code></pre>
+  <p>If any non-targeted test fails, it's a V21 lock-in on the changed shape — investigate (do NOT dismiss as flake), fix the assertion to the new contract, document with a <code>② (2026-05-31)</code> marker.</p>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/
+git commit -m "test(opd): V21 fixups — course step warn->not-deducted muted contract"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule Q verification (real browser + real prod) — gold standard</h3>
+  <p><strong>No code.</strong> Per Rule Q / Q-vis / Q-honest — verify on the REAL deployed UI + real data; SEE pixels in BOTH themes. Most of this is admin-gated → <strong>USER L1</strong>; do what the harness can (Rule R diag + Chrome-MCP theme check on the public mockup) and clearly disclose the gap.</p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: ③ data correctness on REAL prod (Rule R — agent can do)</strong></label></div>
+<pre><code class="language-bash"># diag: find one treatment that DEDUCTED a course vs one that didn't, confirm resolveCourseDeducted
+node scripts/diag-... # query be_treatments: detail.courseItems/treatmentItems length>0 for a known customer
+# assert: deducted doc → courseDeducted true ; pure wound-check doc → false</code></pre>
+  <p>Write a tiny <code>scripts/diag-course-deducted-check.mjs</code> (Rule R, admin-SDK, READ-ONLY, canonical path) printing courseDeducted for ~10 recent treatments so the implementer SEES real true/false split before claiming ③ works.</p>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Theme AA on the course-step + sky card (Chrome MCP — agent can do on the public mockup / deployed build)</strong></label></div>
+  <p>Open the deployed build (or <code>public/brainstorm-v2-grounded.html</code>) in Chrome MCP, screenshot Dark + Light: confirm (a) sky confirmed card is clearly distinct from amber pending in BOTH themes, (b) muted "ไม่ตัดคอร์ส" reads as neutral (not alarm) + AA on both. Verify rendered PIXELS, not the object model.</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 2-honest: disclose the GAP</strong></label></div>
+  <p>The assembled flows below run on the auth-gated AdminDashboard / customer-detail → harness can't drive them = <strong>USER L1</strong>. State this explicitly; do NOT claim "verified" for them.</p>
+
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 3: USER L1 checklist (hand to user after deploy)</strong></label></div>
+  <ul>
+    <li>① Frontend → นัดหมาย → วันนี้: กด "คอนเฟิร์มนัด" บนการ์ดหนึ่ง → การ์ดเปลี่ยนเป็นฟ้าชัด + เด้งขึ้นบนสุด (เหนือ "รอยืนยัน"); หลายคอนเฟิร์ม → เรียงตามเวลา; เปิดอีกเครื่อง → อัปเดตเองไม่ต้อง refresh; ทดสอบทั้ง Dark + Light.</li>
+    <li>② การ์ดวันนี้ + หน้าประวัติ: เคสเสร็จแต่ไม่ตัดคอร์ส (เช่นดูแผล) → ขั้นคอร์ส = จุดเทาจาง "ไม่ตัดคอร์ส" (ไม่ใช่เหลือง "!"); เคสตัดคอร์ส → ม่วง ✓ "คอร์ส".</li>
+    <li>③ หน้าดูข้อมูลลูกค้า (customer=LC-…) → ประวัติการรักษา: เห็น 4 ขั้น (มีคอร์ส) เส้น teal/ส้มเดิม; ขั้นคอร์สถูกต้องตามที่ตัด/ไม่ตัดจริง.</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 4: cleanup</strong></label></div>
+  <p>Delete the dev mockups before/at deploy (not product): <code>public/brainstorm-v2-grounded.html</code>, <code>public/brainstorm-confirmed-card-course-step.html</code>. (Keep <code>docs/superpowers/mockups/*</code> + spec + plan.)</p>
+</div>
+
+<h2>Notes for the executor</h2>
+<ul>
+  <li><strong>Cosmetic-shell:</strong> only the sort helper (Task 1) is new logic — and it's pure + tested. Everything else is className / label / one mapper field. Do NOT touch any handler, onClick, data-testid, or data flow.</li>
+  <li><strong>No deploy</strong> until the user types "deploy" THIS turn (V18). All changes are frontend/lib only → no firestore.rules/storage/index/cron → <strong>no Probe-Deploy-Probe</strong>.</li>
+  <li><strong>Rule N:</strong> run only the targeted test file per task; full <code>npm test -- --run</code> once at Task 6.</li>
+  <li><strong>V-entry:</strong> ③'s mapper-strips-detail is a V139/V104-class find — when shipping, add a short V-entry + an AVxx anchor (course-step consumers must receive courseDeducted from a source that has detail) per Rule P.</li>
+</ul>
+
+</body>
+</html>
