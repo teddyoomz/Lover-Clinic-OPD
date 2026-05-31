@@ -217,8 +217,15 @@ describe('V138.N10 — source-grep regression locks the fix', () => {
     const guards = (backendSrc.match(/if \(before < item\.qty\) throw/g) || []).length;
     expect(guards).toBeGreaterThanOrEqual(2); // transfer export + withdrawal export
   });
-  it('N10.7 balance reader queries status:active only (so negative MUST stay active to show)', () => {
-    expect(balancePanelSrc).toMatch(/listStockBatches\(\{\s*branchId:\s*locationId,\s*status:\s*'active'\s*\}\)/);
+  it('N10.7 balance reader INCLUDES active batches (so negative MUST stay active to show) — V143/V143-ter', () => {
+    // V143 broadened the reader to status ∈ {active, depleted} (show drained-to-0 products);
+    // V143-ter moved it to the LIVE listenToStockBatchesByBranch. Negatives are 'active'
+    // (remaining<0 stays active per resolveBatchStatusForRemaining) → still shown. The
+    // negative-stays-active invariant is exactly what keeps them in the balance.
+    expect(balancePanelSrc).toMatch(/listenToStockBatchesByBranch\(\{ branchId: locationId \}/);
+    expect(balancePanelSrc).toMatch(/b\.status === 'active' \|\| b\.status === 'depleted'/);
+    // anti-regression: the old active-only one-shot query must NOT come back
+    expect(balancePanelSrc).not.toMatch(/listStockBatches\(\{\s*branchId:\s*locationId,\s*status:\s*'active'\s*\}\)/);
   });
   it('N10.8 _repayNegativeBalances filters status:ACTIVE (so negative MUST stay active to be repayable)', () => {
     // the repay sweep reads active batches then applyNegativeRepay picks remaining<0
