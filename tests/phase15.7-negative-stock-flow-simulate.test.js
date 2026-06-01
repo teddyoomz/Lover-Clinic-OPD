@@ -256,8 +256,8 @@ describe('Phase 15.7 — Negative stock flow simulate', () => {
 
     it('N4.2 batchFifoAllocate sorts FEFO so earliest-expiry drained first', () => {
       const batches = [
-        { batchId: 'LATE', productId: 'P1', status: 'active', qty: { remaining: 10, total: 10 }, expiresAt: '2027-12-01' },
-        { batchId: 'EARLY', productId: 'P1', status: 'active', qty: { remaining: 10, total: 10 }, expiresAt: '2026-06-01' },
+        { batchId: 'LATE', productId: 'P1', status: 'active', qty: { remaining: 10, total: 10 }, expiresAt: '2030-12-01' },
+        { batchId: 'EARLY', productId: 'P1', status: 'active', qty: { remaining: 10, total: 10 }, expiresAt: '2030-06-01' },
       ];
       const plan = batchFifoAllocate(batches, 15, { productId: 'P1' });
       // EARLY drained fully (10), LATE drained partially (5)
