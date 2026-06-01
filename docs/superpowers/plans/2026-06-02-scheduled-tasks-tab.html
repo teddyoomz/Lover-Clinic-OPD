@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scheduled Tasks Tab Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.86em; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.6em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin:1em 0; }
+    .fbox { background:#fff; border:1.5px solid var(--bd); border-radius:8px; padding:.5em .8em; font-size:.82em; flex:1; min-width:120px; }
+    .fbox b { display:block; color:var(--accent); font-size:.8em; text-transform:uppercase; margin-bottom:.2em; }
+    .farrow { display:flex; align-items:center; padding:0 .35em; color:var(--accent); font-weight:800; }
+  </style>
+</head>
+<body>
+
+<h1>Scheduled Tasks Tab Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline, batch+checkpoint) or superpowers:subagent-driven-development. Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-06-02-scheduled-tasks-tab-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> One admin-only backend tab ("งานอัตโนมัติ &amp; ตารางเวลา") that consolidates all 10 scheduled tasks (after retiring a duplicate Firebase fn) — each enable/disable + tune params + see last-run status + run-now, at runtime.</p>
+  <p><strong>Architecture:</strong> Extend the proven <code>system_config</code> doc with a <code>scheduledTasks</code> map; a pure <code>scheduledTasksRegistry</code> drives both the UI and the param defaults; each Vercel cron gets a 6-line fail-safe config guard + writes a last-run slice into a <code>scheduled_task_status</code> doc; a registry-driven <code>ScheduledTasksTab</code> reads config + status; a run-now endpoint invokes the cron handler with the server-side CRON_SECRET.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite, Firebase (client SDK in UI, admin SDK in crons), Vitest, existing <code>systemConfigClient.js</code> + <code>SectionCard</code> patterns.</p>
+  <p><strong>Rules in force:</strong> C1 (extract SectionCard + reuse cores) · I (flow-simulate at end) · K (work-first for the cron sweep + UI, test bank consolidated) · N (targeted during, full suite at batch end) · Q (L2 real client-SDK + real cron run before "verified"; no deploy without explicit "deploy"). Schedule timing stays read-only (Vercel deploy-time).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Full faithful mockup (10 tasks, grouped, dark theme) lives in <code>public/brainstorm-scheduled-tasks.html</code> (open in the Launch preview). Representative per-task card shape (grounded in the real <code>SystemSettingsTab</code> <code>SectionCard</code> + exact dark-theme CSS vars):</p>
+<div class="mockup">
+  <div class="mockup-label">Per-task card — loaded state (dark theme)</div>
+  <div style="background:#0f0f0f;border:1px solid #222;border-radius:11px;padding:11px 13px;color:#e5e7eb;font-size:13px;font-family:-apple-system,'Segoe UI',sans-serif;">
+    <div style="display:flex;align-items:center;gap:11px;">
+      <div style="width:40px;height:23px;border-radius:9999px;background:#be123c;border:1px solid #e11d48;position:relative;flex:0 0 auto;"><div style="position:absolute;top:2px;left:19px;width:17px;height:17px;border-radius:9999px;background:#fff;"></div></div>
+      <div style="flex:1;"><div style="font-weight:700;color:#fff;"><span style="color:#fb7185;font-weight:800;">ลบ</span>ประวัติแชทลูกค้า <span style="font-size:9px;font-weight:800;border-radius:5px;padding:1px 5px;background:rgba(125,211,252,.12);color:#7dd3fc;border:1px solid rgba(125,211,252,.3);">Vercel</span> <span style="font-size:9px;color:#fcd34d;background:rgba(252,211,77,.1);border:1px solid rgba(252,211,77,.3);border-radius:5px;padding:1px 5px;">🔒 กันหน้าช้า</span></div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px;">chat_history เก่า → snapshot ใหญ่ทำหน้า frontend ช้า</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px solid #222;font-size:11px;color:#9ca3af;">
+      <span><span style="color:#6b7280;text-transform:uppercase;font-size:9px;">ตาราง</span> ⏱ ทุกวัน 04:00 <span style="font-size:9px;color:#6b7280;background:#1a1a1a;border:1px solid #222;border-radius:5px;padding:1px 5px;">อ่านอย่างเดียว</span></span>
+      <span><span style="color:#6b7280;text-transform:uppercase;font-size:9px;">เก็บไว้</span> <span style="display:inline-block;width:46px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#e5e7eb;padding:2px 5px;text-align:center;">24</span> ชม.</span>
+      <span style="color:#6ee7b7;"><span style="color:#6b7280;text-transform:uppercase;font-size:9px;">ล่าสุด</span> วันนี้ 04:00 · ✓ ลบ 18</span>
+      <button style="margin-left:auto;font-size:10.5px;font-weight:700;background:transparent;border:1px solid #be123c;color:#fb7185;border-radius:7px;padding:4px 10px;">▶ รันตอนนี้</button>
+    </div>
+  </div>
+</div>
+<p><strong>Other states:</strong> disabled → toggle grey + title muted + "ปิดอยู่"; safety-critical disable → confirm modal; never-run → "— ยังไม่เคยรัน"; failed → red "✗ ล้มเหลว" + error; enable-only task → no param input.</p>
+
+<h2>Flow</h2>
+<h3>Toggle/param → config → next cron respects it</h3>
+<div class="flow">
+  <div class="fbox"><b>Admin</b> toggle/param + Save (safety-crit disable → confirm)</div><div class="farrow">→</div>
+  <div class="fbox"><b>saveSystemConfig</b> patch scheduledTasks[id] + audit (atomic batch, reuse)</div><div class="farrow">→</div>
+  <div class="fbox"><b>system_config</b> doc updated</div><div class="farrow">→</div>
+  <div class="fbox"><b>next cron fire</b> readScheduledTaskConfig → skip if !enabled / use param</div>
+</div>
+<h3>Cron run → status doc → UI badge</h3>
+<div class="flow">
+  <div class="fbox"><b>cron fires</b> (fixed schedule)</div><div class="farrow">→</div>
+  <div class="fbox"><b>guard</b> read config (fail-safe: error→enabled+default)</div><div class="farrow">→</div>
+  <div class="fbox"><b>work</b> w/ param, OR skip</div><div class="farrow">→</div>
+  <div class="fbox"><b>writes</b> be_admin_audit (ledger) + merge status slice</div><div class="farrow">→</div>
+  <div class="fbox"><b>UI</b> onSnapshot status doc → badge live</div>
+</div>
+<h3>Run-now</h3>
+<div class="flow">
+  <div class="fbox"><b>Admin</b> ▶ รันตอนนี้ (destructive→confirm)</div><div class="farrow">→</div>
+  <div class="fbox"><b>/api/admin/run-scheduled-task</b> (verifyAdmin/perm)</div><div class="farrow">→</div>
+  <div class="fbox"><b>invokes</b> cron handler w/ server CRON_SECRET + force=1</div><div class="farrow">→</div>
+  <div class="fbox"><b>status doc</b> updated → badge "รันด้วยมือ ✓"</div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+<tr><th>File</th><th>New/Mod</th><th>Responsibility</th></tr>
+<tr><td><code>src/lib/scheduledTasksRegistry.js</code></td><td>NEW</td><td>Pure frozen list of 10 task descriptors + helpers. Param defaults imported from core constants where exported.</td></tr>
+<tr><td><code>src/lib/systemConfigClient.js</code></td><td>MOD</td><td>Add <code>scheduledTasks</code> to DEFAULTS + merge + validate + computeChangedFields.</td></tr>
+<tr><td><code>api/_lib/scheduledTaskRuntime.js</code></td><td>NEW</td><td>Server (admin-SDK) <code>readScheduledTaskConfig(db,id)</code> fail-safe + <code>writeScheduledTaskStatus(db,id,result)</code>.</td></tr>
+<tr><td>10 × <code>api/cron/*.js</code></td><td>MOD</td><td>Insert config guard + status write (additive).</td></tr>
+<tr><td><code>functions/cleanupStaffChat.js</code> + <code>functions/index.js:121</code></td><td>DELETE/MOD</td><td>Retire duplicate Firebase staff-chat fn (locked decision).</td></tr>
+<tr><td><code>api/admin/run-scheduled-task.js</code></td><td>NEW</td><td>Admin-authed run-now dispatcher.</td></tr>
+<tr><td><code>src/components/backend/SettingsPrimitives.jsx</code></td><td>NEW</td><td>Extract <code>SectionCard</code>/<code>SaveButton</code>/<code>StatusBanner</code> (Rule C1, 2 consumers).</td></tr>
+<tr><td><code>src/hooks/useScheduledTaskStatus.js</code></td><td>NEW</td><td>onSnapshot listener for the status doc.</td></tr>
+<tr><td><code>src/components/backend/ScheduledTasksTab.jsx</code></td><td>NEW</td><td>Registry-driven tab UI.</td></tr>
+<tr><td><code>src/lib/permissionGroupValidation.js</code>, <code>src/lib/tabPermissions.js</code>, <code>src/nav/navConfig.js</code>, <code>src/pages/BackendDashboard.jsx</code></td><td>MOD</td><td>perm key + gate + nav + render case.</td></tr>
+<tr><td><code>firestore.rules</code></td><td>MOD</td><td><code>clinic_settings/scheduled_task_status</code> rule (read staff, write false / admin-SDK).</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ───────── Task 1 ───────── -->
+<div class="task">
+<h3>Task 1: Retire the duplicate Firebase staff-chat cleanup fn (locked decision)</h3>
+<p><strong>Files:</strong> Delete <code>functions/cleanupStaffChat.js</code> · Modify <code>functions/index.js:121</code> · Test <code>tests/scheduled-tasks-retire-firebase-staffchat.test.js</code></p>
+<div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing regression test</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'node:fs';
+describe('V?: retire duplicate Firebase staff-chat cleanup', () => {
+  it('functions/cleanupStaffChat.js is deleted', () => {
+    expect(existsSync('functions/cleanupStaffChat.js')).toBe(false);
+  });
+  it('functions/index.js no longer exports cleanupOldStaffChatMessages', () => {
+    const src = readFileSync('functions/index.js', 'utf8');
+    expect(src).not.toMatch(/cleanupOldStaffChatMessages/);
+    expect(src).not.toMatch(/cleanupStaffChat/);
+  });
+});</code></pre>
+<div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → FAIL</strong> (<code>npx vitest run tests/scheduled-tasks-retire-firebase-staffchat.test.js</code>)</label></div>
+<div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Delete the file + remove the export line</strong></label></div>
+<p>Delete <code>functions/cleanupStaffChat.js</code>. In <code>functions/index.js</code> remove line 121: <code>exports.cleanupOldStaffChatMessages = require('./cleanupStaffChat.js')...</code> (leave a comment: <code>// V73 Firebase staff-chat cleanup RETIRED 2026-06-02 — duplicate of Vercel staff-chat-retention-sweep (30d). See scheduled-tasks tab.</code>).</p>
+<div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → PASS</strong></label></div>
+<div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add functions/cleanupStaffChat.js functions/index.js tests/scheduled-tasks-retire-firebase-staffchat.test.js
+git commit -m "refactor(functions): retire duplicate Firebase staff-chat cleanup (keep Vercel 30d)"</code></pre>
+<p><strong>Deploy note (NOT now):</strong> at deploy, <code>firebase deploy --only functions</code> will detect the removed function and DELETE it from Cloud Scheduler (confirm the deletion prompt — this is intended).</p>
+</div>
+
+<!-- ───────── Task 2 ───────── -->
+<div class="task">
+<h3>Task 2: Scheduled tasks registry (pure, single source)</h3>
+<p><strong>Files:</strong> Create <code>src/lib/scheduledTasksRegistry.js</code> · Test <code>tests/scheduled-tasks-registry.test.js</code></p>
+<div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write failing test</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { SCHEDULED_TASKS, getTask, listParams } from '../src/lib/scheduledTasksRegistry.js';
+import { RETENTION_HOURS } from '../src/lib/chatHistoryRetentionCore.js';
+
+describe('scheduledTasksRegistry', () => {
+  it('has exactly 10 tasks, all source=vercel (Firebase fn retired)', () => {
+    expect(SCHEDULED_TASKS.length).toBe(10);
+    expect(SCHEDULED_TASKS.every(t => t.source === 'vercel')).toBe(true);
+  });
+  it('every task has id, label, category, scheduleHuman, cronPath, auditOpPrefix', () => {
+    for (const t of SCHEDULED_TASKS) {
+      expect(t.id && t.label && t.category && t.scheduleHuman && t.cronPath).toBeTruthy();
+      expect(typeof t.safetyCritical).toBe('boolean');
+      expect(Array.isArray(t.params)).toBe(true);
+    }
+  });
+  it('chatHistoryRetention default param = core RETENTION_HOURS (single source)', () => {
+    const p = listParams('chatHistoryRetention').find(p => p.key === 'retentionHours');
+    expect(p.default).toBe(RETENTION_HOURS); // imported, not duplicated
+  });
+  it('safety-critical = backup + chatHistory + opdSession', () => {
+    const crit = SCHEDULED_TASKS.filter(t => t.safetyCritical).map(t => t.id).sort();
+    expect(crit).toEqual(['chatHistoryRetention','opdSessionCleanup','wholeSystemBackup']);
+  });
+  it('ids are unique', () => {
+    expect(new Set(SCHEDULED_TASKS.map(t=>t.id)).size).toBe(10);
+  });
+});</code></pre>
+<div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL</strong></label></div>
+<div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement registry</strong></label></div>
+<pre><code class="language-js">// src/lib/scheduledTasksRegistry.js — pure, no Firebase imports.
+// Param defaults imported from each core constant where a clean export exists
+// (single source); literals (dayBeforeHour etc.) declared here + parity-grep test.
+import { RETENTION_HOURS } from './chatHistoryRetentionCore.js';
+import { RETENTION_DAYS as STAFF_CHAT_DAYS } from './staffChatRetentionCore.js';
+import { RETENTION_DAYS as STOCK_MOVE_DAYS } from './stockMovementRetentionCore.js';
+import { SESSION_TIMEOUT_MS } from '../constants.js';
+
+const num = (key, label, def, min, max, unit) => ({ key, label, type: 'number', default: def, min, max, unit });
+
+export const SCHEDULED_TASKS = Object.freeze([
+  { id:'lineReminderFire', category:'reminder', source:'vercel', label:'ส่ง LINE เตือนนัด',
+    description:'เตือนล่วงหน้า 1 วัน (20:00) + เตือนวันนัด (09:00)', scheduleHuman:'ทุกชั่วโมง',
+    cronPath:'/api/cron/line-reminder-fire', auditOpPrefix:'line-reminder-daily',
+    deletesData:false, safetyCritical:false,
+    params:[ num('dayBeforeHour','ชั่วโมงเตือนก่อนวัน',20,0,23,'น.'), num('dayOfHour','ชั่วโมงเตือนวันนัด',9,0,23,'น.') ] },
+  { id:'lineReminderRetry', category:'reminder', source:'vercel', label:'Retry งานเตือนที่ล้มเหลว',
+    description:'ลองส่งซ้ำสูงสุด 3 ครั้ง', scheduleHuman:'ทุก 5 นาที',
+    cronPath:'/api/cron/line-reminder-retry', auditOpPrefix:'line-alert',
+    deletesData:false, safetyCritical:false, params:[] },
+  { id:'wholeSystemBackup', category:'backup', source:'vercel', label:'สำรองทั้งระบบรายวัน',
+    description:'backup เต็ม + ลบ backup เก่ากว่าที่ตั้งไว้', scheduleHuman:'ทุกวัน 03:00',
+    cronPath:'/api/cron/whole-system-backup-daily', auditOpPrefix:'whole-system-backup',
+    deletesData:true, safetyCritical:true,
+    safetyNote:'ปิดแล้ว = ไม่มี backup รายวัน ถ้าระบบมีปัญหาจะกู้ไม่ได้',
+    params:[ num('retentionDays','เก็บ backup',5,1,60,'วัน') ] },
+  { id:'chatHistoryRetention', category:'retention', source:'vercel', label:'ลบประวัติแชทลูกค้า',
+    description:'ลบ chat_history เก่า (เดิมโตจน snapshot ใหญ่ทำหน้า frontend ช้า)', scheduleHuman:'ทุกวัน 04:00',
+    cronPath:'/api/cron/chat-history-retention-sweep', auditOpPrefix:'chat-history-retention-sweep',
+    deletesData:true, safetyCritical:true,
+    safetyNote:'ปิดแล้ว = chat_history จะโตขึ้นจนหน้า frontend ช้า',
+    params:[ num('retentionHours','เก็บไว้',RETENTION_HOURS,1,720,'ชม.') ] },
+  { id:'staffChatRetention', category:'retention', source:'vercel', label:'ลบไฟล์แชทพนักงานเก่า',
+    description:'ลบข้อความ + ไฟล์แนบ staff-chat + กวาด orphan', scheduleHuman:'ทุกวัน 02:45',
+    cronPath:'/api/cron/staff-chat-retention-sweep', auditOpPrefix:'staff-chat-retention-sweep',
+    deletesData:true, safetyCritical:false,
+    params:[ num('retentionDays','เก็บไว้',STAFF_CHAT_DAYS,1,365,'วัน') ] },
+  { id:'stockMovementRetention', category:'retention', source:'vercel', label:'ลบประวัติเคลื่อนไหวสต็อกเก่า',
+    description:'archive → Storage แล้วลบ stock_movements ออกจาก Firestore', scheduleHuman:'ทุกวัน 03:30',
+    cronPath:'/api/cron/stock-movement-retention', auditOpPrefix:'stock-movement-retention',
+    deletesData:true, safetyCritical:false,
+    params:[ num('retentionDays','เก็บไว้',STOCK_MOVE_DAYS,7,730,'วัน') ] },
+  { id:'stockLotCleanup', category:'retention', source:'vercel', label:'ลบ lot สต็อกว่างซ้ำซ้อน',
+    description:'ต่อ (สินค้า×สาขา) เก็บ lot ที่เหลือ + อย่างมาก 1 placeholder ว่าง', scheduleHuman:'ทุกวัน 03:45',
+    cronPath:'/api/cron/stock-lot-cleanup', auditOpPrefix:'stock-lot-cleanup',
+    deletesData:true, safetyCritical:false, params:[] },
+  { id:'patientLinkCleanup', category:'retention', source:'vercel', label:'ลบลิงก์คนไข้ที่ไม่ใช้แล้ว',
+    description:'ลิงก์ว่าง (ไม่มีนัด+ไม่มีคอร์ส) เกิน grace → ลบ token', scheduleHuman:'ทุกวัน 04:30',
+    cronPath:'/api/cron/patient-link-cleanup-sweep', auditOpPrefix:'patient-link-cleanup-sweep',
+    deletesData:true, safetyCritical:false,
+    params:[ num('graceDays','Grace',30,1,365,'วัน') ] },
+  { id:'chartEditSessionSweep', category:'sweep', source:'vercel', label:'กวาดเซสชันแก้ chart (tablet)',
+    description:'ยกเลิกเซสชันค้าง (client crash) + คืน tablet ให้ว่าง', scheduleHuman:'ทุก 15 นาที',
+    cronPath:'/api/cron/chart-edit-session-sweep', auditOpPrefix:'chart-edit-session-sweep',
+    deletesData:true, safetyCritical:false, params:[] },
+  { id:'opdSessionCleanup', category:'sweep', source:'vercel', label:'ลบ/กวาด OPD session ค้าง',
+    description:'archive/hide/delete opd_sessions หมดอายุ', scheduleHuman:'ทุก 30 นาที',
+    cronPath:'/api/cron/opd-session-cleanup-sweep', auditOpPrefix:'opd-session-cleanup-sweep',
+    deletesData:true, safetyCritical:true,
+    safetyNote:'ปิดแล้ว = opd_sessions ค้างสะสม → listener cascade + หน้าค้าง',
+    params:[ num('sessionTimeoutHours','หมดอายุหลัง', Math.round(SESSION_TIMEOUT_MS/3600000),1,24,'ชม.') ] },
+]);
+
+export const CATEGORY_LABELS = Object.freeze({
+  reminder:'LINE แจ้งเตือนนัดหมาย', backup:'สำรองข้อมูล',
+  retention:'ลบข้อมูลเก่า (Retention)', sweep:'กวาดล้างเซสชัน (Sweep)',
+});
+export const CATEGORY_ORDER = ['reminder','backup','retention','sweep'];
+export const CATEGORY_ICON = { reminder:'🔔', backup:'💾', retention:'🧹', sweep:'🔄' };
+
+export function getTask(id) { return SCHEDULED_TASKS.find(t => t.id === id) || null; }
+export function listParams(id) { return getTask(id)?.params || []; }
+export function defaultParamsFor(id) {
+  return Object.fromEntries(listParams(id).map(p => [p.key, p.default]));
+}</code></pre>
+<div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run → PASS</strong></label></div>
+<div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label> <code>git commit -m "feat(scheduled-tasks): pure registry of 10 tasks"</code></div>
+</div>
+
+<!-- ───────── Task 3 ───────── -->
+<div class="task">
+<h3>Task 3: Extend systemConfigClient with scheduledTasks</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/systemConfigClient.js</code> · Test <code>tests/scheduled-tasks-config.test.js</code></p>
+<div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { mergeSystemConfigDefaults, validateSystemConfigPatch, computeChangedFields,
+  SYSTEM_CONFIG_DEFAULTS } from '../src/lib/systemConfigClient.js';
+
+describe('scheduledTasks config', () => {
+  it('defaults include scheduledTasks = {}', () => {
+    expect(SYSTEM_CONFIG_DEFAULTS.scheduledTasks).toEqual({});
+  });
+  it('merge preserves a scheduledTasks slice', () => {
+    const m = mergeSystemConfigDefaults({ scheduledTasks: { chatHistoryRetention: { enabled:false, params:{retentionHours:48} } } });
+    expect(m.scheduledTasks.chatHistoryRetention).toEqual({ enabled:false, params:{retentionHours:48} });
+  });
+  it('merge of missing scheduledTasks → {}', () => {
+    expect(mergeSystemConfigDefaults(null).scheduledTasks).toEqual({});
+  });
+  it('validate rejects out-of-range param (retentionHours > 720)', () => {
+    const err = validateSystemConfigPatch({ scheduledTasks: { chatHistoryRetention: { params:{retentionHours:9999} } } });
+    expect(err).toMatch(/retentionHours/);
+  });
+  it('validate rejects unknown taskId', () => {
+    const err = validateSystemConfigPatch({ scheduledTasks: { notATask: { enabled:false } } });
+    expect(err).toMatch(/notATask|unknown/i);
+  });
+  it('validate accepts valid patch', () => {
+    expect(validateSystemConfigPatch({ scheduledTasks: { chatHistoryRetention: { enabled:true, params:{retentionHours:48} } } })).toBeNull();
+  });
+  it('computeChangedFields diffs per-task', () => {
+    const before = mergeSystemConfigDefaults({ scheduledTasks: { chatHistoryRetention: { enabled:true, params:{retentionHours:24} } } });
+    const after  = mergeSystemConfigDefaults({ scheduledTasks: { chatHistoryRetention: { enabled:false, params:{retentionHours:24} } } });
+    expect(computeChangedFields(before, after)).toContain('scheduledTasks.chatHistoryRetention');
+  });
+});</code></pre>
+<div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → FAIL</strong></label></div>
+<div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Implement</strong> — in <code>systemConfigClient.js</code></label></div>
+<pre><code class="language-js">// + import at top:
+import { SCHEDULED_TASKS, getTask } from './scheduledTasksRegistry.js';
+
+// + in SYSTEM_CONFIG_DEFAULTS object literal:
+  scheduledTasks: {},
+
+// + in mergeSystemConfigDefaults return object:
+  scheduledTasks: (r.scheduledTasks && typeof r.scheduledTasks === 'object' && !Array.isArray(r.scheduledTasks))
+    ? r.scheduledTasks : {},
+
+// + in validateSystemConfigPatch (before `return null`):
+  if (patch.scheduledTasks !== undefined) {
+    if (typeof patch.scheduledTasks !== 'object' || Array.isArray(patch.scheduledTasks))
+      return 'scheduledTasks must be an object';
+    for (const [taskId, cfg] of Object.entries(patch.scheduledTasks)) {
+      const task = getTask(taskId);
+      if (!task) return `scheduledTasks.${taskId} is unknown`;
+      if (cfg.enabled !== undefined && typeof cfg.enabled !== 'boolean')
+        return `scheduledTasks.${taskId}.enabled must be boolean`;
+      if (cfg.params !== undefined) {
+        if (typeof cfg.params !== 'object' || Array.isArray(cfg.params))
+          return `scheduledTasks.${taskId}.params must be an object`;
+        for (const [pk, pv] of Object.entries(cfg.params)) {
+          const spec = task.params.find(p => p.key === pk);
+          if (!spec) return `scheduledTasks.${taskId}.params.${pk} is unknown`;
+          const n = Number(pv);
+          if (!Number.isFinite(n) || n < spec.min || n > spec.max)
+            return `scheduledTasks.${taskId}.params.${pk} must be ${spec.min}-${spec.max}`;
+        }
+      }
+    }
+  }
+
+// + in computeChangedFields (after featureFlags block, before v86Glow):
+  const bST = b.scheduledTasks || {}, aST = a.scheduledTasks || {};
+  for (const k of new Set([...Object.keys(bST), ...Object.keys(aST)])) {
+    if (JSON.stringify(bST[k] || null) !== JSON.stringify(aST[k] || null))
+      out.push(`scheduledTasks.${k}`);
+  }
+
+// + in saveSystemConfig nextRaw object:
+    scheduledTasks: patch.scheduledTasks !== undefined ? patch.scheduledTasks : beforeMerged.scheduledTasks,</code></pre>
+<p>Note: <code>readPath</code> already walks dotted paths so audit before/after for <code>scheduledTasks.X</code> works unchanged.</p>
+<div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run → PASS</strong></label> (also re-run <code>tests/phase16.3-system-config-client.test.js</code> — existing config tests must stay green)</div>
+<div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 4 ───────── -->
+<div class="task">
+<h3>Task 4: Server runtime helper (fail-safe config read + status write)</h3>
+<p><strong>Files:</strong> Create <code>api/_lib/scheduledTaskRuntime.js</code> · Test <code>tests/scheduled-task-runtime.test.js</code></p>
+<div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write failing tests (mock admin db)</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect, vi } from 'vitest';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../api/_lib/scheduledTaskRuntime.js';
+
+const mkDb = (docData, { throwOnGet=false, captureSet }={}) => ({
+  doc: () => ({
+    get: async () => { if (throwOnGet) throw new Error('boom'); return { exists: !!docData, data: () => docData }; },
+    set: async (d, opts) => { captureSet?.(d, opts); },
+  }),
+});
+
+describe('readScheduledTaskConfig (FAIL-SAFE)', () => {
+  it('missing doc → enabled:true, params:{}', async () => {
+    expect(await readScheduledTaskConfig(mkDb(null), 'chatHistoryRetention')).toEqual({ enabled:true, params:{} });
+  });
+  it('read throws → FAIL-SAFE enabled:true', async () => {
+    expect(await readScheduledTaskConfig(mkDb(null,{throwOnGet:true}), 'x')).toEqual({ enabled:true, params:{} });
+  });
+  it('enabled:false honored', async () => {
+    const db = mkDb({ scheduledTasks: { chatHistoryRetention: { enabled:false, params:{retentionHours:48} } } });
+    expect(await readScheduledTaskConfig(db,'chatHistoryRetention')).toEqual({ enabled:false, params:{retentionHours:48} });
+  });
+  it('task absent from config → enabled:true (default)', async () => {
+    const db = mkDb({ scheduledTasks: { other: { enabled:false } } });
+    expect((await readScheduledTaskConfig(db,'chatHistoryRetention')).enabled).toBe(true);
+  });
+});
+describe('writeScheduledTaskStatus', () => {
+  it('merges a slice keyed by taskId', async () => {
+    let captured;
+    await writeScheduledTaskStatus(mkDb({}, { captureSet:(d,o)=>{captured={d,o};} }), 'chatHistoryRetention', { ok:true, summary:'ลบ 5' });
+    expect(captured.o).toEqual({ merge:true });
+    expect(captured.d.chatHistoryRetention.ok).toBe(true);
+    expect(captured.d.chatHistoryRetention.summary).toBe('ลบ 5');
+    expect(typeof captured.d.chatHistoryRetention.lastRunAt).toBe('string');
+  });
+  it('never throws even if set() fails', async () => {
+    const db = { doc:()=>({ set: async()=>{ throw new Error('x'); } }) };
+    await expect(writeScheduledTaskStatus(db,'x',{})).resolves.toBeUndefined();
+  });
+});</code></pre>
+<div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run → FAIL</strong></label></div>
+<div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code class="language-js">// api/_lib/scheduledTaskRuntime.js — admin-SDK helpers shared by all crons.
+const APP_ID = 'loverclinic-opd-4c39b';
+const PREFIX = `artifacts/${APP_ID}/public/data`;
+const CONFIG_DOC = `${PREFIX}/clinic_settings/system_config`;
+const STATUS_DOC = `${PREFIX}/clinic_settings/scheduled_task_status`;
+
+// FAIL-SAFE: any error / missing → enabled:true + empty params (never silently
+// stop a safety-critical cron because of a config-read error). Caller uses
+// `cfg.params.X ?? CORE_DEFAULT`.
+export async function readScheduledTaskConfig(db, taskId) {
+  try {
+    const snap = await db.doc(CONFIG_DOC).get();
+    const all = snap.exists ? (snap.data()?.scheduledTasks || {}) : {};
+    const t = all[taskId] || {};
+    return {
+      enabled: t.enabled !== false,
+      params: (t.params && typeof t.params === 'object' && !Array.isArray(t.params)) ? t.params : {},
+    };
+  } catch (e) {
+    console.warn(`[readScheduledTaskConfig] ${taskId} read failed; FAIL-SAFE enabled:`, e.message);
+    return { enabled: true, params: {} };
+  }
+}
+
+export async function writeScheduledTaskStatus(db, taskId, { ok = true, summary = '', error = '', skipped = false } = {}) {
+  try {
+    await db.doc(STATUS_DOC).set(
+      { [taskId]: { lastRunAt: new Date().toISOString(), ok, summary: String(summary).slice(0,200), error: String(error).slice(0,300), skipped } },
+      { merge: true },
+    );
+  } catch (e) {
+    console.warn(`[writeScheduledTaskStatus] ${taskId} write failed (non-fatal):`, e.message);
+  }
+}</code></pre>
+<div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Run → PASS</strong></label></div>
+<div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 5 ───────── -->
+<div class="task">
+<h3>Task 5: Wire config guard + status write into all 10 Vercel crons (Rule K work-first sweep)</h3>
+<p><strong>Files (modify all 10):</strong> <code>api/cron/{line-reminder-fire,line-reminder-retry,whole-system-backup-daily,stock-movement-retention,stock-lot-cleanup,chart-edit-session-sweep,staff-chat-retention-sweep,chat-history-retention-sweep,opd-session-cleanup-sweep,patient-link-cleanup-sweep}.js</code> · Test <code>tests/scheduled-tasks-cron-guards.test.js</code></p>
+<p><strong>Canonical guard pattern</strong> — insert in each <code>handler</code> AFTER the CRON_SECRET check + <code>const db = getFirestore()</code>, wrapping the existing work. Example (chat-history-retention-sweep.js):</p>
+<pre><code class="language-js">import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
+const TASK_ID = 'chatHistoryRetention';
+// ...inside handler, after `const db = getFirestore();`:
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok:true, skipped:true, summary:'disabled-by-config' });
+    return res.status(200).json({ ok:true, skipped:'disabled-by-config' });
+  }
+  try {
+    const result = await sweepChatHistoryRetention({ db, now: Date.now(),
+      retentionHours: cfg.params?.retentionHours ?? RETENTION_HOURS });   // param threaded
+    /* ...existing be_admin_audit write unchanged... */
+    await writeScheduledTaskStatus(db, TASK_ID, { ok:true, skipped:false,
+      summary: `ลบ ${result.deleted} / สแกน ${result.scanned}` });
+    return res.status(200).json(result);
+  } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok:false, error: e.message });
+    return res.status(500).json({ error:'SWEEP_FAILED', message:e.message });
+  }</code></pre>
+<p>The shared work-fn for each param'd cron gains a param arg defaulting to its core constant (e.g. <code>sweepChatHistoryRetention({..., retentionHours = RETENTION_HOURS})</code>) — keeps the core constant as the canonical fallback (single source).</p>
+<p><strong>Per-cron specifics:</strong></p>
+<table>
+<tr><th>Cron file</th><th>TASK_ID</th><th>Param thread (cfg → fn arg ?? core)</th><th>status summary</th></tr>
+<tr><td>line-reminder-fire</td><td>lineReminderFire</td><td>dayBeforeHour, dayOfHour (cron-file literals → read from cfg.params ?? 20/9)</td><td>`ส่ง ${sent}`</td></tr>
+<tr><td>line-reminder-retry</td><td>lineReminderRetry</td><td>none (enable-only)</td><td>`retry ${retried}`</td></tr>
+<tr><td>whole-system-backup-daily</td><td>wholeSystemBackup</td><td>retentionDays → runWholeSystemBackup cleanup arg ?? 5</td><td>`${docs} docs`</td></tr>
+<tr><td>chat-history-retention-sweep</td><td>chatHistoryRetention</td><td>retentionHours ?? RETENTION_HOURS</td><td>`ลบ ${deleted}`</td></tr>
+<tr><td>staff-chat-retention-sweep</td><td>staffChatRetention</td><td>retentionDays ?? RETENTION_DAYS</td><td>`ลบ ${deletedMessages}`</td></tr>
+<tr><td>stock-movement-retention</td><td>stockMovementRetention</td><td>retentionDays ?? RETENTION_DAYS</td><td>`archive ${archived}`</td></tr>
+<tr><td>stock-lot-cleanup</td><td>stockLotCleanup</td><td>none</td><td>`ลบ ${lotsDeleted}`</td></tr>
+<tr><td>patient-link-cleanup-sweep</td><td>patientLinkCleanup</td><td>graceDays ?? 30 (core ms → days)</td><td>`ลบ ${deleted}`</td></tr>
+<tr><td>chart-edit-session-sweep</td><td>chartEditSessionSweep</td><td>none</td><td>`คืน ${freed}`</td></tr>
+<tr><td>opd-session-cleanup-sweep</td><td>opdSessionCleanup</td><td>sessionTimeoutHours ?? (SESSION_TIMEOUT_MS/3.6e6)</td><td>`ลบ ${deleted}`</td></tr>
+</table>
+<div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Apply the guard to all 10 files</strong> (read each, insert pattern, thread its param into the work-fn).</label></div>
+<div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Write source-grep regression test</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { SCHEDULED_TASKS } from '../src/lib/scheduledTasksRegistry.js';
+describe('all 10 crons have the config guard + status write', () => {
+  for (const t of SCHEDULED_TASKS) {
+    const file = `api/cron/${t.cronPath.split('/').pop()}.js`;
+    it(`${t.id}: reads config + writes status + honors force`, () => {
+      const src = readFileSync(file, 'utf8');
+      expect(src).toMatch(/readScheduledTaskConfig\(db,\s*['"]?\w+['"]?\)|readScheduledTaskConfig\(\s*db/);
+      expect(src).toMatch(/writeScheduledTaskStatus/);
+      expect(src).toMatch(/disabled-by-config/);
+      expect(src).toMatch(/force/);
+      expect(src).toContain(`'${t.id}'`); // TASK_ID present
+    });
+  }
+});</code></pre>
+<div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Run → PASS</strong></label> (+ re-run each cron's existing sweep unit test if present — param-arg default must not change current behaviour)</div>
+<div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit</strong></label> <code>git commit -m "feat(scheduled-tasks): config guard + status write in all 10 crons"</code></div>
+</div>
+
+<!-- ───────── Task 6 ───────── -->
+<div class="task">
+<h3>Task 6: Run-now admin endpoint</h3>
+<p><strong>Files:</strong> Create <code>api/admin/run-scheduled-task.js</code> · Test <code>tests/run-scheduled-task-endpoint.test.js</code></p>
+<div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write failing tests</strong> (auth gate + unknown-task reject + dispatch shape)</label></div>
+<pre><code class="language-js">import { describe, it, expect, vi } from 'vitest';
+// mock adminAuth + dynamic cron import; assert: 401 without admin, 400 unknown taskId,
+// 200 + result when a stub handler is dispatched with force + CRON_SECRET injected.</code></pre>
+<div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → FAIL</strong></label></div>
+<div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code class="language-js">// api/admin/run-scheduled-task.js
+import { verifyAdminOrPermissionToken } from './_lib/adminAuth.js';   // match existing helper name
+import { SCHEDULED_TASKS, getTask } from '../../src/lib/scheduledTasksRegistry.js';
+
+// Map taskId → cron module path (dynamic import; reuses EXACT cron logic).
+const CRON_MODULE = {
+  lineReminderFire:'../cron/line-reminder-fire.js', lineReminderRetry:'../cron/line-reminder-retry.js',
+  wholeSystemBackup:'../cron/whole-system-backup-daily.js', chatHistoryRetention:'../cron/chat-history-retention-sweep.js',
+  staffChatRetention:'../cron/staff-chat-retention-sweep.js', stockMovementRetention:'../cron/stock-movement-retention.js',
+  stockLotCleanup:'../cron/stock-lot-cleanup.js', patientLinkCleanup:'../cron/patient-link-cleanup-sweep.js',
+  chartEditSessionSweep:'../cron/chart-edit-session-sweep.js', opdSessionCleanup:'../cron/opd-session-cleanup-sweep.js',
+};
+
+export default async function handler(req, res) {
+  const auth = await verifyAdminOrPermissionToken(req, res, 'scheduled_task_management');
+  if (!auth) return; // helper already wrote 401/403
+  if (req.method !== 'POST') return res.status(405).json({ error:'METHOD_NOT_ALLOWED' });
+  const { taskId } = req.body || {};
+  if (!getTask(taskId) || !CRON_MODULE[taskId]) return res.status(400).json({ error:'UNKNOWN_TASK', taskId });
+
+  const mod = await import(CRON_MODULE[taskId]);
+  // Synthetic request carrying the server-side CRON_SECRET + force=1 (run even if disabled).
+  const fakeReq = { method:'GET', headers:{ authorization:`Bearer ${process.env.CRON_SECRET}` }, query:{ force:'1' }, body:{ force:true } };
+  let payload = null, status = 200;
+  const fakeRes = { status(c){ status=c; return this; }, json(o){ payload=o; return this; } };
+  await mod.default(fakeReq, fakeRes);
+  return res.status(status).json({ ranBy: auth.email || auth.uid, taskId, result: payload });
+}</code></pre>
+<p>Note: verify the exact auth helper name in <code>api/admin/_lib/adminAuth.js</code> (the codebase uses <code>verifyAdminToken</code> / <code>verifyAdminOrPermissionToken</code> — match what exists; pass the <code>scheduled_task_management</code> perm).</p>
+<div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Run → PASS</strong></label></div>
+<div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 7 ───────── -->
+<div class="task">
+<h3>Task 7: Extract shared SettingsPrimitives (Rule C1)</h3>
+<p><strong>Files:</strong> Create <code>src/components/backend/SettingsPrimitives.jsx</code> · Modify <code>src/components/backend/SystemSettingsTab.jsx</code> · Test <code>tests/settings-primitives-extract.test.js</code></p>
+<div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1:</strong> Move <code>SectionCard</code>, <code>StatusBanner</code>, <code>SaveButton</code> verbatim out of SystemSettingsTab into <code>SettingsPrimitives.jsx</code> (named exports). Keep markup byte-identical.</label></div>
+<div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2:</strong> SystemSettingsTab imports them from the new file; delete the local defs.</label></div>
+<div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Source-grep test</strong> — SettingsPrimitives exports the 3; SystemSettingsTab imports (no local <code>function SectionCard</code>).</label></div>
+<div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4:</strong> Re-run existing SystemSettingsTab RTL tests → still green (no behaviour change).</label></div>
+<div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 8 ───────── -->
+<div class="task">
+<h3>Task 8: Status listener hook</h3>
+<p><strong>Files:</strong> Create <code>src/hooks/useScheduledTaskStatus.js</code> · Test <code>tests/use-scheduled-task-status.test.js</code></p>
+<div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1:</strong> failing test (onSnapshot wired, returns {} initially, unsubscribes on unmount).</label></div>
+<div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Implement</strong></label></div>
+<pre><code class="language-js">// src/hooks/useScheduledTaskStatus.js
+import { useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db, appId } from '../firebase.js';
+export function useScheduledTaskStatus() {
+  const [status, setStatus] = useState({});
+  useEffect(() => {
+    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'scheduled_task_status');
+    return onSnapshot(ref, (s) => setStatus(s.exists() ? (s.data() || {}) : {}), () => setStatus({}));
+  }, []);
+  return status;
+}</code></pre>
+<div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: PASS + Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 9 ───────── -->
+<div class="task">
+<h3>Task 9: ScheduledTasksTab UI (registry-driven)</h3>
+<p><strong>Files:</strong> Create <code>src/components/backend/ScheduledTasksTab.jsx</code> · Test <code>tests/scheduled-tasks-tab-rtl.test.jsx</code></p>
+<div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Build the component</strong> (work-first per Rule K).</label></div>
+<p>Structure: <code>useSystemConfig()</code> → config; <code>useScheduledTaskStatus()</code> → status; <code>useTabAccess().isAdmin</code> + <code>useHasPermission('scheduled_task_management')</code> gate (mirror SystemSettingsTab). Group <code>SCHEDULED_TASKS</code> by <code>category</code> (CATEGORY_ORDER) → one <code>SectionCard</code> per category. Per task render a <code>&lt;TaskRow&gt;</code>:</p>
+<ul>
+<li>toggle (switch) bound to <code>draft[id].enabled</code> (default true). On toggle-OFF a <code>safetyCritical</code> task → <code>window.confirm(task.safetyNote + ' — แน่ใจไหม?')</code>; cancel reverts.</li>
+<li>param number inputs from <code>task.params</code> (min/max), bound to <code>draft[id].params[key]</code> (default <code>p.default</code>).</li>
+<li>schedule read-only: <code>⏱ {task.scheduleHuman}</code> + a <code>อ่านอย่างเดียว</code> chip + source badge.</li>
+<li>last-run badge from <code>status[id]</code>: <code>ok</code> → green "✓ {summary}"; <code>skipped</code> → grey "ปิดอยู่"; <code>ok===false</code> → red "✗ {error}"; missing → "— ยังไม่เคยรัน". Show relative <code>lastRunAt</code>.</li>
+<li>run-now button → if <code>task.deletesData</code> confirm first → POST <code>/api/admin/run-scheduled-task</code> {taskId} with admin idToken → on return, status doc listener updates the badge.</li>
+</ul>
+<p>One global <strong>"บันทึกการตั้งค่า"</strong> button → diff draft vs <code>config.scheduledTasks</code> → <code>saveSystemConfig({ patch:{ scheduledTasks: draft }, executedBy })</code> (atomic + audit; reuse). Loading/permission states mirror SystemSettingsTab.</p>
+<div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: RTL tests</strong></label></div>
+<p>Mock useSystemConfig + useScheduledTaskStatus + saveSystemConfig + fetch. Assert: renders 10 task rows in 4 category groups; toggling a safety-critical task off triggers confirm (mock <code>window.confirm</code>); param input respects min/max; Save calls saveSystemConfig with the scheduledTasks patch; run-now POSTs to the endpoint; last-run badge reflects status; non-admin/non-perm → access-denied banner.</p>
+<div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: PASS + Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 10 ───────── -->
+<div class="task">
+<h3>Task 10: Permission key + nav + tab wiring</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/permissionGroupValidation.js</code>, <code>src/lib/tabPermissions.js</code>, <code>src/nav/navConfig.js</code>, <code>src/pages/BackendDashboard.jsx</code> · Test <code>tests/scheduled-tasks-nav-wire.test.js</code></p>
+<div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1:</strong> add <code>scheduled_task_management</code> to <code>ALL_PERMISSION_KEYS</code> (under "ตั้งค่า / ข้อมูลพื้นฐาน").</label></div>
+<div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2:</strong> <code>TAB_PERMISSION_MAP['scheduled-tasks'] = { requires:['scheduled_task_management'] }</code> (admin bypass implicit).</label></div>
+<div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3:</strong> add nav entry (label "งานอัตโนมัติ & ตารางเวลา", id <code>scheduled-tasks</code>, icon ⏱️) directly after <code>system-settings</code> in navConfig; add lazy import + render <code>case 'scheduled-tasks':</code> in BackendDashboard.</label></div>
+<div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4:</strong> update counts in <code>tests/backend-nav-config.test.js</code> + <code>tests/phase11-master-data-scaffold.test.jsx</code> (section/MASTER_STUB counts) + <code>tests/phase16.3-flow-simulate.test.js</code> (TAB_PERMISSION_MAP count) — the V21-class count fixups. Add nav-wire test asserting gate semantics (4 personas).</label></div>
+<div class="step"><input type="checkbox" id="t10s5"> <label for="t10s5"><strong>Step 5: PASS + Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 11 ───────── -->
+<div class="task">
+<h3>Task 11: firestore.rules for the status doc + Probe-Deploy-Probe note</h3>
+<p><strong>Files:</strong> Modify <code>firestore.rules</code> · Test <code>tests/scheduled-task-status-rules.test.js</code> (source-grep the rule shape)</p>
+<div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1:</strong> add a narrow match (mirror the existing <code>clinic_settings/system_config</code> block):</label></div>
+<pre><code class="language-js">match /clinic_settings/scheduled_task_status {
+  allow read: if isClinicStaff();
+  allow write: if false; // admin SDK (crons) only — client never writes
+}</code></pre>
+<div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2:</strong> source-grep test asserts the match block + <code>allow write: if false</code>.</label></div>
+<div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3:</strong> Add a Probe entry to <code>.claude/rules/01-iron-clad.md</code> Rule B list: anon write to <code>scheduled_task_status</code> → expect 403. (Deploy is gated on explicit "deploy".)</label></div>
+<div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: Commit</strong></label></div>
+</div>
+
+<!-- ───────── Task 12 ───────── -->
+<div class="task">
+<h3>Task 12: Rule I flow-simulate + Rule Q L2 + AV invariant + full suite (consolidated, Rule K test-last)</h3>
+<p><strong>Files:</strong> Create <code>tests/scheduled-tasks-flow-simulate.test.js</code> · Create <code>scripts/e2e-scheduled-tasks-l2.mjs</code> · Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (new AVxx)</p>
+<div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Step 1: Rule I flow-simulate</strong></label></div>
+<p>Pure-function chain using the real registry + the real <code>readScheduledTaskConfig</code> against a mock db: (F1) config <code>enabled:false</code> → guard returns skip (no work fn called); (F2) param override (retentionHours 24→48) → guard threads 48 to the work fn; (F3) config-read throws → FAIL-SAFE enabled+core-default; (F4) saveSystemConfig diff produces correct <code>scheduledTasks.X</code> changedFields + audit; (F5) status write merges per-task slice. Source-grep: only ONE staff-chat deleter remains (no <code>cleanupOldStaffChatMessages</code> anywhere).</p>
+<div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Step 2: Rule Q L2 script</strong> (real client SDK + real prod, run when user authorizes Rule R env-pull)</label></div>
+<p><code>scripts/e2e-scheduled-tasks-l2.mjs</code>: (1) client SDK signs in as staff, writes <code>system_config.scheduledTasks.chatHistoryRetention.enabled=false</code> via the REAL saveSystemConfig path; (2) reads it back; (3) admin-SDK invokes the chat-history cron guard's <code>readScheduledTaskConfig</code> against the REAL doc → asserts <code>enabled:false</code> (i.e. a real cron WOULD skip); (4) restores enabled:true; (5) verifies status doc read. Honest scope: this proves the config↔cron contract on real prod data; full L1 = user toggles in the tab + observes a real cron skip / run-now.</p>
+<div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Step 3: AVxx invariant</strong></label></div>
+<p>Add to audit-anti-vibe-code: "Every task in <code>scheduledTasksRegistry</code> MUST have (a) a cron file with the <code>readScheduledTaskConfig</code> guard + <code>writeScheduledTaskStatus</code>, (b) exactly one deleter per target collection (no duplicate scheduled deleter — staff-chat conflict regression guard). New scheduled cron → MUST be added to the registry + get the guard." Grep pattern + the Task-5 source-grep test as the lock.</p>
+<div class="step"><input type="checkbox" id="t12s4"> <label for="t12s4"><strong>Step 4: Full verification (Rule N batch-end)</strong></label></div>
+<pre><code class="language-bash">npx vitest run        # ALL green (incl. the V21 count fixups from Task 10)
+npm run build         # clean</code></pre>
+<div class="step"><input type="checkbox" id="t12s5"> <label for="t12s5"><strong>Step 5: Commit + update active.md / SESSION_HANDOFF</strong></label></div>
+<p>Then STOP for the user's explicit "deploy" (V18). Deploy footprint = Vercel (frontend + 10 crons + run-now) + <code>firebase deploy --only functions</code> (removes the retired fn) + <code>firestore.rules</code> (status doc → Probe-Deploy-Probe). Strip <code>public/brainstorm-scheduled-tasks.html</code> before deploy.</p>
+</div>
+
+<h2>Self-Review (done)</h2>
+<ul>
+<li><strong>Spec coverage:</strong> all spec sections map to tasks — registry(T2), config(T3), server reader(T4), guards(T5), run-now(T6), UI(T9 + T7 primitives + T8 hook), permission/nav(T10), rules(T11), conflict-retire(T1), fail-safe(T4), flow-simulate + L2 + AV(T12). Schedule-read-only honored (no schedule-edit task). ✓</li>
+<li><strong>Placeholders:</strong> none — guard pattern shown once + exact per-cron table (DRY, not a placeholder); auth helper name flagged to verify against real <code>adminAuth.js</code>. ✓</li>
+<li><strong>Type consistency:</strong> <code>readScheduledTaskConfig(db,id)→{enabled,params}</code>, <code>writeScheduledTaskStatus(db,id,{ok,summary,error,skipped})</code>, registry <code>{id,label,category,source,scheduleHuman,cronPath,auditOpPrefix,deletesData,safetyCritical,safetyNote?,params[]}</code> — consistent across T2/T4/T5/T6/T9. ✓</li>
+</ul>
+
+</body>
+</html>
