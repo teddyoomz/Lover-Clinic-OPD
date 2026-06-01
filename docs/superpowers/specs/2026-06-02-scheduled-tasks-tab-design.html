@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Scheduled Tasks Tab — Design Spec (งานอัตโนมัติ &amp; ตารางเวลา)</title>
+<style>
+  :root{ --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666;
+    /* exact app dark-theme vars (for the embedded mockup, copied from src/index.css §S-design) */
+    --d-base:#050505; --d-surface:#0a0a0a; --d-card:#0f0f0f; --d-hover:#1a1a1a;
+    --d-bd:#222222; --d-bds:#333333; --d-bds2:#444444;
+    --d-tx:#e5e7eb; --d-tx2:#9ca3af; --d-tx3:#6b7280; --d-head:#ffffff;
+    --rose700:#be123c; --rose600:#e11d48; --rose400:#fb7185; --emer:#6ee7b7; --amber:#fcd34d; --sky:#7dd3fc; }
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Sarabun',sans-serif;max-width:980px;margin:2em auto;padding:1em;line-height:1.65;color:#222}
+  h1{border-bottom:2px solid var(--accent);padding-bottom:.3em}
+  h2{border-bottom:1px solid var(--bd);padding-bottom:.2em;margin-top:2em}
+  h3{margin-top:1.4em}
+  pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;font-size:.86em}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace}
+  blockquote{border-left:4px solid var(--accent);background:var(--bg-meta);padding:.5em 1em;border-radius:0 6px 6px 0;color:var(--tx-muted)}
+  .section{background:var(--bg-section);padding:1em 1.5em;border-radius:8px;margin:1em 0}
+  table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.92em}
+  th,td{border:1px solid var(--bd);padding:.45em .7em;text-align:left;vertical-align:top}
+  th{background:var(--bg-meta)}
+  .warn{background:#fff7ed;border-left:4px solid var(--amber);padding:.5em 1em;border-radius:0 6px 6px 0}
+  /* ── embedded dark mockup ── */
+  .mockup{background:var(--d-base);border:1px solid var(--d-bd);border-radius:12px;padding:16px;margin:1em 0}
+  .mockup-label{font-size:.72em;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-muted);margin-bottom:.6em}
+  .mk *{box-sizing:border-box}
+  .mk{font-size:13px;color:var(--d-tx);font-family:-apple-system,'Segoe UI','Sarabun',sans-serif}
+  .mk .phead{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .mk .phead .ic{width:42px;height:42px;border-radius:9999px;background:rgba(190,18,60,.18);border:1px solid var(--rose700);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .mk .phead h4{margin:0;font-size:18px;font-weight:800;color:var(--d-head)}
+  .mk .phead p{margin:2px 0 0;font-size:11px;color:var(--d-tx3)}
+  .mk .card{background:var(--d-surface);border:1px solid var(--d-bd);border-radius:14px;overflow:hidden;margin-bottom:12px}
+  .mk .card>.h{padding:11px 16px;border-bottom:1px solid var(--d-bd);display:flex;align-items:center;gap:10px}
+  .mk .card>.h .ic{width:32px;height:32px;border-radius:9999px;background:var(--d-hover);border:1px solid var(--d-bd);display:flex;align-items:center;justify-content:center;font-size:15px}
+  .mk .card>.h h5{margin:0;font-size:13.5px;font-weight:800;color:var(--d-head)}
+  .mk .card>.b{padding:6px 12px 12px}
+  .mk .task{border:1px solid var(--d-bd);border-radius:11px;background:var(--d-card);padding:11px 13px;margin-top:9px}
+  .mk .task.cf{border-color:rgba(252,211,77,.5)}
+  .mk .top{display:flex;align-items:center;gap:11px}
+  .mk .nm{flex:1;min-width:0}
+  .mk .nm .t{font-size:13px;font-weight:700;color:var(--d-head)}
+  .mk .nm .d{font-size:11px;color:var(--d-tx2);margin-top:2px}
+  .mk .sw{position:relative;width:40px;height:23px;border-radius:9999px;background:var(--d-bds);flex:0 0 auto;border:1px solid var(--d-bds2)}
+  .mk .sw.on{background:var(--rose700);border-color:var(--rose600)}
+  .mk .sw .k{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:9999px;background:#fff}
+  .mk .sw.on .k{left:19px}
+  .mk .meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px solid var(--d-bd);font-size:11px;color:var(--d-tx2)}
+  .mk .lab{color:var(--d-tx3);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+  .mk .ro{font-size:9px;color:var(--d-tx3);background:var(--d-hover);border:1px solid var(--d-bd);border-radius:5px;padding:1px 5px}
+  .mk .src{font-size:9px;font-weight:800;border-radius:5px;padding:1px 5px}
+  .mk .src.v{background:rgba(125,211,252,.12);color:var(--sky);border:1px solid rgba(125,211,252,.3)}
+  .mk .src.f{background:rgba(252,211,77,.12);color:var(--amber);border:1px solid rgba(252,211,77,.3)}
+  .mk .pinp{width:48px;background:var(--d-hover);border:1px solid var(--d-bds);border-radius:6px;color:var(--d-tx);padding:2px 5px;font-size:11px;text-align:center}
+  .mk .ok{color:var(--emer)} .mk .mut{color:var(--d-tx3)} .mk .del{color:var(--rose400);font-weight:800}
+  .mk .run{margin-left:auto;font-size:10.5px;font-weight:700;background:transparent;border:1px solid var(--rose700);color:var(--rose400);border-radius:7px;padding:4px 10px}
+  .mk .lock{font-size:9px;color:var(--amber);background:rgba(252,211,77,.1);border:1px solid rgba(252,211,77,.3);border-radius:5px;padding:1px 5px}
+  .mk .cfb{background:rgba(252,211,77,.08);border:1px solid rgba(252,211,77,.45);border-radius:9px;padding:7px 11px;margin:9px 0 0;font-size:10.5px;color:var(--amber)}
+  /* flow */
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:1em 0}
+  .fbox{background:#fff;border:1.5px solid var(--bd);border-radius:8px;padding:.6em .9em;font-size:.86em;flex:1;min-width:130px}
+  .fbox b{display:block;color:var(--accent);font-size:.82em;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2em}
+  .farrow{display:flex;align-items:center;padding:0 .4em;color:var(--accent);font-weight:800}
+</style>
+</head>
+<body>
+
+<h1>Scheduled Tasks Tab — "งานอัตโนมัติ &amp; ตารางเวลา"</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-02 · <strong>Status:</strong> Approved by user (design) · <strong>Implementation plan:</strong> (to be written via writing-plans) · <strong>Full interactive mockup:</strong> <code>public/brainstorm-scheduled-tasks.html</code> (11 tasks)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The app has <strong>11 scheduled/automated tasks</strong> scattered across two runtimes (10 Vercel crons in <code>vercel.json</code> + 1 Firebase scheduled Cloud Function) — appointment reminders, a daily full-system backup, and a fleet of auto-delete/retention/sweep jobs. They are invisible, un-tunable at runtime, and "เยอะจนลืม" (so many the admin forgets them). The whole-app sweep also surfaced a <strong>silent conflict</strong>: staff chat is deleted by TWO jobs with different retention (Vercel 30d vs Firebase 7d), so the real retention is 7d, not the intended 30d — nobody knew.</p>
+<p>This feature consolidates ALL 11 into one admin-only backend tab where each can be <strong>enabled/disabled</strong>, have its <strong>parameters tuned</strong> (retention days, grace, quiet hours), show its <strong>last-run status</strong>, and be <strong>manually triggered</strong> — all at runtime. The job <em>schedule</em> (when it fires) stays read-only because Vercel cron timing is deploy-time (<code>vercel.json</code>); changing it needs a deploy.</p>
+
+<h2>Mockup Design</h2>
+<p>Grounded in the existing <code>SystemSettingsTab</code> design language (exact dark-theme CSS vars + <code>SectionCard</code> structure). Full 11-task version lives in <code>public/brainstorm-scheduled-tasks.html</code>; representative slice below.</p>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · loaded · dark theme (the app's real palette)</div>
+  <div class="mk">
+    <div class="phead"><div class="ic">⏱️</div><div><h4>งานอัตโนมัติ &amp; ตารางเวลา</h4><p>รวมงานตั้งเวลา 11 งาน — เปิด/ปิด · ปรับค่า · ดูสถานะ · สั่งรันเอง (admin only)</p></div></div>
+
+    <div class="card"><div class="h"><div class="ic">💾</div><h5>สำรองข้อมูล</h5></div><div class="b">
+      <div class="task"><div class="top"><div class="sw on"><div class="k"></div></div>
+        <div class="nm"><div class="t">สำรองทั้งระบบรายวัน <span class="src v">Vercel</span> <span class="lock">🔒 สำคัญ</span></div><div class="d">backup เต็ม + <span class="del">ลบ</span> backup เก่ากว่า 5 วัน</div></div></div>
+        <div class="meta"><span><span class="lab">ตาราง</span> ⏱ ทุกวัน 03:00 <span class="ro">อ่านอย่างเดียว</span></span><span><span class="lab">เก็บ backup</span> <input class="pinp" value="5"> วัน</span><span class="ok"><span class="lab">ล่าสุด</span> วันนี้ 03:00 · ✓ 4,783 docs</span><button class="run">▶ สำรองตอนนี้</button></div></div>
+    </div></div>
+
+    <div class="card"><div class="h"><div class="ic">🧹</div><h5><span class="del">ลบ</span>ข้อมูลเก่า (Retention)</h5></div><div class="b">
+      <div class="task"><div class="top"><div class="sw on"><div class="k"></div></div>
+        <div class="nm"><div class="t"><span class="del">ลบ</span>ประวัติแชทลูกค้า <span class="src v">Vercel</span> <span class="lock">🔒 กันหน้าช้า</span></div><div class="d">chat_history เก่า → snapshot ใหญ่ทำหน้า frontend ช้า</div></div></div>
+        <div class="meta"><span><span class="lab">ตาราง</span> ⏱ ทุกวัน 04:00 <span class="ro">อ่านอย่างเดียว</span></span><span><span class="lab">เก็บไว้</span> <input class="pinp" value="24"> ชม.</span><span class="ok"><span class="lab">ล่าสุด</span> 04:00 · ✓ ลบ 18</span><button class="run">▶ รันตอนนี้</button></div></div>
+
+      <div class="cfb">⚠ 2 งานล่างนี้ลบ "แชทพนักงาน" ตัวเดียวกัน ค่าเก็บไม่ตรง (30 วัน vs 7 วัน) → แผนเสนอถอด Firebase fn ทิ้ง เหลือ Vercel ตัวเดียว</div>
+      <div class="task cf"><div class="top"><div class="sw on"><div class="k"></div></div>
+        <div class="nm"><div class="t"><span class="del">ลบ</span>ไฟล์แชทพนักงาน <span class="src v">Vercel</span></div><div class="d">ลบข้อความ + ไฟล์แนบ + กวาด orphan (ละเอียดกว่า)</div></div></div>
+        <div class="meta"><span><span class="lab">ตาราง</span> ⏱ ทุกวัน 02:45 <span class="ro">อ่านอย่างเดียว</span></span><span><span class="lab">เก็บไว้</span> <input class="pinp" value="30"> วัน</span><span class="ok"><span class="lab">ล่าสุด</span> 02:45 · ✓ ลบ 5</span><button class="run">▶ รันตอนนี้</button></div></div>
+      <div class="task cf"><div class="top"><div class="sw on"><div class="k"></div></div>
+        <div class="nm"><div class="t"><span class="del">ลบ</span>แชทพนักงาน (ตัวซ้ำ) <span class="src f">Firebase fn</span></div><div class="d">cleanupOldStaffChatMessages — ลบ &gt; 7 วัน (ของเดิม V73)</div></div></div>
+        <div class="meta"><span><span class="lab">ตาราง</span> ⏱ ทุกวัน 03:00 <span class="ro">อ่านอย่างเดียว</span></span><span><span class="lab">เก็บไว้</span> <input class="pinp" value="7"> วัน</span><span class="mut"><span class="lab">ล่าสุด</span> — (Firebase แยก)</span><button class="run">▶ รันตอนนี้</button></div></div>
+    </div></div>
+  </div>
+</div>
+
+<p><strong>States covered</strong>: loaded (above); <em>disabled</em> task → toggle off + grey title + "ปิดอยู่ — ไม่ทำงาน"; <em>safety-critical disable</em> → confirm modal "ปิดแล้ว …จะ… แน่ใจไหม?"; <em>never-run</em> → "— ยังไม่เคยรัน"; <em>failed run</em> → red "✗ ล้มเหลว" + error tooltip; <em>no-param tasks</em> (stock-lot, chart-sweep) → only toggle + status + run-now.</p>
+
+<h2>Flow</h2>
+
+<h3>Flow 1 — Toggle / tune param (runtime config)</h3>
+<div class="flow">
+  <div class="fbox"><b>Admin</b> toggle off OR แก้ param ใน ScheduledTasksTab</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>Confirm?</b> safety-critical + ปิด → modal บอกผล</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>saveSystemConfig</b> patch <code>scheduledTasks[id]</code> + audit doc (atomic writeBatch — reuse เดิม)</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>system_config</b> doc updated</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>Next cron run</b> reads config → <code>enabled:false</code> = skip / ใช้ param ใหม่</div>
+</div>
+
+<h3>Flow 2 — Cron run → last-run status (every scheduled fire)</h3>
+<div class="flow">
+  <div class="fbox"><b>Vercel/Firebase</b> fires cron at its (fixed) schedule</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>readScheduledTaskConfig(id)</b> admin SDK · <b>fail-safe</b>: error/missing → enabled+default</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>enabled?</b> no → write status <code>skipped</code> + return · yes → do work w/ params</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>be_admin_audit</b> (ledger, เดิม) + merge slice into <code>scheduled_task_status</code> doc</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>UI listener</b> on status doc → badge updates live</div>
+</div>
+
+<h3>Flow 3 — Run now (manual trigger)</h3>
+<div class="flow">
+  <div class="fbox"><b>Admin</b> clicks ▶ รันตอนนี้ (destructive → confirm)</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>/api/admin/run-scheduled-task</b> (verifyAdmin/perm) dispatch by taskId</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>shared core</b> (same logic cron uses, apply:true)</div>
+  <div class="farrow">→</div>
+  <div class="fbox"><b>status doc</b> updated → UI badge "รันด้วยมือ · ✓"</div>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>File</th><th>Responsibility / depends on</th></tr>
+  <tr><td>Registry (pure)</td><td><code>src/lib/scheduledTasksRegistry.js</code> NEW</td><td>Frozen list of 11 task descriptors (id, TH label/desc, category, source, scheduleHuman, auditOpPrefix, deletesData, safetyCritical + consequence, params[]). Param defaults imported from each <code>_lib</code> core constant (single source — Rule C1) + parity test. Shared by UI + (shape) server.</td></tr>
+  <tr><td>Config client</td><td><code>src/lib/systemConfigClient.js</code> EXTEND</td><td>Add <code>scheduledTasks</code> to DEFAULTS + mergeSystemConfigDefaults + validateSystemConfigPatch (per-param min/max from registry) + computeChangedFields. Reuse <code>saveSystemConfig</code> (atomic + audit). Missing config = current behaviour (V14 lock).</td></tr>
+  <tr><td>Server config reader</td><td><code>api/_lib/readScheduledTaskConfig.js</code> NEW</td><td>Admin SDK read of <code>clinic_settings/system_config</code> → <code>{enabled, params}</code> for a taskId. <strong>Fail-safe</strong>: any error / missing → <code>{enabled:true, params:registryDefaults}</code>.</td></tr>
+  <tr><td>Cron guards ×11</td><td>10 <code>api/cron/*.js</code> + <code>functions/cleanupStaffChat.js</code> EDIT</td><td>Top-of-handler: read config → skip if disabled (write status <code>skipped</code>) → use <code>cfg.params.X ?? HARDCODED_DEFAULT</code>. End-of-run: merge slice into status doc. Additive, minimal.</td></tr>
+  <tr><td>Status doc</td><td><code>clinic_settings/scheduled_task_status</code> NEW</td><td>One doc, <code>{[taskId]:{lastRunAt, ok, summary, error?, skipped?}}</code>. Each cron merges its slice. UI listens. Separate from immutable <code>be_admin_audit</code> ledger.</td></tr>
+  <tr><td>Run-now endpoint</td><td><code>api/admin/run-scheduled-task.js</code> NEW</td><td>verifyAdminToken / <code>scheduled_task_management</code> perm. Dispatch by taskId → shared core (apply:true). Where a cron's orchestration isn't already in a shared core, extract it (Rule C1).</td></tr>
+  <tr><td>UI tab</td><td><code>src/components/backend/ScheduledTasksTab.jsx</code> NEW</td><td>Registry-driven render, grouped by category. Per-task: toggle + param inputs + last-run badge + run-now. Warn-confirm on safety-critical disable. Reuses <code>SectionCard</code>/<code>SaveButton</code>/<code>StatusBanner</code> (extract to shared <code>SettingsPrimitives.jsx</code> — Rule C1, now 2 consumers).</td></tr>
+  <tr><td>Permission + nav</td><td><code>permissionGroupValidation.js</code>, <code>tabPermissions.js</code>, <code>navConfig.js</code>, <code>BackendDashboard.jsx</code> EDIT</td><td>NEW key <code>scheduled_task_management</code> + gate <code>tab=scheduled-tasks</code> + nav entry near "ตั้งค่าระบบ". Admin bypass implicit.</td></tr>
+  <tr><td>Rules</td><td><code>firestore.rules</code> EDIT (maybe)</td><td><code>clinic_settings/scheduled_task_status</code>: read isClinicStaff; write admin/perm + admin-SDK (crons bypass). system_config write gate already covers the new field. → Probe-Deploy-Probe if rules change.</td></tr>
+</table>
+
+<h3>Config data shape</h3>
+<pre>// clinic_settings/system_config  (extend existing doc)
+scheduledTasks: {
+  chatHistoryRetention: { enabled: true, params: { retentionHours: 24 } },
+  staffChatRetention:   { enabled: true, params: { retentionDays: 30 } },
+  stockMovementRetention:{ enabled: true, params: { retentionDays: 90, batchLimit: 2000 } },
+  patientLinkCleanup:   { enabled: true, params: { graceDays: 30 } },
+  wholeSystemBackup:    { enabled: true, params: { retentionDays: 5 } },
+  lineReminderFire:     { enabled: true, params: { dayBeforeHour: 20, dayOfHour: 9 } },
+  opdSessionCleanup:    { enabled: true, params: { sessionTimeoutHours: 2 } },
+  // stockLotCleanup / chartEditSessionSweep / lineReminderRetry / staffChatCleanupFn = enabled only
+}
+
+// clinic_settings/scheduled_task_status  (NEW doc)
+{ chatHistoryRetention: { lastRunAt: <ts>, ok: true, summary: 'ลบ 18 / เหลือ 96', skipped: false },
+  stockLotCleanup:      { lastRunAt: null,  ok: null, summary: '', skipped: false }, ... }</pre>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A (full):</strong> เปิด/ปิด + ปรับ param + last-run status + ปุ่ม run-now.</li>
+  <li><strong>Scope = A:</strong> tab มีเฉพาะ 11 งานตั้งเวลา. งานลบแบบกดเอง 9 ตัว (delete-customer / cleanup-test-* / wipe-master / cleanup-phantom-branch / cleanup-orphan-stock) ไม่ย้ายมา — มี UI เดิมอยู่แล้ว.</li>
+  <li><strong>Safety = A (warn-on-disable):</strong> งาน safetyCritical (backup / chatHistoryRetention / opdSessionCleanup) ปิดได้แต่เด้ง confirm บอกผล; งานทั่วไปปิดได้เลย. ไม่มี hard-lock.</li>
+  <li><strong>Location = A:</strong> tab ใหม่ <code>tab=scheduled-tasks</code> ข้าง "ตั้งค่าระบบ" + permission <code>scheduled_task_management</code> เฉพาะ. ไม่ยัดเป็น section ในหน้าตั้งค่าเดิม (ยาวเกิน).</li>
+  <li><strong>Schedule = read-only</strong> (Vercel cron timing = deploy-time; UI โชว์เวลาอ่านอย่างเดียว).</li>
+  <li><strong>Fail-safe config read</strong>: cron config-read error/missing → default enabled + ค่าเดิม (งานสำคัญห้ามหยุดเงียบ).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Tab <code>scheduled-tasks</code> แสดงครบ 11 งาน จัดกลุ่มตามหมวด พร้อม schedule (read-only), source badge (Vercel/Firebase), param inputs, last-run badge, ปุ่ม run-now.</li>
+  <li>ปิดงาน (toggle off) + Save → <code>system_config.scheduledTasks[id].enabled=false</code> + audit doc; cron รอบถัดไปอ่านแล้ว <strong>skip จริง</strong> (เขียน status skipped). [Rule Q L2: client SDK เขียน config + รัน cron จริงบน prod ยืนยัน skip]</li>
+  <li>แก้ param (เช่น retentionHours 24→48) + Save → cron รอบถัดไปใช้ค่าใหม่จริง. [L2]</li>
+  <li>ปิดงาน safetyCritical → เด้ง confirm บอกผลก่อน; ปิดงานทั่วไป → ไม่เด้ง.</li>
+  <li>ปุ่ม run-now (งาน destructive ต้อง confirm) → endpoint admin-authed รัน core จริง → status doc + badge อัปเดต. [L2/L1]</li>
+  <li>last-run badge อัปเดต live หลัง cron/manual รัน (listener บน status doc).</li>
+  <li>Config ว่าง/ก่อน migrate → ทุกงานทำงานเดิมเป๊ะ (enabled + ค่า hardcoded). [V14 lock]</li>
+  <li>Config read fail (จำลอง) → cron ยัง enabled + ค่าเดิม (fail-safe). [unit + L2]</li>
+  <li>เฉพาะ admin / perm <code>scheduled_task_management</code> เห็น+แก้ได้; คนอื่น 403/ซ่อน tab.</li>
+  <li>Source-grep: ทั้ง 11 cron มี config guard + status write; registry param-default parity กับ <code>_lib</code> constants.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<div class="warn">
+  <strong>OPEN DECISION — staff-chat conflict (#5 Vercel 30d vs #6 Firebase 7d):</strong> แผนเสนอ <strong>ถอด Firebase function <code>cleanupOldStaffChatMessages</code> ทิ้ง</strong> เหลือ Vercel <code>staff-chat-retention-sweep</code> (30 วัน, ละเอียดกว่า มี orphan-sweep) เป็น single source → staff chat เก็บ 30 วันตามตั้งใจ. ถ้าจริง ๆ อยากเก็บแค่ 7 วัน ให้ตั้ง retentionDays=7 ที่ Vercel แทน. <em>ต้องการ user ยืนยันก่อนแผนถอด function.</em>
+</div>
+<ul>
+  <li><strong>Deploy footprint (ใหญ่แต่ชัด):</strong> Vercel (frontend + 10 cron guards + run-now endpoint) + <code>firebase deploy --only functions</code> (ตัวที่ 11) + อาจ <code>firestore.rules</code> (status doc) → Probe-Deploy-Probe. ทำเป็น batch เดียว ตอน user สั่ง "deploy".</li>
+  <li><strong>Run-now ของ Firebase fn (#6):</strong> เรียกข้าม runtime จาก Vercel ไม่ตรง ๆ — ถ้าถอด function ตาม open-decision ปัญหานี้หายไป (run-now ใช้ core ของ Vercel staff-chat แทน).</li>
+  <li><strong>Param safety bounds:</strong> ทุก param มี min/max validate (กัน retention=0 ลบหมด / batchLimit ใหญ่จน timeout 300s). บาง param (batchLimit) อาจเลือกไม่ expose.</li>
+  <li><strong>Wiring = deploy-coupled ครั้งเดียว:</strong> หลัง deploy guard แล้ว ทุกอย่างเป็น runtime. ก่อน deploy = พฤติกรรมเดิม (guard ยังไม่มี) — ปลอดภัย.</li>
+  <li><strong>Cron core extraction:</strong> บาง cron orchestration ยังไม่อยู่ใน shared core เต็ม ๆ — run-now ต้อง extract (Rule C1); แผนจัดการต่อ task.</li>
+</ul>
+
+</body>
+</html>
