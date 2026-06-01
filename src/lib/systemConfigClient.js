@@ -23,6 +23,7 @@
 
 import { doc, getDoc, onSnapshot, writeBatch, serverTimestamp, collection } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
+import { getTask } from './scheduledTasksRegistry.js';
 
 const SYSTEM_CONFIG_DOC_ID = 'system_config';
 
@@ -62,6 +63,9 @@ export function validateV86Glow(patch) {
 
 export const SYSTEM_CONFIG_DEFAULTS = Object.freeze({
   tabOverrides: {},
+  // 2026-06-02 — per-scheduled-task { enabled, params } (Scheduled Tasks tab).
+  // Empty = every task runs with its hardcoded core defaults (preserves behaviour).
+  scheduledTasks: {},
   defaults: Object.freeze({
     depositPercent: 0,
     pointsPerBaht: 0,
@@ -99,6 +103,7 @@ export function mergeSystemConfigDefaults(raw) {
   const r = raw || {};
   return {
     tabOverrides: r.tabOverrides && typeof r.tabOverrides === 'object' ? r.tabOverrides : {},
+    scheduledTasks: (r.scheduledTasks && typeof r.scheduledTasks === 'object' && !Array.isArray(r.scheduledTasks)) ? r.scheduledTasks : {},
     defaults: {
       depositPercent: typeof r.defaults?.depositPercent === 'number'
         ? r.defaults.depositPercent
@@ -232,6 +237,35 @@ export function validateSystemConfigPatch(patch) {
       }
     }
   }
+  // 2026-06-02 — scheduledTasks: known-task check + per-param min/max from registry
+  if (patch.scheduledTasks !== undefined) {
+    if (typeof patch.scheduledTasks !== 'object' || Array.isArray(patch.scheduledTasks)) {
+      return 'scheduledTasks must be an object';
+    }
+    for (const [taskId, cfg] of Object.entries(patch.scheduledTasks)) {
+      const task = getTask(taskId);
+      if (!task) return `scheduledTasks.${taskId} is unknown`;
+      if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+        return `scheduledTasks.${taskId} must be an object`;
+      }
+      if (cfg.enabled !== undefined && typeof cfg.enabled !== 'boolean') {
+        return `scheduledTasks.${taskId}.enabled must be boolean`;
+      }
+      if (cfg.params !== undefined) {
+        if (typeof cfg.params !== 'object' || Array.isArray(cfg.params)) {
+          return `scheduledTasks.${taskId}.params must be an object`;
+        }
+        for (const [pk, pv] of Object.entries(cfg.params)) {
+          const spec = task.params.find((p) => p.key === pk);
+          if (!spec) return `scheduledTasks.${taskId}.params.${pk} is unknown`;
+          const n = Number(pv);
+          if (!Number.isFinite(n) || n < spec.min || n > spec.max) {
+            return `scheduledTasks.${taskId}.params.${pk} must be ${spec.min}-${spec.max}`;
+          }
+        }
+      }
+    }
+  }
   return null;
 }
 
@@ -275,6 +309,14 @@ export function computeChangedFields(before, after) {
     }
   }
 
+  // 2026-06-02 — scheduledTasks per-task diff (deep-equal each task slice)
+  const bST = b.scheduledTasks || {}, aST = a.scheduledTasks || {};
+  for (const k of new Set([...Object.keys(bST), ...Object.keys(aST)])) {
+    if (JSON.stringify(bST[k] ?? null) !== JSON.stringify(aST[k] ?? null)) {
+      out.push(`scheduledTasks.${k}`);
+    }
+  }
+
   return out;
 }
 
@@ -312,6 +354,7 @@ export async function saveSystemConfig({ patch, executedBy, reason } = {}) {
   // Build the next state (defaults-merged) by applying patch over the current.
   const nextRaw = {
     tabOverrides: patch.tabOverrides !== undefined ? patch.tabOverrides : beforeMerged.tabOverrides,
+    scheduledTasks: patch.scheduledTasks !== undefined ? patch.scheduledTasks : beforeMerged.scheduledTasks,
     defaults: {
       ...beforeMerged.defaults,
       ...(patch.defaults || {}),
