@@ -117,5 +117,8 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
   }
 });
 
-// V73 (2026-05-16) — Staff chat 7-day cleanup
-exports.cleanupOldStaffChatMessages = require('./cleanupStaffChat.js').cleanupOldStaffChatMessages;
+// V73 Firebase staff-chat cleanup (7d) RETIRED 2026-06-02 — it was a duplicate of the
+// Vercel cron `staff-chat-retention-sweep` (30d, orphan-aware) and silently overrode its
+// retention. The Vercel cron is now the single source of truth (configurable in the
+// "งานอัตโนมัติ & ตารางเวลา" backend tab). `firebase deploy --only functions` will delete
+// this scheduled function from Cloud Scheduler.
