@@ -31,8 +31,9 @@ export const SCHEDULED_TASKS = Object.freeze([
     description: 'เตือนล่วงหน้า 1 วัน (20:00) + เตือนวันนัด (09:00)',
     scheduleHuman: 'ทุกชั่วโมง', cronPath: '/api/cron/line-reminder-fire',
     auditOpPrefix: 'line-reminder-daily', deletesData: false, safetyCritical: false,
-    params: [num('dayBeforeHour', 'ชั่วโมงเตือนก่อนวัน', 20, 0, 23, 'น.'),
-             num('dayOfHour', 'ชั่วโมงเตือนวันนัด', 9, 0, 23, 'น.')],
+    // เวลาเตือน (ก่อนวัน/วันนัด) ตั้งแยก "ต่อสาขา" ในตั้งค่า LINE OA แล้ว — ไม่ทำซ้ำที่นี่
+    // (ที่นี่เป็น master kill-switch เปิด/ปิดทั้งหมด + รันตอนนี้ + ดูสถานะ).
+    params: [],
   }),
   Object.freeze({
     id: 'lineReminderRetry', category: 'reminder', source: 'vercel',
@@ -48,7 +49,8 @@ export const SCHEDULED_TASKS = Object.freeze([
     scheduleHuman: 'ทุกวัน 03:00', cronPath: '/api/cron/whole-system-backup-daily',
     auditOpPrefix: 'whole-system-backup', deletesData: true, safetyCritical: true,
     safetyNote: 'ปิดแล้ว = ไม่มี backup รายวัน ถ้าระบบมีปัญหาจะกู้ข้อมูลไม่ได้',
-    params: [num('retentionDays', 'เก็บ backup', 5, 1, 60, 'วัน')],
+    // จำนวนวันที่เก็บ backup (5) อยู่ใน executor (V122) — v1 ให้แค่ เปิด/ปิด + รันตอนนี้ + สถานะ
+    params: [],
   }),
   Object.freeze({
     id: 'chatHistoryRetention', category: 'retention', source: 'vercel',

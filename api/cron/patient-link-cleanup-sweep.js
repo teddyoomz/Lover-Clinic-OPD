@@ -20,7 +20,9 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
 import { isCustomerLinkEmpty, decidePatientLinkCleanup } from '../../src/lib/customerLinkPayloadCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'patientLinkCleanup';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const BE_CUSTOMERS_COL = `${PREFIX}/be_customers`;
@@ -48,9 +50,10 @@ function initAdmin() {
 
 // Shared sweep — used by the cron handler AND scripts/patient-link-cleanup-sweep.mjs.
 // `apply=false` = dry-run (no writes).
-export async function sweepPatientLinkCleanup({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true }) {
+export async function sweepPatientLinkCleanup({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true, graceDays = 30 }) {
   let scanned = 0, stamped = 0, cleared = 0, deleted = 0, skipped = 0;
   const todayISO = bangkokTodayISO(now);
+  const graceMs = graceDays * 24 * 60 * 60 * 1000;
 
   // Only enabled links are eligible. Disabled / no-token customers are skipped
   // server-side (where == true) — cheap, and they're not "active links".
@@ -73,7 +76,7 @@ export async function sweepPatientLinkCleanup({ db, now = Date.now(), limit = SW
       isEmpty = isCustomerLinkEmpty({ courses: data.courses, appointments: appts, todayISO });
     }
 
-    const decision = decidePatientLinkCleanup(data, isEmpty, now);
+    const decision = decidePatientLinkCleanup(data, isEmpty, now, graceMs);
     if (decision.action === 'skip') { skipped++; continue; }
     writes.push({ ref: d.ref, action: decision.action, patch: decision.patch });
   }
@@ -97,7 +100,7 @@ export async function sweepPatientLinkCleanup({ db, now = Date.now(), limit = SW
     else if (action === 'delete') deleted++;
   }
 
-  return { scanned, stamped, cleared, deleted, skipped, graceDays: 30, apply };
+  return { scanned, stamped, cleared, deleted, skipped, graceDays, apply };
 }
 
 export default async function handler(req, res) {
@@ -110,16 +113,25 @@ export default async function handler(req, res) {
   initAdmin();
   const db = getFirestore();
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
-    const result = await sweepPatientLinkCleanup({ db, now: Date.now() });
+    const result = await sweepPatientLinkCleanup({ db, now: Date.now(), graceDays: cfg.params?.graceDays ?? 30 });
     const auditId = `patient-link-cleanup-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'patient-link-cleanup-sweep',
       ...result,
       ranAt: new Date().toISOString(),
     });
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ลบ ${result.deleted} / แตะ ${result.stamped}` });
     return res.status(200).json(result);
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'SWEEP_FAILED', message: e.message });
   }
 }

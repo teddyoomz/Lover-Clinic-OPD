@@ -12,7 +12,9 @@ import {
   groupByBranchMonth, groupKeyForMovement, mergeArchive, buildArchiveFileBody,
   normalizeCreatedAtForCompare,
 } from '../../src/lib/stockMovementRetentionCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'stockMovementRetention';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const MOVEMENTS_COL = `${PREFIX}/be_stock_movements`;
@@ -58,8 +60,16 @@ export default async function handler(req, res) {
   const db = getFirestore();
   const storage = getStorage().bucket();
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
-    const cutoffISO = computeCutoffISO();
+    const retentionDays = cfg.params?.retentionDays ?? RETENTION_DAYS;
+    const cutoffISO = computeCutoffISO(new Date(), retentionDays);
 
     // Coarse fetch — single-field range+order on createdAt (no composite index needed).
     const snap = await db.collection(MOVEMENTS_COL)
@@ -106,14 +116,16 @@ export default async function handler(req, res) {
     const moreRemaining = scanned >= RETENTION_BATCH_LIMIT;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'stock-movement-retention',
-      cutoffISO, retentionDays: RETENTION_DAYS,
+      cutoffISO, retentionDays,
       scanned, archived: eligible.length, deleted,
       monthsTouched: Object.keys(groups), archiveRefs, moreRemaining,
       ranAt: new Date().toISOString(),
     });
 
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `archive ${eligible.length} / ลบ ${deleted}` });
     return res.status(200).json({ scanned, archived: eligible.length, deleted, moreRemaining, cutoffISO });
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'RETENTION_FAILED', message: e.message });
   }
 }

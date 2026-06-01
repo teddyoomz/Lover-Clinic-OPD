@@ -19,7 +19,9 @@ import {
   resolvedAtMs,
   isExpired,
 } from '../../src/lib/chatHistoryRetentionCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'chatHistoryRetention';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const CHAT_HISTORY_COL = `${PREFIX}/chat_history`;
@@ -40,9 +42,9 @@ function initAdmin() {
 
 // Shared sweep — used by the cron handler AND scripts/chat-history-retention-sweep.mjs
 // (Rule of 3). `apply=false` = dry-run (count only, no writes).
-export async function sweepChatHistoryRetention({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true }) {
+export async function sweepChatHistoryRetention({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true, retentionHours = RETENTION_HOURS }) {
   let scanned = 0, deleted = 0, kept = 0, noTimestamp = 0;
-  const cutoff = Timestamp.fromMillis(now - RETENTION_HOURS * 60 * 60 * 1000);
+  const cutoff = Timestamp.fromMillis(now - retentionHours * 60 * 60 * 1000);
 
   // Server-side filter for efficiency. Docs with NO resolvedAt won't match
   // this filter (Firestore treats missing field as "not less than X") → those
@@ -83,7 +85,7 @@ export async function sweepChatHistoryRetention({ db, now = Date.now(), limit = 
   }
   deleted = toDelete.length;
 
-  return { scanned, deleted, kept, noTimestamp, retentionHours: RETENTION_HOURS, apply };
+  return { scanned, deleted, kept, noTimestamp, retentionHours, apply };
 }
 
 export default async function handler(req, res) {
@@ -97,16 +99,25 @@ export default async function handler(req, res) {
   initAdmin();
   const db = getFirestore();
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
-    const result = await sweepChatHistoryRetention({ db, now: Date.now() });
+    const result = await sweepChatHistoryRetention({ db, now: Date.now(), retentionHours: cfg.params?.retentionHours ?? RETENTION_HOURS });
     const auditId = `chat-history-retention-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'chat-history-retention-sweep',
       ...result,
       ranAt: new Date().toISOString(),
     });
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ลบ ${result.deleted} / สแกน ${result.scanned}` });
     return res.status(200).json(result);
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'SWEEP_FAILED', message: e.message });
   }
 }

@@ -12,7 +12,9 @@ import {
   pushLineMessage, getCustomerLineUserIdAtBranch, computeBackoffMs,
   getReminderLogKey, getMergedReminderSettings, isQuietHour, buildReminderLogDoc,
 } from '../../src/lib/lineReminderClient.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'lineReminderFire';
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const BASE_PATH = `artifacts/${APP_ID}/public/data`;
 
@@ -261,6 +263,13 @@ export default async function handler(req, res) {
   const tomorrow = tomorrowISO(now);
   const today = bangkokDateISO(now);
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   const configsSnap = await db.collection(`${BASE_PATH}/be_line_configs`).get();
   const summary = { branchesProcessed: 0, totalAppts: 0, sent: 0, failed: 0, skipped: 0 };
 
@@ -329,5 +338,6 @@ export default async function handler(req, res) {
     [`hourly.${currentHour}`]: summary,
   }, { merge: true });
 
+  await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ส่ง ${summary.sent} / ข้าม ${summary.skipped}` });
   return res.status(200).json({ ok: true, currentHour, tomorrow, today, summary });
 }

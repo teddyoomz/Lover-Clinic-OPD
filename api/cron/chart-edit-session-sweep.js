@@ -9,7 +9,9 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { randomBytes } from 'node:crypto';
 import { shouldReap, isTerminal } from '../../src/lib/chartEditSessionCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'chartEditSessionSweep';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const SESSIONS_COL = `${PREFIX}/be_chart_edit_sessions`;
@@ -50,6 +52,13 @@ export default async function handler(req, res) {
   const storage = getStorage().bucket();
   const now = Date.now();
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
     const snap = await db.collection(SESSIONS_COL).limit(SWEEP_LIMIT).get();
     const scanned = snap.size;
@@ -83,8 +92,10 @@ export default async function handler(req, res) {
       ranAt: new Date().toISOString(),
     });
 
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `คืน ${freed} / ลบ ${deleted}` });
     return res.status(200).json({ scanned, cancelled, deleted, freed });
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'SWEEP_FAILED', message: e.message });
   }
 }

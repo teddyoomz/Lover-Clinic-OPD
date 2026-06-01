@@ -9,7 +9,9 @@ import {
   pushLineMessage, getCustomerLineUserIdAtBranch, computeBackoffMs,
   getMergedReminderSettings,
 } from '../../src/lib/lineReminderClient.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'lineReminderRetry';
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const BASE_PATH = `artifacts/${APP_ID}/public/data`;
 
@@ -54,6 +56,13 @@ export default async function handler(req, res) {
 
   const db = getAdmin();
   const now = new Date();
+
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
 
   // Firestore allows 1 inequality field per query. Filter retryCount<3 in-memory.
   const failedSnap = await db.collection(`${BASE_PATH}/be_line_reminder_log`)
@@ -169,5 +178,6 @@ export default async function handler(req, res) {
     }
   }
 
+  await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `retry ${summary.retried} / สำเร็จ ${summary.succeeded}` });
   return res.status(200).json({ ok: true, summary });
 }

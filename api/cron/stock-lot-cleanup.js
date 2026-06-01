@@ -9,7 +9,9 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
 import { planLotCleanup } from '../../src/lib/stockLotCleanupCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'stockLotCleanup';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const BATCHES_COL = `${PREFIX}/be_stock_batches`;
@@ -38,6 +40,14 @@ export default async function handler(req, res) {
 
   initAdmin();
   const db = getFirestore();
+
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
     const snap = await db.collection(BATCHES_COL).get();
     const batches = snap.docs.map(d => ({ ...d.data(), id: d.id }));
@@ -62,8 +72,10 @@ export default async function handler(req, res) {
       ranAt: new Date().toISOString(),
     });
 
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ลบ ${deleted} lot` });
     return res.status(200).json({ scanned: batches.length, groupsCleaned: Object.keys(perGroup).length, lotsDeleted: deleted, keptPlaceholders });
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'LOT_CLEANUP_FAILED', message: e.message });
   }
 }

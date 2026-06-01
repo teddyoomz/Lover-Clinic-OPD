@@ -7,7 +7,9 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { runWholeSystemBackup } from '../admin/_lib/wholeSystemBackupExecutor.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'wholeSystemBackup';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const LOCK_DOC_PATH = `${PREFIX}/be_admin_audit/whole-system-backup-running`;
@@ -39,6 +41,13 @@ export default async function handler(req, res) {
   const db = getFirestore();
   const storage = getStorage().bucket();
   const auth = getAuth();
+
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
 
   // AV63: concurrency lock via Firestore transaction (atomic check-and-set).
   const lockRef = db.doc(LOCK_DOC_PATH);
@@ -76,8 +85,10 @@ export default async function handler(req, res) {
       createdBy: 'cron',
       runCleanup: true, // cron does cleanup (manual does not — per spec §5.1)
     });
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: 'สำรองสำเร็จ' });
     return res.status(200).json(result);
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'BACKUP_FAILED', message: e.message });
   } finally {
     if (lockAcquired) {

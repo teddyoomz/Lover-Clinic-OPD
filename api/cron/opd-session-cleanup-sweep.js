@@ -21,7 +21,9 @@ import {
   SESSION_TIMEOUT_MS,
   decideCleanupAction,
 } from '../../src/lib/opdSessionCleanupCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'opdSessionCleanup';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const OPD_SESSIONS_COL = `${PREFIX}/opd_sessions`;
@@ -49,7 +51,7 @@ function initAdmin() {
 
 // Shared sweep — used by cron handler AND scripts/opd-session-cleanup-sweep.mjs.
 // `apply=false` = dry-run.
-export async function sweepOpdSessionCleanup({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true }) {
+export async function sweepOpdSessionCleanup({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true, timeoutMs = SESSION_TIMEOUT_MS }) {
   let scanned = 0, archived = 0, hidden = 0, deleted = 0, skipped = 0;
   const reasonsByAction = { archive: {}, hide: {}, delete: {}, skip: {} };
 
@@ -95,7 +97,7 @@ export async function sweepOpdSessionCleanup({ db, now = Date.now(), limit = SWE
     const effectiveData = (joinedDate && !data.appointmentDate)
       ? { ...data, appointmentDate: joinedDate }
       : data;
-    const action = decideCleanupAction(effectiveData, now, SESSION_TIMEOUT_MS, todayISO);
+    const action = decideCleanupAction(effectiveData, now, timeoutMs, todayISO);
     reasonsByAction[action.action][action.reason] = (reasonsByAction[action.action][action.reason] || 0) + 1;
     if (action.action === 'skip') { skipped++; continue; }
     writes.push({ ref: d.ref, op: action.action });
@@ -127,7 +129,7 @@ export async function sweepOpdSessionCleanup({ db, now = Date.now(), limit = SWE
   return {
     scanned, archived, hidden, deleted, skipped,
     reasonsByAction,
-    sessionTimeoutMs: SESSION_TIMEOUT_MS,
+    sessionTimeoutMs: timeoutMs,
     apply,
   };
 }
@@ -143,16 +145,26 @@ export default async function handler(req, res) {
   initAdmin();
   const db = getFirestore();
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
-    const result = await sweepOpdSessionCleanup({ db, now: Date.now() });
+    const timeoutMs = (cfg.params?.sessionTimeoutHours ?? Math.round(SESSION_TIMEOUT_MS / 3600000)) * 3600000;
+    const result = await sweepOpdSessionCleanup({ db, now: Date.now(), timeoutMs });
     const auditId = `opd-session-cleanup-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'opd-session-cleanup-sweep',
       ...result,
       ranAt: new Date().toISOString(),
     });
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ลบ ${result.deleted} / ซ่อน ${result.hidden}` });
     return res.status(200).json(result);
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'SWEEP_FAILED', message: e.message });
   }
 }

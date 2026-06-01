@@ -23,7 +23,9 @@ import {
   isExpired,
   isOrphanFolder,
 } from '../../src/lib/staffChatRetentionCore.js';
+import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
+const TASK_ID = 'staffChatRetention';
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const MESSAGES_COL = `${PREFIX}/be_staff_chat_messages`;
@@ -60,19 +62,19 @@ function createdAtMs(data) {
 
 // Shared sweep — used by the cron handler AND scripts/staff-chat-retention-sweep.mjs
 // (Rule of 3). `apply=false` = dry-run (count only, no writes).
-export async function sweepStaffChatRetention({ db, storage, now = Date.now(), limit = SWEEP_LIMIT, apply = true }) {
+export async function sweepStaffChatRetention({ db, storage, now = Date.now(), limit = SWEEP_LIMIT, apply = true, retentionDays = RETENTION_DAYS }) {
   let scannedMessages = 0, deletedMessages = 0, deletedFiles = 0;
   let orphanFolders = 0, orphanFiles = 0, skippedUnknownAge = 0;
 
   // ── Pass A · age-out ──────────────────────────────────────────────────────
-  const cutoff = Timestamp.fromMillis(now - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const cutoff = Timestamp.fromMillis(now - retentionDays * 24 * 60 * 60 * 1000);
   const snap = await db.collection(MESSAGES_COL).where('createdAt', '<', cutoff).limit(limit).get();
   scannedMessages = snap.size;
   for (const d of snap.docs) {
     const data = d.data();
     // Guard with the pure predicate too (defensive vs clock skew / odd shapes).
     const ms = createdAtMs(data);
-    if (ms != null && !isExpired(ms, now, RETENTION_DAYS)) continue;
+    if (ms != null && !isExpired(ms, now, retentionDays)) continue;
     if (data.branchId) {
       deletedFiles += await deletePrefix(storage, storagePrefixForMessage(data.branchId, d.id), apply);
     }
@@ -125,16 +127,25 @@ export default async function handler(req, res) {
   const db = getFirestore();
   const storage = getStorage().bucket();
 
+  const forced = req.query?.force === '1' || req.body?.force === true;
+  const cfg = await readScheduledTaskConfig(db, TASK_ID);
+  if (!cfg.enabled && !forced) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'disabled-by-config' });
+    return res.status(200).json({ ok: true, skipped: 'disabled-by-config' });
+  }
+
   try {
-    const result = await sweepStaffChatRetention({ db, storage, now: Date.now() });
+    const result = await sweepStaffChatRetention({ db, storage, now: Date.now(), retentionDays: cfg.params?.retentionDays ?? RETENTION_DAYS });
     const auditId = `staff-chat-retention-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'staff-chat-retention-sweep',
       ...result,
       ranAt: new Date().toISOString(),
     });
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ลบ ${result.deletedMessages}` });
     return res.status(200).json(result);
   } catch (e) {
+    await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });
     return res.status(500).json({ error: 'SWEEP_FAILED', message: e.message });
   }
 }
