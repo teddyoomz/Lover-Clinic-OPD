@@ -71,4 +71,14 @@ describe('Scheduled Tasks · Rule I full-flow simulate', () => {
       expect(readFileSync(file, 'utf8')).toContain(`const TASK_ID = '${t.id}'`);
     }
   });
+
+  it('F8 — success banner survives the config-refresh refire (L1-caught UX fix)', () => {
+    // The [config?.scheduledTasks] effect must NOT call setSaved(false): our own
+    // saveSystemConfig triggers a config onSnapshot refire, which would instantly
+    // clear the "บันทึกเรียบร้อย" banner (real bug found by the Playwright L1).
+    const src = readFileSync('src/components/backend/ScheduledTasksTab.jsx', 'utf8');
+    const eff = src.match(/useEffect\(\(\)\s*=>\s*\{[^}]*\},\s*\[config\?\.scheduledTasks\]\)/);
+    expect(eff, 'config-refresh effect present').toBeTruthy();
+    expect(eff[0]).not.toMatch(/setSaved\(false\)/);
+  });
 });

@@ -161,7 +161,11 @@ export default function ScheduledTasksTab() {
   const [runMsg, setRunMsg] = useState('');
 
   // Refresh draft when another admin saves (or initial config arrives).
-  useEffect(() => { setDraft(buildDraft(config)); setSaved(false); }, [config?.scheduledTasks]);
+  // NOTE: do NOT reset `saved` here — our own save triggers a config onSnapshot
+  // refire, which would instantly clear the "บันทึกเรียบร้อย" banner (a real
+  // UX bug caught by the L1 e2e). The success banner is cleared by the next user
+  // edit (onToggle/onParam) instead.
+  useEffect(() => { setDraft(buildDraft(config)); }, [config?.scheduledTasks]);
 
   const enabledCount = useMemo(
     () => SCHEDULED_TASKS.filter((t) => draft[t.id]?.enabled).length, [draft]);
