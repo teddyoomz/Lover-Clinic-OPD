@@ -240,6 +240,9 @@ export const PERMISSION_MODULES = Object.freeze([
       // tab visibility / defaults / feature flags without needing the
       // full admin claim. See firestore.rules clinic_settings/system_config.
       { key: 'system_config_management',      label: 'ตั้งค่าระบบ' },
+      // 2026-06-02 — Scheduled Tasks tab (งานอัตโนมัติ & ตารางเวลา): grant
+      // enable/disable + tune + run-now of cron/auto-delete jobs without admin.
+      { key: 'scheduled_task_management',     label: 'งานอัตโนมัติ & ตารางเวลา' },
       // Phase 29.22 (2026-05-14) — Recall Cases admin sub-pill access.
       // Grants ability to manage be_recall_cases (add/edit/hide recall
       // preset durations). Admin claim bypasses this; non-admin staff with

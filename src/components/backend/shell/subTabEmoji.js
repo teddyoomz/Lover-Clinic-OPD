@@ -67,6 +67,7 @@ export const SUB_TAB_EMOJI = {
   'fb-settings':              '📘',
   'link-requests':            '🔗',
   'system-settings':          '⚙️',
+  'scheduled-tasks':          '⏱️',
   'branch-backup':            '💾',
   'backup-manager':           '🗄️',
 };

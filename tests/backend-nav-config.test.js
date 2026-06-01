@@ -231,6 +231,7 @@ describe('section integrity', () => {
       'fb-settings',
       'link-requests',
       'system-settings',
+      'scheduled-tasks', // 2026-06-02 — Scheduled Tasks tab
       'branch-backup',
       // V74 (2026-05-16) — customer backup/restore admin surface (backup-manager only post-V81-fix7b)
       'backup-manager',

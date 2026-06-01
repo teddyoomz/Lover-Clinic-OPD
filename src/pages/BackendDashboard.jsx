@@ -74,6 +74,7 @@ const ClinicReportTab        = lazy(() => import('../components/backend/reports/
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 // Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
 const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
+const ScheduledTasksTab      = lazy(() => import('../components/backend/ScheduledTasksTab.jsx'));
 // V40 Task 4.4 (2026-05-07) — Branch Backup tab (lazy; admin-only, rarely opened)
 const BranchBackupTab        = lazy(() => import('../components/backend/BranchBackupTab.jsx'));
 // V74 (2026-05-16) — Customer backup/restore admin surfaces (lazy; admin-only)
@@ -699,6 +700,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <LinkRequestsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'system-settings' ? (
           <SystemSettingsTab />
+        ) : activeTab === 'scheduled-tasks' ? (
+          <ScheduledTasksTab />
         ) : activeTab === 'branch-backup' ? (
           <BranchBackupTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'backup-manager' ? (

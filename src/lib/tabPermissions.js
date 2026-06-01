@@ -130,6 +130,8 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // (Q2-C: NEW key `system_config_management`) so owner can grant to
   // head-of-ops without giving full admin claim. Admin bypass implicit.
   'system-settings':     { requires: ['system_config_management'] },
+  // 2026-06-02 — Scheduled Tasks tab. Admin bypass implicit.
+  'scheduled-tasks':     { requires: ['scheduled_task_management'] },
 
   // V74 (2026-05-16) — Customer backup/restore admin surface.
   // 2026-05-17 post-V81-fix7b — 'customer-data-recovery' tab REMOVED per user

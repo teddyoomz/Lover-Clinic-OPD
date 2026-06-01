@@ -65,6 +65,7 @@ const MASTER_STUB_IDS = [
   'fb-settings',    // V75 Item 3 (2026-05-16) — per-branch FB Page settings
   'link-requests',  // V32-tris-quater (2026-04-26) LINE link-request approval queue
   'system-settings', // Phase 16.3 (2026-04-29) admin-gated system config
+  'scheduled-tasks', // 2026-06-02 — Scheduled Tasks tab (cron/auto-delete)
   'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
   'backup-manager',         // V74 (2026-05-16) admin-only unified backup manager
 ];
@@ -87,7 +88,7 @@ describe('Phase 11.1 — navConfig master section', () => {
 
   it('M2 master section has exactly 22 items — 20 prior + 1 V74 backup-manager + 1 V75 fb-settings (post-V81-fix7b drop)', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(22);
+    expect(master.items.length).toBe(23); // +scheduled-tasks (2026-06-02)
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 
