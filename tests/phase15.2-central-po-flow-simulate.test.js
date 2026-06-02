@@ -336,7 +336,9 @@ describe('Phase 15.2 F5 — backendClient.js exports + helper', () => {
     expect(backendSrc).toMatch(/export async function receiveCentralStockOrder/);
     // idempotency contract: skips lines in receivedLineIds
     expect(backendSrc).toMatch(/receivedLineIds/);
-    expect(backendSrc).toMatch(/existingReceived\.has\(lineId\)/);
+    // V152 (2026-06-02) — idempotency is now a CAS claim; the loser skips
+    // unclaimed lines + each line guards on its own receivedBatchId.
+    expect(backendSrc).toMatch(/if \(!claimedSet\.has\(lineId\)\)/);
   });
 
   it('F5.4 cancelCentralStockOrder exported (V19 movement-trail check)', () => {

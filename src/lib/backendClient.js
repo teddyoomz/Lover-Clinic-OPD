@@ -6777,36 +6777,62 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
   const user = _normalizeAuditUser(opts.user);
   const sourceDocPath = `artifacts/${appId}/public/data/be_central_stock_orders/${orderId}`;
 
-  // AUDIT-V34 (2026-04-28) — KNOWN CONCURRENT-RECEIVE GAP (deferred to V35):
-  // Idempotency checkpoint reads `existingReceived` here at line ~4541, then
-  // walks the loop creating batches via `_buildBatchFromOrderItem`, and
-  // updates `receivedLineIds` only at the END (line ~4612). Two concurrent
-  // calls (rare but possible if admin double-clicks "รับสินค้า" or two
-  // admins receive simultaneously) would both see existingReceived=[],
-  // both walk the loop, both create batches → duplicate batches at central
-  // tier. Fix sketch: wrap the read+update of `receivedLineIds` in a
-  // runTransaction with the batch creation done atomically inside (claim
-  // each lineId by writing it to receivedLineIds BEFORE batch creation).
-  // Defer until concurrent test bank (Phase 3 T11) surfaces it. Phase 15.2
-  // already added a defensive check (line ~4561) for the related case where
-  // line.receivedBatchId is already set but receivedLineIds drifted.
-  //
-  // Idempotency checkpoint: skip lines already in receivedLineIds.
-  const existingReceived = new Set(order.receivedLineIds || []);
-  const itemsByLineId = new Map((order.items || []).map(it => [it.centralOrderProductId, it]));
+  // V152 (2026-06-02) — CAS CLAIM closes the AUDIT-V34 concurrent-receive gap.
+  // Pre-V152 the idempotency checkpoint read `order.receivedLineIds` from the
+  // getDoc above (OUTSIDE any tx), then created batches, then updated
+  // receivedLineIds only at the END → two concurrent receives (admin double-
+  // clicks "รับสินค้า" / two admins) both saw receivedLineIds=[], both created
+  // batches → DOUBLE stock (R15 e2e: 16 units for an 8-unit PO). Fix: atomically
+  // CLAIM the to-receive lineIds into receivedLineIds in a runTransaction BEFORE
+  // creating any batch. The loser's CAS sees them already claimed → claims
+  // nothing → returns early without creating batches (transfer/withdrawal use the
+  // same CAS-in-tx pattern, which is why they were never vulnerable — R8/R13/R14).
+  const claimedSet = await runTransaction(db, async (tx) => {
+    const oRef = centralStockOrderDoc(orderId);
+    const oSnap = await tx.get(oRef);
+    if (!oSnap.exists()) throw new Error(`Central order ${orderId} not found`);
+    const o = oSnap.data();
+    if (o.status === 'received') return new Set();
+    if (o.status === 'cancelled' || o.status === 'cancelled_post_receive') {
+      throw new Error(`Cannot receive a cancelled order (${orderId})`);
+    }
+    const already = new Set(o.receivedLineIds || []);
+    const lineMap = new Map((o.items || []).map(it => [it.centralOrderProductId, it]));
+    const toClaim = [];
+    for (const r of receipts) {
+      const lineId = String(r?.centralOrderProductId || '').trim();
+      if (!lineId || already.has(lineId)) continue;
+      const ln = lineMap.get(lineId);
+      if (!ln) throw new Error(`Line ${lineId} not found in order ${orderId}`);
+      if (ln.receivedBatchId) continue; // defensive: already-received (drift) → don't re-create
+      toClaim.push(lineId);
+    }
+    if (toClaim.length === 0) return new Set();
+    tx.update(oRef, { receivedLineIds: [...(o.receivedLineIds || []), ...toClaim], updatedAt: now });
+    return new Set(toClaim);
+  });
+  // Loser (another concurrent receive already claimed everything) — no-op return.
+  if (claimedSet.size === 0) {
+    const fresh = await getCentralStockOrder(orderId);
+    const st = fresh?.status || order.status;
+    return { orderId, status: st, batchIds: [], movementIds: [], alreadyReceived: st === 'received', repays: [] };
+  }
 
+  const itemsByLineId = new Map((order.items || []).map(it => [it.centralOrderProductId, it]));
+  const updatedItems = [...(order.items || [])]; // read-only here (final write is a CAS re-read)
   const batchIds = [];
   const movementIds = [];
-  const updatedItems = [...(order.items || [])];
   const newlyReceivedLineIds = [];
+  const receivedResults = []; // V152 — {lineId, batchId, receiveQty} applied in the finalize CAS
   const repays = []; // Phase 15.7-bis — accumulate repay summary for caller UX
 
   for (const r of receipts) {
     const lineId = String(r.centralOrderProductId || '').trim();
     if (!lineId) continue;
-    if (existingReceived.has(lineId)) {
-      // Already-received lines are no-ops (V31 — classify silently as idempotent
-      // skip; this is NOT an error to swallow, it's a designed retry path).
+    if (!claimedSet.has(lineId)) {
+      // V152 — only process the lines THIS call atomically claimed in the CAS
+      // above. Lines a concurrent receive claimed (or already-received lines)
+      // are skipped here → no double-batch.
       continue;
     }
     const line = itemsByLineId.get(lineId);
@@ -6849,13 +6875,7 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
 
     batchIds.push(batchId);
     if (movementId) movementIds.push(movementId);
-    if (orderIdx >= 0) {
-      updatedItems[orderIdx] = {
-        ...updatedItems[orderIdx],
-        receivedBatchId: batchId,
-        receivedQty: receiveQty,
-      };
-    }
+    receivedResults.push({ lineId, batchId, receiveQty }); // V152 — applied in the finalize CAS
     newlyReceivedLineIds.push(lineId);
     if (repayResult && repayResult.totalRepaid > 0) {
       repays.push({
@@ -6868,18 +6888,31 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
     }
   }
 
-  // Flip order status.
-  const allLineIds = (order.items || []).map(it => it.centralOrderProductId);
-  const totalReceivedSet = new Set([...existingReceived, ...newlyReceivedLineIds]);
-  const allReceived = allLineIds.every(id => totalReceivedSet.has(id));
-  const newStatus = allReceived ? 'received' : 'partial';
-
-  await updateDoc(centralStockOrderDoc(orderId), {
-    items: updatedItems,
-    receivedLineIds: Array.from(totalReceivedSet),
-    status: newStatus,
-    receivedAt: allReceived ? now : (order.receivedAt || null),
-    updatedAt: now,
+  // V152 — finalize in a CAS so concurrent multi-line receives MERGE (re-read +
+  // union receivedLineIds) instead of overwrite (which would drop a sibling
+  // call's just-received line). Applies this call's receivedBatchId/receivedQty
+  // to the matching items + recomputes status from the FRESH receivedLineIds.
+  const newStatus = await runTransaction(db, async (tx) => {
+    const oRef = centralStockOrderDoc(orderId);
+    const oSnap = await tx.get(oRef);
+    const o = oSnap.data() || {};
+    const items = [...(o.items || [])];
+    for (const { lineId, batchId, receiveQty } of receivedResults) {
+      const i = items.findIndex(it => it.centralOrderProductId === lineId);
+      if (i >= 0) items[i] = { ...items[i], receivedBatchId: batchId, receivedQty };
+    }
+    const merged = new Set([...(o.receivedLineIds || []), ...newlyReceivedLineIds]);
+    const allIds = items.map(it => it.centralOrderProductId);
+    const allRcv = allIds.length > 0 && allIds.every(id => merged.has(id));
+    const status = allRcv ? 'received' : 'partial';
+    tx.update(oRef, {
+      items,
+      receivedLineIds: Array.from(merged),
+      status,
+      receivedAt: allRcv ? now : (o.receivedAt || null),
+      updatedAt: now,
+    });
+    return status;
   });
 
   // V144 — new central-warehouse lots just arrived → clear redundant 0-lots

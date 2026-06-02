@@ -209,10 +209,13 @@ describe('INV.2 — Atomicity (source-grep regression guards)', () => {
 describe('INV.3 — Idempotency', () => {
   it('3.1 receiveCentralStockOrder skips already-received line ids', () => {
     const fnIdx = BACKEND_CLIENT_SRC.indexOf('export async function receiveCentralStockOrder');
-    const block = BACKEND_CLIENT_SRC.slice(fnIdx, fnIdx + 5000);
-    // existingReceived Set + skip-already-received guard
-    expect(block).toMatch(/existingReceived = new Set\(order\.receivedLineIds/);
-    expect(block).toMatch(/if \(existingReceived\.has\(lineId\)\)/);
+    const block = BACKEND_CLIENT_SRC.slice(fnIdx, fnIdx + 8000);
+    // V152 (2026-06-02) — idempotency is now a CAS CLAIM (concurrency-safe).
+    // Pre-filter reads existingReceivedSet; the claim + loser-skip + per-line
+    // receivedBatchId guard make the receive double-call-safe.
+    expect(block).toMatch(/existingReceivedSet = new Set\(order\.receivedLineIds/);
+    expect(block).toMatch(/if \(!claimedSet\.has\(lineId\)\)/);   // loser skips unclaimed lines
+    expect(block).toMatch(/if \(line\.receivedBatchId\)/);        // per-line already-received guard
   });
 
   it('3.2 alreadyCancelled short-circuit on cancelStockOrder', () => {
@@ -661,9 +664,12 @@ describe('INV.13 — V34 institutional memory', () => {
     expect(BACKEND_CLIENT_SRC).toMatch(/AUDIT-V34 \(2026-04-28\)/);
   });
 
-  it('13.3 deferred-bug audit flags exist for the 3 known concurrency gaps', () => {
-    // Each AUDIT-V34 comment names the function it flags + the deferral reason
+  it('13.3 deferred-bug audit flags exist for the remaining known concurrency gaps', () => {
+    // Each AUDIT-V34 comment names the function it flags + the deferral reason.
+    // V147 closed the multi-batch deduction race; V152 closed the concurrent
+    // central-receive double-batch gap → the count shrinks as gaps are CLOSED
+    // (this assertion tracks the REMAINING deferred flags, not a fixed count).
     const matches = BACKEND_CLIENT_SRC.match(/AUDIT-V34 \(2026-04-28\)/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(3);
+    expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 });
