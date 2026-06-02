@@ -4847,7 +4847,12 @@ export async function reverseDepositUsage(depositId, saleId) {
     if (matching.length === 0) return { customerId: cur.customerId, restored: 0 };
     const restoreAmt = matching.reduce((s, u) => s + (Number(u.amount) || 0), 0);
     const newUsed = Math.max(0, (Number(cur.usedAmount) || 0) - restoreAmt);
-    const newRemaining = (Number(cur.amount) || 0) - newUsed;
+    // V154 (money-leak, M17): remaining = amount − used − refundAmount. Pre-V154
+    // dropped the refundAmount term, so reversing a sale's usage on a deposit
+    // that had been partially manual-refunded (refundDeposit) RESTORED the
+    // already-paid-out amount → phantom deposit balance (e2e-deposit-refund-reverse
+    // D3/D4). The no-refund path is unaffected (refundAmount 0 → identical).
+    const newRemaining = (Number(cur.amount) || 0) - newUsed - (Number(cur.refundAmount) || 0);
     const remainingHistory = history.filter(u => String(u.saleId) !== sid);
     // Re-derive status (don't override cancelled/refunded)
     let newStatus = cur.status;
@@ -5102,6 +5107,36 @@ export async function refundToWallet(customerId, walletTypeId, {
   await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
+
+  // V153 idempotency (money-leak class — sibling of M1 deposit + S5 stock CAS).
+  // A sale-referenced wallet refund is valid only up to the NET still-deducted
+  // amount for that sale (Σ deduct − Σ refund). This makes a DUPLICATE cancel→
+  // delete refund (or a cancel retry after cancelBackendSale threw) a NO-OP —
+  // outstanding is already 0 → pre-V153 it credited the SAME sale twice = real
+  // spendable money created (e2e-reverse-idempotency W) — WITHOUT breaking the
+  // EDIT path, which legitimately refunds→re-deducts the SAME saleId on every
+  // edit (so each refund offsets a prior deduct; outstanding stays ≥ amt). Query
+  // (not in-tx) → idempotent for the SEQUENTIAL trigger, not a concurrency lock.
+  // Same 2-equality query shape as reversePointsEarned (proven indexed); the
+  // walletType + type split is done client-side. Skipped when referenceId empty.
+  const refId = String(referenceId || '');
+  if (refId) {
+    const refTxSnap = await getDocs(query(walletTxCol(),
+      where('customerId', '==', String(customerId)),
+      where('referenceId', '==', refId),
+    ));
+    let deducted = 0, refunded = 0;
+    for (const d of refTxSnap.docs) {
+      const t = d.data();
+      if (String(t.walletTypeId) !== String(walletTypeId)) continue;
+      const a = Number(t.amount) || 0;
+      if (t.type === 'deduct') deducted += a;
+      else if (t.type === 'refund') refunded += a;
+    }
+    if (deducted - refunded < amt) {
+      return { success: true, alreadyRefunded: true, skipped: true, outstanding: deducted - refunded };
+    }
+  }
 
   // M5: atomic balance + tx-log write.
   const newTxId = txId();
@@ -5641,12 +5676,20 @@ export async function reversePointsEarned(customerId, referenceId) {
     where('referenceId', '==', String(referenceId)),
   );
   const snap = await getDocs(q);
-  let totalReversed = 0;
+  // V153 idempotency (money-leak class — sibling of M1 deposit + S5 stock CAS).
+  // NET the points earned for this reference against points ALREADY reversed for
+  // it, so a repeated reverse (cancel→delete the same sale, or a retry after
+  // cancelBackendSale threw) is a NO-OP instead of re-subtracting. Pre-V153 this
+  // summed 'earn' ONLY (ignored prior 'reverse' txns) → over-reversed the
+  // customer's loyalty balance every extra call (e2e-reverse-idempotency P2).
+  let earnedSum = 0, alreadyReversed = 0;
   for (const d of snap.docs) {
     const tx = d.data();
-    if (tx.type !== 'earn') continue;
-    totalReversed += Number(tx.amount) || 0;
+    const amt = Number(tx.amount) || 0;
+    if (tx.type === 'earn') earnedSum += amt;
+    else if (tx.type === 'reverse') alreadyReversed += amt;
   }
+  const totalReversed = Math.max(0, earnedSum - alreadyReversed);
   if (totalReversed > 0) {
     const newTxId = ptxId();
     const now = new Date().toISOString();

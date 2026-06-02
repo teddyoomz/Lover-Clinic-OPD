@@ -19,14 +19,14 @@ allowed-tools: "Read, Grep, Glob"
 - **Cancel cascade**: sale cancel reverses ALL money flows (no partial)
 
 ## How to run
-1. Read the invariant catalog: [checklist.md](checklist.md) — full list of M1–M15 with WHY + HOW
+1. Read the invariant catalog: [checklist.md](checklist.md) — full list of M1–M17 with WHY + HOW
 2. Run the greps: [patterns.md](patterns.md) — specific Grep regex with file:line anchors
 3. For each invariant, check the code + output PASS/WARN/VIOLATION
 4. Produce a report using the format in [report-template.md](report-template.md)
 
 ## Workflow (step-by-step)
 
-For each invariant M1..M15, follow this loop:
+For each invariant M1..M17, follow this loop:
 1. Read the "Where to check" file:line from checklist.md
 2. Run the grep pattern(s) from patterns.md for that invariant
 3. Read enough surrounding code to understand the actual behavior

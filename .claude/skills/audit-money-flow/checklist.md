@@ -116,6 +116,18 @@ Each invariant has: **What** (the rule), **Why** (real-world rationale), **Where
 **Where**: `src/components/backend/SaleTab.jsx:930–1020` (cancel modal flow)
 **How**: Read cancel flow. Confirm ALL 5 reversals present. Check for short-circuit on error (should compensate, not abort leaving half-done).
 
+### M16 — Cancel-cascade reverse ops are IDEMPOTENT per saleId (V153, 2026-06-02)
+**What**: Every reverse/refund in the cancel cascade must be a NO-OP when re-run for the SAME sale — refundToWallet (referenceId dedup), reversePointsEarned (nets earn − already-reversed), reverseDepositUsage (usageHistory filter), reverseStockForSale (reversedByMovementId CAS / S5), applySaleCancelToCourses (terminal-status skip).
+**Why**: cancel→DELETE the same sale, or a cancel RETRY after cancelBackendSale threw (V105 path resets cancelSaving + returns), re-runs the whole cascade. Pre-V153, wallet refund credited the wallet 2× (real spendable baht CREATED) and points were reversed 2× (over-reversed the balance) because only those two lacked the idempotency the other three already had. The idempotency sibling of M1 (deposit), S5 (stock CAS), and iron-clad Rule T.
+**Where**: `src/lib/backendClient.js` refundToWallet (~5096) + reversePointsEarned (~5638); cascade callers = SaleTab.jsx handleDelete + cancel modal + TreatmentFormPage.jsx edit→sale.
+**How**: refundToWallet must refund only up to the NET still-deducted for the sale (`Σdeduct − Σrefund` for the referenceId) — a duplicate cancel→delete is a no-op (outstanding 0) while the EDIT path's per-edit refund→re-deduct still works (a "skip if any refund exists" guard is WRONG — it double-deducts on the 2nd edit). reversePointsEarned must sum BOTH 'earn' AND 'reverse' txns and reverse only `max(0, earned − alreadyReversed)`. Proof: `scripts/e2e-reverse-idempotency.mjs` (real prod, W/WE/P/PE = cancel→delete idempotency + edit-safety). Regression: `tests/v153-reverse-idempotency.test.js`.
+
+### M17 — reverseDepositUsage honors prior manual refund (V154, 2026-06-02)
+**What**: When a sale's deposit usage is reversed (on cancel), the deposit's remaining must recompute as `amount − usedAmount − refundAmount` — NOT `amount − usedAmount`.
+**Why**: a deposit partially APPLIED to a sale AND partially manual-REFUNDED (refundDeposit), then the sale is cancelled → pre-V154 the reverse restored the FULL amount and dropped the already-paid-out refund → phantom (re-spendable) deposit balance. Deposit-balance family (M3).
+**Where**: `src/lib/backendClient.js` reverseDepositUsage (~4850).
+**How**: confirm `newRemaining = amount − newUsed − refundAmount`. Proof: `scripts/e2e-deposit-refund-reverse.mjs` (was 2-fail → 0-fail; no-refund control still restores full). Regression: `tests/v154-deposit-reverse-honors-refund.test.js`.
+
 ---
 
 ## Accepted risks (document, don't flag)
@@ -131,7 +143,7 @@ Each invariant has: **What** (the rule), **Why** (real-world rationale), **Where
 
 ## External references embedded here
 
-- **Stripe's idempotency-key pattern** (https://stripe.com/docs/api/idempotent_requests): every `reverseXxx` function should be callable twice with same input and produce same result. Our reversals rely on filtering by `reversedByMovementId IS NULL` — equivalent idempotency, but audit that this actually holds.
+- **Stripe's idempotency-key pattern** (https://stripe.com/docs/api/idempotent_requests): every `reverseXxx` function should be callable twice with same input and produce same result. Our reversals achieve this per channel: stock via `reversedByMovementId` CAS (S5), deposit via `usageHistory` filter, course via terminal-status skip, and — since V153 — wallet via `referenceId` refund-txn dedup + points via net(earn−reverse). Audit that each holds (M16).
 - **Double-entry bookkeeping** (Pacioli, 1494): every debit has a matching credit. In our system: every wallet deduct has a matching wallet tx log entry. Every deposit apply has a matching usageHistory entry. Audit the pairings.
 - **Thai MOPH controlled-substance audit** (ข้อ 9 พ.ร.บ.ยาเสพติด): movement log retained ≥ 5 years, immutable, must capture time/actor/batch/qty/purpose. Our movement has all these; audit userId+userName are non-null.
 - **Banker's rounding** (IEEE 754 round-half-to-even): not required for THB 2-decimal; `Math.round(x * 100) / 100` sufficient. But consistency is key — mixing rounding strategies across functions causes drift.
