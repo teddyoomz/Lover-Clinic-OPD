@@ -2,6 +2,10 @@
 
 Chronological, append-only. Every entry starts `## [YYYY-MM-DD] <op> | <title>` so it's greppable: `grep "^## \[" wiki/log.md | tail -10`.
 
+## [2026-06-02 EOD+1] update | V144 stock ยอดคงเหลือ 4-issue batch (SHIPPED + DEPLOYED + L2-verified)
+
+Extended `concepts/stock-realtime-balance-and-lot-cleanup.md` with the V144 section (deployed `2b1a8f11`). Four fixes on tab=stock → ยอดคงเหลือ: (1) "หมด (คงเหลือ 0)" filter; (2) **real-time 0-lot auto-clear (AV172)** — NEW `_clearRedundantZeroLotsForProducts` reuses pure `planLotCleanup` POST-COMMIT at 7 stock-mutation entry points (cron 03:45 stays backstop); `firestore.rules be_stock_batches` delete narrowed `if false`→`isClinicStaff() && resource.data.qty.remaining==0` (Phase-1 caught the V66-class silent-no-op trap — the client delete needed the rule; Rule B 6/6 + probe #16); (3) **in-place adjust/order modals (AV173)** — NEW DRY `StockActionModal` hosts the exported `AdjustCreateForm`/`OrderCreateForm` (no bounce; AV78); (4) **balance follows global BranchSelector (AV173)** — per-panel "สถานที่" dropdown removed, `locationId` derived, aligning StockBalancePanel with its ctxBranchId-following siblings. Verified: full vitest 15777/0 + Rule Q L1 live browser + Rule Q L2 e2e 10/0 real prod + Rule M --apply 14 lingering 0-lots. CentralStockTab same-class navigate = deferred (test CB1).
+
 ## [2026-05-31] ingest | V142 course double-deduct + V143 stock cluster (SHIPPED + DEPLOYED)
 
 Two `/systematic-debugging` families, deployed together (`0c607f68` @ lover-clinic-app.vercel.app; frontend/lib + 1 new cron → no Probe-Deploy-Probe).

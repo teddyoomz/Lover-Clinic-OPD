@@ -1,30 +1,35 @@
 ---
-updated_at: "2026-06-02 EOD — TFP mega-test L1+L2 GREEN on real prod + OPD→CSV export; Scheduled Tasks + resolveParam deployed earlier this session."
-status: "Idle / verification-complete. No open bugs on tested paths. master ahead of prod by tests/scripts/docs only (no bundle change)."
+updated_at: "2026-06-02 EOD+1 — V144 stock-page batch DEPLOYED + verified (filter + real-time 0-lot auto-clear + in-place modals + balance follows global selector)."
+status: "DEPLOYED + L2-verified on real prod. No open bugs on tested paths."
 branch: "master"
-last_commit: "c63c3201 (TFP mega-test complete + CSV export handoff)."
-tests: "Full suite 15720/0 (last run = scheduled-tasks pre-deploy gate this session). TFP mega L2 19/0 + L1 2/0 on REAL prod. NOT re-run at session-end (per directive)."
+last_commit: "2b1a8f11 (V144 code batch) + docs commit follows."
+tests: "Full suite 15777/0 (this session). V144 L2 e2e 10/0 on REAL prod (post-deploy). NOT re-run at session-end (per directive)."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8e6a1d06 LIVE (Scheduled Tasks tab + resolveParam 4th defense layer). Commits after it = tests/scripts/docs only → bundle unchanged."
-firestore_rules_version: "UNCHANGED — no rules/storage/functions change pending. Firebase cleanupOldStaffChatMessages was retired from Cloud Scheduler this session."
+production_commit: "2b1a8f11 — frontend via vercel --prod (V144 UI: หมด filter + in-place adjust/order modals + balance follows top BranchSelector) + firestore:rules (be_stock_batches delete narrowed to remaining==0). Probe-Deploy-Probe 6/6 pre+post."
+firestore_rules_version: "DEPLOYED 2026-06-02 — be_stock_batches delete: if false → isClinicStaff() && resource.data.qty.remaining==0 (V144/AV172, probe #16). Rule B pre+post 6/6 + cleanup."
 ---
 
-# Active — 2026-06-02 EOD
+# Active — 2026-06-02 EOD+1
 
 ## State
-- **Scheduled Tasks tab + resolveParam** DEPLOYED + verified LIVE (prod=`8e6a1d06`); vercel-only, no Probe-Deploy-Probe.
-- **TFP mega-test (app core) COMPLETE** — L2 function chain 19/0 + L1 real-browser component 2/0 on REAL prod. No open bug on tested paths.
-- **OPD→CSV export** done: `F:\FB\targeting\opd-customers.csv` (112 unique phones) for FB Custom Audience.
+- **V144 stock-page batch DEPLOYED + verified LIVE** (frontend `vercel --prod` + `firestore:rules` via Probe-Deploy-Probe).
+- 4 user issues this session, all done + deployed:
+  1. **"หมด (คงเหลือ 0)" filter** in ยอดคงเหลือ (was missing) — live-verified.
+  2. **Real-time 0-lot auto-clear** — `_clearRedundantZeroLotsForProducts` post-commit at 7 stock-mutation entry points (cron 03:45 stays backstop). Rule narrowed to allow client delete of remaining==0 lots only. **L2 e2e 10/0 on real prod.**
+  3. **In-place adjust/order modals** — ปรับ/เพิ่ม open `StockActionModal` on the balance page (no bounce); forms reused; AV78 close. Live-verified both.
+  4. **Balance follows top BranchSelector** — per-panel "สถานที่" dropdown removed; locationId derived. Live-verified static + dynamic (นครราชสีมา 94 ↔ พระราม 3 5).
+- **Rule M applied**: 14 lingering redundant 0-lots deleted on prod (audit `v143-quater-...37330cf4`); idempotent re-check 0 remaining, 30 placeholders kept.
 
-## What this session shipped (detail → checkpoint `2026-06-02-tfp-megatest-scheduled-deploy.md`)
-- Scheduled Tasks deploy + 2 post-deploy run-now fixes (dynamic-import → static → internal-HTTP) + live-guard 21/21.
-- resolveParam 4th defense layer (clamps corrupt cron param) wired into 5 destructive crons + 94/0 param-safety tests.
-- `scripts/e2e-tfp-mega-test.mjs` (L2 19/0) + `tests/e2e/tfp-mega-l1.spec.js` (L1 2/0) — real-prod TFP verification.
-- `scripts/export-opd-customers-csv.mjs` — FB targeting export.
-- Found e2e test-debt (NOT app bugs): Phase 28 button rename, V26.1 button removal, helpers.js hardcodes deleted customer 2867.
+## What shipped (detail → V-log V144 + wiki stock-realtime page)
+- `_clearRedundantZeroLotsForProducts` (backendClient) + 7 entry-point wirings + 2 AV172-exempt (create*Transfer/Withdrawal pending-doc).
+- StockActionModal (NEW, DRY) hosting exported AdjustCreateForm/OrderCreateForm.
+- StockBalancePanel: "หมด" filter + derived locationId (dropdown/auto-pick removed).
+- firestore.rules narrow delete + Rule B probe #16. AV172 (real-time lot-clear) + AV173 (in-place modal + follow-selector).
+- tests: v144-realtime-lot-clear (41) + v144-stock-ux (23) + 15 V21 lock-in fixups.
 
 ## Next action
-- Idle — await user direction. Honest stance: tested paths clean; "zero bugs whole app" not claimable (tests prove presence, not absence).
+- Idle — await user direction. Tested paths clean.
 
-## Outstanding user-triggered actions
-- None blocking. Optional: (a) re-enable 4 stale TFP e2e specs (treatment-courses/buy-deduct/v96/v71) via tfp-mega-l1's fresh-fixture pattern; (b) prior-session V-log entries (sales/EOD+5/+6) still unwritten; (c) cron stock-lot-cleanup 03:45 BKK carryover.
+## Outstanding (optional, user-triggered)
+- **CentralStockTab same-class deferred**: its balance ปรับ/เพิ่ม still navigate (different tab + CentralStockOrderPanel + warehouse-scoped). Flagged (test CB1). Offer to convert to in-place modals if wanted.
+- Prior-session V-log entries (sales/EOD+5/+6) still unwritten (carryover).
