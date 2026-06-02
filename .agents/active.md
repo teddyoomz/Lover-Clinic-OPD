@@ -1,115 +1,30 @@
 ---
-updated_at: "2026-06-02 — TFP MEGA-TEST complete (L1 2/0 + L2 19/0 on real prod) + OPD→CSV export for FB; earlier: Scheduled Tasks DEPLOYED + resolveParam 4th layer."
-status: "DEPLOYED. Full suite 15720/0 + build clean + post-deploy live-guard 21/21 on fresh prod. 4th defense layer (resolveParam clamps a corrupt config value at the cron) LIVE. Firebase dup retired from Cloud Scheduler."
+updated_at: "2026-06-02 EOD — TFP mega-test L1+L2 GREEN on real prod + OPD→CSV export; Scheduled Tasks + resolveParam deployed earlier this session."
+status: "Idle / verification-complete. No open bugs on tested paths. master ahead of prod by tests/scripts/docs only (no bundle change)."
 branch: "master"
-last_commit: "8e6a1d06 (resolveParam 4th defense layer + param-safety tests)."
-tests: "Full suite 15720/0. Build clean (2503 modules). Post-deploy live-guard 21/21 + L1 Playwright deployed-URL 1/1 + L2 contract 13/0. param-safety 94/94 · scheduled group 174/174."
+last_commit: "c63c3201 (TFP mega-test complete + CSV export handoff)."
+tests: "Full suite 15720/0 (last run = scheduled-tasks pre-deploy gate this session). TFP mega L2 19/0 + L1 2/0 on REAL prod. NOT re-run at session-end (per directive)."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8e6a1d06 LIVE (Scheduled Tasks + resolveParam hardening). Firebase functions: cleanupOldStaffChatMessages DELETED from Cloud Scheduler."
-firestore_rules_version: "UNCHANGED — no rules/storage/functions/cron change. Both deploys vercel-only (no Probe-Deploy-Probe)."
+production_commit: "8e6a1d06 LIVE (Scheduled Tasks tab + resolveParam 4th defense layer). Commits after it = tests/scripts/docs only → bundle unchanged."
+firestore_rules_version: "UNCHANGED — no rules/storage/functions change pending. Firebase cleanupOldStaffChatMessages was retired from Cloud Scheduler this session."
 ---
 
-# Active — TFP MEGA-TEST complete + Scheduled Tasks DEPLOYED, 2026-06-02
+# Active — 2026-06-02 EOD
 
-## 🔬 TFP MEGA-TEST (the app's core, longest bug history) — L1 + L2 GREEN on REAL prod
-The biggest test yet. NO deploy/source change to the app — pure Rule-Q verification +
-2 regression artifacts.
-- **L2 (function chain) — `scripts/e2e-tfp-mega-test.mjs` 19/0**: real CLIENT SDK
-  (authed staff) drives the REAL backend functions TFP calls, on REAL prod (real
-  rules/indexes/data-shapes), TEST-prefixed fixtures + cleanup. Each scenario
-  reproduces a historical bug's exact trigger: V104 (course 5/5→4/5) · V36
-  (be_course_changes kind='use', field is `linkedTreatmentId`) · over-deduct throws ·
-  V142 carry-forward (reverse→5/5, re-deduct→4/5, no double/stuck) · V44/V45
-  (assign product≠course-name) · V108 (sale name resolved from patientData, not "-") ·
-  Rule O/V46 (movement uses LIVE be_products name, not passed/frozen). Caught 2 of my
-  OWN test bugs (qty "4 / 5 ครั้ง" spaces; audit field name) before they masked a pass.
-- **L1 (component orchestration) — `tests/e2e/tfp-mega-l1.spec.js` 2/0**: real browser
-  drives the REAL TFP UI on real prod, FRESH TEST customer (admin beforeAll; no
-  real-customer actions). Proves handleSubmit actually CALLS the chain: save →
-  course DECREMENTS + be_treatments persisted + V36 audit emits (V104 bug = stays 5/5).
-- **e2e staleness found+documented** (pre-existing, NOT TFP bugs): Phase 28 renamed
-  สร้างการรักษา→**บันทึกการรักษา**; V26.1 removed the top-right ยืนยันการรักษา button;
-  `tests/e2e/helpers.js` hardcodes customer **2867** (deleted) + the old `goToBackend`
-  selector. The old TFP specs (treatment-courses / treatment-buy-deduct / v96 / v71)
-  inherit this debt — re-enable by copying tfp-mega-l1's fresh-fixture pattern (FOLLOW-UP).
-- Prod left clean (0 TEST customers). Branch note: all 3 doctors tagged to นครราชสีมา
-  (`BR-1777873556815-26df6480`); L1 injects `localStorage.selectedBranchId` so the
-  doctor dropdown is populated.
+## State
+- **Scheduled Tasks tab + resolveParam** DEPLOYED + verified LIVE (prod=`8e6a1d06`); vercel-only, no Probe-Deploy-Probe.
+- **TFP mega-test (app core) COMPLETE** — L2 function chain 19/0 + L1 real-browser component 2/0 on REAL prod. No open bug on tested paths.
+- **OPD→CSV export** done: `F:\FB\targeting\opd-customers.csv` (112 unique phones) for FB Custom Audience.
 
-## 📤 OPD → CSV for FB Custom Audience — `scripts/export-opd-customers-csv.mjs`
-Read-only export of all 113 be_customers → 112 unique phones (customer's OWN phone,
-never emergencyPhone) + name/email/dob(YYYYMMDD CE)/gender(m|f) → `F:\FB\targeting\
-opd-customers.csv` (OUTSIDE repo). Deduped by last-9 digits, UTF-8 no-BOM. Re-run to refresh.
+## What this session shipped (detail → checkpoint `2026-06-02-tfp-megatest-scheduled-deploy.md`)
+- Scheduled Tasks deploy + 2 post-deploy run-now fixes (dynamic-import → static → internal-HTTP) + live-guard 21/21.
+- resolveParam 4th defense layer (clamps corrupt cron param) wired into 5 destructive crons + 94/0 param-safety tests.
+- `scripts/e2e-tfp-mega-test.mjs` (L2 19/0) + `tests/e2e/tfp-mega-l1.spec.js` (L1 2/0) — real-prod TFP verification.
+- `scripts/export-opd-customers-csv.mjs` — FB targeting export.
+- Found e2e test-debt (NOT app bugs): Phase 28 button rename, V26.1 button removal, helpers.js hardcodes deleted customer 2867.
 
----
+## Next action
+- Idle — await user direction. Honest stance: tested paths clean; "zero bugs whole app" not claimable (tests prove presence, not absence).
 
-# Active — Scheduled Tasks tab DEPLOYED + verified LIVE, 2026-06-02
-
-## 4th defense layer (resolveParam) — DEPLOYED 2026-06-02 (prod=8e6a1d06)
-After the feature shipped, an adversarial bug-hunt found that the 5 destructive
-retention/cleanup crons threaded their deletion window via `cfg.params?.X ?? DEFAULT`
-— `??` only falls back on null/undefined, so a corrupt `retentionHours:0` (e.g. a
-direct admin-SDK write bypassing the validated saveSystemConfig) would survive →
-cutoff=now → DELETE-ALL. Reachable paths were already triple-protected (input min +
-onChange clamp + validateSystemConfigPatch throw); this adds the unreachable-config-
-corruption backstop. NEW pure `resolveParam(taskId,key,raw)` (registry): null/undefined→
-default (matches `??`), valid→unchanged (NO-OP), 0/neg/>max→clamp to [min,max],
-NaN/Infinity→default. Wired into all 5 crons. NO-OP for every valid value AND for the
-current prod config. The G6 adversarial test caught a real divergence in the helper
-(Number(null)===0→min) before ship → fixed. **Verified post-deploy: live-guard 21/21
-on fresh prod (all 5 resolveParam crons return 401 no-secret = modules bundle+load
-cleanly; disable-skip/force/security/run-now all GREEN).** Tests: param-safety 94/94
-(incl. G6 clamp matrix + G7 import wiring), full suite 15720/0, build clean. NO
-rules/functions change → vercel-only.
-
-## What shipped + DEPLOYED
-`tab=scheduled-tasks` "งานอัตโนมัติ & ตารางเวลา" — all 10 Vercel cron/auto-delete jobs in ONE
-configurable backend tab (near Settings): enable/disable + tune params + last-run badge + run-now,
-all at runtime. The completeness sweep ("ดูทั้ง app มา เอามาให้ครบ") found + retired a duplicate
-Firebase `cleanupOldStaffChatMessages` (7d) that was overriding the Vercel staff-chat cron (30d) —
-the headline "เยอะจนลืม" payoff. Registry (`scheduledTasksRegistry.js`) + `system_config.scheduledTasks`
-+ fail-safe `readScheduledTaskConfig` guard in all 10 crons + run-now endpoint + UI + perm/nav + AV171.
-(Architecture detail in SESSION_HANDOFF + spec/plan.)
-
-## DEPLOY (done — user "deploy")
-- **Vercel** (frontend + 10 cron guards + run-now endpoint): 3 deploys — initial → `441c0601`
-  (static-import attempt) → **`e32df9bc` (FINAL, internal-HTTP run-now)**. Prod LIVE.
-- **Firebase functions** (`firebase deploy --only functions`): DELETED `cleanupOldStaffChatMessages`
-  from Cloud Scheduler (the 7d/30d conflict gone — staff-chat retention is now Vercel-only @ 30d).
-- NO firestore.rules / storage change → no Probe-Deploy-Probe.
-- `public/brainstorm-scheduled-tasks.html` mockup stripped before deploy (not shipped).
-
-## 2 post-deploy run-now bugs (found by live re-test, fixed)
-The cron *guards* + UI + scheduled crons deployed clean first try; only the manual **run-now**
-endpoint had deploy-only bugs (invisible to local vitest — Vercel bundling + admin-SDK init order):
-1. **CRON_IMPORT_FAILED** — Vercel's bundler doesn't trace a dynamic computed `import(map[taskId])`
-   → the cron module wasn't bundled → 500. Fix attempt: STATIC imports (`441c0601`).
-2. **storageBucket conflict** — `verifyAdminOrPermissionToken` inits firebase-admin WITHOUT a
-   storageBucket; a statically-imported cron's own `initAdmin()` then no-ops (`getApps().length>0`)
-   and `getStorage().bucket()` throws → 500. **Fix (FINAL `e32df9bc`): internal-HTTP trigger** —
-   run-now POSTs the task's OWN deployed Vercel cron function (`{cronPath}?force=1` + `CRON_SECRET`),
-   so the cron runs in its own function context with its own init. No shared-app conflict.
-
-## Verification (Rule Q — ALL GREEN, on the LIVE deployed system)
-- ✅ Full vitest **15617/0** + build clean.
-- ✅ **L2 contract 13/0 on REAL prod** (`scripts/e2e-scheduled-tasks-l2.mjs --apply`): write
-  `enabled=false` to real `system_config` → `readScheduledTaskConfig` (exact cron path) returns
-  false → cron WOULD skip → restored.
-- ✅ **L1 Playwright on REAL browser + REAL prod Firebase** (dev server, identical code): render 10
-  → toggle non-critical → toggle safety-critical (confirm) → tune param → Save (real client-SDK
-  write) → reload→PERSISTED → restore → run-now. **Caught a real UX bug** mocks missed: post-save
-  config refire cleared the success banner instantly → fixed (drop `setSaved(false)` from the
-  config-refresh effect) + locked (F8).
-- ✅ **L1 deployed-URL 1/1** — same spec re-run against `https://lover-clinic-app.vercel.app`
-  (`E2E_BASE_URL=…`, webServer skipped, no localhost fallback): the full UI flow ran on the LIVE
-  bundle, incl. **run-now → LIVE `/api/admin/run-scheduled-task` endpoint → success banner**.
-- ✅ **LIVE run-now HTTP 200** (direct call to the deployed endpoint): `ranBy:loverclinic@…`,
-  `cronStatus:200`, result `{scanned:0,deleted:0,freed:0}` (chartEditSessionSweep — safe), and the
-  status doc `lastRunAt` went FRESH (02:45→02:59) → run-now → internal-HTTP → real cron exec → status write.
-- ✅ **Deployed scheduled cron** respects config + writes status (the 02:45 chartEditSessionSweep
-  scheduled run wrote a status doc on the live system).
-
-## Next action (user / future session)
-- Nothing outstanding on this feature — DEPLOYED + verified. New work needs explicit go-ahead.
-- Carryover (pre-existing): cron `stock-lot-cleanup` 03:45 BKK; prior-session V-log entries
-  (sales / EOD+5 / +6) unwritten.
+## Outstanding user-triggered actions
+- None blocking. Optional: (a) re-enable 4 stale TFP e2e specs (treatment-courses/buy-deduct/v96/v71) via tfp-mega-l1's fresh-fixture pattern; (b) prior-session V-log entries (sales/EOD+5/+6) still unwritten; (c) cron stock-lot-cleanup 03:45 BKK carryover.
