@@ -2,7 +2,7 @@
 updated_at: "2026-06-02 EOD+1 — V144 stock-page batch DEPLOYED + verified (filter + real-time 0-lot auto-clear + in-place modals + balance follows global selector)."
 status: "DEPLOYED + L2-verified on real prod. No open bugs on tested paths."
 branch: "master"
-last_commit: "2b1a8f11 (V144 code batch) + docs commit follows."
+last_commit: "0599af2e (V144 docs) · code 2b1a8f11 · session-end checkpoint follows."
 tests: "Full suite 15777/0 (this session). V144 L2 e2e 10/0 on REAL prod (post-deploy). NOT re-run at session-end (per directive)."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "2b1a8f11 — frontend via vercel --prod (V144 UI: หมด filter + in-place adjust/order modals + balance follows top BranchSelector) + firestore:rules (be_stock_batches delete narrowed to remaining==0). Probe-Deploy-Probe 6/6 pre+post."
