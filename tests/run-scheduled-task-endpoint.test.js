@@ -7,7 +7,7 @@ vi.mock('../api/admin/_lib/adminAuth.js', () => ({
   verifyAdminOrPermissionToken: (...a) => mockVerify(...a),
 }));
 
-import handler, { CRON_MODULE } from '../api/admin/run-scheduled-task.js';
+import handler, { CRON_HANDLER } from '../api/admin/run-scheduled-task.js';
 import { SCHEDULED_TASKS } from '../src/lib/scheduledTasksRegistry.js';
 
 function mkRes() {
@@ -20,9 +20,9 @@ function mkRes() {
 describe('run-scheduled-task endpoint', () => {
   beforeEach(() => mockVerify.mockReset());
 
-  it('CRON_MODULE covers exactly every registry task', () => {
-    for (const t of SCHEDULED_TASKS) expect(CRON_MODULE[t.id]).toBeTruthy();
-    expect(Object.keys(CRON_MODULE).length).toBe(SCHEDULED_TASKS.length);
+  it('CRON_HANDLER (static imports) covers exactly every registry task', () => {
+    for (const t of SCHEDULED_TASKS) expect(typeof CRON_HANDLER[t.id]).toBe('function');
+    expect(Object.keys(CRON_HANDLER).length).toBe(SCHEDULED_TASKS.length);
   });
 
   it('returns early when auth fails (helper returned null → no further output)', async () => {
