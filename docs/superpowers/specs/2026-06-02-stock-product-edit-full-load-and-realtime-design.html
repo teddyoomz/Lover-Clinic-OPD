@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Stock-tab product edit — full-doc load + real-time table reflection · Design Spec</title>
+<style>
+  :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --sky:#0369a1; --em:#047857; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+  h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+  h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+  pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+  code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+  .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+  th { background: var(--bg-meta); }
+  .ok { color: var(--em); font-weight: 600; }
+  .bad { color: var(--accent); font-weight: 600; }
+  /* dark mockup */
+  .mock { background:#0f0f0f; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:1em 0; color:#e5e5e5; font-size:13px; }
+  .mock .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#8a8a8a; margin-bottom:8px; }
+  .mt { width:100%; border-collapse:collapse; font-size:12px; }
+  .mt th { background:#1c1c1c; color:#8a8a8a; border:none; font-size:10px; padding:6px 9px; text-transform:uppercase; }
+  .mt td { border:none; border-top:1px solid #2a2a2a; padding:7px 9px; color:#e5e5e5; }
+  .mt .em { color:#34d399; font-family:monospace; font-weight:700; }
+  .mt .new { background:rgba(56,189,248,.10); }
+  .mt .drop { color:#f87171; text-decoration:line-through; }
+  .hl { background:rgba(56,189,248,.16); border-radius:3px; padding:0 4px; }
+  .flow td { font-size:0.9em; }
+  .flow .n { background:var(--bg-meta); font-weight:700; width:2.4em; text-align:center; }
+</style>
+</head>
+<body>
+
+<h1>Stock-tab product edit — full-doc load + real-time table reflection</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-02 · <strong>Status:</strong> Awaiting user review · <strong>Class:</strong> partial-object / frozen-denormalization at the stock↔product boundary (V12 multi-reader-sweep + Rule O display live-resolve) · <strong>Implementation plan:</strong> (to follow via writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The "แก้ไขสินค้า" modal opened from <code>tab=stock</code> (ยอดคงเหลือ → ปุ่ม แก้ไข behind a row) loads <strong>incomplete</strong> data — user screenshots: the same product (ถุงมือ Sterile ไซส์ M) shows ประเภท=ยา + blank หมวดหมู่/หน่วย/ราคา from stock, but ประเภท=สินค้าสิ้นเปลือง + หมวดหมู่=อุปกรณ์ + หน่วย=กล่อง from <code>tab=products</code>.</p>
+<p><strong>Root cause (confirmed by reading the code):</strong></p>
+<ol>
+  <li><code>StockBalancePanel.onEditProduct(p)</code> passes the <strong>aggregated row</strong> (<code>{productId, productName, unit, totalRemaining, batches, …thresholds}</code>) — NOT the real <code>be_products</code> doc. <code>ProductFormModal</code> seeds <code>form = {…emptyProductForm(), …row}</code> → every field absent on the row falls to defaults (<code>productType:'ยา'</code>, blank category/unit/price; the row's <code>unit</code> key ≠ form's <code>mainUnitName</code> so unit stays blank).</li>
+  <li><span class="bad">CRITICAL data-integrity risk:</span> <code>saveProduct</code> does <code>setDoc(…, { merge:false })</code> (full overwrite) and <code>normalizeProduct</code> does <code>return { …form, … }</code> (<strong>spreads, no whitelist</strong>). So saving the stock-opened modal would (a) <strong>overwrite</strong> the real product with blanks/defaults, and (b) <strong>write junk</strong> (<code>batches</code>, <code>totalRemaining</code>, <code>nextExpiry</code>, <code>valueCost</code>, <code>unit</code>) onto the product doc. Stock holds millions of baht of inventory.</li>
+  <li>The balance table's <strong>unit is frozen</strong>: it renders <code>b.unit</code> (the batch's denormalized unit), not the live <code>be_products.mainUnitName</code>. (Name is already canonical via the existing <code>listenToProducts</code> listener; unit/category/type are not.) → editing a unit anywhere never updates the table (user: "Matigen ยังเป็นครั้ง").</li>
+</ol>
+<p><strong>Goal:</strong> (1) the stock-tab edit modal loads the complete product (identical to tab=products); (2) editing unit / name / category / type / other fields — from <code>tab=stock</code> OR <code>tab=products</code> OR another device — reflects in the balance table <strong>in real time</strong>; (3) no save can ever corrupt a product doc; (4) comprehensive tests (stock is mission-critical).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mock">
+  <div class="lbl">BEFORE · stock-tab modal (the bug) — loads defaults; saving would overwrite the real product</div>
+  <table class="mt">
+    <tr><td>ประเภท* <span class="bad">ยา ⚠ (default)</span></td><td>สถานะ ใช้งาน</td></tr>
+    <tr><td>ชื่อ เนื้อเยื่อเทียม Matigen…</td><td>รหัส <span style="color:#555">—</span></td></tr>
+    <tr><td>หมวดหมู่ <span class="bad">ว่าง ⚠</span></td><td>หน่วย <span class="bad">ว่าง ⚠</span></td></tr>
+    <tr><td>ราคา <span class="bad">ว่าง ⚠</span></td><td>ขนาดยา 500/mg (placeholder)</td></tr>
+  </table>
+</div>
+
+<div class="mock">
+  <div class="lbl">AFTER · stock-tab modal — loads the full be_products doc (= tab=products)</div>
+  <table class="mt">
+    <tr><td>ประเภท* <span class="ok" style="color:#6ee7b7">สินค้าสิ้นเปลือง ✓</span></td><td>สถานะ ใช้งาน</td></tr>
+    <tr><td>ชื่อ เนื้อเยื่อเทียม Matigen…</td><td>รหัส MTG-5740</td></tr>
+    <tr><td>หมวดหมู่ <span style="color:#6ee7b7">อุปกรณ์ ✓</span></td><td>หน่วย <span style="color:#6ee7b7">ครั้ง → เปลี่ยนเป็น "ชิ้น" ✓</span></td></tr>
+    <tr><td>ราคา <span style="color:#6ee7b7">1,200 ✓</span></td><td>แจ้งใกล้หมด 5</td></tr>
+  </table>
+</div>
+
+<div class="mock">
+  <div class="lbl">BEFORE · balance table (ยอดคงเหลือ) — unit frozen, no category/type</div>
+  <table class="mt">
+    <thead><tr><th>สินค้า</th><th>Batches</th><th>คงเหลือ</th><th>ความจุ</th><th>มูลค่าทุน</th><th>หมดอายุถัดไป</th><th>ACTIONS</th></tr></thead>
+    <tbody><tr><td>เนื้อเยื่อเทียม Matigen 5×7×0.4 cm</td><td>1</td><td><span class="em">3</span> ครั้ง ⚠</td><td>-</td><td>฿3,600</td><td>-</td><td>ปรับ · เพิ่ม · แก้ไข</td></tr></tbody>
+  </table>
+</div>
+
+<div class="mock">
+  <div class="lbl">AFTER · balance table — REMOVE มูลค่าทุน + ความจุ · ADD หมวดหมู่ + ประเภท (live) · unit live</div>
+  <table class="mt">
+    <thead><tr><th>สินค้า</th><th>Batches</th><th>คงเหลือ</th><th class="new">หมวดหมู่</th><th class="new">ประเภท</th><th>หมดอายุถัดไป</th><th>ACTIONS</th></tr></thead>
+    <tbody><tr>
+      <td>เนื้อเยื่อเทียม Matigen 5×7×0.4 cm</td><td>1</td>
+      <td><span class="em">3</span> <span class="hl">ชิ้น</span> ⟲</td>
+      <td class="new"><span class="hl">อุปกรณ์</span></td>
+      <td class="new"><span class="hl">สินค้าสิ้นเปลือง</span></td>
+      <td>-</td><td>ปรับ · เพิ่ม · แก้ไข</td>
+    </tr></tbody>
+  </table>
+  <div style="font-size:11px;color:#8a8a8a;margin-top:6px">หน่วย / ชื่อ / หมวดหมู่ / ประเภท อ่านสดจาก <code>be_products</code> ผ่าน listener เดิม → แก้จาก stock หรือ products หรืออีกเครื่อง = อัปเดตทันทีทุกคนที่เปิดหน้านี้. (มูลค่าต้นทุนรวมยังโชว์ใน header ด้านบน — ลบเฉพาะคอลัมน์ต่อแถว.)</div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mock">
+<div class="lbl">Edit → real-time reflect (from stock OR products OR another device)</div>
+<table class="mt flow">
+  <tr><td class="n">1</td><td>คลิก <b>แก้ไข</b> หลังแถวใน ยอดคงเหลือ → <code>StockBalancePanel</code> ส่ง <b>doc สินค้าเต็ม</b> (จาก map ของ <code>listenToProducts</code>) ให้ <code>onEditProduct</code> — ไม่ใช่แถวสรุป</td></tr>
+  <tr><td class="n">2</td><td><code>StockTab</code> เปิด <code>ProductFormModal product={fullDoc}</code> → ฟอร์มครบทุก field (= tab=products). (fallback: ถ้า doc ไม่อยู่ใน map → <code>getProduct(id)</code>)</td></tr>
+  <tr><td class="n">3</td><td>แก้ หน่วย/ชื่อ/หมวดหมู่/ประเภท/… → <b>บันทึก</b> → <code>saveProduct</code> → <code>normalizeProduct</code> (<b>whitelist</b> เฉพาะ field สินค้า → ตัด batches/totalRemaining/unit/junk ทิ้ง) → <code>setDoc(merge:false)</code></td></tr>
+  <tr><td class="n">4</td><td><code>be_products</code> เปลี่ยน → <code>listenToProducts</code> (BS-18, มีอยู่แล้ว) ยิง snapshot → map อัปเดต (canonicalName/unit/category/type)</td></tr>
+  <tr><td class="n">5</td><td>ตาราง re-render: หน่วย = <code>canonicalUnit || b.unit</code>, + คอลัมน์ หมวดหมู่/ประเภท สด → <b>เปลี่ยนทันที real-time</b> ทุกเครื่องที่เปิดหน้านี้ (เพราะ listener live)</td></tr>
+</table>
+</div>
+
+<div class="mock">
+<div class="lbl">Whitelist guard (Q2) — junk can never reach a product doc</div>
+<table class="mt flow">
+  <tr><td class="n">A</td><td>form (อาจมี junk จาก row เก่า/caller อนาคต) → <code>normalizeProduct</code> emit เฉพาะ field ใน be_products schema (enumerate จากของจริงด้วย Rule R diag — ต้องรวม <code>stockConfig</code>, <code>mainProductId/Name</code>, forensic <code>_*</code> ไม่งั้น drop ของจริง)</td></tr>
+  <tr><td class="n">B</td><td>คีย์ที่ไม่อยู่ใน schema (<code>batches, totalRemaining, totalCapacity, nextExpiry, expired, valueCost, unit, id</code>) → <b>ถูกตัดทิ้ง</b> → ไม่มีขยะลง doc</td></tr>
+</table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>Change</th><th>Why isolated</th></tr>
+  <tr><td><code>StockBalancePanel.jsx</code></td><td>Extend the existing <code>listenToProducts</code> map to store the <b>full product doc</b> per productId + derived <code>canonicalUnit/Category/Type</code>. <code>onEditProduct(fullProduct)</code>. Table: drop มูลค่าทุน+ความจุ columns, add หมวดหมู่+ประเภท, render unit = <code>canonicalUnit || b.unit</code>; realign lot-detail sub-rows to the new column count.</td><td>Already owns the live products listener; one map, one render. valueCost still computed for the header summary.</td></tr>
+  <tr><td><code>StockTab.jsx</code></td><td>No shape change — <code>onEditProduct={setEditingProduct}</code> now receives the full doc. Add a defensive <code>getProduct(id)</code> fallback if the passed object lacks <code>productType</code>.</td><td>Modal wiring untouched; just receives complete data.</td></tr>
+  <tr><td><code>productValidation.js · normalizeProduct</code></td><td><b>Whitelist</b> output to the known be_products field set (drop unknown keys). Enumerate the COMPLETE schema (emptyProductForm keys + <code>stockConfig</code>, <code>mainProductId</code>, <code>mainProductName</code>, <code>isHidden/hiddenAt/hiddenBy</code>, forensic <code>_*</code>) via a Rule R diag on real prod docs BEFORE writing the whitelist.</td><td>Backstop for ALL saveProduct callers; must not regress existing fields.</td></tr>
+  <tr><td><code>ProductFormModal.jsx</code></td><td>No change needed (init already <code>{…emptyProductForm(), …product}</code> → now gets the full doc). Optional: drop any non-form keys before save (belt-and-suspenders).</td><td>Full-doc load makes it correct without modal changes.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = remove มูลค่าทุน + ความจุ columns; ADD หมวดหมู่ + ประเภท</strong> (both live-resolved from be_products). Name + unit live in all cases. (Header "มูลค่าต้นทุนรวม ฿X" summary kept — only the per-row column removed; flag if you want the header gone too.)</li>
+  <li><strong>Q2 = whitelist only</strong> — add the whitelist to <code>normalizeProduct</code> (drop non-product junk). No extra "block save on partial object" guard; the full-doc-load fix is the primary wipe-prevention.</li>
+  <li>Real-time mechanism = live-resolve at display via the EXISTING <code>listenToProducts</code> listener (Rule O pattern) — NO mutation of existing batch denormalization.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Edit-from-stock opens the modal with the COMPLETE product (type, category, unit, price, code, dosage, flags…) — byte-identical to opening from tab=products.</li>
+  <li>Change unit ครั้ง→ชิ้น (from stock OR products) → balance table unit shows ชิ้น instantly, no page refresh. Same for ชื่อ, หมวดหมู่, ประเภท. Verified on a 2nd device/tab via the live listener.</li>
+  <li>Saving the product (from either tab) NEVER wipes real fields and NEVER writes stock-aggregation junk (batches/totalRemaining/…) onto the doc — proven on a REAL prod product round-trip (Rule Q L2).</li>
+  <li>Balance table renders with the new columns (สินค้า · Batches · คงเหลือ · หมวดหมู่ · ประเภท · หมดอายุถัดไป · ACTIONS); lot-expand sub-rows align; badges/filters (หมด/ใกล้หมด/เกินสต็อก/ติดลบ/ใกล้หมดอายุ) still work.</li>
+  <li>Comprehensive tests: unit (map build + live-resolve + whitelist preserves stockConfig/forensic) + RTL (stock-edit opens full modal; columns) + Rule I flow-simulate (edit unit/name/category/type → table reflects) + corruption regression (partial object can't wipe/junk a doc) + Rule Q L2 real-prod round-trip + source-grep AV.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><span class="bad">KEY RISK — whitelist drops a legit field.</span> A be_products doc carries fields beyond emptyProductForm: <code>stockConfig</code> (trackStock — drives whether the product has batches!), <code>mainProductId/mainProductName</code>, <code>isHidden</code> (V41), forensic <code>_v*</code> stamps (V46). A careless whitelist would DROP these on save → break stock tracking / hide-flag / audit trail. <b>Mitigation:</b> Rule R diag on real prod docs to enumerate the FULL field set; the whitelist = that set; a test asserts a real doc round-trips through normalizeProduct with zero field loss.</li>
+  <li>Removing 2 columns + adding 2 changes the table's column count → the lot-expand sub-rows (which use fixed <code>colSpan</code>/cell positions) must be realigned, or they'll mis-render.</li>
+  <li><code>be_products</code> is branch-scoped (BSA) → live-resolve is per-branch (consistent: the balance table is per-branch; editing a product reflects in that branch's table). No cross-branch surprise.</li>
+  <li>Header "มูลค่าต้นทุนรวม" — kept as the aggregate summary. Confirm you're OK keeping it (only the per-row column is removed).</li>
+</ul>
+
+</body>
+</html>

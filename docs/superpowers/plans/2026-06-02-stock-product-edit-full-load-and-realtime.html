@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stock-tab product edit — full-doc load + real-time table · Implementation Plan</title>
+<style>
+  :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+  h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+  h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+  pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+  code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+  .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+  .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+  .mockup { background:#0f0f0f; color:#e5e5e5; border:1px solid #2a2a2a; border-radius:8px; padding:1em; margin:1em 0; font-size:12px; }
+  .mockup-label { font-size:0.72em; text-transform:uppercase; letter-spacing:0.05em; color:#8a8a8a; margin-bottom:0.5em; }
+  .mt{width:100%;border-collapse:collapse;font-size:12px}.mt th{background:#1c1c1c;color:#8a8a8a;padding:5px 8px;font-size:10px;text-transform:uppercase;text-align:left}.mt td{border-top:1px solid #2a2a2a;padding:6px 8px}.mt .new{background:rgba(56,189,248,.10)}.em{color:#34d399;font-family:monospace;font-weight:700}.hl{background:rgba(56,189,248,.16);padding:0 4px;border-radius:3px}
+  .n{background:var(--bg-meta);font-weight:700;text-align:center;width:2.2em}
+</style>
+</head>
+<body>
+
+<h1>Stock-tab product edit — full-doc load + real-time table</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute inline (executing-plans) — tightly coupled across StockBalancePanel + normalizeProduct + StockTab; subagents thrash on this baseline (V81/V86 lesson). TDD per task.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Stock-tab "แก้ไขสินค้า" loads the COMPLETE product (= tab=products), edits to unit/name/category/type reflect in the ยอดคงเหลือ table in real time (from any tab/device), and no save can ever wipe/pollute a product doc.</p>
+  <p><strong>Architecture:</strong> (1) StockBalancePanel's existing <code>listenToProducts</code> map stores the FULL product doc + canonical unit/category/type → onEditProduct passes the full doc, table renders live fields. (2) <code>normalizeProduct</code> whitelists the real be_products schema (drops stock junk). (3) StockTab fetch fallback. Live-resolve at display (Rule O); no batch mutation.</p>
+  <p><strong>Tech Stack:</strong> React + Firestore onSnapshot (BS-18), vitest + RTL, Rule Q L2 (firebase-admin real-prod), Rule R diag, Rule M follow-up (data cleanup, user-gated).</p>
+  <p><strong>Whitelist (from Rule R diag on 610 real docs):</strong> PRESERVE = 30 emptyProductForm keys + <code>stockConfig</code> + <code>createdBy</code> + <code>updatedBy</code> + every <code>_*</code> forensic key. saveProduct adds productId/branchId/createdAt/updatedAt. DROP = <code>batches, expired, nextExpiry, totalCapacity, totalRemaining, unit, valueCost, id</code>.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">AFTER · ยอดคงเหลือ table — drop มูลค่าทุน+ความจุ, add หมวดหมู่+ประเภท (live), unit live</div>
+  <table class="mt">
+    <thead><tr><th>สินค้า</th><th>Batches</th><th>คงเหลือ</th><th class="new">หมวดหมู่</th><th class="new">ประเภท</th><th>หมดอายุถัดไป</th><th>ACTIONS</th></tr></thead>
+    <tbody><tr><td>เนื้อเยื่อเทียม Matigen 5×7×0.4 cm</td><td>1</td><td><span class="em">3</span> <span class="hl">ชิ้น</span></td><td class="new"><span class="hl">อุปกรณ์</span></td><td class="new"><span class="hl">สินค้าสิ้นเปลือง</span></td><td>-</td><td>ปรับ·เพิ่ม·แก้ไข</td></tr></tbody>
+  </table>
+  <div style="font-size:11px;color:#8a8a8a;margin-top:6px">Edit modal (stock) = full be_products doc, identical to tab=products. Header "มูลค่าต้นทุนรวม ฿X" summary kept; only per-row cost/capacity columns removed.</div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Edit → real-time reflect + whitelist guard</div>
+  <table class="mt">
+    <tr><td class="n">1</td><td>คลิก แก้ไข (stock row) → <code>StockBalancePanel</code> passes <code>fullById[productId]</code> (the live full doc from its listenToProducts map) to <code>onEditProduct</code></td></tr>
+    <tr><td class="n">2</td><td><code>StockTab.handleEditProduct(obj)</code>: if <code>!obj.productType</code> → <code>getProduct(obj.productId)</code> fallback → <code>setEditingProduct(full)</code> → <code>ProductFormModal</code> complete</td></tr>
+    <tr><td class="n">3</td><td>edit + Save → <code>saveProduct</code> → <code>normalizeProduct</code> (whitelist → drops batches/totalRemaining/unit junk; preserves stockConfig/createdBy/updatedBy/_*) → setDoc(merge:false)</td></tr>
+    <tr><td class="n">4</td><td><code>be_products</code> changes → <code>listenToProducts</code> snapshot fires → map updates (canonicalName/Unit/Category/Type + full doc)</td></tr>
+    <tr><td class="n">5</td><td>table re-renders live: unit=<code>canonicalUnit||b.unit</code>, + หมวดหมู่/ประเภท columns → instant on every open viewer/device</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li><strong>Modify</strong> <code>src/lib/productValidation.js</code> — <code>normalizeProduct</code> whitelist (drop <code>...form</code> spread; preserve enumerated extras + <code>_*</code>).</li>
+  <li><strong>Modify</strong> <code>src/components/backend/StockBalancePanel.jsx</code> — listenToProducts map stores full doc + canonicalUnit/Category/Type; products useMemo surfaces them; table columns swap (drop cost+capacity, add หมวดหมู่+ประเภท); unit live; lot sub-rows realign; <code>onEditProduct(fullDoc)</code>.</li>
+  <li><strong>Modify</strong> <code>src/components/backend/StockTab.jsx</code> + <code>CentralStockTab.jsx</code> — <code>handleEditProduct</code> with getProduct fallback.</li>
+  <li><strong>Create</strong> <code>tests/v145-stock-product-edit-realtime.test.js</code> (unit + source-grep) + <code>tests/v145-stock-product-edit-rtl.test.jsx</code> (RTL + flow-simulate) + <code>scripts/e2e-v145-product-edit-roundtrip.mjs</code> (Rule Q L2).</li>
+  <li><strong>Modify</strong> <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> — AV175.</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: normalizeProduct whitelist (data-integrity backstop)</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/productValidation.js</code> (normalizeProduct); Test <code>tests/v145-stock-product-edit-realtime.test.js</code>.</p>
+<p><strong>Step 1 — failing test</strong> (real-doc lossless + junk dropped):</p>
+<pre><code class="language-js">import { normalizeProduct, emptyProductForm } from '../src/lib/productValidation.js';
+// PRESERVE legit extras
+it('A1 preserves stockConfig / createdBy / updatedBy / _forensic', () => {
+  const out = normalizeProduct({ ...emptyProductForm(), productName:'X', productType:'ยา',
+    stockConfig:{trackStock:true,unit:'ครั้ง'}, createdBy:'u1', updatedBy:'u2',
+    _branchIdBackfilledAt:'t', _stockConfigSetBy:'_deductOneItem' });
+  expect(out.stockConfig).toEqual({trackStock:true,unit:'ครั้ง'});
+  expect(out.createdBy).toBe('u1'); expect(out.updatedBy).toBe('u2');
+  expect(out._branchIdBackfilledAt).toBe('t'); expect(out._stockConfigSetBy).toBe('_deductOneItem');
+});
+// DROP stock-aggregation junk (the corruption vector)
+it('A2 drops batches/totalRemaining/unit/valueCost/nextExpiry/expired/totalCapacity/id', () => {
+  const out = normalizeProduct({ ...emptyProductForm(), productName:'X', productType:'ยา',
+    batches:[{x:1}], totalRemaining:3, totalCapacity:0, nextExpiry:null, expired:0,
+    unit:'ครั้ง', valueCost:99, id:'STRAY' });
+  for (const k of ['batches','totalRemaining','totalCapacity','nextExpiry','expired','unit','valueCost','id'])
+    expect(k in out).toBe(false);
+});
+// V14 — no undefined leaves
+it('A3 emits no undefined values', () => {
+  const out = normalizeProduct(emptyProductForm());
+  for (const v of Object.values(out)) expect(v).not.toBeUndefined();
+});</code></pre>
+<p><strong>Step 2 — implement.</strong> Replace the leading <code>...form</code> spread with explicit extra-preservation:</p>
+<pre><code class="language-js">export function normalizeProduct(form) {
+  const f = (form && typeof form === 'object' && !Array.isArray(form)) ? form : {};
+  const trim = (v) => typeof v === 'string' ? v.trim() : '';
+  const numOrNull = (v) => (v === '' || v == null) ? null : Number(v);
+  const out = {
+    // ── all 30 emptyProductForm fields (explicit — NO ...form spread) ──
+    productName: trim(f.productName), productCode: trim(f.productCode),
+    productType: f.productType || 'ยา', serviceType: trim(f.serviceType),
+    genericName: trim(f.genericName), categoryName: trim(f.categoryName),
+    subCategoryName: trim(f.subCategoryName), mainUnitName: trim(f.mainUnitName),
+    price: numOrNull(f.price), priceInclVat: numOrNull(f.priceInclVat),
+    isVatIncluded: !!f.isVatIncluded, isClaimDrugDiscount: !!f.isClaimDrugDiscount,
+    isTakeawayProduct: !!f.isTakeawayProduct, skipStockDeduction: !!f.skipStockDeduction,
+    defaultProductUnitGroupId: trim(f.defaultProductUnitGroupId), stockLocation: trim(f.stockLocation),
+    alertDayBeforeExpire: numOrNull(f.alertDayBeforeExpire),
+    alertQtyBeforeOutOfStock: numOrNull(f.alertQtyBeforeOutOfStock),
+    alertQtyBeforeMaxStock: numOrNull(f.alertQtyBeforeMaxStock),
+    dosageAmount: trim(f.dosageAmount), dosageUnit: trim(f.dosageUnit),
+    indications: trim(f.indications), instructions: trim(f.instructions),
+    storageInstructions: trim(f.storageInstructions),
+    administrationMethod: trim(f.administrationMethod),
+    administrationMethodHour: trim(f.administrationMethodHour),
+    administrationTimes: Array.isArray(f.administrationTimes)
+      ? f.administrationTimes.map(s => trim(s)).filter(Boolean) : [],
+    timesPerDay: numOrNull(f.timesPerDay), orderBy: numOrNull(f.orderBy),
+    status: f.status || 'ใช้งาน',
+  };
+  // V145 (AV175) — whitelist: preserve ONLY legit be_products extras (enumerated
+  // from 610 real prod docs via Rule R diag) + forensic _* keys. Everything else
+  // (batches/totalRemaining/totalCapacity/nextExpiry/expired/unit/valueCost/id —
+  // stock-aggregation junk) is DROPPED so a partial stock-row object can never
+  // pollute or wipe a product doc on save (setDoc merge:false).
+  if (f.stockConfig !== undefined) out.stockConfig = f.stockConfig;
+  if (f.createdBy !== undefined) out.createdBy = f.createdBy;
+  if (f.updatedBy !== undefined) out.updatedBy = f.updatedBy;
+  for (const k of Object.keys(f)) { if (k.startsWith('_') && f[k] !== undefined) out[k] = f[k]; }
+  return out;
+}</code></pre>
+<p><strong>Step 3</strong> run A1-A3 → PASS. <strong>Step 4</strong> run existing product tests (<code>productValidation</code>, <code>phase12*product*</code>, migrate) → no regression. <strong>Commit.</strong></p>
+</div>
+
+<div class="task">
+<h3>Task 2: StockBalancePanel — full-doc map + live unit/category/type + column swap</h3>
+<p><strong>Files:</strong> Modify <code>src/components/backend/StockBalancePanel.jsx</code>; Test (RTL) in Task 4.</p>
+<p><strong>Step 1 — listenToProducts map carries full doc + canonical unit/category/type</strong> (extend the existing effect, lines ~111-134):</p>
+<pre><code class="language-js">const [productMap, setProductMap] = useState({}); // pid -> { ...derived, full }
+// inside listenToProducts callback:
+map[pid] = {
+  alertDayBeforeExpire: numOrNull(p.alertDayBeforeExpire),
+  alertQtyBeforeOutOfStock: numOrNull(p.alertQtyBeforeOutOfStock),
+  alertQtyBeforeMaxStock: numOrNull(p.alertQtyBeforeMaxStock),
+  canonicalName: String(p.productName || p.name || '').trim(),
+  canonicalUnit: String(p.mainUnitName || '').trim(),         // V145
+  canonicalCategory: String(p.categoryName || '').trim(),     // V145
+  canonicalType: String(p.productType || '').trim(),          // V145
+  skipStockDeduction: p.skipStockDeduction === true,
+  full: p,                                                    // V145 full live doc for edit
+};</code></pre>
+<p><strong>Step 2 — products useMemo surfaces live unit/category/type</strong> (replace <code>unit: b.unit</code>):</p>
+<pre><code class="language-js">const tEntry = productMap[String(b.productId)];
+byProduct.set(b.productId, {
+  productId: b.productId,
+  productName: (tEntry?.canonicalName) || b.productName || '',
+  unit: (tEntry?.canonicalUnit) || b.unit || '',          // V145 live unit (batch fallback for legacy)
+  category: tEntry?.canonicalCategory || '',              // V145
+  productType: tEntry?.canonicalType || '',               // V145
+  fullProduct: tEntry?.full || null,                       // V145 for edit
+  /* ...totals, batches, thresholds as before... */
+});</code></pre>
+<p><strong>Step 3 — table columns: drop มูลค่าทุน + ความจุ &lt;th&gt;/&lt;td&gt;, add หมวดหมู่ + ประเภท.</strong> New header order: สินค้า · Batches · คงเหลือ · หมวดหมู่ · ประเภท · หมดอายุถัดไป · ACTIONS. Row cells:</p>
+<pre><code class="language-jsx">&lt;td className="px-3 py-2 text-[var(--tx-primary)]"&gt;{p.category || '-'}&lt;/td&gt;
+&lt;td className="px-3 py-2 text-[var(--tx-muted)]"&gt;{p.productType || '-'}&lt;/td&gt;</code></pre>
+<p>Keep <code>valueCost</code> in the useMemo (header "มูลค่าต้นทุนรวม" still uses <code>totalValue</code>). Remove the per-row <code>มูลค่าทุน</code> &lt;td&gt; (line ~450) + <code>ความจุ</code> &lt;th&gt;/&lt;td&gt; (lines ~370,443-449). The "เกินสต็อก" badge/filter logic stays (alertQtyBeforeMaxStock still on the row).</p>
+<p><strong>Step 4 — realign lot-expand sub-rows</strong> (lines ~498-511) to the new 7-column layout: the <code>colSpan={2}</code> lot label + the per-lot qty/category(blank)/type(blank)/expiry/cost cells must total 7 columns. Set lot rows to: <code>&lt;td colSpan=2&gt;↳ Lot…&lt;/td&gt; &lt;td&gt;qty&lt;/td&gt; &lt;td&gt;—&lt;/td&gt; &lt;td&gt;—&lt;/td&gt; &lt;td&gt;expiry&lt;/td&gt; &lt;td&gt;@cost&lt;/td&gt;</code> (7 cells).</p>
+<p><strong>Step 5 — onEditProduct passes the FULL doc</strong> (line ~478):</p>
+<pre><code class="language-jsx">onClick={e =&gt; { e.stopPropagation(); onEditProduct(p.fullProduct || { productId: p.productId }); }}</code></pre>
+<p><strong>Step 6</strong> build + RTL (Task 4). <strong>Commit.</strong></p>
+</div>
+
+<div class="task">
+<h3>Task 3: StockTab + CentralStockTab — full-doc fetch fallback</h3>
+<p><strong>Files:</strong> Modify <code>src/components/backend/StockTab.jsx</code>, <code>src/components/backend/CentralStockTab.jsx</code>.</p>
+<p><strong>Step 1 — handler with getProduct fallback</strong> (replace <code>onEditProduct={setEditingProduct}</code>):</p>
+<pre><code class="language-jsx">import { getProduct } from '../../lib/scopedDataLayer.js'; // verify export; else backendClient
+const handleEditProduct = useCallback(async (obj) =&gt; {
+  // V145 — StockBalancePanel passes the full live doc; defensive fetch if a
+  // minimal {productId} slipped through (map race) so we NEVER open a partial
+  // object into the modal (partial → save → wipe).
+  if (obj && obj.productType) { setEditingProduct(obj); return; }
+  const id = obj?.productId || obj?.id;
+  if (!id) return;
+  try { const full = await getProduct(id); if (full) setEditingProduct(full); }
+  catch (e) { console.error('[StockTab] getProduct failed:', e); }
+}, []);
+// ...
+&lt;StockBalancePanel ... onEditProduct={handleEditProduct} /&gt;</code></pre>
+<p>(If <code>getProduct</code> is not exported from scopedDataLayer, add a passthrough export there mirroring <code>listProducts</code>; backendClient already has <code>getProduct</code>/equivalent — verify and wire.)</p>
+<p><strong>Step 2</strong> mirror in CentralStockTab if it also wires onEditProduct. <strong>Step 3</strong> build clean. <strong>Commit.</strong></p>
+</div>
+
+<div class="task">
+<h3>Task 4: RTL + flow-simulate + corruption regression</h3>
+<p><strong>Files:</strong> Create <code>tests/v145-stock-product-edit-rtl.test.jsx</code>; extend <code>tests/v145-stock-product-edit-realtime.test.js</code>.</p>
+<p><strong>RTL B-group</strong> — render StockBalancePanel (mock <code>listenToStockBatchesByBranch</code> + <code>listenToProducts</code> + <code>listStockLocations</code> via scopedDataLayer; mock BranchContext):</p>
+<ul>
+  <li>B1 table shows หมวดหมู่ + ประเภท columns; NO มูลค่าทุน / ความจุ column headers.</li>
+  <li>B2 unit renders the canonical (be_products.mainUnitName="ชิ้น"), NOT the batch unit ("ครั้ง") → proves live-resolve.</li>
+  <li>B3 click แก้ไข → <code>onEditProduct</code> called with the FULL product object (has productType/categoryName/price), NOT the aggregated row.</li>
+  <li>B4 a product whose batch.unit≠be_products.mainUnitName shows the be_products unit (the Matigen ครั้ง→ชิ้น case).</li>
+</ul>
+<p><strong>Flow-simulate F-group (Rule I)</strong> — pure simulate of the listener→map→render chain: edit be_products.mainUnitName → map rebuild → products useMemo → row.unit changes; same for category/type/name. + corruption regression: feed a partial stock-row through normalizeProduct → assert resulting doc has no junk + retains nothing it shouldn't (= would-not-wipe when full doc loaded).</p>
+<p><strong>StockTab fallback test</strong>: handleEditProduct with <code>{productId}</code> only → getProduct mock called → setEditingProduct receives full; with full obj → no fetch.</p>
+<p><strong>Run</strong> the two v145 files → all PASS. <strong>Commit.</strong></p>
+</div>
+
+<div class="task">
+<h3>Task 5: Rule Q L2 real-prod round-trip + AV175 + source-grep + full suite</h3>
+<p><strong>Files:</strong> Create <code>scripts/e2e-v145-product-edit-roundtrip.mjs</code>; modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (AV175); extend v145 unit test (source-grep).</p>
+<p><strong>Step 1 — Rule Q L2</strong> (firebase-admin, real prod, TEST-prefixed fixture; admin-init boilerplate copied from <code>scripts/diag-be-products-schema.mjs</code>):</p>
+<ul>
+  <li>Create a TEST-V145- product with the FULL field set incl. <code>stockConfig</code> + <code>createdBy</code> + a forensic <code>_x</code>.</li>
+  <li>Simulate the modal save: <code>normalizeProduct({ ...emptyProductForm(), ...realDoc, batches:[…], totalRemaining:5, mainUnitName:'ชิ้น' })</code> → write via saveProduct path shape → read back.</li>
+  <li>Assert: stockConfig + createdBy + _x SURVIVE; batches/totalRemaining/unit/valueCost ABSENT; mainUnitName='ชิ้น'; categoryName/price NOT wiped. Cleanup the fixture (delete). Zero orphan.</li>
+  <li>Also: round-trip a REAL existing product (read → normalizeProduct → diff) asserting ZERO legit-field loss across a sample of the 610 docs (the whitelist-completeness proof).</li>
+</ul>
+<p><strong>Step 2 — AV175</strong> in audit-anti-vibe-code: "normalizeProduct MUST whitelist (no <code>...form</code> spread); be_products writes drop stock-aggregation junk (batches/totalRemaining/unit/valueCost/nextExpiry/expired/totalCapacity/id); stock-tab edit MUST pass the full be_products doc (never the aggregated balance row)." Grep: <code>normalizeProduct</code> body has no leading <code>...form</code>; StockBalancePanel onEditProduct passes <code>fullProduct</code>; StockBalancePanel table reads <code>canonicalUnit</code>.</p>
+<p><strong>Step 3 — source-grep</strong> locks (in the unit test): StockBalancePanel has <code>canonicalUnit</code>/<code>canonicalCategory</code>/<code>canonicalType</code>/<code>fullProduct</code>; onEditProduct passes fullProduct; no per-row <code>มูลค่าทุน</code>/<code>ความจุ</code> &lt;td&gt;; normalizeProduct has no <code>...form,</code> leading spread.</p>
+<p><strong>Step 4 — full suite</strong> <code>npx vitest run</code> → only the known cross-branch-import-rtl flake may fail (re-prove isolated). Build clean. <strong>Commit.</strong></p>
+</div>
+
+<h2>Out of scope (surface to user — do NOT auto-run)</h2>
+<blockquote>
+  <strong>Rule M data cleanup (separate, user-gated):</strong> the Rule R diag found <strong>35 product docs already polluted</strong> with stock junk (batches/totalRemaining/…) + at least one <strong>corrupted duplicate</strong> (Matigen <code>PRODUCTS_…_ADEF6A2D</code>: type=ยא, blank cat/unit — the bug already overwrote it). The code fix prevents recurrence; a Rule M two-phase script (dry-run → --apply) to strip junk from the 35 docs + restore/dedupe the corrupted ones is a follow-up requiring explicit user authorization. Offer it after the code ships.
+</blockquote>
+
+</body>
+</html>

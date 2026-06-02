@@ -751,7 +751,9 @@ describe('V43.K — Rule I full-flow: direct product master flag → branch 2 fi
     expect(productFormModalSrc).toMatch(/onChange.*skipStockDeduction:\s*e\.target\.checked/);
 
     // Step B: normalizeProduct preserves the flag with !!coercion
-    expect(productValidationSrc).toMatch(/skipStockDeduction:\s*!!form\.skipStockDeduction/);
+    // V145 (2026-06-02) — normalizeProduct param renamed form→f for the AV175
+    // whitelist refactor (behavior unchanged: still !!<param>.skipStockDeduction).
+    expect(productValidationSrc).toMatch(/skipStockDeduction:\s*!!f\.skipStockDeduction/);
 
     // Step C: _getProductStockConfig surfaces top-level skipStockDeduction
     expect(backendClientSrc).toMatch(/skipStockDeduction:\s*!!data\.skipStockDeduction/);

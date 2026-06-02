@@ -1,8 +1,9 @@
 // ─── StockTab — container for all stock sub-panels ──────────────────────────
 // Sub-tabs: Balance (ยอดคงเหลือ) / Orders (นำเข้า) / Adjust (ปรับสต็อก) / Movement Log
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Package, ShoppingBag, SlidersHorizontal, Activity, Truck, ClipboardCheck, Warehouse } from 'lucide-react';
+import { getProduct } from '../../lib/scopedDataLayer.js';
 import OrderPanel from './OrderPanel.jsx';
 import StockAdjustPanel from './StockAdjustPanel.jsx';
 import MovementLogPanel from './MovementLogPanel.jsx';
@@ -39,6 +40,23 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
   const handleAdjustProduct = (product) => setStockAction({ mode: 'adjust', product });
   const handleAddStockForProduct = (product) => setStockAction({ mode: 'order', product });
 
+  // V145 (2026-06-02, AV175) — open ProductFormModal with the COMPLETE be_products
+  // doc. StockBalancePanel passes the full live doc; this guard refuses to open a
+  // partial object (only {productId}, e.g. if the live map hadn't loaded) — it
+  // fetches the full doc first. A partial object would default + corrupt the
+  // product on save (setDoc merge:false), so we NEVER feed one to the modal.
+  const handleEditProduct = useCallback(async (obj) => {
+    if (obj && obj.productType) { setEditingProduct(obj); return; }
+    const id = obj?.productId || obj?.id;
+    if (!id) return;
+    try {
+      const full = await getProduct(id);
+      if (full) setEditingProduct(full);
+    } catch (e) {
+      console.error('[StockTab] getProduct fallback failed:', e);
+    }
+  }, []);
+
   return (
     <div className="space-y-3">
       <div className="bg-[var(--bg-surface)] rounded-xl p-1.5 shadow border border-[var(--bd)] flex gap-1 overflow-x-auto">
@@ -62,7 +80,7 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
           clinicSettings={clinicSettings} theme={theme}
           onAdjustProduct={handleAdjustProduct}
           onAddStockForProduct={handleAddStockForProduct}
-          onEditProduct={setEditingProduct}
+          onEditProduct={handleEditProduct}
         />
       )}
       {subTab === 'orders' && (

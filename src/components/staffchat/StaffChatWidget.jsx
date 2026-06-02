@@ -10,6 +10,7 @@
 // silent-listener-error → V66-class trust collapse).
 import React, { useEffect } from 'react';
 import { useStaffChat } from '../../hooks/useStaffChat.js';
+import { buildReplySnapshot } from '../../lib/staffChatClient.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { StaffChatBubble } from './StaffChatBubble.jsx';
 import { StaffChatPanel } from './StaffChatPanel.jsx';
@@ -51,15 +52,13 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
     (Array.isArray(branches) ? branches.find(b => b.id === selectedBranchId)?.name : '') ||
     '';
 
-  // V73 Feature C — Reply handler: stashes a slim snapshot of the target message
-  // into replyingTo state. Composer reads + clears it on send.
+  // V73 Feature C — Reply handler: stashes a snapshot of the target message into
+  // replyingTo state. Composer reads + clears it on send.
+  // (2026-06-02, AV174) buildReplySnapshot now also captures an image thumb / file
+  // / sticker descriptor so a reply to a non-text message shows WHAT was replied
+  // to (pre-AV174 only msg.text was captured → image-only replies were blank).
   const handleReply = (msg) => {
-    chat.setReplyingTo({
-      msgId: msg.id,
-      snippet: (msg.text || '').slice(0, 80),
-      displayName: msg.displayName,
-      deviceId: msg.deviceId,
-    });
+    chat.setReplyingTo(buildReplySnapshot(msg));
   };
 
   return (

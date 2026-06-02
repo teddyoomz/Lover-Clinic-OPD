@@ -128,47 +128,75 @@ export function emptyProductForm() {
 }
 
 export function normalizeProduct(form) {
+  const f = (form && typeof form === 'object' && !Array.isArray(form)) ? form : {};
   const trim = (v) => typeof v === 'string' ? v.trim() : '';
   const numOrNull = (v) => (v === '' || v == null) ? null : Number(v);
-  return {
-    ...form,
-    productName: trim(form.productName),
-    productCode: trim(form.productCode),
-    productType: form.productType || 'ยา',
-    serviceType: trim(form.serviceType),
-    genericName: trim(form.genericName),
-    categoryName: trim(form.categoryName),
-    subCategoryName: trim(form.subCategoryName),
-    mainUnitName: trim(form.mainUnitName),
-    price: numOrNull(form.price),
-    priceInclVat: numOrNull(form.priceInclVat),
-    isVatIncluded: !!form.isVatIncluded,
-    isClaimDrugDiscount: !!form.isClaimDrugDiscount,
-    isTakeawayProduct: !!form.isTakeawayProduct,
+  // V145 (AV175, 2026-06-02) — WHITELIST: emit ONLY the canonical be_products
+  // field set (the 30 form fields below + the curated extras after). The prior
+  // leading `...form` spread let ANY caller field through, so editing a product
+  // from the stock balance (which passes the AGGREGATED ROW, not the doc) +
+  // saving via setDoc(merge:false) would (a) wipe real fields with blanks AND
+  // (b) write stock-aggregation junk (batches/totalRemaining/unit/valueCost/
+  // nextExpiry/expired/totalCapacity/id) onto the product doc. Rule R diag on
+  // 610 real prod docs confirmed the corruption ALREADY hit 35 docs. The
+  // explicit field list below + curated extras = the COMPLETE real schema; the
+  // junk keys are simply never copied → can't pollute the doc.
+  const out = {
+    productName: trim(f.productName),
+    productCode: trim(f.productCode),
+    productType: f.productType || 'ยา',
+    serviceType: trim(f.serviceType),
+    genericName: trim(f.genericName),
+    categoryName: trim(f.categoryName),
+    subCategoryName: trim(f.subCategoryName),
+    mainUnitName: trim(f.mainUnitName),
+    price: numOrNull(f.price),
+    priceInclVat: numOrNull(f.priceInclVat),
+    isVatIncluded: !!f.isVatIncluded,
+    isClaimDrugDiscount: !!f.isClaimDrugDiscount,
+    isTakeawayProduct: !!f.isTakeawayProduct,
     // V43 (2026-05-08) — !! coerce to ensure no `undefined` leaves the
     // normalizer (V14 lock — Firestore setDoc rejects undefined fields).
-    skipStockDeduction: !!form.skipStockDeduction,
-    defaultProductUnitGroupId: trim(form.defaultProductUnitGroupId),
-    stockLocation: trim(form.stockLocation),
-    alertDayBeforeExpire: numOrNull(form.alertDayBeforeExpire),
-    alertQtyBeforeOutOfStock: numOrNull(form.alertQtyBeforeOutOfStock),
-    alertQtyBeforeMaxStock: numOrNull(form.alertQtyBeforeMaxStock),
-    dosageAmount: trim(form.dosageAmount),
-    dosageUnit: trim(form.dosageUnit),
-    indications: trim(form.indications),
-    instructions: trim(form.instructions),
-    storageInstructions: trim(form.storageInstructions),
-    administrationMethod: trim(form.administrationMethod),
-    administrationMethodHour: trim(form.administrationMethodHour),
-    administrationTimes: Array.isArray(form.administrationTimes)
-      ? form.administrationTimes.map(s => trim(s)).filter(Boolean)
+    skipStockDeduction: !!f.skipStockDeduction,
+    defaultProductUnitGroupId: trim(f.defaultProductUnitGroupId),
+    stockLocation: trim(f.stockLocation),
+    alertDayBeforeExpire: numOrNull(f.alertDayBeforeExpire),
+    alertQtyBeforeOutOfStock: numOrNull(f.alertQtyBeforeOutOfStock),
+    alertQtyBeforeMaxStock: numOrNull(f.alertQtyBeforeMaxStock),
+    dosageAmount: trim(f.dosageAmount),
+    dosageUnit: trim(f.dosageUnit),
+    indications: trim(f.indications),
+    instructions: trim(f.instructions),
+    storageInstructions: trim(f.storageInstructions),
+    administrationMethod: trim(f.administrationMethod),
+    administrationMethodHour: trim(f.administrationMethodHour),
+    administrationTimes: Array.isArray(f.administrationTimes)
+      ? f.administrationTimes.map(s => trim(s)).filter(Boolean)
       : [],
-    timesPerDay: numOrNull(form.timesPerDay),
-    orderBy: numOrNull(form.orderBy),
-    status: form.status || 'ใช้งาน',
+    timesPerDay: numOrNull(f.timesPerDay),
+    orderBy: numOrNull(f.orderBy),
+    status: f.status || 'ใช้งาน',
     // Phase 29.22 (2026-05-14) — Recall preset fields stripped (followUpAfterDays
     // / followUpReason / recallAfterDays / recallReason). Now in be_recall_cases.
   };
+  // V145 (AV175) — curated extras: the ONLY non-form fields a be_products doc
+  // legitimately carries (enumerated from the full 610-doc Rule R diag) +
+  // forensic `_*` audit stamps + the legacy `name` display alias (resolved by
+  // resolveProductDisplayName). Copied only when present, never undefined (V14).
+  // Anything NOT listed here (the stock-aggregation junk) is intentionally dropped.
+  if (f.stockConfig !== undefined) out.stockConfig = f.stockConfig;
+  if (f.createdBy !== undefined) out.createdBy = f.createdBy;
+  if (f.updatedBy !== undefined) out.updatedBy = f.updatedBy;
+  if (f.name !== undefined) out.name = f.name;
+  for (const k of Object.keys(f)) {
+    // V145 — prototype-pollution guard: `__proto__` is an own-key after
+    // JSON.parse and starts with '_', so `out[k]=f[k]` would set the output's
+    // prototype. Skip the dangerous keys (Firestore reserves __*__ so real docs
+    // can't carry them, but this shared pure fn must not have a pollution sink).
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    if (k.startsWith('_') && f[k] !== undefined) out[k] = f[k];
+  }
+  return out;
 }
 
 /**

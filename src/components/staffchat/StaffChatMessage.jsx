@@ -17,6 +17,7 @@ import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
 import { StaffChatAttachmentCard } from './StaffChatAttachmentCard.jsx';
 import { StaffChatPdfOverlay } from './StaffChatPdfOverlay.jsx';
 import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
+import { StaffChatReplyPreview } from './StaffChatReplyPreview.jsx';
 import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
 import { gridLayoutFor, attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
 import { bundledStickerSrc } from '../../lib/staffChatStickers.js';
@@ -79,7 +80,7 @@ function formatTime(createdAt) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export function StaffChatMessage({ message, isOwn, onReply, onDelete }) {
+export function StaffChatMessage({ message, isOwn, onReply, onDelete, onQuoteClick, isHighlighted, registerNode }) {
   // V73 Feature F — local lightbox state. null = closed; else { images, start }.
   const [lightbox, setLightbox] = useState(null);
   // (2026-05-22) any-file: file-preview overlay state.
@@ -99,19 +100,33 @@ export function StaffChatMessage({ message, isOwn, onReply, onDelete }) {
   const otherAtts = atts.filter((a) => attachmentKindFor(a && a.mimeType) !== 'image');
   // (2026-05-26) Feature 4 — sticker message renders chrome-less (no bubble).
   const isSticker = !!(message.sticker && message.sticker.kind);
+  // (2026-06-02, AV174) bounce highlight when the user clicks a quote pointing at
+  // THIS message (set by StaffChatMessageList.scrollToMessage after scroll).
+  const highlightCls = isHighlighted ? ' staff-chat-reply-bounce' : '';
   return (
     <div
       data-testid="staff-chat-message"
       data-own={isOwn ? 'true' : 'false'}
+      data-msg-id={message.id}
+      ref={(el) => { if (registerNode) registerNode(message.id, el); }}
       className={`group flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}
     >
       {message.replyTo && (
         <div
           data-testid={`staff-chat-message-quote-${message.id}`}
+          role="button"
+          tabIndex={0}
+          title="ไปที่ข้อความต้นทาง"
+          onClick={() => onQuoteClick && onQuoteClick(message.replyTo.msgId)}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && onQuoteClick) {
+              e.preventDefault();
+              onQuoteClick(message.replyTo.msgId);
+            }
+          }}
           className={`text-[13px] px-2 py-1 mb-1 border-l-2 border-rose-400 bg-rose-500/[0.08] rounded max-w-[80%] ${isOwn ? 'self-end' : 'self-start'} cursor-pointer hover:bg-rose-500/15`}
         >
-          <span className="font-bold text-rose-300">↩ {message.replyTo.displayName}: </span>
-          <span className="text-[var(--tx-muted)] italic">{message.replyTo.snippet}</span>
+          <StaffChatReplyPreview reply={message.replyTo} />
         </div>
       )}
       {/* V73 L1 fix (2026-05-18) — show displayName on ALL messages incl. own.
@@ -135,14 +150,14 @@ export function StaffChatMessage({ message, isOwn, onReply, onDelete }) {
             data-testid={`staff-chat-message-sticker-${message.id}`}
             src={message.sticker.kind === 'bundled' ? bundledStickerSrc(message.sticker.id) : message.sticker.url}
             alt="sticker"
-            className="w-28 h-28 object-contain"
+            className={`w-28 h-28 object-contain${highlightCls}`}
             onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}
           />
         ) : (
           <div
             className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words border text-[var(--tx-primary)] ${
               isOwn ? 'rounded-br-md' : 'rounded-bl-md'
-            }`}
+            }${highlightCls}`}
             style={bubbleStyle}
             data-testid={`staff-chat-message-bubble-${message.id}`}
           >

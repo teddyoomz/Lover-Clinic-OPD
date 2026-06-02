@@ -24,7 +24,7 @@ import {
   Warehouse, Package, ShoppingBag, Truck, ClipboardCheck, Activity,
   Plus, Loader2, SlidersHorizontal,
 } from 'lucide-react';
-import { listCentralWarehouses } from '../../lib/scopedDataLayer.js';
+import { listCentralWarehouses, getProduct } from '../../lib/scopedDataLayer.js';
 import StockBalancePanel from './StockBalancePanel.jsx';
 import StockTransferPanel from './StockTransferPanel.jsx';
 import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';
@@ -72,6 +72,22 @@ export default function CentralStockTab({ clinicSettings, theme }) {
     setOrderPrefill(product);
     setSubTab('orders');
   };
+
+  // V145 (2026-06-02, AV175) — open ProductFormModal with the COMPLETE be_products
+  // doc (StockBalancePanel passes the full live doc; guard fetches it if only a
+  // partial {productId} slips through, so a partial object can never corrupt the
+  // product on save).
+  const handleEditProduct = useCallback(async (obj) => {
+    if (obj && obj.productType) { setEditingProduct(obj); return; }
+    const id = obj?.productId || obj?.id;
+    if (!id) return;
+    try {
+      const full = await getProduct(id);
+      if (full) setEditingProduct(full);
+    } catch (e) {
+      console.error('[CentralStock] getProduct fallback failed:', e);
+    }
+  }, []);
 
   const loadWarehouses = useCallback(async () => {
     setWarehousesLoading(true);
@@ -207,7 +223,7 @@ export default function CentralStockTab({ clinicSettings, theme }) {
           // sub-tabs (was no-op before; user reported broken UX).
           onAdjustProduct={handleCentralAdjustProduct}
           onAddStockForProduct={handleCentralAddStockForProduct}
-          onEditProduct={setEditingProduct}
+          onEditProduct={handleEditProduct}
         />
       )}
 

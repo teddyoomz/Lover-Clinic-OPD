@@ -268,9 +268,11 @@ describe('Phase 15.5/Item 1 — IT.C schema + form integrity', () => {
   });
 
   it('C3 normalizeProduct converts 3 alert fields via numOrNull', () => {
-    expect(PRODUCT_VAL_SRC).toMatch(/alertDayBeforeExpire:\s*numOrNull\(form\.alertDayBeforeExpire\)/);
-    expect(PRODUCT_VAL_SRC).toMatch(/alertQtyBeforeOutOfStock:\s*numOrNull\(form\.alertQtyBeforeOutOfStock\)/);
-    expect(PRODUCT_VAL_SRC).toMatch(/alertQtyBeforeMaxStock:\s*numOrNull\(form\.alertQtyBeforeMaxStock\)/);
+    // V145 (2026-06-02) — normalizeProduct param renamed form→f for the AV175
+    // whitelist refactor (behavior unchanged: still numOrNull(<param>.alert*)).
+    expect(PRODUCT_VAL_SRC).toMatch(/alertDayBeforeExpire:\s*numOrNull\(f\.alertDayBeforeExpire\)/);
+    expect(PRODUCT_VAL_SRC).toMatch(/alertQtyBeforeOutOfStock:\s*numOrNull\(f\.alertQtyBeforeOutOfStock\)/);
+    expect(PRODUCT_VAL_SRC).toMatch(/alertQtyBeforeMaxStock:\s*numOrNull\(f\.alertQtyBeforeMaxStock\)/);
   });
 
   it('C4 ProductFormModal has 3 alert input fields (data-field anchors)', () => {

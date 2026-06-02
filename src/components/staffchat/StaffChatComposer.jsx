@@ -13,6 +13,7 @@ import { Send, Paperclip, X as XIcon } from 'lucide-react';
 import { extractMentions } from '../../lib/staffChatClient.js';
 import { StaffChatMentionDropdown } from './StaffChatMentionDropdown.jsx';
 import { StaffChatStickerPicker } from './StaffChatStickerPicker.jsx';
+import { StaffChatReplyPreview } from './StaffChatReplyPreview.jsx';
 import {
   validateStaffChatFile,
   attachmentKindFor,
@@ -242,8 +243,9 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
           data-testid="staff-chat-composer-quote-strip"
           className="px-3 py-1.5 bg-rose-500/10 border-b border-rose-500/30 flex items-center gap-2 text-[13px]"
         >
-          <span className="font-bold text-rose-300">↩ ตอบกลับ {replyingTo.displayName}:</span>
-          <span className="flex-1 text-[var(--tx-muted)] italic truncate">{replyingTo.snippet}</span>
+          {/* (2026-06-02, AV174) shared preview shows image thumb / file icon so
+              the sender sees WHAT they're replying to before sending. */}
+          <StaffChatReplyPreview reply={replyingTo} prefixLabel="ตอบกลับ " truncateSnippet className="flex-1 min-w-0" />
           <button
             type="button"
             onClick={onClearReply}

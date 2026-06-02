@@ -7,7 +7,7 @@
 // clinic ever scales past that, move to backend aggregation.
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
-import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info, Edit2 } from 'lucide-react';
+import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Edit2 } from 'lucide-react';
 import { listenToStockBatchesByBranch, listStockLocations, listenToProducts } from '../../lib/scopedDataLayer.js';
 import { filterOutSkippedProducts } from '../../lib/skipStockFilter.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
@@ -121,9 +121,20 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
           alertQtyBeforeMaxStock: numOrNull(p.alertQtyBeforeMaxStock),
           // Canonical name from be_products (preferred over batch.productName)
           canonicalName: String(p.productName || p.name || '').trim(),
+          // V145 (2026-06-02) — canonical unit / category / type, live from
+          // be_products. The balance table renders these (NOT the frozen
+          // batch.unit) so editing them from EITHER tab (or another device)
+          // reflects instantly via this onSnapshot listener. (AV175)
+          canonicalUnit: String(p.mainUnitName || '').trim(),
+          canonicalCategory: String(p.categoryName || '').trim(),
+          canonicalType: String(p.productType || '').trim(),
           // V43-followup — surface the flag so the products useMemo can
           // filter via filterOutSkippedProducts.
           skipStockDeduction: p.skipStockDeduction === true,
+          // V145 — the FULL live product doc, so the row's แก้ไข button opens
+          // ProductFormModal with the COMPLETE product (not the aggregated row,
+          // which would default + corrupt the doc on save).
+          full: p,
         };
       }
       setProductThresholdMap(map);
@@ -131,7 +142,16 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
       console.error('[StockBalance] listenToProducts failed:', err);
     });
     return () => { if (typeof unsub === 'function') unsub(); };
-  }, []);
+    // V145 (2026-06-02, AV175 + BS-9/Rule L) — RE-SUBSCRIBE on branch switch.
+    // Pre-V145 this effect had `[]` deps → it subscribed ONCE at mount and the
+    // canonical map (name/unit/category/type) went STALE after the top
+    // BranchSelector changed (the batches effect IS keyed on [locationId] and
+    // re-fired, so batches=new branch + products map=old branch → every row
+    // showed the batch-fallback name/unit + "-" for category/type). listenToProducts({})
+    // auto-injects resolveSelectedBranchId() at CALL time, so the effect MUST
+    // re-run when the selected branch changes. Keyed on selectedBranchId (what
+    // the products are scoped to), mirroring the batches effect's re-subscribe.
+  }, [selectedBranchId]);
 
   // V35.2-bis: cross-tier map removed — user clarified they want per-lot
   // detail (NOT cross-tier counts). Per-lot detail surfaced via expandable
@@ -190,7 +210,15 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         byProduct.set(b.productId, {
           productId: b.productId,
           productName: displayName,
-          unit: b.unit,
+          // V145 (2026-06-02, AV175) — unit is LIVE from be_products (canonical
+          // mainUnitName), falling back to the batch's frozen unit only for
+          // legacy products not yet in the live map. Same for category/type
+          // (new columns). Editing any of them updates this row in real time.
+          unit: (tEntry?.canonicalUnit) || b.unit || '',
+          category: tEntry?.canonicalCategory || '',
+          productType: tEntry?.canonicalType || '',
+          // V145 — full live product doc for the row's แก้ไข button.
+          fullProduct: tEntry?.full || null,
           totalRemaining: 0,
           totalCapacity: 0,
           batches: [],
@@ -363,16 +391,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                 <th className="px-3 py-2 text-left font-bold">สินค้า</th>
                 <th className="px-3 py-2 text-center font-bold w-16">Batches</th>
                 <th className="px-3 py-2 text-right font-bold w-24">คงเหลือ</th>
-                {/* V35.2-tris (2026-04-28) — column now displays per-product
-                    "แจ้งเกินสต็อก" threshold (alertQtyBeforeMaxStock) directly.
-                    User: "แถวของความจุ ให้แสดง แจ้งเกินสต็อก (qty) ของสินค้า
-                    นั้นๆเลย ไม่ต้องแสดงเป้าหมายอะไรแล้ว". '-' when unset. */}
-                <th className="px-3 py-2 text-right font-bold w-28" data-testid="th-capacity">
-                  <span title="ค่า 'แจ้งเกินสต็อก' (max-stock alert qty) ที่ตั้งในข้อมูลสินค้า — ปรับใน ProductFormModal. ' - ' = ยังไม่ได้ตั้งค่า" className="inline-flex items-center gap-1 cursor-help">
-                    ความจุ <Info size={10} aria-hidden className="text-[var(--tx-muted)]" />
-                  </span>
-                </th>
-                <th className="px-3 py-2 text-right font-bold w-28">มูลค่าทุน</th>
+                {/* V145 (2026-06-02, AV175) — replaced ความจุ + มูลค่าทุน columns
+                    with หมวดหมู่ + ประเภท (live from be_products). มูลค่าต้นทุนรวม
+                    stays in the header summary above; the per-product เกินสต็อก
+                    threshold still drives the badge/filter (just not a column). */}
+                <th className="px-3 py-2 text-left font-bold w-32" data-testid="th-category">หมวดหมู่</th>
+                <th className="px-3 py-2 text-left font-bold w-28" data-testid="th-type">ประเภท</th>
                 <th className="px-3 py-2 text-center font-bold w-28">หมดอายุถัดไป</th>
                 <th className="px-3 py-2 text-center font-bold w-28">ACTIONS</th>
               </tr>
@@ -440,14 +464,11 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                     >
                       {fmtQty(p.totalRemaining)} {p.unit}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]" data-testid="td-capacity">
-                      {/* V35.2-tris (2026-04-28) — column now shows the per-product
-                          QtyBeforeMaxStock threshold directly (not batch.qty.total).
-                          User: "แถวของความจุ ให้แสดง แจ้งเกินสต็อก (qty) ของสินค้า
-                          นั้นๆเลย ไม่ต้องแสดงเป้าหมายอะไรแล้ว". '-' when threshold unset. */}
-                      {p.alertQtyBeforeMaxStock != null ? fmtQty(p.alertQtyBeforeMaxStock) : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-orange-400">฿{fmtQty(p.valueCost)}</td>
+                    {/* V145 (2026-06-02, AV175) — หมวดหมู่ + ประเภท, live from
+                        be_products (replaces ความจุ + มูลค่าทุน columns). Edit
+                        from either tab/device → these update in real time. */}
+                    <td className="px-3 py-2 text-left text-[var(--tx-primary)]" data-testid="td-category">{p.category || '-'}</td>
+                    <td className="px-3 py-2 text-left text-[var(--tx-muted)]" data-testid="td-type">{p.productType || '-'}</td>
                     <td className={`px-3 py-2 text-center ${expiryClass}`}>
                       {p.nextExpiry || '-'}
                       {days != null && <div className="text-[9px]">{days < 0 ? `หมดแล้ว ${-days}d` : `อีก ${days}d`}</div>}
@@ -475,7 +496,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                       {onEditProduct && (
                         <button
                           type="button"
-                          onClick={e => { e.stopPropagation(); onEditProduct(p); }}
+                          onClick={e => { e.stopPropagation(); onEditProduct(p.fullProduct || { productId: p.productId }); }}
                           title="แก้ไขข้อมูลสินค้า"
                           className="ml-1 px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 hover:border-sky-600 inline-flex items-center gap-1"
                           data-testid={`stock-balance-edit-${p.productId}`}
@@ -500,9 +521,13 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                           ↳ Lot …{String(b.batchId || '').slice(-8)}
                           {b.isPremium && <span className="ml-1 px-1 rounded text-[8px] bg-rose-900/30 text-rose-400 border border-rose-800">premium</span>}
                         </td>
-                        <td className="px-3 py-1 text-right font-mono text-[11px] text-emerald-400">{fmtQty(b.qty?.remaining || 0)} {b.unit || ''}</td>
-                        <td className="px-3 py-1 text-right font-mono text-[10px] text-[var(--tx-muted)]">{fmtQty(b.qty?.total || 0)}</td>
-                        <td className="px-3 py-1 text-right font-mono text-[10px] text-orange-400">฿{fmtQty((b.qty?.remaining || 0) * (b.originalCost || 0))}</td>
+                        {/* V145 (2026-06-02) — lot qty uses the LIVE product unit
+                            (p.unit) for consistency with the main row. The
+                            หมวดหมู่ + ประเภท columns are product-level (not per-lot)
+                            so lot rows show '—' there. 7 cells = new column count. */}
+                        <td className="px-3 py-1 text-right font-mono text-[11px] text-emerald-400">{fmtQty(b.qty?.remaining || 0)} {p.unit || b.unit || ''}</td>
+                        <td className="px-3 py-1 text-center text-[10px] text-[var(--tx-muted)]">—</td>
+                        <td className="px-3 py-1 text-center text-[10px] text-[var(--tx-muted)]">—</td>
                         <td className={`px-3 py-1 text-center text-[11px] ${lotExpClass}`}>
                           {b.expiresAt || '-'}
                           {lotDays != null && <div className="text-[8px]">{lotDays < 0 ? `หมดแล้ว ${-lotDays}d` : `อีก ${lotDays}d`}</div>}

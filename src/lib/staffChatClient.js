@@ -7,7 +7,7 @@
 //   - optional mentions[] / replyTo / attachment fields
 // Used by ChatPanel + scopedDataLayer.addStaffChatMessage.
 import { serverTimestamp } from 'firebase/firestore';
-import { STAFF_CHAT_MAX_ATTACHMENTS } from './staffChatRetentionCore.js';
+import { STAFF_CHAT_MAX_ATTACHMENTS, attachmentKindFor } from './staffChatRetentionCore.js';
 // (2026-05-22 EOD+2 — T2) Office MIME → stamp pdfPreviewStatus='pending' at
 // send time so receiver UI shows ⏳ immediately. The officeToPdf Cloud Function
 // patches to 'ready'/'failed' once the LibreOffice conversion completes.
@@ -98,12 +98,25 @@ export function buildMessageDoc({
     doc.attachments = attachments.slice(0, STAFF_CHAT_MAX_ATTACHMENTS).map(normalizeStaffChatAttachment);
   }
   if (Array.isArray(mentions) && mentions.length > 0) doc.mentions = mentions.slice(0, 5);
-  if (replyTo && replyTo.msgId) doc.replyTo = {
-    msgId: replyTo.msgId,
-    snippet: String(replyTo.snippet || '').slice(0, 80),
-    displayName: String(replyTo.displayName || ''),
-    deviceId: String(replyTo.deviceId || ''),
-  };
+  if (replyTo && replyTo.msgId) {
+    // (2026-06-02, AV174) The reply snapshot now carries a non-text content
+    // descriptor so a reply to an image / file / sticker is visible in the quote
+    // (V73 captured only msg.text → image-only replies rendered blank). Keep
+    // Firestore-undefined-safe (V14): only write sub-fields that are present.
+    const rt = {
+      msgId: replyTo.msgId,
+      snippet: String(replyTo.snippet || '').slice(0, 80),
+      displayName: String(replyTo.displayName || ''),
+      deviceId: String(replyTo.deviceId || ''),
+    };
+    if (replyTo.attachmentKind) rt.attachmentKind = String(replyTo.attachmentKind);
+    if (replyTo.attachmentThumbUrl) rt.attachmentThumbUrl = String(replyTo.attachmentThumbUrl);
+    if (Number.isFinite(replyTo.attachmentCount) && replyTo.attachmentCount > 0) {
+      rt.attachmentCount = Math.round(replyTo.attachmentCount);
+    }
+    if (replyTo.isSticker) rt.isSticker = true;
+    doc.replyTo = rt;
+  }
   if (attachmentUrl) {
     doc.attachmentUrl = attachmentUrl;
     doc.attachmentSize = Number(attachmentSize) || 0;
@@ -198,4 +211,71 @@ export function parseMessageBody(text) {
   }
   if (lastIndex < text.length) out.push({ type: 'text', content: text.slice(lastIndex) });
   return out;
+}
+
+// ── (2026-06-02, AV174) Reply-preview helpers ───────────────────────────────
+// A reply to an image / file / sticker MUST show WHAT was replied to. The V73
+// reply snapshot captured only msg.text, so an image-only reply rendered a blank
+// quote (the recipient couldn't tell what was replied to). These pure helpers
+// build the snapshot (text snippet + a content descriptor) and map it to a Thai
+// icon + label. Consumers: StaffChatWidget.handleReply + StaffChatReplyPreview.
+
+// Build the reply snapshot stashed into `replyingTo` (composer strip) and later
+// persisted under the next message's `replyTo`. Captures the text snippet AND a
+// content descriptor for attachments / stickers so the quote is never blank.
+export function buildReplySnapshot(msg) {
+  if (!msg || !msg.id) return null;
+  const snap = {
+    msgId: String(msg.id),
+    snippet: String(msg.text || '').slice(0, 80),
+    displayName: String(msg.displayName || ''),
+    deviceId: String(msg.deviceId || ''),
+  };
+  // Sticker message — chrome-less, no attachments. Flag + return early.
+  if (msg.sticker && typeof msg.sticker === 'object' && msg.sticker.kind) {
+    snap.isSticker = true;
+    return snap;
+  }
+  const atts = Array.isArray(msg.attachments) ? msg.attachments : [];
+  if (atts.length > 0) {
+    const imageAtts = atts.filter(a => attachmentKindFor(a && a.mimeType) === 'image');
+    snap.attachmentCount = atts.length;
+    if (imageAtts.length > 0) {
+      // Prefer an image preview: thumb (cheap) → full → none.
+      snap.attachmentKind = 'image';
+      const first = imageAtts[0];
+      const thumb = (first && (first.thumbUrl || first.fullUrl)) || '';
+      if (thumb) snap.attachmentThumbUrl = String(thumb);
+    } else {
+      // Non-image set — label by the first attachment's kind (file/pdf/video/…).
+      snap.attachmentKind = attachmentKindFor(atts[0] && atts[0].mimeType);
+    }
+    return snap;
+  }
+  // Legacy V73 single-image scalar (attachmentUrl) — treat as one image.
+  if (msg.attachmentUrl) {
+    snap.attachmentKind = 'image';
+    snap.attachmentCount = 1;
+    snap.attachmentThumbUrl = String(msg.attachmentUrl);
+  }
+  return snap;
+}
+
+// Map a reply snapshot's content descriptor to a Thai icon + label for the quote
+// preview. Returns null for a pure-text reply (the snippet itself is the preview).
+export function replyPreviewMeta(reply) {
+  if (!reply || typeof reply !== 'object') return null;
+  if (reply.isSticker) return { icon: '🎟', label: 'สติกเกอร์' };
+  const kind = reply.attachmentKind;
+  if (!kind) return null;
+  const n = Number.isFinite(reply.attachmentCount) && reply.attachmentCount > 1
+    ? ` (${reply.attachmentCount})` : '';
+  switch (kind) {
+    case 'image':  return { icon: '📷', label: `รูปภาพ${n}` };
+    case 'video':  return { icon: '🎬', label: `วิดีโอ${n}` };
+    case 'audio':  return { icon: '🎵', label: `ไฟล์เสียง${n}` };
+    case 'pdf':    return { icon: '📄', label: `ไฟล์ PDF${n}` };
+    case 'office': return { icon: '📑', label: `เอกสาร${n}` };
+    default:       return { icon: '📎', label: `ไฟล์แนบ${n}` };
+  }
 }

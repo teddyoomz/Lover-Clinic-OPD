@@ -10,7 +10,7 @@
 //   unreadCount badge "9+" cap, Q2=A appear-when-scrolled-up) smooth-scrolls endRef
 //   to the latest message. V82 onScrolledToBottom timing is unchanged (still fires
 //   only on intersect). Additive only — no change to send/receive/read-cursor flow.
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { StaffChatMessage } from './StaffChatMessage.jsx';
 import { groupMessagesByDay } from '../../lib/staffChatDayGroups.js';
@@ -35,6 +35,31 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   // (2026-06-01) true when the bottom sentinel is in view. Default true so the
   // button is hidden on first mount (the auto-scroll effect pins to the bottom).
   const [isAtBottom, setIsAtBottom] = useState(true);
+
+  // (2026-06-02, AV174) Click-a-reply-quote → scroll to the original message +
+  // bounce it. nodeRefs maps message-id → its DOM node (registered by each
+  // StaffChatMessage). highlightId drives the one-shot bounce class on the target.
+  const nodeRefs = useRef(new Map());
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightTimer = useRef(null);
+  const registerNode = useCallback((id, el) => {
+    if (!id) return;
+    if (el) nodeRefs.current.set(id, el);
+    else nodeRefs.current.delete(id);
+  }, []);
+  const scrollToMessage = useCallback((msgId) => {
+    if (!msgId) return;
+    const node = nodeRefs.current.get(msgId);
+    // Off-window (older than the 50-message listener cap) → graceful no-op.
+    if (!node) return;
+    // scroll first (jsdom lacks scrollIntoView → guard), THEN highlight so the
+    // bounce still fires even if the scroll call throws.
+    try { node.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* jsdom noop */ }
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    setHighlightId(msgId);
+    highlightTimer.current = setTimeout(() => setHighlightId(null), 1600);
+  }, []);
+  useEffect(() => () => { if (highlightTimer.current) clearTimeout(highlightTimer.current); }, []);
 
   // V140 (2026-05-31) — auto-scroll keyed on the latest-message identity (the
   // listener caps at 50, so messages.length stops changing past the cap).
@@ -117,6 +142,9 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
                 isOwn={m.deviceId === ownDeviceId}
                 onReply={onReply}
                 onDelete={onDelete}
+                onQuoteClick={scrollToMessage}
+                isHighlighted={m.id === highlightId}
+                registerNode={registerNode}
               />
             ))}
           </React.Fragment>

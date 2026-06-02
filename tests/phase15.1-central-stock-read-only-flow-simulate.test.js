@@ -127,8 +127,10 @@ describe('Phase 15.1 F4 — CentralStockTab structure', () => {
   });
 
   it('F4.2 imports listCentralWarehouses from scopedDataLayer (BSA Task 6)', () => {
-    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
-    expect(centralTabSrc).toMatch(/import\s*\{\s*listCentralWarehouses\s*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2.
+    // V145 (2026-06-02) — getProduct added to the same import for the AV175
+    // edit-fallback; allow additional named imports in the braces.
+    expect(centralTabSrc).toMatch(/import\s*\{[^}]*\blistCentralWarehouses\b[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
 
   it('F4.3 has 6 sub-tabs: balance, orders, transfers, withdrawals, movements, warehouses', () => {
