@@ -418,6 +418,19 @@ For ANY design/UI brainstorm on an EXISTING screen/component, BEFORE authoring a
 
 **Origin (2026-05-31)**: I shipped a confirmed-card + course-step mockup invented from scratch (flat colors, wrong card structure) — ignoring the 2 real screenshots the user gave AND the real `AppointmentHubRowCard` / `TreatmentLifecycleStepper` source. The user couldn't decide because the options weren't based on their real design. Memory: `feedback_ground_mockups_in_existing_design.md`. Extends Rule F (Triangle — look at the real thing first) into the mockup-authoring step.
 
+### T. Atomic read-modify-write for concurrent-mutation-prone Firestore docs (iron-clad 2026-06-02, after V147+V148 concurrency saga)
+
+Any read-modify-write of a Firestore doc that MULTIPLE flows can mutate concurrently — `be_customers.courses[]`, stock batches (`be_stock_batches`), INV/HN counters, appointment slots — MUST be atomic. A plain `getDoc → updateDoc/updateCustomer` or `getDoc → writeBatch` on such a doc is **FORBIDDEN**: two concurrent callers read the same state, last write wins → a use/buy/deduction/reverse is silently LOST (course over-credit / stock over-deduct), OR a stale-plan race throws a cryptic save failure.
+
+**Required patterns**:
+- **Single-doc RMW** (a course array, one batch, a counter) → `runTransaction(tx.get(ref) → mutate in place → tx.update(ref))`. Firestore OCC serializes; the loser aborts + auto-retries against the re-read state → applies on top, never lost. Canonical helper for customer courses = `_mutateCustomerCoursesAtomic` (V148, `backendClient.js`); multi-field/filter writers use an inline `runTransaction` with `tx.get` of the doc.
+- **Multi-doc / set-read RMW** (multi-batch FIFO allocation, where the candidate SET must be queried OUTSIDE the tx) → the per-item tx MUST re-verify inside the tx AND, on a contention/race throw, **RE-FETCH + RE-PLAN** (bounded retry) rather than propagate a stale-plan race as a save failure. Canonical = `_deductOneItem` retry loop (V147, transient throws tagged `STOCK_RACE_RETRY`).
+- **A user-thrown error inside a Firestore tx is NOT auto-retried** (only commit-time contention is). So a stale-plan guard that throws must be caught + re-planned by your OWN bounded retry loop — never let it fail the user's save when the app's purpose is "always succeed" (e.g. Phase 15.7 negative-stock).
+
+**Verify (Rule Q)**: every confirmed concurrency fix needs a REAL-PROD L2 e2e firing the concurrent pair via `Promise.allSettled` + asserting conservation / no-lost-update / no-spurious-failure (mocks CANNOT expose a race). Templates: `scripts/e2e-stock-concurrency-race.mjs`, `scripts/e2e-course-deduct-concurrency.mjs`, `scripts/e2e-course-mutation-concurrency.mjs`.
+
+**Origin**: V147 (concurrent treatment/sale stock deduction → one save failed with "Batch X raced", violating Phase 15.7 "ตัดได้เสมอ"; 6/6 rounds on real prod) + V148 (5 concurrent course uses applied as 1 → course over-credited; 6/6 rounds). Both were `getDoc → write` with NO tx. Audits: AV177 (courses) + audit-stock-flow S32 (stock). User loop directive 2026-06-02: "ระบบ Stock สำคัญมากๆ ... วนลูปจนไม่เจอบั๊ค".
+
 ### Anti-patterns (all 4 rules)
 - Fix bug แต่ไม่เพิ่ม test + skill → regression guaranteed
 - Skill ไม่มี grep patterns / invariant numbers → documentation ไม่ใช่ audit

@@ -346,8 +346,16 @@ describe('V36.K — Customer + branch invariance (per user directive 2026-04-29)
     // No branchId reads in the function body
     expect(body).not.toMatch(/opts\.branchId/);
     expect(body).not.toMatch(/branchId:\s*opts\.branchId/);
-    // Customer-doc-only data dependency
-    expect(body).toMatch(/customerDoc\(customerId\)/);
+    // V148 (2026-06-02) — the customer-doc read+write is now via the atomic
+    // helper _mutateCustomerCoursesAtomic(customerId,...) (was a direct
+    // getDoc(customerDoc(customerId)) → updateCustomer). Dependency is still
+    // customer-doc-only + branch-agnostic; the helper itself reads
+    // customerDoc(customerId) with no branchId (locked by v148 test).
+    expect(body).toMatch(/_mutateCustomerCoursesAtomic\(customerId/);
+    const hStart = BACKEND_CLIENT.indexOf('async function _mutateCustomerCoursesAtomic');
+    const hBody = BACKEND_CLIENT.substring(hStart, hStart + 700);
+    expect(hBody).toMatch(/customerDoc\(customerId\)/);
+    expect(hBody).not.toMatch(/branchId/);
   });
 
   test('K.3 — course-type matrix coverage in deductCourseItems', () => {

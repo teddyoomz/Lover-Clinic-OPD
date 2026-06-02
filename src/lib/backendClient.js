@@ -1288,6 +1288,32 @@ export async function rebuildTreatmentSummary(customerId) {
 
 import { deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString, formatQtyString } from './courseUtils.js';
 
+// V148 (2026-06-02) — atomic customer.courses[] read-modify-write.
+// Every course mutator (deduct/reverse/add/assign/resolve/exchange) used to do
+// getDoc(customerDoc) → mutate courses[] → updateCustomer({courses}) with NO
+// transaction. Two concurrent mutators both read the SAME courses[], both
+// updateCustomer → LAST WRITE WINS → a use/buy/reverse is LOST → the course is
+// silently OVER-CREDITED (money-adjacent — the customer paid for N sessions).
+// Confirmed Rule Q L2: scripts/e2e-course-deduct-concurrency.mjs — 5 concurrent
+// uses on a 5/5 course left remaining=4 (only 1 of 5 applied) BEFORE this fix.
+// The course analog of the V147 stock race. This helper serializes course
+// mutations via Firestore OCC (read + write in one runTransaction). The mutator
+// MUST mutate `courses` IN PLACE (push/splice/index-assign — never reassign the
+// binding). On contention Firestore aborts + auto-retries the callback with the
+// re-read courses, so each concurrent mutation applies on top of the prior.
+// Returns the mutator's return value when defined, else the final courses array.
+async function _mutateCustomerCoursesAtomic(customerId, mutate) {
+  return runTransaction(db, async (tx) => {
+    const ref = customerDoc(customerId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Customer not found');
+    const courses = [...(snap.data().courses || [])];
+    const ret = await mutate(courses, snap.data());
+    tx.update(ref, { courses });
+    return ret !== undefined ? ret : courses;
+  });
+}
+
 /**
  * Deduct course items after treatment save.
  *
@@ -1307,17 +1333,19 @@ import { deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString,
  */
 export async function deductCourseItems(customerId, deductions, opts = {}) {
   if (!deductions?.length) return [];
-  const snap = await getDoc(customerDoc(customerId));
-  if (!snap.exists()) throw new Error('Customer not found');
-  const courses = [...(snap.data().courses || [])];
   const { parseQtyString, formatQtyString } = await import('./courseUtils.js');
   const preferNewest = !!opts?.preferNewest;
+  // V148 — atomic (was getDoc→updateCustomer, no tx → concurrent uses lost-
+  // updated → course over-credited). beforeSnapshot captured inside the mutator
+  // so it stays consistent with the committed courses across tx retries.
+  let beforeSnapshot = [];
+  const courses = await _mutateCustomerCoursesAtomic(customerId, (courses) => {
   // Phase 16.5-quater (2026-04-29) — snapshot before mutation so we can diff
   // and emit per-changed-course audit entries (kind='use') after commit.
   // Only fires when caller passes opts.treatmentId (treatment-deduction
   // context). Other callers (sale/exchange/share) emit their own audit
   // entries with the appropriate kind.
-  const beforeSnapshot = courses.map((c) => ({ ...c }));
+  beforeSnapshot = courses.map((c) => ({ ...c }));
 
   const matchesDed = (c, d) => {
     const nameMatch = d.courseName ? c.name === d.courseName : true;
@@ -1415,8 +1443,7 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
       throw new Error(`คอร์สคงเหลือไม่พอ: ${d.productName || d.courseName} ต้องการตัด ${d.deductQty} เหลือตัดไม่ได้อีก ${remaining}`);
     }
   }
-
-  await updateCustomer(customerId, { courses });
+  }); // V148 — end atomic course mutation (tx.update writes the deducted courses)
 
   // Phase 16.5-quater — emit kind='use' audit per changed course when called
   // from treatment-deduction context (opts.treatmentId set).
@@ -1516,10 +1543,10 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
  */
 export async function reverseCourseDeduction(customerId, deductions, opts = {}) {
   if (!deductions?.length) return [];
-  const snap = await getDoc(customerDoc(customerId));
-  if (!snap.exists()) throw new Error('Customer not found');
-  const courses = [...(snap.data().courses || [])];
   const preferNewest = !!opts?.preferNewest;
+  // V148 — atomic customer.courses[] mutation (concurrent reverse↔deduct
+  // lost-update guard). See _mutateCustomerCoursesAtomic.
+  return _mutateCustomerCoursesAtomic(customerId, (courses) => {
 
   const matchesDed = (c, d) => {
     const nameMatch = d.courseName ? c.name === d.courseName : true;
@@ -1549,9 +1576,7 @@ export async function reverseCourseDeduction(customerId, deductions, opts = {}) 
     if (idx < 0 || idx >= courses.length) continue;
     courses[idx] = { ...courses[idx], qty: reverseQty(courses[idx].qty, d.deductQty || 1) };
   }
-
-  await updateCustomer(customerId, { courses });
-  return courses;
+  }); // V148 — end atomic course mutation
 }
 
 /**
@@ -1573,15 +1598,15 @@ export async function reverseCourseDeduction(customerId, deductions, opts = {}) 
  * @param {object} [opts] — { actor, staffId, staffName, reason }
  */
 export async function addCourseRemainingQty(customerId, courseIndex, addQty, opts = {}) {
-  const snap = await getDoc(customerDoc(customerId));
-  if (!snap.exists()) throw new Error('Customer not found');
-  const courses = [...(snap.data().courses || [])];
-  if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
-  const before = courses[courseIndex];
-  const beforeQty = String(before.qty || '');
-  const afterQtyStr = reverseQty(beforeQty, addQty);
-  courses[courseIndex] = { ...before, qty: afterQtyStr };
-  await updateCustomer(customerId, { courses });
+  // V148 — atomic (concurrent add↔use lost-update guard).
+  let before; let beforeQty = ''; let afterQtyStr = '';
+  const courses = await _mutateCustomerCoursesAtomic(customerId, (courses) => {
+    if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
+    before = courses[courseIndex];
+    beforeQty = String(before.qty || '');
+    afterQtyStr = reverseQty(beforeQty, addQty);
+    courses[courseIndex] = { ...before, qty: afterQtyStr };
+  });
 
   // Phase 16.5-quater — emit be_course_changes audit entry (kind='add')
   try {
@@ -1615,9 +1640,8 @@ export async function addCourseRemainingQty(customerId, courseIndex, addQty, opt
 
 /** Assign a master course to a customer — creates entries in customer.courses[] */
 export async function assignCourseToCustomer(customerId, masterCourse) {
-  const snap = await getDoc(customerDoc(customerId));
-  if (!snap.exists()) throw new Error('Customer not found');
-  const courses = [...(snap.data().courses || [])];
+  // V148 — atomic (concurrent buy↔use / buy↔buy lost-update guard).
+  return _mutateCustomerCoursesAtomic(customerId, (courses) => {
 
   const products = masterCourse.products || [];
   // Phase 12.2b follow-up (2026-04-25): be_courses schema uses
@@ -1706,7 +1730,6 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       })),
       assignedAt: new Date().toISOString(),
     });
-    await updateCustomer(customerId, { courses });
     return { success: true, courses };
   }
 
@@ -1772,8 +1795,8 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
     });
   }
 
-  await updateCustomer(customerId, { courses });
   return { success: true, courses };
+  }); // V148 — end atomic course mutation
 }
 
 /**
@@ -1801,9 +1824,8 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
  * @returns {Promise<{success:boolean, courses:object[]}>}
  */
 export async function resolvePickedCourseInCustomer(customerId, courseKey, picks) {
-  const snap = await getDoc(customerDoc(customerId));
-  if (!snap.exists()) throw new Error('Customer not found');
-  const courses = [...(snap.data().courses || [])];
+  // V148 — atomic (concurrent resolve↔use lost-update guard).
+  return _mutateCustomerCoursesAtomic(customerId, (courses) => {
 
   let idx = -1;
   if (typeof courseKey === 'string') {
@@ -1855,8 +1877,8 @@ export async function resolvePickedCourseInCustomer(customerId, courseKey, picks
   }));
 
   courses.splice(idx, 1, ...resolvedEntries);
-  await updateCustomer(customerId, { courses });
   return { success: true, courses };
+  }); // V148 — end atomic course mutation
 }
 
 /**
@@ -1879,9 +1901,8 @@ export async function resolvePickedCourseInCustomer(customerId, courseKey, picks
  */
 export async function addPicksToResolvedGroup(customerId, pickedFromCourseId, additionalPicks) {
   if (!pickedFromCourseId) throw new Error('pickedFromCourseId required');
-  const snap = await getDoc(customerDoc(customerId));
-  if (!snap.exists()) throw new Error('Customer not found');
-  const courses = [...(snap.data().courses || [])];
+  // V148 — atomic (concurrent add-picks↔use lost-update guard).
+  return _mutateCustomerCoursesAtomic(customerId, (courses) => {
 
   const siblings = courses.filter(c => c && c.pickedFromCourseId === pickedFromCourseId);
   if (siblings.length === 0) {
@@ -1921,13 +1942,17 @@ export async function addPicksToResolvedGroup(customerId, pickedFromCourseId, ad
   // Append at end — keeps existing siblings in place + their indexes stable
   // (so any in-flight references to siblings[i] still resolve correctly).
   courses.push(...newEntries);
-  await updateCustomer(customerId, { courses });
   return { success: true, courses, appended: newEntries.length };
+  }); // V148 — end atomic course mutation
 }
 
 /** Exchange a product within a customer's course */
 export async function exchangeCourseProduct(customerId, courseIndex, newProduct, reason = '', opts = {}) {
-  const snap = await getDoc(customerDoc(customerId));
+  // V148 — atomic 2-field write (courses + courseExchangeLog) via runTransaction
+  // (concurrent exchange↔use/exchange lost-update guard).
+  return runTransaction(db, async (tx) => {
+  const _ref = customerDoc(customerId);
+  const snap = await tx.get(_ref);
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
   if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
@@ -1953,11 +1978,12 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
   };
 
   const existingLog = snap.data().courseExchangeLog || [];
-  await updateCustomer(customerId, {
+  tx.update(_ref, {
     courses,
     courseExchangeLog: [...existingLog, exchangeEntry],
   });
   return { success: true, courses, exchangeLog: exchangeEntry };
+  }); // V148 — end atomic exchange
 }
 
 // ─── Appointment CRUD ───────────────────────────────────────────────────────
@@ -3757,10 +3783,15 @@ export async function removeLinkedSaleCourses(saleId, { removeUsed = false } = {
   if (!saleSnap.exists()) throw new Error('Sale not found');
   const customerId = String(saleSnap.data().customerId || '');
   if (!customerId) return { removedCount: 0, keptUsedCount: 0 };
-  const custSnap = await getDoc(customerDoc(customerId));
+  const { parseQtyString } = await import('./courseUtils.js');
+  // V148 — atomic (concurrent course-remove↔use lost-update guard). Sale doc
+  // read above stays outside the tx (reference data); the customer read+write
+  // is serialized via runTransaction.
+  return runTransaction(db, async (tx) => {
+  const _ref = customerDoc(customerId);
+  const custSnap = await tx.get(_ref);
   if (!custSnap.exists()) return { removedCount: 0, keptUsedCount: 0 };
   const current = custSnap.data().courses || [];
-  const { parseQtyString } = await import('./courseUtils.js');
   let removedCount = 0;
   let keptUsedCount = 0;
   const next = current.filter(c => {
@@ -3773,9 +3804,10 @@ export async function removeLinkedSaleCourses(saleId, { removeUsed = false } = {
     return true;
   });
   if (removedCount > 0) {
-    await updateCustomer(customerId, { courses: next });
+    tx.update(_ref, { courses: next });
   }
   return { removedCount, keptUsedCount };
+  }); // V148 — end atomic course removal
 }
 
 /**
@@ -3804,12 +3836,16 @@ export async function applySaleCancelToCourses(saleId, kind, opts = {}) {
   if (!saleSnap.exists()) throw new Error('Sale not found');
   const customerId = String(saleSnap.data().customerId || '');
   if (!customerId) return { flippedCount: 0, customerId: '', targetStatus };
-  const custSnap = await getDoc(customerDoc(customerId));
-  if (!custSnap.exists()) return { flippedCount: 0, customerId, targetStatus };
-  const current = custSnap.data().courses || [];
-
   const { buildChangeAuditEntry } = await import('./courseExchange.js');
   const stamp = new Date().toISOString();
+  // V148 — atomic (concurrent sale-cancel cascade ↔ course-use lost-update guard).
+  // Customer read+write + audit sets all in one runTransaction (was getDoc +
+  // writeBatch = read-modify-write without re-check). Sale doc read stays above.
+  return runTransaction(db, async (tx) => {
+  const _cref = customerDoc(customerId);
+  const custSnap = await tx.get(_cref);
+  if (!custSnap.exists()) return { flippedCount: 0, customerId, targetStatus };
+  const current = custSnap.data().courses || [];
   const flippedIndices = [];
   const next = current.map((c, i) => {
     if (String(c.linkedSaleId || '') !== String(saleId)) return c;
@@ -3829,8 +3865,7 @@ export async function applySaleCancelToCourses(saleId, kind, opts = {}) {
 
   if (flippedIndices.length === 0) return { flippedCount: 0, customerId, targetStatus };
 
-  const batch = writeBatch(db);
-  batch.update(customerDoc(customerId), { courses: next, updatedAt: stamp });
+  tx.update(_cref, { courses: next, updatedAt: stamp });
   for (const i of flippedIndices) {
     const audit = buildChangeAuditEntry({
       customerId,
@@ -3843,10 +3878,10 @@ export async function applySaleCancelToCourses(saleId, kind, opts = {}) {
       staffId: opts.staffId || '',
       staffName: opts.staffName || '',
     });
-    batch.set(courseChangeDoc(audit.changeId), audit);
+    tx.set(courseChangeDoc(audit.changeId), audit);
   }
-  await batch.commit();
   return { flippedCount: flippedIndices.length, customerId, targetStatus };
+  }); // V148 — end atomic sale-cancel cascade
 }
 
 /** Cancel a sale with reason + refund tracking + staff identification */

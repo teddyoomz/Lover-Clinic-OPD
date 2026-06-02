@@ -215,7 +215,10 @@ describe('G5 row component contract', () => {
     const slice = CLIENT_SRC.slice(idx, idx + 3000);
     expect(slice).toMatch(/kind === 'refund' \? 'คืนเงิน'/);
     expect(slice).toMatch(/'ยกเลิก'/);
-    expect(slice).toMatch(/writeBatch\(db\)/);
+    // V148 (2026-06-02) — atomicity upgraded from writeBatch(db) to runTransaction
+    // (was getDoc→writeBatch = read-modify-write that lost-updated under concurrent
+    // course mutation; now tx.get + tx.update + tx.set, all atomic).
+    expect(slice).toMatch(/runTransaction\(db/);
   });
 
   test('G8.4 cancelBackendSale persists staffId/staffName on cancelled object', () => {
