@@ -1,21 +1,20 @@
 ---
-updated_at: "2026-06-03 — 4-system audit (TFP/Stock/Sales/Finance) /systematic-debugging loop ONGOING. R16 found V158 (CONCURRENT double-cancel money leak) → fixed. Loop continues toward multiple-consecutive-clean (user: 'ห้ามออกจากลูปจนกว่าจะไม่เจอบั๊ค ... deploy ที่เดียว')."
-status: "LOOP ONGOING. Round-16 (concurrent double-cancel) FOUND V158 — V153's idempotency QUERIES were not concurrency locks → 2 concurrent cancels double-refunded wallet (+200 real baht) + over-reversed points (−50). Fixed via per-reference IN-tx net marker (saleNet / finance.pointsSaleNet) + legacy-seed for pre-V158 refs. R16 now 5/0. Loop must keep finding-fixing until N consecutive FRESH rounds are clean (stock-loop bar ~6). Deploy ONCE at loop end."
+updated_at: "2026-06-03 — 4-system audit (TFP/Stock/Sales/Finance) /systematic-debugging loop CONVERGED. R16 found V158 (concurrent double-cancel money leak) → fixed; R17-R22 = 6 consecutive FRESH clean rounds. Deploying once per user 'ลุยให้จบ loop แล้ว deploy ที่เดียว ... ผมจะไปนอนรอ'."
+status: "LOOP CONVERGED. R16 (concurrent double-cancel) FOUND V158 (V153's idempotency queries were not concurrency locks → wallet +200 / points −50). Fixed via per-reference IN-tx net marker (saleNet / finance.pointsSaleNet) + legacy seed. Then 6 consecutive FRESH adversarial rounds ALL clean: R17 concurrent-sale-edit 8/0 · R18 course lifecycle+use‖cancel race 6/0 · R19 4-SYSTEM capstone cancel-cascade + concurrent double-cancel 21/0 · R20 report-accuracy (cancelled excluded from all 9 aggregators) · R21 one-deposit/many-sales partial-cancel + concurrent multi-apply 12/0 · R22 manual-adjust × sale-marker interplay + concurrent summary RMW 9/0. Stop condition met (fresh rounds find NO bug; matches prior stock-loop 6-consecutive bar)."
 branch: "master"
-last_commit: "(V158 about to commit) — prior d780750c (V153-V157)."
-tests: "Full vitest 15970/0 (JSON run). Real-prod Rule Q L2: e2e-r16-concurrent-double-cancel 5/0 + e2e-reverse-idempotency 11/0 + e2e-points-concurrency 2/0 + e2e-r13-cancel-cascade 11/0 + e2e-r14-edit-reconciliation 7/0 + e2e-r15-adversarial-guards 15/0. v158/v153/v149 regression green. build clean."
+last_commit: "91bb3349 (V158) + R17-R22 regression scripts. DEPLOYING."
+tests: "Full vitest 15970/0 (JSON run). Real-prod Rule Q L2: R16 5/0 · R17 8/0 · R18 6/0 · R19 21/0 · R21 12/0 · R22 9/0 · reverse-idempotency 11/0 · points-concurrency 2/0 · R13 11/0 · R14 7/0 · R15 15/0 · course-mutation 4/0+2/0. v158/v153/v149 regression green. build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "d780750c — V153-V157 LIVE. V158 NOT yet deployed (deploy-once at loop end). prod currently carries the concurrent-double-cancel gap (rare race; batched into the end-of-loop deploy per user 'deploy ที่เดียว')."
+production_commit: "d780750c (V153-V157) → deploying V158 (91bb3349) now. V158 = client-SDK logic only, NO firestore.rules change → vercel --prod only, no Probe-Deploy-Probe (V153-V157 precedent)."
 firestore_rules_version: "UNCHANGED (V158 = client-SDK logic only)."
 ---
 
-# Active — 2026-06-03 — 4-system audit loop ONGOING (R16 → V158 fixed; loop continues)
+# Active — 2026-06-03 — 4-system audit loop CONVERGED (V158 fixed; R17-R22 6× clean; deploying)
 
-## STOP CONDITION (user, verbatim)
-"ห้ามออกจากลูปจนกว่าจะไม่เจอบั๊คตามเงื่อนไข ห้ามหยุด ทำไปเรื่อยๆ ผมจะไปนอนรอ" +
-"ลุยให้จบ loop แล้ว deploy ที่เดียว". → Keep running FRESH adversarial audit rounds;
-fix every bug found; stop ONLY when a fresh round finds NO bug AND multiple
-consecutive rounds are clean (stock-loop bar ≈ 6). THEN deploy once.
+## STOP CONDITION — MET
+User: "ห้ามออกจากลูปจนกว่าจะไม่เจอบั๊คตามเงื่อนไข ... ผมจะไปนอนรอ" + "ลุยให้จบ loop แล้ว deploy ที่เดียว".
+→ Ran FRESH adversarial rounds; R16 found V158 (fixed); R17-R22 = 6 consecutive clean
+(each a DIFFERENT surface). Fresh rounds now find NO bug → converged → deploy once.
 
 ## Fixes shipped this loop (committed; NOT yet deployed except V153-V157)
 - **V153** (M16) — refundToWallet + reversePointsEarned idempotent for SEQUENTIAL repeats. e2e 11/0. [DEPLOYED d780750c]
