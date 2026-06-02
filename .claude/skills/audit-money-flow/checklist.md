@@ -128,6 +128,12 @@ Each invariant has: **What** (the rule), **Why** (real-world rationale), **Where
 **Where**: `src/lib/backendClient.js` reverseDepositUsage (~4850).
 **How**: confirm `newRemaining = amount − newUsed − refundAmount`. Proof: `scripts/e2e-deposit-refund-reverse.mjs` (was 2-fail → 0-fail; no-refund control still restores full). Regression: `tests/v154-deposit-reverse-honors-refund.test.js`.
 
+### M18 — deposit refund/cancel + membership renew are ATOMIC RMW (V155, 2026-06-03, Rule T)
+**What**: refundDeposit, cancelDeposit, and renewMembership (the renewals[] push) must wrap read+guard+write in ONE runTransaction (tx.get → tx.update), NOT getDoc→updateDoc.
+**Why**: non-atomic money RMW → two concurrent refunds (or a double-click) both read the same remaining/refundAmount → last-write-wins → one refund's RECORD lost → refundAmount understates the cash paid out → deposit over-stated → re-spendable money. Same Rule-T family as M5 (wallet) / V148 (courses) / V149 (points) / V147 (stock).
+**Where**: `src/lib/backendClient.js` refundDeposit (~4681), cancelDeposit (~4660), renewMembership (~5354).
+**How**: confirm each has `runTransaction(db, async (tx) => { const snap = await tx.get(ref); …; tx.update(ref, …) })` and NO `getDoc(ref)→updateDoc(ref)` pair. The over-refund + usedAmount guards are re-checked IN-tx. Proof: `scripts/e2e-deposit-refund-atomicity.mjs` (real prod; 2 concurrent refundDeposit(300) → refundAmount=600 not 300). Regression: `tests/v155-deposit-membership-atomicity.test.js`. (Round-10 sweep confirmed wallet topUp/adjust [M5], points earn/deduct/adjust [V149], and INV/HN/PO counters are already atomic — the money-domain Rule-T class is complete.)
+
 ---
 
 ## Accepted risks (document, don't flag)

@@ -15,6 +15,7 @@ import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } fr
 // real-time redundant-0-lot auto-clear. Same plan the 03:45 cron runs.
 import { planLotCleanup } from './stockLotCleanupCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
+import { roundTHB } from './financeUtils.js'; // V156 — defensive money rounding at the write boundary (closes M12 caveat)
 import { decideApptStatusServiceSync } from './appointmentDisplay.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
@@ -4659,46 +4660,60 @@ export async function updateDeposit(depositId, data) {
 /** Cancel a deposit. Only allowed when no usage exists (usedAmount === 0). */
 export async function cancelDeposit(depositId, { cancelNote = '', cancelEvidenceUrl = '' } = {}) {
   const ref = depositDoc(depositId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('Deposit not found');
-  const cur = snap.data();
-  if ((Number(cur.usedAmount) || 0) > 0) {
-    throw new Error('มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถยกเลิกได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน');
-  }
-  await updateDoc(ref, {
-    status: 'cancelled',
-    cancelNote,
-    cancelEvidenceUrl,
-    cancelledAt: new Date().toISOString(),
-    remainingAmount: 0,
-    updatedAt: new Date().toISOString(),
+  // V155 (Rule T): atomic — re-check usedAmount IN-tx so a cancel can't race an
+  // applyDepositToSale (itself atomic) and wipe remaining on an in-flight apply.
+  // Was getDoc→updateDoc.
+  const customerId = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Deposit not found');
+    const cur = snap.data();
+    if ((Number(cur.usedAmount) || 0) > 0) {
+      throw new Error('มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถยกเลิกได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน');
+    }
+    tx.update(ref, {
+      status: 'cancelled',
+      cancelNote,
+      cancelEvidenceUrl,
+      cancelledAt: new Date().toISOString(),
+      remainingAmount: 0,
+      updatedAt: new Date().toISOString(),
+    });
+    return cur.customerId;
   });
-  await recalcCustomerDepositBalance(cur.customerId);
+  await recalcCustomerDepositBalance(customerId);
   return { success: true };
 }
 
 /** Refund a deposit (partial or full). */
 export async function refundDeposit(depositId, { refundAmount, refundChannel = '', refundDate = null, note = '' } = {}) {
-  const ref = depositDoc(depositId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('Deposit not found');
-  const cur = snap.data();
-  const amt = Number(refundAmount) || 0;
+  const amt = roundTHB(Number(refundAmount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('จำนวนคืนต้องมากกว่า 0');
-  const remaining = Number(cur.remainingAmount) || 0;
-  if (amt > remaining) throw new Error(`จำนวนคืนต้องไม่เกินยอดคงเหลือ (${remaining})`);
-  const newRemaining = Math.max(0, remaining - amt);
-  const fullRefund = newRemaining === 0;
-  await updateDoc(ref, {
-    status: fullRefund ? 'refunded' : cur.status === 'partial' ? 'partial' : 'active',
-    refundAmount: (Number(cur.refundAmount) || 0) + amt,
-    refundChannel,
-    refundDate: refundDate || new Date().toISOString(),
-    refundNote: note,
-    remainingAmount: newRemaining,
-    updatedAt: new Date().toISOString(),
+  const ref = depositDoc(depositId);
+  // V155 (Rule T): atomic RMW — re-read remaining/refundAmount IN-tx. Was
+  // getDoc→updateDoc: two concurrent refunds (or a double-click) both read the
+  // same `remaining`, both wrote from the stale base → last-write-wins → one
+  // refund's record LOST → refundAmount understated the cash actually paid out
+  // → deposit over-stated → re-spendable money (e2e-deposit-refund-atomicity R1).
+  const customerId = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Deposit not found');
+    const cur = snap.data();
+    const remaining = Number(cur.remainingAmount) || 0;
+    if (amt > remaining) throw new Error(`จำนวนคืนต้องไม่เกินยอดคงเหลือ (${remaining})`);
+    const newRemaining = Math.max(0, remaining - amt);
+    const fullRefund = newRemaining === 0;
+    tx.update(ref, {
+      status: fullRefund ? 'refunded' : cur.status === 'partial' ? 'partial' : 'active',
+      refundAmount: (Number(cur.refundAmount) || 0) + amt,
+      refundChannel,
+      refundDate: refundDate || new Date().toISOString(),
+      refundNote: note,
+      remainingAmount: newRemaining,
+      updatedAt: new Date().toISOString(),
+    });
+    return cur.customerId;
   });
-  await recalcCustomerDepositBalance(cur.customerId);
+  await recalcCustomerDepositBalance(customerId);
   return { success: true };
 }
 
@@ -4787,7 +4802,7 @@ export async function getActiveDeposits(customerId) {
  * → appends to usageHistory. Throws if insufficient.
  */
 export async function applyDepositToSale(depositId, saleId, amount) {
-  const amt = Number(amount) || 0;
+  const amt = roundTHB(Number(amount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('จำนวนต้องมากกว่า 0');
   const ref = depositDoc(depositId);
 
@@ -5006,7 +5021,7 @@ export async function topUpWallet(customerId, walletTypeId, {
   amount, walletTypeName = '', paymentChannel = '', refNo = '', note = '',
   staffId = '', staffName = '', referenceType = 'manual', referenceId = '',
 } = {}) {
-  const amt = Number(amount) || 0;
+  const amt = roundTHB(Number(amount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('ยอดเติมต้องมากกว่า 0');
   await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
   const key = walletKey(customerId, walletTypeId);
@@ -5055,7 +5070,7 @@ export async function deductWallet(customerId, walletTypeId, {
   amount, walletTypeName = '', note = '', staffId = '', staffName = '',
   referenceType = 'sale', referenceId = '',
 } = {}) {
-  const amt = Number(amount) || 0;
+  const amt = roundTHB(Number(amount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('ยอดหักต้องมากกว่า 0');
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
@@ -5102,7 +5117,7 @@ export async function refundToWallet(customerId, walletTypeId, {
   amount, walletTypeName = '', note = '', staffId = '', staffName = '',
   referenceType = 'sale', referenceId = '',
 } = {}) {
-  const amt = Number(amount) || 0;
+  const amt = roundTHB(Number(amount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('ยอดคืนต้องมากกว่า 0');
   await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
   const key = walletKey(customerId, walletTypeId);
@@ -5178,7 +5193,7 @@ export async function adjustWallet(customerId, walletTypeId, {
   amount, isIncrease = true, walletTypeName = '', note = '',
   staffId = '', staffName = '',
 } = {}) {
-  const amt = Number(amount) || 0;
+  const amt = roundTHB(Number(amount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('ยอดปรับต้องมากกว่า 0');
   await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
   const key = walletKey(customerId, walletTypeId);
@@ -5356,31 +5371,32 @@ export async function renewMembership(membershipId, {
   note = '', grantCredit = 0, grantPoints = 0,
 } = {}) {
   const ref = membershipDoc(membershipId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('Membership not found');
-  const cur = snap.data();
   const now = new Date().toISOString();
-  const baseTime = Math.max(
-    Date.now(),
-    cur.expiresAt ? new Date(cur.expiresAt).getTime() : Date.now()
-  );
-  const newExpiry = new Date(baseTime + Number(extendDays) * 86400000).toISOString();
-
-  const renewals = Array.isArray(cur.renewals) ? [...cur.renewals] : [];
-  renewals.push({
-    renewedAt: now,
-    expiresAt: newExpiry,
-    price: Number(price) || 0,
-    paymentChannel, refNo, note,
-    grantCredit: Number(grantCredit) || 0,
-    grantPoints: Number(grantPoints) || 0,
-  });
-
-  await updateDoc(ref, {
-    expiresAt: newExpiry,
-    renewals,
-    status: 'active',
-    updatedAt: now,
+  // V155 (Rule T): atomic renewals[] RMW — re-read inside the tx so two
+  // concurrent renews can't both read the same renewals[] and lose one entry
+  // (last-write-wins). Was getDoc→updateDoc. The wallet/points GRANTS stay
+  // AFTER the tx (separate collections; their idempotency is the cross-
+  // collection torn-write concern, not this atomicity fix).
+  const { cur, newExpiry } = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Membership not found');
+    const c = snap.data();
+    const baseTime = Math.max(
+      Date.now(),
+      c.expiresAt ? new Date(c.expiresAt).getTime() : Date.now()
+    );
+    const exp = new Date(baseTime + Number(extendDays) * 86400000).toISOString();
+    const renewals = Array.isArray(c.renewals) ? [...c.renewals] : [];
+    renewals.push({
+      renewedAt: now,
+      expiresAt: exp,
+      price: Number(price) || 0,
+      paymentChannel, refNo, note,
+      grantCredit: Number(grantCredit) || 0,
+      grantPoints: Number(grantPoints) || 0,
+    });
+    tx.update(ref, { expiresAt: exp, renewals, status: 'active', updatedAt: now });
+    return { cur: c, newExpiry: exp };
   });
 
   if (grantCredit > 0 && cur.walletTypeId) {

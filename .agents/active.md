@@ -1,39 +1,28 @@
 ---
-updated_at: "2026-06-02 EOD+4 — Stock adversarial-hunt LOOP: V147-V152 (6 concurrency/atomicity fixes) + R16-R21 (6 consecutive CLEAN verification rounds → loop CONVERGED). ALL V147-V152 DEPLOYED LIVE."
-status: "Loop CONVERGED + ALL DEPLOYED. 6 real bugs found+fixed (V147-V152, all read-outside-tx RMW / atomicity family → iron-clad Rule T). 6 fresh adversarial rounds (R16-R21) across all distinct stock surfaces found ZERO new app bugs (every 'finding' was MY test-assumption/filter error, corrected to confirm the app is right). Stop condition met."
+updated_at: "2026-06-03 — 4-system audit (TFP/Stock/Sales/Finance) /systematic-debugging loop CONVERGED. 4 money fixes (V153-V156) found+fixed+real-prod-verified. Deploying V153-V156 (one deploy, frontend-only)."
+status: "Loop CONVERGED. V153 (wallet+points reverse idempotency) + V154 (deposit reverse refundAmount term) + V155 (refundDeposit/cancelDeposit/renewMembership atomic RMW) + V156 (defensive roundTHB at money-write boundary). Rounds 1-11: cancel/reverse cascade fully idempotent (5 channels), deposit conservation correct, money-RMW atomic class COMPLETE, billing/exchange/sale-variants/appointment/counters all CLEAN. Only residual = cross-COLLECTION torn-write (architectural, documented — NOT a clean bug, NOT half-fixed)."
 branch: "master"
-last_commit: "ae51cc18 (active.md). All V147-V152 + R16-R21 committed + pushed + DEPLOYED."
-tests: "Full vitest 15898/0 (after V152). Every fix: source-grep test + audit invariant. Every round R16-R21: real-prod Rule Q L2 e2e green (17+10+16+10+10+12 = 75 prod assertions, zero orphans). build clean. NOT re-run at session-end."
+last_commit: "97ef4ede (V153+V154). V155+V156 commit next, then deploy."
+tests: "Full vitest green (V153-V156 gates all exit-0). Real-prod Rule Q L2: e2e-reverse-idempotency 11/0 + e2e-deposit-refund-reverse 6/0 + e2e-deposit-refund-atomicity 3/0. v153/v154/v155 regression 30+13+21. build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ae51cc18 — ALL V147-V152 LIVE (vercel --prod EOD+4; frontend-only, aliased to lover-clinic-app.vercel.app)."
-firestore_rules_version: "UNCHANGED — all V147-V152 are client-SDK logic (runTransaction/CAS) fitting existing rules. NO rules change → no Probe-Deploy-Probe."
+production_commit: "ae51cc18 (V147-V152) → deploying to V153-V156 HEAD this turn (user authorized end-of-loop deploy). Frontend-only — all client-SDK logic (runTransaction/query-guard/roundTHB), NO firestore.rules change → no Probe-Deploy-Probe."
+firestore_rules_version: "UNCHANGED."
 ---
 
-# Active — 2026-06-02 EOD+4 — Stock adversarial-hunt loop (CONVERGED)
+# Active — 2026-06-03 — 4-system audit loop CONVERGED (V153-V156)
 
-## The loop (user /systematic-debugging directive: find novel stock bugs → fix → repeat until a fresh round finds nothing)
+## Fixes (all real-prod Rule Q L2 verified)
+- **V153** (M16) — sale cancel/reverse cascade: `refundToWallet` + `reversePointsEarned` not idempotent → cancel→delete / cancel-retry double-credited wallet (real baht) + double-reversed points. Fix: points reverse `max(0,Σearn−Σreverse)`; wallet refund up to NET outstanding `(Σdeduct−Σrefund)`. Round-3 self-catch: first wallet guard broke sale-EDIT (caught by the WE e2e, NOT the full suite) → corrected to net-outstanding.
+- **V154** (M17) — `reverseDepositUsage` dropped `refundAmount` term → phantom deposit balance. Fix: `remaining = amount − used − refundAmount`.
+- **V155** (M18) — `refundDeposit`/`cancelDeposit`/`renewMembership(renewals[])` non-atomic getDoc→updateDoc → concurrent/double-click lost-update. Fix: runTransaction (tx.get→tx.update; guards re-checked in-tx).
+- **V156** — defensive `roundTHB` at the 6 THB money-write boundaries (closes the M12 float-precision caveat).
 
-### Fixes shipped (V147-V152 — all ONE family: non-atomic read-modify-write / stale-plan race; backstopped by NEW iron-clad **Rule T** = atomic RMW for concurrent-mutation-prone Firestore docs)
-- **V147** (S32) — `_deductOneItem` multi-batch FIFO: listStockBatches→allocate→tx ran with a stale plan under contention → wrong deduction. Fix: retry loop (`_DEDUCT_MAX_ATTEMPTS=6`, `STOCK_RACE_RETRY`). DEPLOYED.
-- **V148** (AV177) — `customer.courses[]` getDoc→modify→updateDoc (lost-update on concurrent course ops). Fix: `_mutateCustomerCoursesAtomic` runTransaction; routed deduct/reverse/addQty/assign/resolve/exchange/cancel. DEPLOYED.
-- **V149** (AV178) — `finance.loyaltyPoints` RMW (over-credit/over-spend race). Fix: runTransaction earn/deduct/reverse + in-tx over-spend re-check. DEPLOYED.
-- **V150** (S33) — `pickNegativeTargetBatch` could pick a CANCELLED/EXPIRED lot as the negative carrier. Fix: candidate filter excludes them. DEPLOYED.
-- **V151** (S34) — cancel a sale/treatment whose lot V144 already auto-deleted → reverse threw → whole cancel FAILED + stock never returned. Fix: `_reverseOneMovement` RE-CREATES the vanished lot (`_recreatedByReverse`). LOCAL.
-- **V152** (S35) — concurrent central-PO receive → DOUBLE stock (read-outside-tx idempotency gap, the documented AUDIT-V34 "deferred" one). Fix: a `runTransaction` CAS CLAIMS the lineIds before any batch is built; finalize merge-CAS. LOCAL.
+## Audited CLEAN / dismissed (Rule Q-honest, code-read)
+Cancel cascade = 5 idempotent channels (stock S5 · deposit · wallet · points · course). Sale-variants (online/vendor/insurance = tracking-only). Exchange/refund-course (atomic + idempotent-by-throw + no money move). Appointment-delete (never touches deposit → balance preserved). Billing math (roundTHB'd, no double-discount). INV/HN/PO counters (runTransaction). Money-RMW Rule-T class COMPLETE.
 
-### Verification rounds (R16-R21 — 6 CONSECUTIVE CLEAN, real-prod Rule Q L2, every distinct stock surface)
-- **R16** reverse conservation — concurrent double-reverse credits ONCE (S5 in-tx CAS holds); negative-debt reverse clears to 0; nonexistent product silent-skips (V36-bis). 17/0.
-- **R17** single-batch contention — V147 retry + negative-allowance + cross-op (deduct↔adjust) serialization. 10/0.
-- **R18** multi-lot FEFO span + ledger-replay conservation (S16 time-travel) + V144 0-lot-delete + V151 reverse-recreate interaction. 16/0.
-- **R19** edit path (reverse-old + deduct-new): qty up/down, product swap, edit-to-same, re-edit-after-V144-clear. 10/0.
-- **R20** cross-branch isolation — deduct at A never touches B; negative carrier branch-scoped; movement branchId stamped. 10/0.
-- **R21** transfer/withdrawal concurrent double-receive — status-CAS gate (loser throws), ONE dest batch, conservation. EMPIRICALLY confirms the "never vulnerable" code-read. 12/0.
+## Deferred — ARCHITECTURAL (NOT a clean bug; honestly NOT half-fixed)
+**Cross-COLLECTION torn-write**: createBackendSale + TFP auto-sale write many collections via sequential awaits; a rare Firestore mid-chain throw → sale committed but a side-effect (wallet/deposit/points/course) silently failed (deliberate "non-blocking" design; side-effects now mostly-idempotent). Proper fix = a reconciliation/detection report or structured partial-failure surfacing (a FEATURE) — recommend a dedicated build; a code patch (throw-instead-of-swallow) worsens UX.
 
-**Negative-stock from TFP/sale CONFIRMED INTACT** (user's key ask): R16.4 + R17.1 + R18.3 + R20.3 + earlier 18/0 comprehensive.
-
-## Next action
-- **DONE — all V147-V152 DEPLOYED LIVE** (vercel --prod EOD+4). Loop converged. No further rounds warranted (6 clean; every R16-R21 "finding" was a test-assumption error, strong signal the app is correct).
-- Next session = idle on stock; pick up a carryover task below OR await new direction.
-
-## Outstanding (user-triggered, carryover from EOD+3)
-- dropdown หมวดหมู่ task (3rd original ask, not started; be_product_groups empty → source = distinct categoryName, brainstorm needed) · V-log-archive verbose entries (V147-V152) unwritten (one-liners in 00-session-start are enough to recognize) · Neuramis merge + junk test-course "หฟแฟ" (deferred data).
+## Next
+- Commit V155+V156 → push → **deploy V153-V156** (one `vercel --prod`, frontend-only).
+- Future: cross-collection reconciliation feature (the one deferred item) · carryover: dropdown หมวดหมู่ · Neuramis merge + junk test-course "หฟแฟ".
