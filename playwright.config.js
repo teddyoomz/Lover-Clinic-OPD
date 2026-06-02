@@ -6,11 +6,12 @@ export default defineConfig({
   timeout: 30000,
   retries: 1,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5173',
     headless: true,
     screenshot: 'only-on-failure',
   },
-  webServer: {
+  // Skip the local dev server when targeting a remote deployment (E2E_BASE_URL).
+  webServer: process.env.E2E_BASE_URL ? undefined : {
     command: 'npm run dev',
     port: 5173,
     reuseExistingServer: true,
