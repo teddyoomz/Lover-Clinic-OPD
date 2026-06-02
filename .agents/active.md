@@ -1,5 +1,5 @@
 ---
-updated_at: "2026-06-02 — Scheduled Tasks tab DEPLOYED + verified LIVE + resolveParam 4th-defense-layer DEPLOYED + post-deploy-verified."
+updated_at: "2026-06-02 — TFP MEGA-TEST complete (L1 2/0 + L2 19/0 on real prod) + OPD→CSV export for FB; earlier: Scheduled Tasks DEPLOYED + resolveParam 4th layer."
 status: "DEPLOYED. Full suite 15720/0 + build clean + post-deploy live-guard 21/21 on fresh prod. 4th defense layer (resolveParam clamps a corrupt config value at the cron) LIVE. Firebase dup retired from Cloud Scheduler."
 branch: "master"
 last_commit: "8e6a1d06 (resolveParam 4th defense layer + param-safety tests)."
@@ -7,6 +7,40 @@ tests: "Full suite 15720/0. Build clean (2503 modules). Post-deploy live-guard 2
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "8e6a1d06 LIVE (Scheduled Tasks + resolveParam hardening). Firebase functions: cleanupOldStaffChatMessages DELETED from Cloud Scheduler."
 firestore_rules_version: "UNCHANGED — no rules/storage/functions/cron change. Both deploys vercel-only (no Probe-Deploy-Probe)."
+---
+
+# Active — TFP MEGA-TEST complete + Scheduled Tasks DEPLOYED, 2026-06-02
+
+## 🔬 TFP MEGA-TEST (the app's core, longest bug history) — L1 + L2 GREEN on REAL prod
+The biggest test yet. NO deploy/source change to the app — pure Rule-Q verification +
+2 regression artifacts.
+- **L2 (function chain) — `scripts/e2e-tfp-mega-test.mjs` 19/0**: real CLIENT SDK
+  (authed staff) drives the REAL backend functions TFP calls, on REAL prod (real
+  rules/indexes/data-shapes), TEST-prefixed fixtures + cleanup. Each scenario
+  reproduces a historical bug's exact trigger: V104 (course 5/5→4/5) · V36
+  (be_course_changes kind='use', field is `linkedTreatmentId`) · over-deduct throws ·
+  V142 carry-forward (reverse→5/5, re-deduct→4/5, no double/stuck) · V44/V45
+  (assign product≠course-name) · V108 (sale name resolved from patientData, not "-") ·
+  Rule O/V46 (movement uses LIVE be_products name, not passed/frozen). Caught 2 of my
+  OWN test bugs (qty "4 / 5 ครั้ง" spaces; audit field name) before they masked a pass.
+- **L1 (component orchestration) — `tests/e2e/tfp-mega-l1.spec.js` 2/0**: real browser
+  drives the REAL TFP UI on real prod, FRESH TEST customer (admin beforeAll; no
+  real-customer actions). Proves handleSubmit actually CALLS the chain: save →
+  course DECREMENTS + be_treatments persisted + V36 audit emits (V104 bug = stays 5/5).
+- **e2e staleness found+documented** (pre-existing, NOT TFP bugs): Phase 28 renamed
+  สร้างการรักษา→**บันทึกการรักษา**; V26.1 removed the top-right ยืนยันการรักษา button;
+  `tests/e2e/helpers.js` hardcodes customer **2867** (deleted) + the old `goToBackend`
+  selector. The old TFP specs (treatment-courses / treatment-buy-deduct / v96 / v71)
+  inherit this debt — re-enable by copying tfp-mega-l1's fresh-fixture pattern (FOLLOW-UP).
+- Prod left clean (0 TEST customers). Branch note: all 3 doctors tagged to นครราชสีมา
+  (`BR-1777873556815-26df6480`); L1 injects `localStorage.selectedBranchId` so the
+  doctor dropdown is populated.
+
+## 📤 OPD → CSV for FB Custom Audience — `scripts/export-opd-customers-csv.mjs`
+Read-only export of all 113 be_customers → 112 unique phones (customer's OWN phone,
+never emergencyPhone) + name/email/dob(YYYYMMDD CE)/gender(m|f) → `F:\FB\targeting\
+opd-customers.csv` (OUTSIDE repo). Deduped by last-9 digits, UTF-8 no-BOM. Re-run to refresh.
+
 ---
 
 # Active — Scheduled Tasks tab DEPLOYED + verified LIVE, 2026-06-02
