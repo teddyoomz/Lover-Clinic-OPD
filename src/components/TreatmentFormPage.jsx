@@ -2707,6 +2707,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           ? await updateBackendTreatment(treatmentId, finalBackendDetail)
           : await createBackendTreatment(customerId, finalBackendDetail);
         await rebuildTreatmentSummary(customerId);
+        // V157 — collect non-fatal side-effect failures (deposit/wallet/points/
+        // course) so the admin SEES them at save. The treatment+sale are saved
+        // regardless (deliberate non-blocking design), but pre-V157 a failed
+        // money/course side-effect was swallowed to console only → invisible to
+        // the clinic → silent money/inventory discrepancy. Surfaced via a non-
+        // fatal alert before the success screen (additive — happy path untouched).
+        const sideEffectWarnings = [];
 
         // V36-bis (2026-04-29) — deductCourseItems moved here so we have
         // the real treatmentId (from result.treatmentId on create OR from
@@ -2899,7 +2906,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // Apply each selected deposit to this new sale
             for (const d of depositIdsPayload) {
               try { await applyDepositToSale(d.depositId, createRes.saleId, d.amount); }
-              catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); }
+              catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); sideEffectWarnings.push(`หักมัดจำ ${d.amount}฿ ไม่สำเร็จ — ใบเสร็จบันทึกว่าใช้มัดจำแล้วแต่ระบบยังไม่หัก กรุณาตรวจสอบ`); }
             }
             // Deduct wallet if any
             if (walletTypeIdPayload && walletAppliedValue > 0) {
@@ -2911,7 +2918,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   referenceType: 'sale', referenceId: createRes.saleId,
                   staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
                 });
-              } catch (e) { console.warn('[TreatmentForm] wallet deduct failed:', e); }
+              } catch (e) { console.warn('[TreatmentForm] wallet deduct failed:', e); sideEffectWarnings.push(`หัก wallet ${walletAppliedValue}฿ ไม่สำเร็จ — ใบเสร็จบันทึกว่าใช้ wallet แล้วแต่ระบบยังไม่หัก กรุณาตรวจสอบ`); }
             }
             // Earn points
             const bpp = Number(backendActiveMembership?.bahtPerPoint) || 0;
@@ -2959,7 +2966,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   daysBeforeExpire: course.daysBeforeExpire ?? null,
                   alreadyResolved,
                 });
-              } catch (e) { console.error('[TreatmentForm] course assign error:', e); }
+              } catch (e) { console.error('[TreatmentForm] course assign error:', e); sideEffectWarnings.push(`เพิ่มคอร์ส "${course.name}" ให้ลูกค้าไม่สำเร็จ — ลูกค้าจ่ายแล้วแต่ยังไม่ได้คอร์ส กรุณาเพิ่มให้`); }
             }
             for (const promo of grouped.promotions) {
               try {
@@ -2978,9 +2985,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     : [{ name: promo.name, qty: pQty, unit: 'โปรโมชัน' }];
                   await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId });
                 }
-              } catch (e) { console.error('[TreatmentForm] promo assign error:', e); }
+              } catch (e) { console.error('[TreatmentForm] promo assign error:', e); sideEffectWarnings.push(`เพิ่มโปรโมชัน "${promo.name}" ให้ลูกค้าไม่สำเร็จ — ลูกค้าจ่ายแล้วแต่ยังไม่ได้ กรุณาเพิ่มให้`); }
             }
-          } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); }
+          } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); sideEffectWarnings.push('สร้างใบเสร็จอัตโนมัติไม่สำเร็จ — การรักษาบันทึกแล้วแต่ยังไม่มีใบเสร็จ กรุณาสร้างใบเสร็จเอง'); }
         }
 
         // Phase 7: On EDIT, if a linked sale exists, reverse & reapply deposits + wallet + points
@@ -3073,7 +3080,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 }
                 for (const d of depositIdsPayload) {
                   try { await applyDepositToSale(d.depositId, createRes.saleId, d.amount); }
-                  catch (e) { console.warn('[TreatmentForm] apply deposit (edit→sale) failed:', e); }
+                  catch (e) { console.warn('[TreatmentForm] apply deposit (edit→sale) failed:', e); sideEffectWarnings.push(`หักมัดจำ ${d.amount}฿ ไม่สำเร็จ — ใบเสร็จบันทึกว่าใช้มัดจำแล้วแต่ระบบยังไม่หัก กรุณาตรวจสอบ`); }
                 }
                 if (walletTypeIdPayload && walletAppliedValue > 0) {
                   try {
@@ -3083,7 +3090,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       referenceType: 'sale', referenceId: createRes.saleId,
                       staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
                     });
-                  } catch (e) { console.warn('[TreatmentForm] wallet deduct (edit→sale) failed:', e); }
+                  } catch (e) { console.warn('[TreatmentForm] wallet deduct (edit→sale) failed:', e); sideEffectWarnings.push(`หัก wallet ${walletAppliedValue}฿ ไม่สำเร็จ — ใบเสร็จบันทึกว่าใช้ wallet แล้วแต่ระบบยังไม่หัก กรุณาตรวจสอบ`); }
                 }
                 const bpp2 = Number(backendActiveMembership?.bahtPerPoint) || 0;
                 if (bpp2 > 0 && billing.netTotal > 0) {
@@ -3114,7 +3121,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       daysBeforeExpire: course.daysBeforeExpire ?? null,
                       alreadyResolved,
                     });
-                  } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); }
+                  } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); sideEffectWarnings.push(`เพิ่มคอร์ส "${course.name}" ให้ลูกค้าไม่สำเร็จ — ลูกค้าจ่ายแล้วแต่ยังไม่ได้คอร์ส กรุณาเพิ่มให้`); }
                 }
                 // Mirror create-path: also assign purchased promotions (bundled sub-courses or plain promo).
                 for (const promo of newGrouped.promotions) {
@@ -3141,7 +3148,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               const oldDeps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
               for (const od of oldDeps) {
                 try { await reverseDepositUsage(od.depositId, saleId); }
-                catch (e) { console.warn('[TreatmentForm] reverse old deposit failed:', e); }
+                catch (e) { console.warn('[TreatmentForm] reverse old deposit failed:', e); sideEffectWarnings.push('คืนมัดจำเดิม (แก้ไขใบเสร็จ) ไม่สำเร็จ — กรุณาตรวจสอบยอดมัดจำ'); }
               }
               // 2. Refund old wallet
               const oldWalletTypeId = linkedSale.billing?.walletTypeId || '';
@@ -3154,7 +3161,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     note: `แก้ไข treatment — คืนยอด wallet เดิมบน ${saleId}`,
                     referenceType: 'sale', referenceId: saleId,
                   });
-                } catch (e) { console.warn('[TreatmentForm] wallet refund (edit) failed:', e); }
+                } catch (e) { console.warn('[TreatmentForm] wallet refund (edit) failed:', e); sideEffectWarnings.push('คืนยอด wallet เดิม (แก้ไขใบเสร็จ) ไม่สำเร็จ — กรุณาตรวจสอบ'); }
               }
               // 3. Reverse old earned points
               try { await reversePointsEarned(customerId, saleId); }
@@ -3216,7 +3223,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               // 5. Apply new deposits
               for (const d of depositIdsPayload) {
                 try { await applyDepositToSale(d.depositId, saleId, d.amount); }
-                catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); }
+                catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); sideEffectWarnings.push(`หักมัดจำ ${d.amount}฿ (แก้ไขใบเสร็จ) ไม่สำเร็จ — กรุณาตรวจสอบ`); }
               }
               // 6. Deduct new wallet
               if (walletTypeIdPayload && walletAppliedValue > 0) {
@@ -3228,7 +3235,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     referenceType: 'sale', referenceId: saleId,
                     staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
                   });
-                } catch (e) { console.warn('[TreatmentForm] wallet deduct (edit) failed:', e); }
+                } catch (e) { console.warn('[TreatmentForm] wallet deduct (edit) failed:', e); sideEffectWarnings.push(`หัก wallet ${walletAppliedValue}฿ (แก้ไขใบเสร็จ) ไม่สำเร็จ — กรุณาตรวจสอบ`); }
               }
               // 7. Earn new points
               const bpp = Number(backendActiveMembership?.bahtPerPoint) || 0;
@@ -3323,6 +3330,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }
         }
 
+        // V157 — surface any non-fatal side-effect failures to the admin. The
+        // treatment/sale IS saved; this makes a silently-failed money/course
+        // step visible so the admin can reconcile (no longer a silent leak).
+        if (sideEffectWarnings.length) {
+          try { window.alert('บันทึกสำเร็จ ✓\n\nแต่บางรายการทำไม่สำเร็จ กรุณาตรวจสอบ/ทำซ้ำ:\n• ' + sideEffectWarnings.join('\n• ')); } catch { /* alert unavailable (SSR/test) */ }
+        }
         setSuccess(true);
         const savedId = result.treatmentId || treatmentId || '';
         // Clean up form state before closing

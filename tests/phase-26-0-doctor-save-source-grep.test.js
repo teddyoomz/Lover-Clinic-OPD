@@ -16,16 +16,18 @@ describe('Phase 26.0 — AV37 source-grep regression locks', () => {
       'earnPoints(',
     ];
 
-    // Window: 16000 chars to cover the entire auto-sale chain (~6500 chars) and
-    // edit-mode sale sync block (~15000 chars). Both wrap many inner deduction
-    // calls under a single outer `if (saveMode !== 'doctor' && ...)` guard.
-    // Regression-catching property preserved: if a NEW unguarded call is added
-    // outside any saveMode block (e.g. above all the gates at top of handleSubmit),
-    // the 16000-char window won't reach the outer block's gate. The window is
-    // generous enough to traverse the largest gated block in current code
-    // (edit-mode sale sync, ~15002 chars between gate and deepest earnPoints call)
-    // but not so generous that a fresh unguarded code path is silently allowed.
-    const GATE_WINDOW = 16000;
+    // Window: covers the entire auto-sale chain (~6500 chars) and the edit-mode
+    // sale sync block. Both wrap many inner deduction calls under a single outer
+    // `if (saveMode !== 'doctor' && ...)` guard.
+    // V157 (2026-06-03): added per-channel `sideEffectWarnings.push(...)` (long
+    // Thai strings) INSIDE the already-gated auto-sale + edit-sale-sync catch
+    // blocks → the gate→deepest-earnPoints distance grew (~15002 → ~15900). The
+    // GATING IS UNCHANGED (V157 added no new earnPoints calls); only the byte
+    // distance grew. Bumped 16000 → 18000 to restore headroom.
+    // Regression-catching property preserved: a NEW unguarded call added above
+    // all the gates (top of handleSubmit) still won't find a saveMode gate within
+    // 18000 chars, so a fresh unguarded code path is still caught.
+    const GATE_WINDOW = 18000;
     GATED_SITES.forEach((fn) => {
       it(`G1.${fn.replace(/[()]/g, '')} — every '${fn}' call gated within ${GATE_WINDOW} chars`, () => {
         const fnEscaped = fn.replace(/[()]/g, '\\$&');

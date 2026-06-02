@@ -870,6 +870,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, name: s.name, percent: s.percent, total: s.total })),
       });
       let newSaleId;
+      // V157 — collect silently-failed course/promo assigns (deposit/wallet already
+      // throw loud above). Surfaced via a non-fatal alert before the success screen
+      // so "customer paid but didn't get the course" is no longer invisible.
+      const saleSideEffectWarnings = [];
       const oldDeps = editingSale ? (Array.isArray(editingSale.billing?.depositIds) ? editingSale.billing.depositIds : []) : [];
       const oldWalletTypeId = editingSale?.billing?.walletTypeId || '';
       const oldWalletApplied = Number(editingSale?.billing?.walletApplied) || 0;
@@ -1005,7 +1009,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 // would later still deduct stock.
                 skipStockDeduction: !!course.skipStockDeduction,
               });
-            } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
+            } catch (e) { console.warn('[SaleTab] assign course failed:', e); saleSideEffectWarnings.push(`เพิ่มคอร์ส "${course.name}" ให้ลูกค้าไม่สำเร็จ — ลูกค้าจ่ายแล้วแต่ยังไม่ได้คอร์ส กรุณาเพิ่มให้`); }
           }
           for (const promo of grouped.promotions) {
             try {
@@ -1026,7 +1030,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               } else {
                 await assignCourseToCustomer(customerId, { name: promo.name, products: [{ name: promo.name, qty: purchasedQty, unit: 'โปรโมชัน' }], price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: newSaleId });
               }
-            } catch (e) { console.warn('[SaleTab] assign promotion failed:', e); }
+            } catch (e) { console.warn('[SaleTab] assign promotion failed:', e); saleSideEffectWarnings.push(`เพิ่มโปรโมชัน "${promo.name}" ให้ลูกค้าไม่สำเร็จ — ลูกค้าจ่ายแล้วแต่ยังไม่ได้ กรุณาเพิ่มให้`); }
           }
         }
       }
@@ -1043,6 +1047,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
           });
         } catch (e) { console.warn('[SaleTab] earnPoints failed:', e); }
+      }
+      // V157 — surface silently-failed course/promo assigns (sale IS saved).
+      if (saleSideEffectWarnings.length) {
+        try { window.alert('บันทึกใบเสร็จสำเร็จ ✓\n\nแต่บางรายการทำไม่สำเร็จ กรุณาตรวจสอบ/ทำซ้ำ:\n• ' + saleSideEffectWarnings.join('\n• ')); } catch { /* alert unavailable */ }
       }
       setSuccess(true);
       setTimeout(() => {
