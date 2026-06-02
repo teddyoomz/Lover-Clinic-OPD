@@ -22,6 +22,7 @@ import {
   decideCleanupAction,
 } from '../../src/lib/opdSessionCleanupCore.js';
 import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
+import { resolveParam } from '../../src/lib/scheduledTasksRegistry.js';
 
 const TASK_ID = 'opdSessionCleanup';
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -153,7 +154,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const timeoutMs = (cfg.params?.sessionTimeoutHours ?? Math.round(SESSION_TIMEOUT_MS / 3600000)) * 3600000;
+    const timeoutMs = resolveParam(TASK_ID, 'sessionTimeoutHours', cfg.params?.sessionTimeoutHours) * 3600000;
     const result = await sweepOpdSessionCleanup({ db, now: Date.now(), timeoutMs });
     const auditId = `opd-session-cleanup-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({

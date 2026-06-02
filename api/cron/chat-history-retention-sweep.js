@@ -20,6 +20,7 @@ import {
   isExpired,
 } from '../../src/lib/chatHistoryRetentionCore.js';
 import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
+import { resolveParam } from '../../src/lib/scheduledTasksRegistry.js';
 
 const TASK_ID = 'chatHistoryRetention';
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -107,7 +108,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await sweepChatHistoryRetention({ db, now: Date.now(), retentionHours: cfg.params?.retentionHours ?? RETENTION_HOURS });
+    const result = await sweepChatHistoryRetention({ db, now: Date.now(), retentionHours: resolveParam(TASK_ID, 'retentionHours', cfg.params?.retentionHours) });
     const auditId = `chat-history-retention-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'chat-history-retention-sweep',

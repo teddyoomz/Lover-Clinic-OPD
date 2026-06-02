@@ -13,6 +13,7 @@ import {
   normalizeCreatedAtForCompare,
 } from '../../src/lib/stockMovementRetentionCore.js';
 import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
+import { resolveParam } from '../../src/lib/scheduledTasksRegistry.js';
 
 const TASK_ID = 'stockMovementRetention';
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -68,7 +69,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const retentionDays = cfg.params?.retentionDays ?? RETENTION_DAYS;
+    const retentionDays = resolveParam(TASK_ID, 'retentionDays', cfg.params?.retentionDays);
     const cutoffISO = computeCutoffISO(new Date(), retentionDays);
 
     // Coarse fetch — single-field range+order on createdAt (no composite index needed).

@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { validateSystemConfigPatch } from '../src/lib/systemConfigClient.js';
-import { SCHEDULED_TASKS, getTask } from '../src/lib/scheduledTasksRegistry.js';
+import { SCHEDULED_TASKS, resolveParam } from '../src/lib/scheduledTasksRegistry.js';
 import { RETENTION_HOURS } from '../src/lib/chatHistoryRetentionCore.js';
 import { RETENTION_DAYS as STAFF_CHAT_DAYS } from '../src/lib/staffChatRetentionCore.js';
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from '../src/lib/stockMovementRetentionCore.js';
@@ -117,33 +117,95 @@ describe('G3 · param default parity (UI default == cron fallback default)', () 
   }
 });
 
-// ── G4 · each destructive cron threads its param with the CORRECT time unit ──
-describe('G4 · cron param unit-conversion locks', () => {
-  it('chatHistoryRetention: retentionHours → ms (× 60×60×1000)', () => {
+// ── G4 · each destructive cron threads its param via resolveParam (clamped) + correct unit ──
+// resolveParam() is the 4th defense layer: it clamps a corrupt config value to [min,max]
+// BEFORE the deletion math (no-op for valid values + undefined). These locks ensure the
+// crons keep using it (a refactor back to bare `?? default` would re-open the delete-all hole).
+describe('G4 · cron param threading via resolveParam (clamped) + unit-conversion locks', () => {
+  it('chatHistoryRetention: resolveParam(retentionHours) → ms (× 60×60×1000)', () => {
     const s = read('chat-history-retention-sweep.js');
-    expect(s).toMatch(/cfg\.params\?\.retentionHours\s*\?\?\s*RETENTION_HOURS/);
+    expect(s).toMatch(/resolveParam\(TASK_ID,\s*'retentionHours',\s*cfg\.params\?\.retentionHours\)/);
     expect(s).toMatch(/retentionHours\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   });
-  it('staffChatRetention: retentionDays → ms (× 24×60×60×1000)', () => {
+  it('staffChatRetention: resolveParam(retentionDays) → ms (× 24×60×60×1000)', () => {
     const s = read('staff-chat-retention-sweep.js');
-    expect(s).toMatch(/cfg\.params\?\.retentionDays\s*\?\?\s*RETENTION_DAYS/);
+    expect(s).toMatch(/resolveParam\(TASK_ID,\s*'retentionDays',\s*cfg\.params\?\.retentionDays\)/);
     expect(s).toMatch(/retentionDays\s*\*\s*24\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   });
-  it('patientLinkCleanup: graceDays → ms (× 24×60×60×1000)', () => {
+  it('patientLinkCleanup: resolveParam(graceDays) → ms (× 24×60×60×1000)', () => {
     const s = read('patient-link-cleanup-sweep.js');
-    expect(s).toMatch(/cfg\.params\?\.graceDays\s*\?\?\s*30/);
+    expect(s).toMatch(/resolveParam\(TASK_ID,\s*'graceDays',\s*cfg\.params\?\.graceDays\)/);
     expect(s).toMatch(/graceDays\s*\*\s*24\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   });
-  it('opdSessionCleanup: sessionTimeoutHours → ms (× 3600000)', () => {
+  it('opdSessionCleanup: resolveParam(sessionTimeoutHours) × 3600000 → ms', () => {
     const s = read('opd-session-cleanup-sweep.js');
-    expect(s).toMatch(/cfg\.params\?\.sessionTimeoutHours\s*\?\?/); // threads the param
-    expect(s).toMatch(/\)\s*\*\s*3600000/);                        // resolved hours × 3600000 → ms
+    expect(s).toMatch(/resolveParam\(TASK_ID,\s*'sessionTimeoutHours',\s*cfg\.params\?\.sessionTimeoutHours\)\s*\*\s*3600000/);
   });
-  it('stockMovementRetention: retentionDays → computeCutoffISO(days)', () => {
+  it('stockMovementRetention: resolveParam(retentionDays) → computeCutoffISO(days)', () => {
     const s = read('stock-movement-retention.js');
-    expect(s).toMatch(/cfg\.params\?\.retentionDays\s*\?\?\s*RETENTION_DAYS/);
+    expect(s).toMatch(/resolveParam\(TASK_ID,\s*'retentionDays',\s*cfg\.params\?\.retentionDays\)/);
     expect(s).toMatch(/computeCutoffISO\(new Date\(\),\s*retentionDays\)/);
   });
+});
+
+// ── G6 · resolveParam — the 4th layer: clamps corrupt values, NO-OP for valid + undefined ──
+describe('G6 · resolveParam clamps a corrupt config value to the safe boundary', () => {
+  for (const t of PARAM_TASKS) {
+    for (const p of t.params) {
+      describe(`${t.id}.${p.key} (min ${p.min}, max ${p.max}, default ${p.default})`, () => {
+        const r = (v) => resolveParam(t.id, p.key, v);
+        it('NO-OP for a valid in-range value', () => {
+          expect(r(p.min)).toBe(p.min);
+          expect(r(p.max)).toBe(p.max);
+          const mid = Math.round((p.min + p.max) / 2);
+          expect(r(mid)).toBe(mid);
+        });
+        it('undefined / null → the registry default (== cron core default)', () => {
+          expect(r(undefined)).toBe(p.default);
+          expect(r(null)).toBe(p.default);
+        });
+        it('0 / negative → clamped UP to min (was delete-all)', () => {
+          expect(r(0)).toBe(p.min);
+          expect(r(-9999)).toBe(p.min);
+        });
+        it('above max → clamped DOWN to max', () => {
+          expect(r(p.max + 1)).toBe(p.max);
+          expect(r(1e9)).toBe(p.max);
+        });
+        it('NaN / Infinity → default (never the corrupt value)', () => {
+          expect(r(NaN)).toBe(p.default);
+          expect(r(Infinity)).toBe(p.default);
+          expect(r('not-a-number')).toBe(p.default);
+        });
+        it('numeric string + float → coerced + rounded into range', () => {
+          expect(r(String(p.min))).toBe(p.min);
+          expect(r(p.min + 0.4)).toBe(p.min);          // rounds down, stays >= min
+          expect(r(p.max - 0.4)).toBe(p.max);          // rounds up to max boundary
+        });
+      });
+    }
+  }
+  it('unknown task/key → pass-through (programming error, never a cron call-site)', () => {
+    expect(resolveParam('nope', 'x', 5)).toBe(5);
+    expect(resolveParam('chatHistoryRetention', 'bogus', 7)).toBe(7);
+  });
+});
+
+// ── G7 · all 5 destructive param-crons import resolveParam (the wiring is present) ──
+describe('G7 · destructive param-crons import resolveParam', () => {
+  const FILES = {
+    chatHistoryRetention: 'chat-history-retention-sweep.js',
+    staffChatRetention: 'staff-chat-retention-sweep.js',
+    stockMovementRetention: 'stock-movement-retention.js',
+    patientLinkCleanup: 'patient-link-cleanup-sweep.js',
+    opdSessionCleanup: 'opd-session-cleanup-sweep.js',
+  };
+  for (const t of PARAM_TASKS) {
+    it(`${t.id} imports resolveParam from the registry`, () => {
+      const s = read(FILES[t.id]);
+      expect(s).toMatch(/import\s*\{\s*resolveParam\s*\}\s*from\s*'\.\.\/\.\.\/src\/lib\/scheduledTasksRegistry\.js'/);
+    });
+  }
 });
 
 // ── G5 · UI input protections: min/max attrs + onChange clamp to [min,max] ──

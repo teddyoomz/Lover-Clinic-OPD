@@ -124,3 +124,23 @@ export function listParams(id) { return getTask(id)?.params || []; }
 export function defaultParamsFor(id) {
   return Object.fromEntries(listParams(id).map(p => [p.key, p.default]));
 }
+
+// Defense-in-depth (2026-06-02): resolve a runtime param value for a destructive
+// cron. Replaces the bare `cfg.params?.X ?? CORE_DEFAULT` pattern so a CORRUPT
+// config value (e.g. retentionHours:0 written by a direct admin-SDK call that
+// bypassed validateSystemConfigPatch → cutoff=now → delete-all) can NEVER reach
+// the deletion math. NO-OP for the normal cases:
+//   - a valid in-range value → returned unchanged
+//   - undefined / null / NaN / Infinity (no param set) → the registry default
+//     (which == the cron's core constant — G3 parity test locks this)
+// Only a malformed value (0, negative, > max, non-integer) is clamped to the
+// safe [min,max] boundary. Unknown task/key → pass-through (programming error;
+// never happens for the hardcoded cron call-sites).
+export function resolveParam(taskId, key, rawValue) {
+  const spec = listParams(taskId).find(p => p.key === key);
+  if (!spec) return rawValue;
+  if (rawValue == null) return spec.default;          // null/undefined ("not set") → default (matches `?? default`)
+  const n = Math.round(Number(rawValue));
+  if (!Number.isFinite(n)) return spec.default;       // NaN / Infinity (corrupt) → default
+  return Math.max(spec.min, Math.min(spec.max, n));   // present-but-out-of-range → clamp to safe boundary
+}

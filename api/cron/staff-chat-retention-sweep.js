@@ -24,6 +24,7 @@ import {
   isOrphanFolder,
 } from '../../src/lib/staffChatRetentionCore.js';
 import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
+import { resolveParam } from '../../src/lib/scheduledTasksRegistry.js';
 
 const TASK_ID = 'staffChatRetention';
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -135,7 +136,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await sweepStaffChatRetention({ db, storage, now: Date.now(), retentionDays: cfg.params?.retentionDays ?? RETENTION_DAYS });
+    const result = await sweepStaffChatRetention({ db, storage, now: Date.now(), retentionDays: resolveParam(TASK_ID, 'retentionDays', cfg.params?.retentionDays) });
     const auditId = `staff-chat-retention-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'staff-chat-retention-sweep',

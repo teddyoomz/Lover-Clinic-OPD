@@ -21,6 +21,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
 import { isCustomerLinkEmpty, decidePatientLinkCleanup } from '../../src/lib/customerLinkPayloadCore.js';
 import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
+import { resolveParam } from '../../src/lib/scheduledTasksRegistry.js';
 
 const TASK_ID = 'patientLinkCleanup';
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -121,7 +122,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await sweepPatientLinkCleanup({ db, now: Date.now(), graceDays: cfg.params?.graceDays ?? 30 });
+    const result = await sweepPatientLinkCleanup({ db, now: Date.now(), graceDays: resolveParam(TASK_ID, 'graceDays', cfg.params?.graceDays) });
     const auditId = `patient-link-cleanup-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
     await db.collection(AUDIT_COL).doc(auditId).set({
       op: 'patient-link-cleanup-sweep',
