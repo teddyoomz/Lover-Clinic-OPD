@@ -1,15 +1,32 @@
 ---
-updated_at: "2026-06-02 — Scheduled Tasks tab DEPLOYED + fully verified LIVE on prod."
-status: "DEPLOYED. Full suite green + REAL e2e (L1 Playwright dev + L1 deployed-URL + L2 contract) GREEN + LIVE run-now 200 + deployed cron status-write verified. 2 post-deploy run-now bugs found+fixed. Firebase dup retired from Cloud Scheduler."
+updated_at: "2026-06-02 — Scheduled Tasks tab DEPLOYED + verified LIVE + resolveParam 4th-defense-layer DEPLOYED + post-deploy-verified."
+status: "DEPLOYED. Full suite 15720/0 + build clean + post-deploy live-guard 21/21 on fresh prod. 4th defense layer (resolveParam clamps a corrupt config value at the cron) LIVE. Firebase dup retired from Cloud Scheduler."
 branch: "master"
-last_commit: "<docs commit — Scheduled Tasks DEPLOYED + LIVE-verified handoff>"
-tests: "Full suite 15617/0. Build clean. L1 Playwright dev 1/1 + L1 deployed-URL 1/1 + L2 contract 13/0 + LIVE run-now HTTP 200 + deployed scheduled-cron status-write verified."
+last_commit: "8e6a1d06 (resolveParam 4th defense layer + param-safety tests)."
+tests: "Full suite 15720/0. Build clean (2503 modules). Post-deploy live-guard 21/21 + L1 Playwright deployed-URL 1/1 + L2 contract 13/0. param-safety 94/94 · scheduled group 174/174."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "e32df9bc LIVE (Scheduled Tasks). Firebase functions: cleanupOldStaffChatMessages DELETED from Cloud Scheduler."
-firestore_rules_version: "UNCHANGED — no rules change (no Probe-Deploy-Probe). Deploy was vercel + firebase functions only."
+production_commit: "8e6a1d06 LIVE (Scheduled Tasks + resolveParam hardening). Firebase functions: cleanupOldStaffChatMessages DELETED from Cloud Scheduler."
+firestore_rules_version: "UNCHANGED — no rules/storage/functions/cron change. Both deploys vercel-only (no Probe-Deploy-Probe)."
 ---
 
 # Active — Scheduled Tasks tab DEPLOYED + verified LIVE, 2026-06-02
+
+## 4th defense layer (resolveParam) — DEPLOYED 2026-06-02 (prod=8e6a1d06)
+After the feature shipped, an adversarial bug-hunt found that the 5 destructive
+retention/cleanup crons threaded their deletion window via `cfg.params?.X ?? DEFAULT`
+— `??` only falls back on null/undefined, so a corrupt `retentionHours:0` (e.g. a
+direct admin-SDK write bypassing the validated saveSystemConfig) would survive →
+cutoff=now → DELETE-ALL. Reachable paths were already triple-protected (input min +
+onChange clamp + validateSystemConfigPatch throw); this adds the unreachable-config-
+corruption backstop. NEW pure `resolveParam(taskId,key,raw)` (registry): null/undefined→
+default (matches `??`), valid→unchanged (NO-OP), 0/neg/>max→clamp to [min,max],
+NaN/Infinity→default. Wired into all 5 crons. NO-OP for every valid value AND for the
+current prod config. The G6 adversarial test caught a real divergence in the helper
+(Number(null)===0→min) before ship → fixed. **Verified post-deploy: live-guard 21/21
+on fresh prod (all 5 resolveParam crons return 401 no-secret = modules bundle+load
+cleanly; disable-skip/force/security/run-now all GREEN).** Tests: param-safety 94/94
+(incl. G6 clamp matrix + G7 import wiring), full suite 15720/0, build clean. NO
+rules/functions change → vercel-only.
 
 ## What shipped + DEPLOYED
 `tab=scheduled-tasks` "งานอัตโนมัติ & ตารางเวลา" — all 10 Vercel cron/auto-delete jobs in ONE
