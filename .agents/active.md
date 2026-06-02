@@ -1,31 +1,31 @@
 ---
-updated_at: "2026-06-02 EOD+2 — V145 stock product-edit + V146 staff-chat reply DEPLOYED + verified (L1 real app + L2 real prod). B data-cleanup deferred → next session."
-status: "DEPLOYED LIVE. No open bugs on tested paths. One data-cleanup (B) deferred by user to next session."
+updated_at: "2026-06-02 EOD+3 — B (be_products cleanup) APPLIED + product delete-cascade/guard (AV176) built + adversarial hunt (2 real bugs found). Code LOCAL — not deployed."
+status: "Code committed local (6cff6905). Prod DATA cleaned (V145 junk + V146 orphans/dedup applied via admin-SDK). Cascade CODE not yet deployed → prod product-delete still uses old bare delete until deploy."
 branch: "master"
-last_commit: "85063e5d (V145+V146 code) — EOD docs commit follows."
-tests: "Full suite 15836/0 (this session). V145 Rule Q L2 18/0 real prod (609-doc whitelist completeness). NOT re-run at session-end (per directive)."
+last_commit: "6cff6905 (feat product delete-cascade) — EOD docs commit follows."
+tests: "product-delete-cascade 25/0 + e2e 124/0 (3 branches × every scenario, real prod TEST fixtures) + affected-area 230/0 + build clean. Full suite green MODULO the known cross-branch-import-rtl flake (15860/1 intermittent; JSON-reporter run = 0 failed; passes isolated — NOT a regression). NOT re-run at session-end."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "85063e5d — vercel --prod (frontend-only: V145 stock + V146 chat). NO firestore.rules change this session → no Probe-Deploy-Probe (V125–V127 frontend-only precedent)."
-firestore_rules_version: "UNCHANGED — V144 rules still live (be_stock_batches narrow-delete). V145 + V146 added NO rules change (be_staff_chat_messages create rule tolerates replyTo sub-fields; be_products writes via existing path)."
+production_commit: "85063e5d (V145+V146) — UNCHANGED this session. The cascade code is LOCAL only; deploy needed to protect prod deletes."
+firestore_rules_version: "UNCHANGED — cascade is frontend-only client-side (fits existing be_products/be_courses/be_product_groups/be_stock_batches write rules + V144 ==0-delete). NO rules change → no Probe-Deploy-Probe."
 ---
 
-# Active — 2026-06-02 EOD+2
+# Active — 2026-06-02 EOD+3
 
 ## State
-- **V145 + V146 DEPLOYED LIVE** (`vercel --prod`, frontend-only). master=85063e5d=prod.
-- V145 stock product-edit: full-doc load + whitelist + real-time หมวดหมู่/ประเภท columns + branch-switch re-subscribe — all verified in the REAL app (L1) + real prod (L2).
-- V146 staff-chat reply: image/file/sticker preview in the quote + click-to-scroll + bounce.
+- **B (be_products cleanup) DONE on prod** (Rule M admin-SDK): V145 junk strip+restore (35 docs) + V146 orphan batches (5, incl. screenshot's ยาทาจี้หูด/Buscopan-ฉีด) + 2 safe dedups. Verified gone + idempotent. Audit docs emitted.
+- **Product delete-cascade + guard (AV176) built + committed local** (`6cff6905`) — NOT deployed.
+- **Adversarial hunt found 2 REAL bugs** (user's "smell" was right). Suite green modulo known flake.
 
-## What this session shipped (detail → checkpoint 2026-06-02-v145-stock-product-edit.md)
-- **V145** (AV175): stock-tab แก้ไข loads the FULL be_products doc (was the aggregated row → blank/default + overwrite-corruption risk); `normalizeProduct` whitelists (drops stock junk + __proto__ guard; preserves stockConfig/createdBy/forensic); StockBalancePanel live unit/category/type + new columns (replaced ความจุ/มูลค่าทุน); StockTab/CentralStockTab getProduct fallback.
-- **🐛 BIG bug found via L1+diag**: products-map effect had `[]` deps → stale after branch switch → every row "-" for cat/type (BS-9/Rule L). Fixed: deps `[selectedBranchId]`. Pre-existing (canonical name + skip-filter were stale too); my columns exposed it.
-- **V146** (AV174): buildReplySnapshot + shared StaffChatReplyPreview + quote-card scroll+bounce.
-- Verified: full suite 15836/0 · Rule Q L2 18/0 real prod (whitelist completeness 609 docs, zero loss + branchId preserved + corruption round-trip) · Rule Q L1 real app (columns + live fields + full-doc edit modal + branch-switch re-subscribe, screenshots).
+## What this session shipped (detail → checkpoint 2026-06-02-product-delete-cascade.md)
+- Cascade fix: bare `deleteProduct` → Guard+cascade via NEW `productDeleteCascade.js` (pure) + `productDeleteClient.js` (client-side, works on `npm run dev`); ProductsTab routes through it; StockBalancePanel orphan backstop.
+- **Bug 1 (pending-op guard)**: delete a product in a PENDING inbound op → its receive throws `_assertProductExists` forever (139 products were in active orders). Added guard.
+- **Bug 2 (op-schema heterogeneity, the big one)**: my guard's `where branchId` MISSED transfers/withdrawals (no branchId, numeric status) + central orders (centralWarehouseId). Fixed: load those unfiltered; `isPendingOp` handles numeric+string status.
+- Completeness: cascade clears stock batches (branch+central) + courseProducts[] (main-block) + be_product_groups; history kept (Rule O). Verified e2e 124/0 across 3 branches.
+- Disproven (NOT bugs, code-read): purchased-course deduction (graceful skip, V36-bis); id-mismatch (0/611); marketing refs (none).
 
 ## Next action
-- Idle — await user direction. (User: do B next session.)
+- **DEPLOY the cascade code** (frontend-only, no Probe-Deploy-Probe) — user-triggered. Until then prod deletes still orphan.
+- THEN the **dropdown หมวดหมู่** task (3rd original ask — NOT started: Edit-Product modal category dropdown from be_product_groups… but be_product_groups is empty → source = distinct categoryName; brainstorm needed).
 
 ## Outstanding (user-triggered)
-- **B (next session — user-deferred)**: be_products data cleanup. 36 junk/corrupted docs in นครราชสีมา. Dry-run done (read-only). Script `scripts/v145-cleanup-polluted-product-junk.mjs` — bundles A(junk-strip)+B(restore cat/unit/type: 28 auto from clean cross-branch copies + 1 same-branch + 7 manual/ProClinic) + dedup of 3 true same-branch dups (FK-check first). Run dry-run → review → `--apply`.
-- CentralStockTab navigate-bounce (carryover, V144 test CB1).
-- Prior-session V-log entries (sales/EOD+5/+6) still unwritten (carryover).
+- Deploy cascade code · dropdown task · continue Round 3 hunt (marketing clean; quotations/DF/>450-chunk-atomicity/course-price-recompute reasoned-not-exhaustively-tested) · Neuramis merge + junk test-course "หฟแฟ" (deferred data) · V-log-archive verbose entry for this fix (V147) unwritten (carryover).
