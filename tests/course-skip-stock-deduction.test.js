@@ -611,7 +611,10 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     // Phase 16.3 (2026-04-29) — fn body grew after V36-bis name fallback +
     // negative-stock-toggle gate. Slice widened 20000 → 25000.
-    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
+    // V147 (2026-06-02) — fn body grew again (concurrency-race retry loop +
+    // 5 STOCK_RACE_RETRY tagged throws prepend the Stock-insufficient /
+    // negativeOverage lines). Slice widened 25000 → 30000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 30000);
     // Defensive throw for non-supported contexts is preserved.
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
@@ -627,7 +630,10 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     // Phase 16.3 (2026-04-29) — fn body grew after V36-bis name fallback +
     // negative-stock-toggle gate. Slice widened 20000 → 25000.
-    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
+    // V147 (2026-06-02) — fn body grew again (concurrency-race retry loop +
+    // 5 STOCK_RACE_RETRY tagged throws prepend the Stock-insufficient /
+    // negativeOverage lines). Slice widened 25000 → 30000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 30000);
     // Treatment+sale gate still narrows the negative-push path.
     expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
     // negativeOverage marker on the new movement

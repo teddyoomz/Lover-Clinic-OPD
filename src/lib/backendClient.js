@@ -7653,6 +7653,20 @@ async function _deductOneItem({
   // Falls back to item.productId for the common case where it already
   // matches. Movement records still carry item.productId (the original)
   // so audit trails stay consistent with the form-submitted shape.
+  // V147 (2026-06-02) — CONCURRENCY-RACE RETRY (Rule O / Phase 15.7 purpose lock).
+  // The candidate-batch read below is OUTSIDE the per-batch runTransaction, so the
+  // FIFO plan is computed from a snapshot a CONCURRENT deduction can invalidate
+  // before our tx commits. The in-tx guard then throws STOCK_RACE_RETRY. Phase
+  // 15.7's purpose is "ตัดได้เสมอ (ติดลบได้)" — a treatment/sale deduction must
+  // NEVER fail because a sibling deduction drained the batch first (that race-time
+  // shortfall is NOT covered by the plan-time negative-stock fallback because
+  // plan.shortfall===0 when the stale snapshot still showed enough). So on a race
+  // we RE-FETCH + RE-PLAN against fresh `remaining`; the negative-stock path then
+  // absorbs any real shortfall. Bounded (converges in 1-2 retries — each retry
+  // routes more to the no-floor negative push). Verified by
+  // scripts/e2e-stock-concurrency-race.mjs (was 6/6 rounds raced before this fix).
+  const _DEDUCT_MAX_ATTEMPTS = 6;
+  for (let _deductAttempt = 1; ; _deductAttempt++) {
   const batches = await listStockBatches({ productId: lookupProductId, branchId, status: BATCH_STATUS.ACTIVE });
   // batchFifoAllocate consumes the already-filtered list. Do NOT pass
   // branchId here — listStockBatches is the single source of truth for
@@ -7791,16 +7805,24 @@ async function _deductOneItem({
 
       const txResult = await runTransaction(db, async (tx) => {
         const snap = await tx.get(batchRef);
-        if (!snap.exists()) throw new Error(`Batch ${a.batchId} vanished mid-deduct`);
+        // V147 — vanished/cancelled/expired mid-deduct are concurrency-transient
+        // (e.g. a sibling deduct drained it to 0 → V144 0-lot clear deleted it, or
+        // admin cancelled it). Tag STOCK_RACE_RETRY so the outer loop re-plans
+        // against the fresh active-batch set instead of failing the save.
+        if (!snap.exists()) { const e = new Error(`Batch ${a.batchId} vanished mid-deduct`); e.code = 'STOCK_RACE_RETRY'; throw e; }
         const b = snap.data();
         if (b.status === BATCH_STATUS.CANCELLED || b.status === BATCH_STATUS.EXPIRED) {
-          throw new Error(`Batch ${a.batchId} became ${b.status} mid-deduct`);
+          const e = new Error(`Batch ${a.batchId} became ${b.status} mid-deduct`); e.code = 'STOCK_RACE_RETRY'; throw e;
         }
         const beforeRemaining = Number(b.qty?.remaining) || 0;
         if (beforeRemaining < a.takeQty) {
-          throw new Error(
+          // V147 — race: a concurrent deduction drained this batch below the
+          // stale-plan takeQty. Tag for retry (re-plan → negative-stock absorbs).
+          const e = new Error(
             `Batch ${a.batchId} raced: available ${beforeRemaining}, need ${a.takeQty}`
           );
+          e.code = 'STOCK_RACE_RETRY';
+          throw e;
         }
         const newQty = deductQtyNumeric(b.qty, a.takeQty);
         const afterRemaining = newQty.remaining;
@@ -7863,7 +7885,9 @@ async function _deductOneItem({
       const movementId = _genMovementId();
       const txResult = await runTransaction(db, async (tx) => {
         const snap = await tx.get(batchRef);
-        if (!snap.exists()) throw new Error(`Batch ${negativeTargetBatchId} vanished pre-negative-push`);
+        // V147 — transient (negative-target batch deleted/cleared by a sibling op
+        // between plan + push). Tag for retry → re-plan resolves the new target.
+        if (!snap.exists()) { const e = new Error(`Batch ${negativeTargetBatchId} vanished pre-negative-push`); e.code = 'STOCK_RACE_RETRY'; throw e; }
         const b = snap.data();
         // Allow status='depleted' (we may have just drained it ourselves
         // in the loop above). Reject only cancelled/expired (real
@@ -7871,7 +7895,7 @@ async function _deductOneItem({
         // 'active' so StockBalancePanel + listStockBatches({status:'active'})
         // pick up the row — admin must SEE the debt to repay it.
         if (b.status === BATCH_STATUS.CANCELLED || b.status === BATCH_STATUS.EXPIRED) {
-          throw new Error(`Batch ${negativeTargetBatchId} became ${b.status} pre-negative-push`);
+          const e = new Error(`Batch ${negativeTargetBatchId} became ${b.status} pre-negative-push`); e.code = 'STOCK_RACE_RETRY'; throw e;
         }
         const beforeRemaining = Number(b.qty?.remaining) || 0;
         const newRemaining = beforeRemaining - plan.shortfall;
@@ -7939,18 +7963,28 @@ async function _deductOneItem({
       );
     }
   } catch (err) {
-    // Compensate: reverse everything committed so far for THIS item
+    // Compensate: reverse everything committed so far for THIS item (this attempt).
     for (const m of committedMovements) {
       try {
         await _reverseOneMovement(m.movementId);
       } catch (rollbackErr) {
-        console.error('[deductStockForSale] compensation failed for movement', m.movementId, rollbackErr);
+        console.error('[_deductOneItem] compensation failed for movement', m.movementId, rollbackErr);
       }
+    }
+    // V147 — retry the WHOLE allocation on a concurrency race (re-fetch + re-plan
+    // at the top of the for-loop). Non-race errors (STOCK_INSUFFICIENT_NEGATIVE_DISABLED,
+    // PRODUCT_NOT_FOUND, etc.) propagate immediately. Bounded so pathological
+    // contention can't spin forever; converges as each retry routes more of the
+    // shortfall to the no-floor negative-stock push.
+    if (err?.code === 'STOCK_RACE_RETRY' && _deductAttempt < _DEDUCT_MAX_ATTEMPTS) {
+      console.warn(`[_deductOneItem] stock race on attempt ${_deductAttempt}/${_DEDUCT_MAX_ATTEMPTS} — re-planning:`, err?.message);
+      continue;
     }
     throw err;
   }
 
   return { productId: item.productId, skipped: false, movements: committedMovements };
+  } // end V147 concurrency-race retry loop
 }
 
 /**
