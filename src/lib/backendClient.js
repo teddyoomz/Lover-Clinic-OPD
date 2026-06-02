@@ -8052,7 +8052,7 @@ async function _deductOneItem({
  */
 async function _reverseOneMovement(movementId, { user } = {}) {
   const { stockUtils } = await _stockLib();
-  const { BATCH_STATUS, reverseQtyNumeric } = stockUtils;
+  const { BATCH_STATUS, reverseQtyNumeric, resolveBatchStatusForRemaining } = stockUtils;
   // S12: normalize the incoming user; if none supplied, the original
   // movement's user (m.user) is reused when writing the reverse entry.
   const reverseUser = user ? _normalizeAuditUser(user) : null;
@@ -8102,18 +8102,53 @@ async function _reverseOneMovement(movementId, { user } = {}) {
 
     const batchRef = stockBatchDoc(m.batchId);
     const bSnap = await tx.get(batchRef);
-    if (!bSnap.exists()) throw new Error(`Batch ${m.batchId} vanished before reverse`);
-    const b = bSnap.data();
     const qtyReturn = Math.abs(Number(m.qty) || 0);
-    const beforeRemaining = Number(b.qty?.remaining) || 0;
-    const newQty = reverseQtyNumeric(b.qty, qtyReturn);
-    const afterRemaining = newQty.remaining;
-    const newStatus = b.status === BATCH_STATUS.DEPLETED && afterRemaining > 0
-      ? BATCH_STATUS.ACTIVE
-      : b.status;
     const now = new Date().toISOString();
-
-    tx.update(batchRef, { qty: newQty, status: newStatus, updatedAt: now });
+    let beforeRemaining;
+    let afterRemaining;
+    if (!bSnap.exists()) {
+      // V151 (2026-06-02) — the original lot is GONE (e.g. V144's real-time
+      // 0-lot clear DELETED it after a deduct drained it to 0 while another lot
+      // stayed live; or an admin removed it). A reverse MUST still restore the
+      // stock — NEVER throw + permanently lose it (pre-V151 the throw propagated
+      // out of reverseStockForSale/Treatment's loop → the whole cancel FAILED +
+      // the customer's stock was never returned; confirmed R10 e2e). Re-create
+      // the lot from the movement metadata carrying the returned qty so
+      // conservation holds AND the reverse movement's batchId still matches
+      // (audit chain intact). Original total/cost/expiry vanished with the lot;
+      // derive cost from costBasis, expiry unknown → null, flag
+      // `_recreatedByReverse` so admin can reconcile (e.g. set expiry) if needed.
+      beforeRemaining = 0;
+      afterRemaining = qtyReturn;
+      const derivedCost = (Number(m.costBasis) && qtyReturn) ? (Number(m.costBasis) / qtyReturn) : 0;
+      tx.set(batchRef, {
+        batchId: m.batchId,
+        productId: m.productId || null,
+        productName: m.productName || '',
+        branchId: m.branchId || null,
+        locationId: m.branchId || null,
+        locationType: 'branch',
+        status: resolveBatchStatusForRemaining(afterRemaining),
+        qty: { total: qtyReturn, remaining: qtyReturn },
+        originalCost: derivedCost,
+        cost: derivedCost,
+        receivedAt: now,
+        expiresAt: null,
+        createdAt: now,
+        updatedAt: now,
+        notes: 'RECREATED on reverse — original lot was deleted before this cancel/edit (e.g. V144 0-lot clear); stock restored',
+        _recreatedByReverse: true,
+      });
+    } else {
+      const b = bSnap.data();
+      beforeRemaining = Number(b.qty?.remaining) || 0;
+      const newQty = reverseQtyNumeric(b.qty, qtyReturn);
+      afterRemaining = newQty.remaining;
+      const newStatus = b.status === BATCH_STATUS.DEPLETED && afterRemaining > 0
+        ? BATCH_STATUS.ACTIVE
+        : b.status;
+      tx.update(batchRef, { qty: newQty, status: newStatus, updatedAt: now });
+    }
 
     tx.set(stockMovementDoc(reverseMovementId), {
       ...m,
