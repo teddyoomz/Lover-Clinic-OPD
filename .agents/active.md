@@ -1,28 +1,29 @@
 ---
-updated_at: "2026-06-03 — 4-system audit (TFP/Stock/Sales/Finance) /systematic-debugging loop CONVERGED. 4 money fixes (V153-V156) found+fixed+real-prod-verified. Deploying V153-V156 (one deploy, frontend-only)."
-status: "Loop CONVERGED. V153 (wallet+points reverse idempotency) + V154 (deposit reverse refundAmount term) + V155 (refundDeposit/cancelDeposit/renewMembership atomic RMW) + V156 (defensive roundTHB at money-write boundary). Rounds 1-11: cancel/reverse cascade fully idempotent (5 channels), deposit conservation correct, money-RMW atomic class COMPLETE, billing/exchange/sale-variants/appointment/counters all CLEAN. Only residual = cross-COLLECTION torn-write (architectural, documented — NOT a clean bug, NOT half-fixed)."
+updated_at: "2026-06-03 — 4-system audit (TFP/Stock/Sales/Finance) /systematic-debugging loop CONVERGED + DEPLOYED. V153-V157 (5 money-integrity fixes) LIVE."
+status: "LOOP CONVERGED + DEPLOYED. Round-12 fresh audit = 0 new concrete leaks; full suite 15956/0. 5 fixes shipped: V153 (wallet+points reverse idempotency), V154 (deposit reverse refundAmount term), V155 (deposit/membership atomic RMW), V156 (defensive money rounding), V157 (torn-write silent-aspect → side-effect failures now surfaced). Money-domain Rule-T atomic-RMW class COMPLETE; cancel cascade fully idempotent."
 branch: "master"
-last_commit: "97ef4ede (V153+V154). V155+V156 commit next, then deploy."
-tests: "Full vitest green (V153-V156 gates all exit-0). Real-prod Rule Q L2: e2e-reverse-idempotency 11/0 + e2e-deposit-refund-reverse 6/0 + e2e-deposit-refund-atomicity 3/0. v153/v154/v155 regression 30+13+21. build clean."
+last_commit: "d780750c (V157). Pushed + DEPLOYED."
+tests: "Full vitest 15956/0 (definitive JSON run). Real-prod Rule Q L2: e2e-reverse-idempotency 11/0 + e2e-deposit-refund-reverse 6/0 + e2e-deposit-refund-atomicity 3/0. v153/v154/v155/v157 regression all green. build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ae51cc18 (V147-V152) → deploying to V153-V156 HEAD this turn (user authorized end-of-loop deploy). Frontend-only — all client-SDK logic (runTransaction/query-guard/roundTHB), NO firestore.rules change → no Probe-Deploy-Probe."
+production_commit: "d780750c — V153-V157 LIVE (vercel --prod 2026-06-03, aliased). Was ae51cc18 (V147-V152). Frontend-only — all client-SDK logic/UI, NO firestore.rules change → no Probe-Deploy-Probe."
 firestore_rules_version: "UNCHANGED."
 ---
 
-# Active — 2026-06-03 — 4-system audit loop CONVERGED (V153-V156)
+# Active — 2026-06-03 — 4-system audit loop CONVERGED + DEPLOYED (V153-V157)
 
-## Fixes (all real-prod Rule Q L2 verified)
-- **V153** (M16) — sale cancel/reverse cascade: `refundToWallet` + `reversePointsEarned` not idempotent → cancel→delete / cancel-retry double-credited wallet (real baht) + double-reversed points. Fix: points reverse `max(0,Σearn−Σreverse)`; wallet refund up to NET outstanding `(Σdeduct−Σrefund)`. Round-3 self-catch: first wallet guard broke sale-EDIT (caught by the WE e2e, NOT the full suite) → corrected to net-outstanding.
-- **V154** (M17) — `reverseDepositUsage` dropped `refundAmount` term → phantom deposit balance. Fix: `remaining = amount − used − refundAmount`.
-- **V155** (M18) — `refundDeposit`/`cancelDeposit`/`renewMembership(renewals[])` non-atomic getDoc→updateDoc → concurrent/double-click lost-update. Fix: runTransaction (tx.get→tx.update; guards re-checked in-tx).
-- **V156** — defensive `roundTHB` at the 6 THB money-write boundaries (closes the M12 float-precision caveat).
+## Fixes shipped + LIVE (5 money-integrity)
+- **V153** (M16) — `refundToWallet` + `reversePointsEarned` idempotent (cancel→delete / retry double-credit). Net-based; round-3 self-catch corrected the wallet guard to net-outstanding (edit-safe). e2e 11/0.
+- **V154** (M17) — `reverseDepositUsage` honors `refundAmount` (phantom balance). e2e 6/0.
+- **V155** (M18, Rule T) — refundDeposit/cancelDeposit/renewMembership atomic RMW (lost-update). e2e 3/0.
+- **V156** — defensive `roundTHB` at 6 money-write boundaries (M12 caveat).
+- **V157** — cross-collection torn-write SILENT aspect: TFP auto-sale + SaleTab now SURFACE failed deposit/wallet/course/promo side-effects via a non-fatal alert (was console-only). V21 fixup: doctor-save GATE_WINDOW 16000→18000.
 
-## Audited CLEAN / dismissed (Rule Q-honest, code-read)
-Cancel cascade = 5 idempotent channels (stock S5 · deposit · wallet · points · course). Sale-variants (online/vendor/insurance = tracking-only). Exchange/refund-course (atomic + idempotent-by-throw + no money move). Appointment-delete (never touches deposit → balance preserved). Billing math (roundTHB'd, no double-discount). INV/HN/PO counters (runTransaction). Money-RMW Rule-T class COMPLETE.
+## Audited CLEAN (Rule Q-honest, rounds 4-12)
+Cancel cascade = 5 idempotent channels · money-domain Rule-T atomic-RMW COMPLETE (wallet/points/deposit/courses/membership/counters all atomic) · billing math conserves · sale-variants tracking-only · exchange/refund-course atomic+idempotent · appointment-delete preserves deposit · customer-delete cascade safe · stock cost cascade atomic. **Round-12 fresh audit: 0 new concrete leaks.**
 
-## Deferred — ARCHITECTURAL (NOT a clean bug; honestly NOT half-fixed)
-**Cross-COLLECTION torn-write**: createBackendSale + TFP auto-sale write many collections via sequential awaits; a rare Firestore mid-chain throw → sale committed but a side-effect (wallet/deposit/points/course) silently failed (deliberate "non-blocking" design; side-effects now mostly-idempotent). Proper fix = a reconciliation/detection report or structured partial-failure surfacing (a FEATURE) — recommend a dedicated build; a code patch (throw-instead-of-swallow) worsens UX.
+## Residual (architectural — honest, NOT a clean bug)
+Cross-collection NON-atomicity is a Firestore reality (can't 11-collection-tx). V157 made its failures VISIBLE + side-effects are mostly-idempotent (retry converges). A full auto-reconciliation/compensation report = optional future feature (not a bug).
 
-## Next
-- Commit V155+V156 → push → **deploy V153-V156** (one `vercel --prod`, frontend-only).
-- Future: cross-collection reconciliation feature (the one deferred item) · carryover: dropdown หมวดหมู่ · Neuramis merge + junk test-course "หฟแฟ".
+## Next (carryover — no longer loop work)
+- Optional: auto-reconciliation report for cross-collection partial-failures (build on V157's surfacing).
+- Pre-existing carryover: dropdown หมวดหมู่ task · Neuramis merge + junk test-course "หฟแฟ".
