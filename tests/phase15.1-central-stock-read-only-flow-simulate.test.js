@@ -200,21 +200,23 @@ describe('Phase 15.1 F5 — additive override props on existing panels', () => {
     expect(balancePanelSrc).toMatch(/function StockBalancePanel\([^)]+defaultLocationId[^)]*lockLocation[^)]*\)/);
   });
 
-  it('F5.2 Phase 17.2 — StockBalancePanel uses empty-string fallback (no main literal)', () => {
-    // Phase 17.2 (2026-05-05): default-location fallback changed from
-    // `'main'` literal to `''` (empty string sentinel for "not yet
-    // resolved"). The auto-pick effect resolves to the current branch
-    // OR the first available stock location. Migration script handles
-    // legacy 'main' rows.
-    expect(balancePanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*''\)/);
+  it('F5.2 V144 — StockBalancePanel locationId is DERIVED (no useState / no main literal)', () => {
+    // V144 (2026-06-02): the auto-pick + per-panel dropdown were removed.
+    // locationId is now derived: lockLocation ? defaultLocationId : selectedBranchId.
+    expect(balancePanelSrc).toMatch(/const\s+locationId\s*=\s*lockLocation\s*\?\s*\(defaultLocationId\s*\|\|\s*''\)\s*:\s*\(selectedBranchId\s*\|\|\s*''\)/);
+    expect(balancePanelSrc).not.toMatch(/useState\(defaultLocationId/);
   });
 
-  it('F5.3 StockBalancePanel — sync useEffect when defaultLocationId changes (async parent)', () => {
-    expect(balancePanelSrc).toMatch(/useEffect\(\(\)\s*=>\s*\{\s*if\s*\(defaultLocationId\s*&&\s*defaultLocationId\s*!==\s*locationId\)/);
+  it('F5.3 V144 — defaultLocationId changes auto-propagate via the derived const (no sync useEffect)', () => {
+    // The old defaultLocationId-sync useEffect is gone — locationId recomputes
+    // each render so a defaultLocationId change re-keys the live listener.
+    expect(balancePanelSrc).not.toMatch(/if\s*\(defaultLocationId\s*&&\s*defaultLocationId\s*!==\s*locationId\)/);
   });
 
-  it('F5.4 StockBalancePanel — lockLocation hides the dropdown', () => {
-    expect(balancePanelSrc).toMatch(/!lockLocation\s*&&\s*\(/);
+  it('F5.4 V144 — lockLocation (central) pins to defaultLocationId; NO dropdown at all', () => {
+    // Dropdown removed entirely; the central path is the lockLocation branch.
+    expect(balancePanelSrc).toMatch(/lockLocation\s*\?\s*\(defaultLocationId/);
+    expect(balancePanelSrc).not.toMatch(/!lockLocation\s*&&\s*\(/);
   });
 
   it('F5.5 StockTransferPanel — filterLocationId narrows listStockTransfers query', () => {
@@ -242,20 +244,17 @@ describe('Phase 15.1 F5 — additive override props on existing panels', () => {
 // F6 — Anti-regression: existing panels unchanged in default behaviour
 // ────────────────────────────────────────────────────────────────────────
 describe('Phase 15.1 F6 — anti-regression (V12 multi-reader sweep)', () => {
-  it('F6.1 StockBalancePanel still uses internal location dropdown when NOT locked', () => {
-    // The dropdown markup must still exist (just conditionally rendered now).
-    expect(balancePanelSrc).toContain('สถานที่:');
-    // Phase 15.7-ter (2026-04-28) — onChange now ALSO flips the
-    // userPickedLocation flag so the auto-pick effect doesn't override
-    // admin's manual choice. Both setters must fire on change.
-    expect(balancePanelSrc).toMatch(/value=\{locationId\}\s+onChange=\{e\s*=>\s*\{\s*setLocationId\(e\.target\.value\);\s*setUserPickedLocation\(true\)/);
+  it('F6.1 V144 — StockBalancePanel has NO internal location dropdown (follows global selector)', () => {
+    // V144 (2026-06-02): the per-panel "สถานที่" dropdown was removed — the
+    // branch balance follows the global top BranchSelector (selectedBranchId).
+    expect(balancePanelSrc).not.toContain('สถานที่:');
+    expect(balancePanelSrc).not.toMatch(/setUserPickedLocation/);
+    expect(balancePanelSrc).toMatch(/const\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*=\s*useSelectedBranch\(\)/);
   });
 
-  it('F6.2 Phase 17.2 — StockBalancePanel default location is "" when no override (no main fallback)', () => {
-    // Phase 17.2 (2026-05-05): no synthetic 'main' fallback. Empty string
-    // sentinel until auto-pick effect resolves to current branch or first
-    // available stock location.
-    expect(balancePanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*''\)/);
+  it('F6.2 V144 — StockBalancePanel locationId derived (no useState main fallback)', () => {
+    expect(balancePanelSrc).not.toMatch(/useState\(defaultLocationId/);
+    expect(balancePanelSrc).toMatch(/const\s+locationId\s*=\s*lockLocation\s*\?/);
   });
 
   it('F6.3 StockTransferPanel still calls listStockTransfers without filter when no override', () => {

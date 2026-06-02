@@ -221,8 +221,16 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
    curl -s -o /dev/null -w "%{http_code}\n" -X DELETE "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o/staff-chat-attachments%2FPROBE%2Ftest.png"   # → 401/403
    curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_staff_chat_messages?documentId=test-probe-sticker-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"PROBE"},"deviceId":{"stringValue":"d"},"sticker":{"mapValue":{"fields":{"kind":{"stringValue":"bundled"}}}}}}'   # → 403
    ```
+16. **V144 Stock 0-lot delete (2026-06-02)** — `be_stock_batches` delete narrowed `if false` → `if isClinicStaff() && resource.data.qty.remaining == 0` (real-time redundant-0-lot auto-clear, AV172). Verify the NARROW predicate holds: a staff-token DELETE of a remaining==0 batch → 200; a staff-token DELETE of a remaining>0 batch → 403 (live lot stays protected); anon DELETE → 403. **Primary verification = the Rule Q L2 e2e `scripts/e2e-stock-realtime-lot-clear.mjs`** (drives the REAL client-SDK helper deleting a 0-lot + asserts a live/negative lot is NOT deletable). Curl regression form (needs a staff ID token + seeded TEST- batches):
+   ```
+   # seed a remaining==0 TEST batch (staff) then DELETE → 200
+   curl -X DELETE "$BASE/$PREFIX/be_stock_batches/TEST-V144-zero-$(date +%s)" -H "Authorization: Bearer $STAFF_TOKEN"   # → 200 (remaining==0)
+   # seed a remaining>0 TEST batch (staff) then DELETE → 403 (narrow predicate)
+   curl -X DELETE "$BASE/$PREFIX/be_stock_batches/TEST-V144-live-$(date +%s)" -H "Authorization: Bearer $STAFF_TOKEN"   # → 403 (remaining>0)
+   curl -s -o /dev/null -w "%{http_code}\n" -X DELETE "$BASE/$PREFIX/be_stock_batches/anything"   # → 403 (anon)
+   ```
 13. `firebase deploy --only firestore:rules,storage` (⚠ firebase CLI 15.x: `storage`, NOT `storage:rules`)
-14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15) หรือ ≠ 403 (เฉพาะ 12) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
+14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
 13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)

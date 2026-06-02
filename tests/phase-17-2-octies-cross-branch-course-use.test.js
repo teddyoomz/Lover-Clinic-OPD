@@ -101,7 +101,11 @@ describe('Phase 17.2-octies — Cross-branch course-use contract', () => {
       expect(BACKEND_CLIENT_SRC).toMatch(/export async function deductStockForTreatment\(treatmentId,\s*items,\s*opts\s*=/);
     });
     it('CB5.2 deductStockForTreatment uses opts.branchId not customer.branchId', () => {
-      const block = BACKEND_CLIENT_SRC.match(/export async function deductStockForTreatment[\s\S]{0,1500}?\n\}/);
+      // V144 (2026-06-02): window 1500→2400 — the V144 post-commit
+      // _clearRedundantZeroLotsForProducts try/catch added ~220 chars before the
+      // function-close brace, pushing the col-0 `}` past the old 1500 window.
+      // The asserted contract (`const branchId = opts.branchId`) is unchanged.
+      const block = BACKEND_CLIENT_SRC.match(/export async function deductStockForTreatment[\s\S]{0,2400}?\n\}/);
       expect(block).toBeTruthy();
       const body = block[0];
       expect(body).toMatch(/const branchId = opts\.branchId/);

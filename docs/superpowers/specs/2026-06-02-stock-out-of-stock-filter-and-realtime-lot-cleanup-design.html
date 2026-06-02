@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stock — "หมด" filter + real-time lot auto-clear · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    /* dark-theme mockup of the real StockBalancePanel filter row + table */
+    .dk { background:#0d0d0f; border:1.5px solid rgba(244,63,94,0.15); border-radius:14px; padding:14px 16px; color:#e6e6e6; font-size:12px; }
+    .dk .filters { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-top:10px; }
+    .dk .chip { display:inline-flex; align-items:center; gap:6px; color:#9a9a9a; }
+    .dk .chip.neg { color:#fda4af; }
+    .dk .chip.out { color:#fca5a5; }
+    .dk .box { width:13px; height:13px; border:1px solid #555; border-radius:3px; display:inline-block; }
+    .dk .box.on { background:#dc2626; border-color:#dc2626; }
+    .dk em { color:#bdbdbd; font-style:italic; }
+    .dk table { width:100%; margin-top:12px; font-size:11px; color:#ddd; }
+    .dk th, .dk td { border:none; border-top:1px solid #232327; padding:7px 8px; }
+    .dk th { color:#888; text-transform:uppercase; letter-spacing:.04em; font-size:10px; text-align:left; }
+    .dk .num { text-align:right; font-family:monospace; }
+    .badge { padding:1px 6px; border-radius:5px; font-size:9px; margin-left:8px; }
+    .b-out { background:rgba(127,29,29,.3); color:#f87171; border:1px solid #7f1d1d; }
+    .b-neg { background:rgba(127,29,29,.4); color:#fda4af; border:1px solid rgba(190,18,60,.6); font-weight:700; }
+    .em { color:#34d399; } .rose { color:#fb7185; }
+    .new { outline:2px dashed #22c55e; outline-offset:3px; border-radius:6px; }
+    .tag-new { background:#16a34a; color:#fff; font-size:9px; padding:1px 6px; border-radius:10px; margin-left:6px; vertical-align:middle; }
+    .arrow { font-weight:700; color:var(--accent); }
+    .lot { font-family:monospace; font-size:.9em; }
+  </style>
+</head>
+<body>
+
+<h1>Stock — "หมด" filter + real-time lot auto-clear · Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-02 · <strong>Status:</strong> Approved by user (design Q&amp;A locked) · <strong>Page:</strong> tab=stock → ยอดคงเหลือ (StockBalancePanel) + backendClient stock-mutation paths · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-02-stock-out-of-stock-filter-and-realtime-lot-cleanup.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Two user-reported issues on <code>tab=stock</code> → ยอดคงเหลือ:</p>
+<ol>
+  <li><strong>No "หมด" filter.</strong> The balance table has 4 filter checkboxes (ใกล้หมดอายุ / ใกล้หมด / เกินสต็อก / ติดลบ) but <em>none</em> for fully out-of-stock products — even though a "หมด" badge already renders at <code>totalRemaining === 0</code>. User: <em>"มี filter เยอะแยะ แต่ไม่มี filter สินค้าที่หมดแล้ว"</em>.</li>
+  <li><strong>Spent 0-lots linger until the nightly cron.</strong> A lot drained to 0 is dead weight and clutters the per-product lot list. The V143-quater <code>planLotCleanup</code> already removes redundant 0-lots, but only on the <strong>03:45 BKK cron</strong>. User wants it <strong>real-time</strong> — <em>"lot ที่เป็น 0 … เป็น 0 แล้วมันไม่ได้ใช้อะไรแล้ว … เมื่อใดมันกลายเป็น 0 ปุ๊บ ลบไปเลย"</em>, clarified: <em>"มันเป็น 0 ได้ ถ้ามี lot เดียว แต่ถ้ามี lot อื่นเข้ามา lot ที่เป็น 0 จะต้องหายไป"</em>.</li>
+</ol>
+<p><strong>The clarification is the key design fact</strong>: the rule is EXACTLY the existing <code>planLotCleanup</code> — keep <strong>one</strong> 0-lot when a product is fully drained (placeholder so it still shows at "0 / หมด", honoring prior user directive V143/AV166 <em>"ต้องแสดงจำนวนเสมอแม้เป็น 0"</em>); delete <strong>every</strong> 0-lot the moment a live lot exists. So no panel rewrite is needed — the placeholder keeps drained products visible, which is exactly what makes the new "หมด" filter meaningful.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">BEFORE — real filter row today (4 checkboxes, no "หมด"). Grounded in StockBalancePanel.jsx:341-360 + user screenshot.</div>
+  <div class="dk">
+    <div style="font-weight:700;color:#fff;">ยอดคงเหลือ — นครราชสีมา</div>
+    <div style="color:#888;font-size:11px;">66 สินค้า • 82 batches • มูลค่าต้นทุนรวม <span style="color:#fb923c">฿0</span></div>
+    <div class="filters">
+      <span style="color:#888;font-size:10px;font-weight:700;">ค้นหา / สถานที่ …</span>
+      <span class="chip"><span class="box"></span> ใกล้หมดอายุ (ตั้งใน <em>แจ้งก่อนหมดอายุ</em>)</span>
+      <span class="chip"><span class="box"></span> ใกล้หมด (ตั้งใน <em>แจ้งใกล้หมด</em>)</span>
+      <span class="chip"><span class="box"></span> เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)</span>
+      <span class="chip neg"><span class="box"></span> ติดลบ (ต้องเติมสต็อค)</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">AFTER — +1 checkbox "หมด (คงเหลือ 0)" (red accent, mirrors the existing 4). Only addition to the filter row.</div>
+  <div class="dk">
+    <div style="font-weight:700;color:#fff;">ยอดคงเหลือ — นครราชสีมา</div>
+    <div style="color:#888;font-size:11px;">66 สินค้า • 82 batches • มูลค่าต้นทุนรวม <span style="color:#fb923c">฿0</span></div>
+    <div class="filters">
+      <span style="color:#888;font-size:10px;font-weight:700;">ค้นหา / สถานที่ …</span>
+      <span class="chip"><span class="box"></span> ใกล้หมดอายุ (ตั้งใน <em>แจ้งก่อนหมดอายุ</em>)</span>
+      <span class="chip"><span class="box"></span> ใกล้หมด (ตั้งใน <em>แจ้งใกล้หมด</em>)</span>
+      <span class="chip"><span class="box"></span> เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)</span>
+      <span class="chip neg"><span class="box"></span> ติดลบ (ต้องเติมสต็อค)</span>
+      <span class="chip out new"><span class="box on">✓</span> หมด (คงเหลือ 0) <span class="tag-new">NEW</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">AFTER — "หมด" filter ON → table shows only totalRemaining === 0 rows (drained products stay visible via their 1 placeholder lot). ติดลบ (&lt;0) excluded — it has its own filter.</div>
+  <div class="dk">
+    <table>
+      <thead><tr><th>สินค้า</th><th style="text-align:center">Batches</th><th class="num">คงเหลือ</th><th class="num">ความจุ</th><th style="text-align:center">หมดอายุถัดไป</th></tr></thead>
+      <tbody>
+        <tr><td>2% Lidocain without adrenaline <span class="badge b-out">หมด</span></td><td style="text-align:center;color:#888">1</td><td class="num em">0 ขวด</td><td class="num" style="color:#888">30</td><td style="text-align:center;color:#888">-</td></tr>
+        <tr><td>Acetin <span class="badge b-out">หมด</span></td><td style="text-align:center;color:#888">1</td><td class="num em">0 ครั้ง</td><td class="num" style="color:#888">100</td><td style="text-align:center;color:#888">-</td></tr>
+        <tr><td>Betadine 15 ml <span class="badge b-out">หมด</span></td><td style="text-align:center;color:#888">1</td><td class="num em">0 ขวด</td><td class="num" style="color:#888">50</td><td style="text-align:center;color:#888">-</td></tr>
+      </tbody>
+    </table>
+    <div style="color:#888;font-size:10px;margin-top:6px;">↳ each drained product = exactly <strong>1</strong> placeholder lot (Batches: 1). Redundant 0-lots are already gone (real-time + cron).</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow A — "lot อื่นเข้ามา" → the 0-lot(s) vanish in real time (the case the user emphasised)</div>
+  <div style="font-family:monospace;font-size:12.5px;line-height:2;">
+    Product X @ NK has lot <span class="lot">L1 = 0</span> (drained placeholder).<br>
+    Admin นำเข้า / รับเข้า a new lot → <code>createStockOrder</code> / <code>receiveCentralStockOrder</code> commits <span class="lot">L2 = 50</span>.<br>
+    <span class="arrow">↓ after commit</span> entry point calls <code>_clearRedundantZeroLotsForProducts([{X, NK}])</code><br>
+    <span class="arrow">↓</span> reads X@NK lots → <code>planLotCleanup</code>: live=[L2], zero=[L1] → <strong>delete L1</strong> (DELETE-only, remaining===0).<br>
+    <span class="arrow">↓</span> panel onSnapshot listener (V143-ter) fires → row shows <strong>Batches: 1 · 50</strong> on every open device. <em>No 0-lot clutter.</em>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow B — drain a lot to 0: delete it if a live sibling exists; keep it as the placeholder if it's the last</div>
+  <table>
+    <thead><tr><th>Before</th><th>Event</th><th>planLotCleanup</th><th>After</th></tr></thead>
+    <tbody>
+      <tr><td>L1=3 (older), L2=5</td><td>FIFO deduct 3 → L1 hits 0</td><td>live=[L2], zero=[L1] → delete L1</td><td>L2=5 only (Batches:1)</td></tr>
+      <tr><td>L1=0 (last lot)</td><td>—</td><td>live=[], zero=[L1] → keep slice(1) = keep L1</td><td>L1=0 placeholder kept → product still shows "0 / หมด"</td></tr>
+      <tr><td>L1=2 (last lot)</td><td>deduct 2 → L1 hits 0</td><td>live=[], zero=[L1] → keep L1</td><td>L1=0 kept (placeholder)</td></tr>
+      <tr><td>L1=−4 (AUTO-NEG debt)</td><td>—</td><td>live=[L1] (remaining≠0) → keep</td><td>L1=−4 kept (negative = live debt, never deleted)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow C — entry-point wiring (post-commit, non-critical, cron backstop)</div>
+  <div style="font-family:monospace;font-size:12px;line-height:1.9;">
+    8 entry points (deductStockForSale · deductStockForTreatment · deductCourseItems ·<br>
+    createStockOrder · receiveCentralStockOrder · createStockAdjustment ·<br>
+    create/updateStockTransfer · create/updateStockWithdrawal)<br>
+    &nbsp;&nbsp;<span class="arrow">→</span> run their existing transaction (unchanged)<br>
+    &nbsp;&nbsp;<span class="arrow">→</span> collect affectedKeys = Set of (productId × locationId) touched<br>
+    &nbsp;&nbsp;<span class="arrow">→</span> <code>await _clearRedundantZeroLotsForProducts(affectedKeys)</code> in try/catch (failure ≠ block; cron catches)<br>
+    03:45 BKK cron <code>stock-lot-cleanup.js</code> = unchanged system-wide nightly backstop.<br>
+    NEW <strong>AV169</strong> source-grep: every exported stock-mutation fn writing be_stock_batches MUST call the helper (or be annotated exempt) → anti-V36-multi-writer-sweep lock.
+  </div>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+  <p><strong>Part 1 — "หมด" filter (StockBalancePanel.jsx, pure UI):</strong> new state <code>showOutOfStockOnly</code>, a 5th checkbox <code>data-testid="filter-out-of-stock"</code> after ติดลบ, predicate <code>isOutOfStock(p) = Number(p.totalRemaining) === 0</code> (matches the line-414 badge logic; negative is excluded — covered by ติดลบ), wired into the <code>displayed</code> useMemo + its deps. ~8 LOC. No data/listener change.</p>
+  <p><strong>Part 2 — real-time auto-clear (backendClient.js):</strong> NEW <code>_clearRedundantZeroLotsForProducts(affectedKeys)</code> — for each (productId × locationId): query <code>be_stock_batches</code> (status ∈ {active,depleted}) for that group, call the pure <code>planLotCleanup</code> (stockLotCleanupCore.js, <strong>unchanged</strong>), delete the resulting <code>deleteIds</code> via a chunked writeBatch. DELETE-only on <code>remaining === 0</code>; idempotent; never reads/writes a live lot. Each of the 8 entry points collects the (productId × location) keys it touched and calls the helper <strong>after</strong> its transaction commits, wrapped in try/catch (non-critical side-effect). The pure <code>planLotCleanup</code> + the 03:45 cron + the Rule-M CLI all stay as-is.</p>
+  <p><strong>Part 3 — existing lingering 0-lots (Rule M):</strong> run the existing <code>scripts/stock-lot-cleanup.mjs</code> dry-run on prod → review count + affected products → <code>--apply</code> on user go (two-phase + audit doc). No new script.</p>
+  <p><strong>Invariants honored:</strong> Rule O (productId identity; movements carry live productName, unaffected by lot delete) · V143/AV166 (drained product stays visible via placeholder) · V36 anti-multi-writer-sweep (AV169 source-grep covers all 8 entry points) · Rule M (Part 3 two-phase) · Rule Q (L2 real-client-SDK verify, not mock).</p>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Placeholder rule (user clarification):</strong> keep 1 zero-lot when fully drained; delete all zero-lots when a live lot exists. = existing <code>planLotCleanup</code>. No panel rewrite, no products-first.</li>
+  <li><strong>Q1 = A:</strong> real-time trigger = post-commit hook at all 8 stock-mutation entry points + keep the 03:45 cron as backstop + AV169 source-grep lock. (Inside-transaction rejected — higher V36 risk.)</li>
+  <li><strong>Q2 = A:</strong> clean the current lingering 0-lots now via the existing Rule-M script — dry-run first, review, then --apply.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>"หมด" filter ON → shows ONLY products with <code>totalRemaining === 0</code>; negative (&lt;0) products do NOT appear (they're under ติดลบ); positive products do NOT appear.</li>
+  <li>Import a 2nd lot into a product that has a 0-lot → the 0-lot is deleted within the same operation (no reload) — verified on real prod via L2 client SDK.</li>
+  <li>FIFO-drain an older lot to 0 while a newer lot is live → the drained lot is deleted; the product's Batches count drops.</li>
+  <li>Drain the LAST lot to 0 → exactly ONE 0-lot remains (placeholder); the product still appears in the table at "0 / หมด".</li>
+  <li>A negative (AUTO-NEG debt) lot is NEVER deleted by the helper.</li>
+  <li>Deleting a 0-lot does NOT break the Movement Log (movements read be_stock_movements, carry their own productName per Rule O) — verified.</li>
+  <li>AV169 source-grep passes: every exported stock-mutation entry point calls <code>_clearRedundantZeroLotsForProducts</code> (or is annotated exempt).</li>
+  <li>Full vitest green + build clean; no regression in stock test banks (V34/V35/V36/V42–49/V143).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<p><strong>R1 — Movement Log reader.</strong> Must confirm no UI reader JOINs a deleted 0-lot's <code>be_stock_batches</code> doc for display (expected: movements are self-contained per Rule O). Verified during implementation; if a reader does join, fall back to keeping the lot + flag.</p>
+<p><strong>R2 — Multi-writer-sweep (V36 class).</strong> Mitigated by AV169 source-grep over all 8 entry points + the nightly cron backstop. A future new entry point that forgets the call → lingering lots until 03:45 (graceful), AND fails AV169.</p>
+<p><strong>R3 — Concurrency.</strong> Helper is read-then-delete-zeros; a concurrent mutation racing it can only mean a 0-lot is deleted twice (idempotent / already gone) or skipped (cron catches). It never deletes a live lot (re-reads remaining at delete time is unnecessary because planLotCleanup only targets remaining===0, and a lot at 0 that concurrently gains stock would just be skipped on the next pass).</p>
+<p><strong>R4 — Verification is L2, not L1.</strong> The auto-clear is a backend behavior best driven by the real client SDK (exact functions the UI calls). The "หมด" filter is a UI add verifiable via the panel. Full L1 real-browser of the filter is a nice-to-have; L2 of the cleanup is the gold standard here.</p>
+
+</body>
+</html>

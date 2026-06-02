@@ -11,6 +11,9 @@ import { storagePrefixForMessage } from './staffChatRetentionCore.js';
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
 import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } from './chartEditSessionCore.js';
+// V144 (2026-06-02) — pure lot-cleanup plan (no firebase dep) reused for the
+// real-time redundant-0-lot auto-clear. Same plan the 03:45 cron runs.
+import { planLotCleanup } from './stockLotCleanupCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
 import { decideApptStatusServiceSync } from './appointmentDisplay.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
@@ -5713,6 +5716,52 @@ export async function listStockBatches({ productId, branchId, status } = {}) {
   return batches;
 }
 
+// V144 (2026-06-02) — real-time redundant-0-lot auto-clear. User rule (verbatim
+// clarification): "มันเป็น 0 ได้ ถ้ามี lot เดียว แต่ถ้ามี lot อื่นเข้ามา lot ที่เป็น 0
+// จะต้องหายไป" — a 0-lot is OK only as the LAST lot (placeholder so the product
+// still shows at "0 / หมด" per V143/AV166); the moment a LIVE lot exists for that
+// product (a new lot came in, OR a sibling still holds stock/debt) every 0-lot
+// must vanish. That is EXACTLY planLotCleanup (V143-quater). This runs that pure
+// plan in REAL TIME (post-commit) per (productId × location) a stock mutation
+// touched — instead of waiting for the 03:45 cron (which stays as the system-wide
+// backstop). DELETE-ONLY on remaining===0; idempotent; NEVER touches a live lot
+// (positive stock OR negative debt) → cannot corrupt stock. Non-critical
+// side-effect: callers wrap in try/catch so a cleanup failure never blocks the
+// mutation (cron catches the leftovers). AV172 locks every stock-mutation entry
+// point to call this (or carry an AV172-exempt annotation). Extends AV168
+// (V143-quater planLotCleanup) from nightly-cron-only → also real-time.
+export async function _clearRedundantZeroLotsForProducts(affectedKeys) {
+  const seen = new Set();
+  const uniq = [];
+  for (const k of (Array.isArray(affectedKeys) ? affectedKeys : [])) {
+    const pid = String(k?.productId ?? '');
+    const loc = String(k?.locationId ?? k?.branchId ?? '');
+    if (!pid || !loc) continue;
+    const key = `${pid}|${loc}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniq.push({ productId: pid, branchId: loc });
+  }
+  if (uniq.length === 0) return { deleted: 0, groups: 0 };
+  let deleted = 0;
+  let groups = 0;
+  for (const { productId, branchId } of uniq) {
+    const lots = await listStockBatches({ productId, branchId });
+    const { deleteIds } = planLotCleanup(lots);
+    if (!deleteIds || deleteIds.length === 0) continue;
+    groups += 1;
+    let wb = writeBatch(db);
+    let n = 0;
+    for (const id of deleteIds) {
+      wb.delete(stockBatchDoc(id));
+      deleted += 1; n += 1;
+      if (n >= 450) { await wb.commit(); wb = writeBatch(db); n = 0; }
+    }
+    if (n > 0) await wb.commit();
+  }
+  return { deleted, groups };
+}
+
 // V143-ter (2026-05-31) — LIVE stock-balance listener. StockBalancePanel used a
 // one-shot listStockBatches getDocs → a deduction from ANY surface (treatment /
 // sale / adjust / import) on ANY device did NOT update the open ยอดคงเหลือ page
@@ -6326,6 +6375,12 @@ export async function createStockOrder(data, opts = {}) {
     updatedAt: now,
   });
 
+  // V144 — new lots just arrived for these products → clear any redundant
+  // 0-lots ("lot อื่นเข้ามา → 0-lot หายไป"). Post-commit, non-critical.
+  try {
+    await _clearRedundantZeroLotsForProducts(items.map(i => ({ productId: i.productId, locationId: branchId })));
+  } catch (e) { console.warn('[createStockOrder] V144 lot-clear skipped:', e?.message); }
+
   return { orderId, batchIds, success: true, repays };
 }
 
@@ -6769,6 +6824,12 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
     updatedAt: now,
   });
 
+  // V144 — new central-warehouse lots just arrived → clear redundant 0-lots
+  // for those products at the central location. Post-commit, non-critical.
+  try {
+    await _clearRedundantZeroLotsForProducts(linesToReceive.map(l => ({ productId: l.productId, locationId: order.centralWarehouseId })));
+  } catch (e) { console.warn('[receiveCentralStockOrder] V144 lot-clear skipped:', e?.message); }
+
   return { orderId, status: newStatus, batchIds, movementIds, alreadyReceived: false, repays };
 }
 
@@ -6982,6 +7043,11 @@ export async function createStockAdjustment(p, opts = {}) {
     }
   } catch { /* non-fatal — falls through to batch.productName fallback in tx */ }
 
+  // V144 — capture the adjusted product+location (closure) for the post-commit
+  // redundant-0-lot clear (return shape stays unchanged).
+  let adjProductId = '';
+  let adjBranchId = '';
+
   const result = await runTransaction(db, async (tx) => {
     const batchRef = stockBatchDoc(batchId);
     const snap = await tx.get(batchRef);
@@ -7005,6 +7071,8 @@ export async function createStockAdjustment(p, opts = {}) {
     // became unrepayable. This is the "บวกสต็อคติดลบทีละนิด" path the user wants.
     const newStatus = resolveBatchStatusForRemaining(afterRemaining);
     const branchId = p.branchId || batch.branchId;
+    adjProductId = batch.productId; // V144 — capture for post-commit lot-clear
+    adjBranchId = branchId;
 
     // Mutate batch
     tx.update(batchRef, {
@@ -7055,6 +7123,12 @@ export async function createStockAdjustment(p, opts = {}) {
 
     return { adjustmentId, movementId, before: beforeRemaining, after: afterRemaining };
   });
+
+  // V144 — an adjustment may drain a lot to 0 (or repay a negative toward 0);
+  // clear redundant 0-lots for this product at its location. Post-commit.
+  try {
+    await _clearRedundantZeroLotsForProducts([{ productId: adjProductId, locationId: adjBranchId }]);
+  } catch (e) { console.warn('[createStockAdjustment] V144 lot-clear skipped:', e?.message); }
 
   return { ...result, success: true };
 }
@@ -8039,6 +8113,11 @@ export async function deductStockForSale(saleId, items, opts = {}) {
     }
   }
 
+  // V144 — real-time clear redundant 0-lots for every product we just drained.
+  try {
+    await _clearRedundantZeroLotsForProducts(flat.map(i => ({ productId: i.productId, locationId: branchId })));
+  } catch (e) { console.warn('[deductStockForSale] V144 lot-clear skipped:', e?.message); }
+
   return { allocations, skippedItems: skipped };
 }
 
@@ -8083,6 +8162,11 @@ export async function deductStockForTreatment(treatmentId, items, opts = {}) {
       throw err;
     }
   }
+
+  // V144 — real-time clear redundant 0-lots for every product we just drained.
+  try {
+    await _clearRedundantZeroLotsForProducts(flat.map(i => ({ productId: i.productId, locationId: branchId })));
+  } catch (e) { console.warn('[deductStockForTreatment] V144 lot-clear skipped:', e?.message); }
 
   return { allocations, skippedItems: skipped };
 }
@@ -8444,6 +8528,9 @@ export async function createStockTransfer(data, opts = {}) {
     });
   }
 
+  // AV172-exempt: writes a PENDING transfer doc only — NO be_stock_batches
+  // write here. Lots are drained/created on the 0→1/1→2 transitions in
+  // updateStockTransferStatus, which IS wired to _clearRedundantZeroLotsForProducts.
   await setDoc(stockTransferDoc(transferId), {
     transferId,
     sourceLocationId: src,
@@ -8530,6 +8617,15 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
   const user = opts.user || cur.user || { userId: null, userName: null };
 
   const docPath = `artifacts/${appId}/public/data/be_stock_transfers/${transferId}`;
+
+  // V144 — a transfer touches BOTH the source (drain on send) and the
+  // destination (new lot on receive). Build the (productId × location) keys
+  // for both ends; the post-commit cleanup no-ops at whichever end didn't
+  // change. (dedups internally.)
+  const v144AffectedKeys = (Array.isArray(cur.items) ? cur.items : []).flatMap(it => ([
+    { productId: it.productId, locationId: cur.sourceLocationId },
+    { productId: it.productId, locationId: cur.destinationLocationId },
+  ]));
 
   // Helper: deduct from source batch + emit EXPORT_TRANSFER movement
   async function _exportFromSource(item) {
@@ -8720,11 +8816,13 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
       }
     }
     await updateDoc(ref, { items: updatedItems, updatedAt: new Date().toISOString() });
+    try { await _clearRedundantZeroLotsForProducts(v144AffectedKeys); } catch (e) { console.warn('[updateStockTransferStatus] V144 lot-clear skipped:', e?.message); }
     return { transferId, status: next, success: true, repays };
   }
   else if (curStatus === 1 && (next === 3 || next === 4)) {
     for (const it of cur.items) await _reverseExport(it.sourceBatchId);
   }
+  try { await _clearRedundantZeroLotsForProducts(v144AffectedKeys); } catch (e) { console.warn('[updateStockTransferStatus] V144 lot-clear skipped:', e?.message); }
   return { transferId, status: next, success: true };
 }
 
@@ -8822,6 +8920,9 @@ export async function createStockWithdrawal(data, opts = {}) {
     });
   }
 
+  // AV172-exempt: writes a PENDING withdrawal doc only — NO be_stock_batches
+  // write here. Lots drained/created on the 0→1/1→2 transitions in
+  // updateStockWithdrawalStatus, which IS wired to _clearRedundantZeroLotsForProducts.
   await setDoc(stockWithdrawalDoc(withdrawalId), {
     withdrawalId,
     direction,
@@ -8880,6 +8981,13 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
   const user = opts.user || cur.user || { userId: null, userName: null };
 
   const docPath = `artifacts/${appId}/public/data/be_stock_withdrawals/${withdrawalId}`;
+
+  // V144 — withdrawal touches source (drain on send) + destination (new lot on
+  // receive); build both-end keys, cleanup no-ops where nothing changed.
+  const v144AffectedKeys = (Array.isArray(cur.items) ? cur.items : []).flatMap(it => ([
+    { productId: it.productId, locationId: cur.sourceLocationId },
+    { productId: it.productId, locationId: cur.destinationLocationId },
+  ]));
 
   async function _exportFromSource(item) {
     return runTransaction(db, async (tx) => {
@@ -9034,11 +9142,13 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
       }
     }
     await updateDoc(ref, { items: updatedItems, updatedAt: new Date().toISOString() });
+    try { await _clearRedundantZeroLotsForProducts(v144AffectedKeys); } catch (e) { console.warn('[updateStockWithdrawalStatus] V144 lot-clear skipped:', e?.message); }
     return { withdrawalId, status: next, success: true, repays };
   }
   else if (curStatus === 1 && next === 3) {
     for (const it of cur.items) await _reverseExport(it.sourceBatchId);
   }
+  try { await _clearRedundantZeroLotsForProducts(v144AffectedKeys); } catch (e) { console.warn('[updateStockWithdrawalStatus] V144 lot-clear skipped:', e?.message); }
   return { withdrawalId, status: next, success: true };
 }
 

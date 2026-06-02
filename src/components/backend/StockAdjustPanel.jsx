@@ -232,7 +232,10 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   );
 }
 
-function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, sellers, sellersLoading, onClose, onSaved }) {
+// V144 (2026-06-02) — exported so StockActionModal can host this form in an
+// in-place modal on the ยอดคงเหลือ page (the ปรับ button no longer navigates
+// to the ปรับสต็อก sub-tab). Still rendered full-page by StockAdjustPanel above.
+export function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, sellers, sellersLoading, onClose, onSaved }) {
   // Phase 15.3 (2026-04-27) — branchId passed in from StockAdjustPanel.
   // Pre-existing bug: BRANCH_ID was referenced inside this sibling function
   // (lines 191 + 220 below) but never declared in its scope — silently

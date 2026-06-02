@@ -19,9 +19,12 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct, onEditProduct, defaultLocationId, lockLocation }) {
-  // Phase 17.2 (2026-05-05): branches list still needed for landing-default
-  // resolution (newest-first via useSelectedBranch ordering).
-  const { branches } = useSelectedBranch();
+  // V144 (2026-06-02): follow the global top BranchSelector (selectedBranchId)
+  // instead of a per-panel "สถานที่" dropdown. The dropdown + auto-pick-branches[0]
+  // confused users (two branch selectors out of sync — user: "เอา tab สถานที่
+  // ออกไปเลย ให้ขึ้น stock ตาม Branch selector ด้านบนเท่านั้น"). Mirrors how
+  // StockAdjustPanel / MovementLogPanel already follow ctxBranchId.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -42,6 +45,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // _deductOneItem). Filter is checkbox-driven and shows ONLY rows where
   // sum(batches[i].qty.remaining) < 0.
   const [showNegativeStockOnly, setShowNegativeStockOnly] = useState(false);
+  // V144 (2026-06-02) — out-of-stock filter. The balance table had 4 filters
+  // (near-expiry / low / over / negative) but NO "หมด" filter even though the
+  // "หมด" badge already renders at totalRemaining === 0. User: "มี filter
+  // เยอะแยะ แต่ไม่มี filter สินค้าที่หมดแล้ว". Shows ONLY rows where
+  // sum(batches[i].qty.remaining) === 0 (negative <0 has its own ติดลบ filter).
+  const [showOutOfStockOnly, setShowOutOfStockOnly] = useState(false);
   // Phase 17.2 (2026-05-05): no synthetic 'main' default — initial empty list,
   // populated from listStockLocations() once branches arrive.
   const [locations, setLocations] = useState([]);
@@ -60,20 +69,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const toggleExpandRow = useCallback((pid) => {
     setExpandedRows(prev => ({ ...prev, [String(pid)]: !prev[String(pid)] }));
   }, []);
-  // Phase 15.1 (2026-04-27) — defaultLocationId pre-selects a specific
-  // location (e.g. central warehouse from CentralStockTab). lockLocation
-  // hides the dropdown when caller wants the location fixed.
-  // Phase 17.2 (2026-05-05): no synthetic 'main' fallback — empty until
-  // defaultLocationId or branches arrive.
-  const [locationId, setLocationId] = useState(defaultLocationId || '');
-  // Phase 15.7-ter (2026-04-28) — track whether admin manually picked a
-  // location so subsequent branch-list async-load doesn't override their
-  // choice. Pre-fix: panel default 'main' literal + StockTab not passing
-  // defaultLocationId → admin sees empty page even when default branch has
-  // stock. User report: "นำเข้า Allergan แล้ว ในหน้ายอดคงเหลือหายไปเลย" —
-  // data was actually 924 at default branch but locationId='main' filtered
-  // it out.
-  const [userPickedLocation, setUserPickedLocation] = useState(false);
+  // V144 (2026-06-02) — locationId is DERIVED, not state. The branch balance
+  // view follows the global top BranchSelector (selectedBranchId); the central
+  // warehouse view (lockLocation, from CentralStockTab) stays pinned to
+  // defaultLocationId. This replaces the per-panel dropdown + the
+  // auto-pick-branches[0] state machine (both removed). The V143-ter live
+  // listener (keyed on [locationId]) re-subscribes when the value changes —
+  // so switching branch in the top selector refreshes this table.
+  const locationId = lockLocation ? (defaultLocationId || '') : (selectedBranchId || '');
 
   useEffect(() => {
     let cancelled = false;
@@ -85,22 +88,6 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     })();
     return () => { cancelled = true; };
   }, []);
-
-  // Phase 17.2 (2026-05-05): auto-pick the FIRST branch in the list when
-  // branches arrive (useSelectedBranch already orders newest-first +
-  // staff-accessible filter). isDefault flag is gone — first item is the
-  // canonical landing default.
-  useEffect(() => {
-    if (defaultLocationId) return;
-    if (userPickedLocation) return;
-    if (!Array.isArray(branches) || branches.length === 0) return;
-    const first = branches[0];
-    const defId = first && (first.branchId || first.id);
-    if (defId && defId !== locationId) {
-      setLocationId(String(defId));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branches, defaultLocationId]);
 
   // Phase 15.5 / Item 1 — load product threshold map (alertDayBeforeExpire +
   // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock per productId).
@@ -150,15 +137,6 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // detail (NOT cross-tier counts). Per-lot detail surfaced via expandable
   // rows below; no extra Firestore query needed (panel already has all
   // location-scoped batches loaded; .batches array IS the lot list).
-
-  // Phase 15.1 — sync locationId when caller updates defaultLocationId
-  // (e.g. CentralStockTab loads warehouses async then passes the first one).
-  useEffect(() => {
-    if (defaultLocationId && defaultLocationId !== locationId) {
-      setLocationId(defaultLocationId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultLocationId]);
 
   // V143-ter (2026-05-31) — LIVE listener (Task B real-time). Replaces the prior
   // one-shot listStockBatches getDocs so a deduction from ANY surface (treatment /
@@ -277,6 +255,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const isNegativeStockWarning = useCallback((p) => {
     return Number(p.totalRemaining) < 0;
   }, []);
+  // V144 (2026-06-02) — out-of-stock predicate. Exactly 0 (matches the "หมด"
+  // badge at line ~414: outOfStock = !isNegative && totalRemaining <= 0 ===
+  // totalRemaining === 0). Negative (<0) is excluded — covered by ติดลบ.
+  const isOutOfStock = useCallback((p) => {
+    return Number(p.totalRemaining) === 0;
+  }, []);
 
   const displayed = useMemo(() => {
     let list = products;
@@ -292,8 +276,10 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     if (showOverStockOnly) list = list.filter(isOverStockWarning);
     // Phase 15.7 — negative-stock filter (totalRemaining < 0)
     if (showNegativeStockOnly) list = list.filter(isNegativeStockWarning);
+    // V144 — out-of-stock filter (totalRemaining === 0)
+    if (showOutOfStockOnly) list = list.filter(isOutOfStock);
     return list;
-  }, [products, search, showExpiringOnly, showLowStockOnly, showOverStockOnly, showNegativeStockOnly, isExpiryWarning, isLowStockWarning, isOverStockWarning, isNegativeStockWarning]);
+  }, [products, search, showExpiringOnly, showLowStockOnly, showOverStockOnly, showNegativeStockOnly, showOutOfStockOnly, isExpiryWarning, isLowStockWarning, isOverStockWarning, isNegativeStockWarning, isOutOfStock]);
 
   const totalValue = useMemo(() => products.reduce((s, p) => s + p.valueCost, 0), [products]);
 
@@ -316,19 +302,9 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          {!lockLocation && (
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold">สถานที่:</label>
-              <select value={locationId} onChange={e => { setLocationId(e.target.value); setUserPickedLocation(true); }}
-                className="px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-rose-500 min-w-[180px]">
-                {locations.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}{l.kind === 'central' ? ' (คลังกลาง)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* V144 (2026-06-02) — per-panel "สถานที่" dropdown REMOVED. The branch
+              balance follows the global top BranchSelector; the central view is
+              pinned via lockLocation+defaultLocationId. No second selector. */}
           <div className="flex-1 relative min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาสินค้า..."
@@ -357,6 +333,13 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
           <label className="flex items-center gap-2 text-[11px] text-rose-300 cursor-pointer" data-testid="filter-negative-stock">
             <input type="checkbox" checked={showNegativeStockOnly} onChange={e => setShowNegativeStockOnly(e.target.checked)} className="accent-rose-500" />
             ติดลบ (ต้องเติมสต็อค)
+          </label>
+          {/* V144 (2026-06-02) — out-of-stock filter. Surfaces products whose
+              totalRemaining === 0 ("หมด"). Distinct from ติดลบ (<0). Red accent
+              matches the existing "หมด" row badge. */}
+          <label className="flex items-center gap-2 text-[11px] text-red-300 cursor-pointer" data-testid="filter-out-of-stock">
+            <input type="checkbox" checked={showOutOfStockOnly} onChange={e => setShowOutOfStockOnly(e.target.checked)} className="accent-red-500" />
+            หมด (คงเหลือ 0)
           </label>
         </div>
       </div>

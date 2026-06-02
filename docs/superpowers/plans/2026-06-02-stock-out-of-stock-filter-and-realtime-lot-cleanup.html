@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stock — "หมด" filter + real-time lot auto-clear · Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size:.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Stock — "หมด" filter + real-time lot auto-clear · Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> execute task-by-task. Stock subsystem is the most bug-prone (V34/V35/V36/V42–49/Rule O) — INLINE execution (subagents thrash on this baseline per V81/V86). Spec: <code>docs/superpowers/specs/2026-06-02-stock-out-of-stock-filter-and-realtime-lot-cleanup-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add a "หมด (คงเหลือ 0)" filter to the stock balance table, and make spent/redundant 0-lots auto-clear in real time (keep 1 placeholder when fully drained) instead of waiting for the 03:45 cron.</p>
+  <p><strong>Architecture:</strong> Part 1 = pure UI filter in StockBalancePanel. Part 2 = NEW <code>_clearRedundantZeroLotsForProducts</code> in backendClient.js (reuses pure <code>planLotCleanup</code>), called post-commit at all 8 stock-mutation entry points; cron stays as backstop; AV169 source-grep lock. Part 3 = Rule-M cleanup of current lingering 0-lots.</p>
+  <p><strong>Tech Stack:</strong> React + Firebase client SDK · vitest · existing <code>stockLotCleanupCore.js planLotCleanup</code> · Rule-M admin-SDK script. Verify via Rule Q L2 real-client-SDK e2e on real prod.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Filter row AFTER — +1 checkbox (red accent, mirrors the 4 existing). Drained products stay visible via their 1 placeholder lot.</div>
+  <div style="background:#0d0d0f;border:1.5px solid rgba(244,63,94,0.15);border-radius:12px;padding:12px;color:#ddd;font-size:12px;">
+    <div style="display:flex;flex-wrap:wrap;gap:14px;">
+      <span style="color:#9a9a9a;">☐ ใกล้หมดอายุ</span>
+      <span style="color:#9a9a9a;">☐ ใกล้หมด</span>
+      <span style="color:#9a9a9a;">☐ เกินสต็อก</span>
+      <span style="color:#fda4af;">☐ ติดลบ (ต้องเติมสต็อค)</span>
+      <span style="color:#fca5a5;outline:2px dashed #22c55e;outline-offset:3px;border-radius:5px;padding:1px 4px;">☑ หมด (คงเหลือ 0) <span style="background:#16a34a;color:#fff;font-size:9px;padding:0 5px;border-radius:9px;">NEW</span></span>
+    </div>
+    <div style="margin-top:10px;font-size:11px;">2% Lidocain <span style="background:rgba(127,29,29,.3);color:#f87171;border:1px solid #7f1d1d;border-radius:5px;padding:0 6px;font-size:9px;">หมด</span> · <span style="font-family:monospace;color:#34d399;">0 ขวด</span> · Batches: 1</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<table>
+  <thead><tr><th>Trigger</th><th>Entry point(s)</th><th>planLotCleanup result</th><th>Outcome</th></tr></thead>
+  <tbody>
+    <tr><td>New lot arrives for a product that has a 0-lot</td><td>createStockOrder · receiveCentralStockOrder · updateStockTransferStatus(receive) · updateStockWithdrawalStatus(receive)</td><td>live=[new], zero=[old] → delete old</td><td>0-lot gone instantly (panel listener re-renders)</td></tr>
+    <tr><td>FIFO-drain an older lot to 0, newer lot live</td><td>deductStockForSale · deductStockForTreatment · deductCourseItems</td><td>live=[newer], zero=[drained] → delete drained</td><td>Batches count drops</td></tr>
+    <tr><td>Drain the LAST lot to 0</td><td>(same deduct paths)</td><td>live=[], zero=[L] → keep slice(1) = keep L</td><td>1 placeholder kept; product still shows "0 / หมด"</td></tr>
+    <tr><td>Negative AUTO-NEG debt lot</td><td>any</td><td>remaining≠0 → live → never deleted</td><td>debt preserved (Rule O)</td></tr>
+  </tbody>
+</table>
+<p>Mechanism: entry point runs its existing transaction (unchanged) → collects <code>affectedKeys = Set((productId × locationId))</code> → <code>await _clearRedundantZeroLotsForProducts(keys)</code> in try/catch (non-critical; cron 03:45 backstop catches any miss). AV169 source-grep locks all 8 entry points.</p>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/components/backend/StockBalancePanel.jsx</code></td><td>Modify — add "หมด" filter (state + checkbox + predicate + deps)</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>Modify — NEW <code>_clearRedundantZeroLotsForProducts</code> + import <code>planLotCleanup</code> + post-commit calls at 8 entry points</td></tr>
+  <tr><td><code>src/lib/stockLotCleanupCore.js</code></td><td>UNCHANGED (reused as-is)</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>Modify — add AV169</td></tr>
+  <tr><td><code>tests/v144-realtime-lot-clear.test.js</code></td><td>Create — helper key-dedup + AV169 source-grep + filter predicate</td></tr>
+  <tr><td><code>tests/stock-balance-out-of-stock-filter.test.jsx</code></td><td>Create — RTL filter behavior</td></tr>
+  <tr><td><code>scripts/e2e-stock-realtime-lot-clear.mjs</code></td><td>Create — Rule Q L2 real-prod e2e (5 scenarios + cleanup)</td></tr>
+  <tr><td><code>scripts/stock-lot-cleanup.mjs</code></td><td>UNCHANGED (existing Rule-M script for Part 3)</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: "หมด" filter in StockBalancePanel</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/StockBalancePanel.jsx</code> · Test <code>tests/stock-balance-out-of-stock-filter.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Add state after <code>showNegativeStockOnly</code> (line ~44): <code>const [showOutOfStockOnly, setShowOutOfStockOnly] = useState(false);</code></div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Add predicate near the other warn predicates (~line 279): <code>const isOutOfStock = useCallback((p) =&gt; Number(p.totalRemaining) === 0, []);</code> (matches the line-414 badge: exactly 0; negative is its own ติดลบ filter).</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> In <code>displayed</code> useMemo (line ~281-296) add <code>if (showOutOfStockOnly) list = list.filter(isOutOfStock);</code> and add <code>showOutOfStockOnly, isOutOfStock</code> to the deps array.</div>
+  <div class="step"><input type="checkbox"> <strong>4.</strong> Add the 5th checkbox after the ติดลบ label (after line 360):</div>
+<pre><code>&lt;label className="flex items-center gap-2 text-[11px] text-red-300 cursor-pointer" data-testid="filter-out-of-stock"&gt;
+  &lt;input type="checkbox" checked={showOutOfStockOnly} onChange={e =&gt; setShowOutOfStockOnly(e.target.checked)} className="accent-red-500" /&gt;
+  หมด (คงเหลือ 0)
+&lt;/label&gt;</code></pre>
+  <div class="step"><input type="checkbox"> <strong>5.</strong> RTL test: mount panel with mocked listener returning a product at 0 + one at 50 + one at −3 → toggle filter-out-of-stock → assert only the 0 row shows (50 hidden, −3 hidden). NOTE: filter is a PURE client predicate → RTL/unit is adequate verification (not a Firestore-query behavior; no L2 needed for the filter itself).</div>
+  <div class="step"><input type="checkbox"> <strong>6.</strong> Run focused test + commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 2: <code>_clearRedundantZeroLotsForProducts</code> helper</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> · Test <code>tests/v144-realtime-lot-clear.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Confirm/add static import near top: <code>import { planLotCleanup } from './stockLotCleanupCore.js';</code> (grep first — backendClient may already reference it).</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Add the helper near the other stock internals (after <code>listStockBatches</code> ~line 5714):</div>
+<pre><code>// V144 (2026-06-02) — real-time redundant-0-lot auto-clear. Per user rule:
+// a 0-lot is OK only as the LAST lot (placeholder so the product still shows
+// at "0 / หมด" per V143/AV166); the moment a LIVE lot exists for that product
+// (new lot in, or a sibling still has stock/debt) every 0-lot must vanish.
+// = exactly planLotCleanup (V143-quater). This runs that pure plan in REAL TIME
+// (post-commit) per (productId × location) a stock mutation touched, instead of
+// waiting for the 03:45 cron (which stays as the system-wide backstop). AV169.
+// DELETE-ONLY on remaining===0; idempotent; NEVER touches a live lot → cannot
+// corrupt stock. Non-critical side-effect: failure is swallowed (cron catches).
+export async function _clearRedundantZeroLotsForProducts(affectedKeys) {
+  const seen = new Set();
+  const uniq = [];
+  for (const k of (Array.isArray(affectedKeys) ? affectedKeys : [])) {
+    const pid = String(k?.productId ?? '');
+    const loc = String(k?.locationId ?? k?.branchId ?? '');
+    if (!pid || !loc) continue;
+    const key = `${pid}|${loc}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniq.push({ productId: pid, branchId: loc });
+  }
+  if (uniq.length === 0) return { deleted: 0, groups: 0 };
+  let deleted = 0;
+  let groups = 0;
+  for (const { productId, branchId } of uniq) {
+    const lots = await listStockBatches({ productId, branchId });
+    const { deleteIds } = planLotCleanup(lots);
+    if (!deleteIds || deleteIds.length === 0) continue;
+    groups += 1;
+    let wb = writeBatch(db);
+    let n = 0;
+    for (const id of deleteIds) {
+      wb.delete(stockBatchDoc(id));
+      deleted += 1; n += 1;
+      if (n >= 450) { await wb.commit(); wb = writeBatch(db); n = 0; }
+    }
+    if (n > 0) await wb.commit();
+  }
+  return { deleted, groups };
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Unit test the pure key-dedup contract (extract dedup into a tiny pure helper if needed, OR test via the exported fn with a mocked listStockBatches/planLotCleanup): empty → {deleted:0}; duplicate (pid×loc) keys collapse; missing pid OR loc skipped. Plus assert it imports + calls planLotCleanup (source-grep).</div>
+  <div class="step"><input type="checkbox"> <strong>4.</strong> Run focused test + commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 3: Wire deduction entry points (drain → 0)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> — <code>deductStockForSale</code> (8009) · <code>deductStockForTreatment</code> (8055) · <code>deductCourseItems</code> (1305, only IF it deducts stock directly — read first; if it delegates to deductStockForTreatment, that wiring already covers it → annotate exempt).</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> In <code>deductStockForSale</code>, BEFORE <code>return { allocations, skippedItems: skipped };</code> (line 8042):</div>
+<pre><code>// V144 — real-time clear redundant 0-lots for every product we just touched.
+try {
+  await _clearRedundantZeroLotsForProducts(flat.map(i =&gt; ({ productId: i.productId, locationId: branchId })));
+} catch (e) { console.warn('[deductStockForSale] V144 lot-clear skipped:', e?.message); }</code></pre>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Same insertion in <code>deductStockForTreatment</code> before its <code>return</code> (line 8087), using the same <code>flat</code> + <code>branchId</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Read <code>deductCourseItems</code> — if it calls <code>deductStockForTreatment</code> internally, add an AV169 exempt-annotation comment (covered transitively); if it deducts stock directly, add the same post-commit call.</div>
+  <div class="step"><input type="checkbox"> <strong>4.</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: Wire import / receive / adjust (new lot / adjust → 0)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> — <code>createStockOrder</code> (6263) · <code>receiveCentralStockOrder</code> (6638) · <code>createStockAdjustment</code> (6947).</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> In <code>createStockOrder</code>, AFTER <code>setDoc(stockOrderDoc(orderId), {...})</code> and BEFORE <code>return</code> (line 6329): call helper with <code>items.map(i =&gt; ({ productId: i.productId, locationId: branchId }))</code>. (Primary "lot อื่นเข้ามา" case.)</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Read <code>receiveCentralStockOrder</code> (6638) — collect keys from the received items × the destination location; call helper post-commit.</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Read <code>createStockAdjustment</code> (6947) — collect <code>{ productId: p.productId, locationId: p.branchId||p.locationId }</code>; call helper post-commit.</div>
+  <div class="step"><input type="checkbox"> <strong>4.</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 5: Wire transfer / withdrawal (move = drain source + create dest)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> — <code>createStockTransfer</code> (8396) · <code>updateStockTransferStatus</code> (8476) · <code>createStockWithdrawal</code> (8774) · <code>updateStockWithdrawalStatus</code> (8839).</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Read each — identify which actually move lots (likely the <code>update*Status</code> functions on EXPORT/RECEIVE). Collect keys for BOTH source-location and dest-location × each item's productId; call helper post-commit.</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> For <code>create*</code> functions that only write a pending doc (no lot movement), annotate AV169-exempt (no batch write → nothing to clear).</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 6: AV169 invariant + source-grep test</h3>
+  <p><strong>Files:</strong> Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> · Test in <code>tests/v144-realtime-lot-clear.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Add AV169: "Every exported stock-mutation entry point in backendClient.js that writes be_stock_batches MUST call <code>_clearRedundantZeroLotsForProducts</code> after commit (or carry a <code>// AV169-exempt: &lt;reason&gt;</code> annotation). Sanctioned exempt: create*Transfer/Withdrawal that only write a pending doc; deductCourseItems if it delegates to deductStockForTreatment."</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Source-grep test: read backendClient.js, assert each of the 8 entry-point function bodies contains either <code>_clearRedundantZeroLotsForProducts</code> OR <code>AV169-exempt</code>. Closed list — a new entry point without either fails.</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule Q L2 — real-prod e2e (เทสโหดๆ)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-stock-realtime-lot-clear.mjs</code> (model on existing <code>scripts/e2e-stock-balance-realtime.mjs</code> + <code>e2e-tfp-mega-test.mjs</code> — real CLIENT SDK, authed staff, TEST-prefixed fixtures, Rule R env-pull).</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Setup: pull prod env; auth as real staff (client SDK); make a TEST branch + TEST product via the real functions.</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Scenario 1 (new lot in): create a batch, drain it to 0 (leaves placeholder), then <code>createStockOrder</code> a new lot → assert the old 0-lot is GONE + 1 live lot remains.</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Scenario 2 (FIFO drain non-last): 2 live lots → deduct enough to zero the older → assert older deleted, newer remains.</div>
+  <div class="step"><input type="checkbox"> <strong>4.</strong> Scenario 3 (drain LAST lot): single lot → drain to 0 → assert exactly 1 placeholder remains (NOT deleted); product still listable at totalRemaining 0.</div>
+  <div class="step"><input type="checkbox"> <strong>5.</strong> Scenario 4 (negative): force AUTO-NEG (over-deduct) → assert the negative lot is NEVER deleted.</div>
+  <div class="step"><input type="checkbox"> <strong>6.</strong> Scenario 5 (Movement Log safety): after a 0-lot is deleted, assert its be_stock_movements still exist + carry productName (Rule O) → Movement Log reader unaffected.</div>
+  <div class="step"><input type="checkbox"> <strong>7.</strong> Cleanup ALL TEST fixtures; assert zero orphans. Run → expect N/0.</div>
+  <div class="step"><input type="checkbox"> <strong>8.</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 8: Rule M — clean current lingering 0-lots (dry-run → review → apply)</h3>
+  <p><strong>Files:</strong> existing <code>scripts/stock-lot-cleanup.mjs</code> (UNCHANGED).</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Run dry-run on prod; report total redundant 0-lots + affected products to the user.</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> On user go → <code>--apply</code> (two-phase + audit doc). Re-run dry-run to confirm idempotent 0.</div>
+</div>
+
+<div class="task">
+  <h3>Task 9: Full regression + build + docs</h3>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> <code>npm test -- --run</code> → ALL green (esp. stock banks V34/V35/V36/V42–49/V143 + audit-stock-flow + planLotCleanup). "ทำงานได้ดีเหมือนเดิม 100%".</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> <code>npm run build</code> → clean.</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Update wiki concept page (stock-realtime-balance-and-lot-cleanup.md) + active.md + SESSION_HANDOFF. NO commit/push/deploy without explicit user "deploy".</div>
+</div>
+
+<h2>Self-Review (done)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> filter (T1), real-time helper (T2) + wiring all 8 entry points (T3-5), AV169 lock (T6), L2 verify all 5 acceptance scenarios + Movement-Log safety (T7), Rule-M existing cleanup (T8), regression (T9). All spec sections covered.</li>
+  <li><strong>Placeholder scan:</strong> helper + filter have complete code; wiring shows the canonical insertion fully (T3) + per-function key-source (T4-5 read-then-wire, same pattern). No TBD.</li>
+  <li><strong>Type consistency:</strong> helper takes <code>affectedKeys: [{productId, locationId|branchId}]</code> everywhere; <code>planLotCleanup</code> signature unchanged; <code>listStockBatches({productId,branchId})</code> matches the real signature (line 5704).</li>
+</ul>
+
+</body>
+</html>

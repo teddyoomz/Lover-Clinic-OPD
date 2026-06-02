@@ -11,6 +11,7 @@ import StockTransferPanel from './StockTransferPanel.jsx';
 import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';
 import CentralWarehousePanel from './CentralWarehousePanel.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
+import StockActionModal from './StockActionModal.jsx';
 
 const SUB_TABS = [
   { id: 'balance', label: 'ยอดคงเหลือ', icon: <Package size={14} /> },
@@ -24,24 +25,19 @@ const SUB_TABS = [
 
 export default function StockTab({ clinicSettings, theme, initialSubTab }) {
   const [subTab, setSubTab] = useState(initialSubTab || 'balance');
-  // When a Balance row button is clicked, we hand the selected product to the
-  // target sub-tab so its create-form opens pre-filled.
-  const [adjustPrefill, setAdjustPrefill] = useState(null);
-  const [orderPrefill, setOrderPrefill] = useState(null);
+  // V144 (2026-06-02) — a Balance row ปรับ/เพิ่ม click opens an in-place MODAL
+  // (no navigation to the ปรับสต็อก/นำเข้า sub-tab → no "bounce"; after save you
+  // stay on ยอดคงเหลือ + the V143-ter live listener refreshes the row).
+  // { mode: 'adjust' | 'order', product }.
+  const [stockAction, setStockAction] = useState(null);
   // V43-followup (2026-05-19 NIGHT+5 EOD+1) — own the ProductFormModal state
   // for the [✎ แก้ไข] button in StockBalancePanel Actions column. When admin
   // toggles skipStockDeduction + saves, the BS-18 listener in
   // StockBalancePanel will live-update; the row disappears instantly.
   const [editingProduct, setEditingProduct] = useState(null);
 
-  const handleAdjustProduct = (product) => {
-    setAdjustPrefill(product);
-    setSubTab('adjust');
-  };
-  const handleAddStockForProduct = (product) => {
-    setOrderPrefill(product);
-    setSubTab('orders');
-  };
+  const handleAdjustProduct = (product) => setStockAction({ mode: 'adjust', product });
+  const handleAddStockForProduct = (product) => setStockAction({ mode: 'order', product });
 
   return (
     <div className="space-y-3">
@@ -70,18 +66,10 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
         />
       )}
       {subTab === 'orders' && (
-        <OrderPanel
-          clinicSettings={clinicSettings} theme={theme}
-          prefillProduct={orderPrefill}
-          onPrefillConsumed={() => setOrderPrefill(null)}
-        />
+        <OrderPanel clinicSettings={clinicSettings} theme={theme} />
       )}
       {subTab === 'adjust' && (
-        <StockAdjustPanel
-          clinicSettings={clinicSettings} theme={theme}
-          prefillProduct={adjustPrefill}
-          onPrefillConsumed={() => setAdjustPrefill(null)}
-        />
+        <StockAdjustPanel clinicSettings={clinicSettings} theme={theme} />
       )}
       {subTab === 'transfer' && <StockTransferPanel clinicSettings={clinicSettings} theme={theme} />}
       {subTab === 'withdrawal' && <StockWithdrawalPanel clinicSettings={clinicSettings} theme={theme} />}
@@ -94,6 +82,18 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
           clinicSettings={clinicSettings}
           onClose={() => setEditingProduct(null)}
           onSaved={() => setEditingProduct(null)}
+        />
+      )}
+
+      {/* V144 — in-place adjust/order modal (ปรับ/เพิ่ม from the Balance row).
+          After save → close → the V143-ter live listener refreshes the row. */}
+      {stockAction && (
+        <StockActionModal
+          mode={stockAction.mode}
+          product={stockAction.product}
+          theme={theme}
+          onClose={() => setStockAction(null)}
+          onSaved={() => setStockAction(null)}
         />
       )}
     </div>

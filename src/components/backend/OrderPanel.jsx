@@ -420,7 +420,10 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
 // ═══════════════════════════════════════════════════════════════════════════
 // Order Create Form
 // ═══════════════════════════════════════════════════════════════════════════
-function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, sellers, sellersLoading, onClose, onSaved }) {
+// V144 (2026-06-02) — exported so StockActionModal can host this form in an
+// in-place modal on the ยอดคงเหลือ page (the เพิ่ม button no longer navigates
+// to the นำเข้า sub-tab). Still rendered full-page by OrderPanel above.
+export function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, sellers, sellersLoading, onClose, onSaved }) {
   // 2026-04-27 fix — branchId passed in from OrderPanel (parent).
   // Pre-existing scope bug: BRANCH_ID was referenced inside this sibling
   // function (line 318 below) but never declared in its scope —

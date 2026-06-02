@@ -518,8 +518,14 @@ service cloud.firestore {
       match /be_stock_batches/{batchId} {
         allow read: if isClinicStaff();
         allow create, update: if isClinicStaff();
-        // Batches are cancelled/depleted (status flip), never deleted — FIFO audit.
-        allow delete: if false;
+        // V144 (2026-06-02) — a 0-remaining lot holds no stock; its history lives
+        // in the immutable be_stock_movements (Rule O / never deleted). The 03:45
+        // cron already hard-deletes redundant 0-lots (admin SDK); this opens the
+        // SAME delete to the client SDK for real-time redundant-0-lot auto-clear
+        // (AV172) — but ONLY when remaining == 0. Live (>0) + negative-debt (<0)
+        // lots stay UNDELETABLE (FIFO audit preserved; defense-in-depth — even a
+        // buggy caller can't delete a lot that holds stock or debt).
+        allow delete: if isClinicStaff() && resource.data.qty.remaining == 0;
       }
       match /be_stock_movements/{movementId} {
         allow read, create: if isClinicStaff();
