@@ -11,7 +11,7 @@ allowed-tools: "Read, Grep, Glob"
 **Purpose**: Detect places where stock quantities can vanish, appear free, or drift from the movement log ledger. FIFO/FEFO correctness, batch integrity, audit-trail completeness. READ-ONLY.
 
 ## Scope
-**32 invariants across 8 subsystems** (V34 added S16–S20 on 2026-04-28; Phase 15.5 added S21–S25 on 2026-04-28; Phase 15.6 / V35 added S26–S28 on 2026-04-28; Phase 15.7-bis added S29–S31; V147 added S32 — multi-batch FIFO deduction concurrency-race retry — on 2026-06-02):
+**33 invariants across 8 subsystems** (V34 added S16–S20 on 2026-04-28; Phase 15.5 added S21–S25 on 2026-04-28; Phase 15.6 / V35 added S26–S28 on 2026-04-28; Phase 15.7-bis added S29–S31; V147 added S32 — multi-batch FIFO deduction concurrency-race retry; V150 added S33 — negative-debt carrier excludes expired/cancelled lots — on 2026-06-02):
 - **Batch integrity**: qty caps, append-only log, status transitions
 - **FIFO/FEFO allocation**: sort ordering monotonic, exactBatchId override, skip-expired/depleted
 - **Movement log**: reversedByMovementId chain intact, user+sourceDocPath always set

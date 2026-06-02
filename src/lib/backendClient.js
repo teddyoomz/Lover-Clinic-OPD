@@ -5525,34 +5525,43 @@ export async function getPointBalance(customerId) {
 async function _earnPointsInternal(customerId, points, meta = {}) {
   const amt = Number(points) || 0;
   if (amt <= 0) return { success: true, txId: null, pointsAfter: await getPointBalance(customerId) };
-  const before = await getPointBalance(customerId);
-  const after = before + amt;
   const newTxId = ptxId();
-  await setDoc(pointTxDoc(newTxId), {
-    ptxId: newTxId,
-    customerId: String(customerId),
-    type: meta.type || 'earn',
-    amount: amt,
-    pointsBefore: before,
-    pointsAfter: after,
-    referenceType: meta.referenceType || 'manual',
-    referenceId: String(meta.referenceId || ''),
-    purchaseAmount: Number(meta.purchaseAmount) || 0,
-    bahtPerPoint: Number(meta.bahtPerPoint) || 0,
-    note: meta.note || '',
-    staffId: meta.staffId || '',
-    staffName: meta.staffName || '',
-    createdAt: new Date().toISOString(),
+  const now = new Date().toISOString();
+  // V149 (2026-06-02) — atomic points RMW (was getPointBalance→setDoc→updateDoc
+  // with NO tx → concurrent earn/deduct lost-updated finance.loyaltyPoints;
+  // confirmed Rule Q L2 scripts/e2e-points-concurrency.mjs 6/6). runTransaction
+  // reads the summary INSIDE the tx so Firestore OCC serializes (mirrors wallet
+  // M5). iron-clad Rule T (concurrency-RMW class). Ledger + summary now atomic.
+  const { before, after, exists } = await runTransaction(db, async (tx) => {
+    const cRef = customerDoc(customerId);
+    const cSnap = await tx.get(cRef);
+    const ex = cSnap.exists();
+    const b = Number(cSnap.data()?.finance?.loyaltyPoints) || 0;
+    const a = b + amt;
+    if (ex) tx.update(cRef, { 'finance.loyaltyPoints': a });
+    tx.set(pointTxDoc(newTxId), {
+      ptxId: newTxId,
+      customerId: String(customerId),
+      type: meta.type || 'earn',
+      amount: amt,
+      pointsBefore: b,
+      pointsAfter: a,
+      referenceType: meta.referenceType || 'manual',
+      referenceId: String(meta.referenceId || ''),
+      purchaseAmount: Number(meta.purchaseAmount) || 0,
+      bahtPerPoint: Number(meta.bahtPerPoint) || 0,
+      note: meta.note || '',
+      staffId: meta.staffId || '',
+      staffName: meta.staffName || '',
+      createdAt: now,
+    });
+    return { before: b, after: a, exists: ex };
   });
-  try {
-    await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
-  } catch (e) {
-    // M9: the point tx log above was already written, so the audit trail is
-    // complete. Only the customer summary field failed to update (likely
-    // customer doc missing or permission error). Flag with structured data
-    // so a nightly reconciler can detect and repair the drift.
-    console.error('[backendClient] _earnPointsInternal: finance.loyaltyPoints update failed — tx log is authoritative, summary stale', {
-      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after, error: e?.message,
+  if (!exists) {
+    // M9: customer doc missing — the point tx log IS written (audit authoritative);
+    // only the summary was skipped (can't update a non-existent doc).
+    console.error('[backendClient] _earnPointsInternal: customer doc missing — point tx log written, finance.loyaltyPoints summary skipped', {
+      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after,
     });
   }
   return { success: true, txId: newTxId, pointsBefore: before, pointsAfter: after };
@@ -5590,29 +5599,36 @@ export async function adjustPoints(customerId, {
       referenceType: 'manual',
     });
   }
-  // Deduct
-  const before = await getPointBalance(customerId);
-  if (before < amt) throw new Error(`คะแนนไม่พอ (มี ${before} ต้องการ ${amt})`);
-  const after = before - amt;
+  // Deduct — V149 (2026-06-02) atomic RMW (Rule T). Over-spend guard re-checked
+  // INSIDE the tx so two concurrent deducts can't both pass on a stale balance
+  // AND can't lost-update the summary (mirrors deductWallet M5).
   const newTxId = ptxId();
-  await setDoc(pointTxDoc(newTxId), {
-    ptxId: newTxId,
-    customerId: String(customerId),
-    type: 'adjust',
-    amount: amt,
-    pointsBefore: before,
-    pointsAfter: after,
-    referenceType: 'manual', referenceId: '',
-    purchaseAmount: 0, bahtPerPoint: 0,
-    note, staffId, staffName,
-    createdAt: new Date().toISOString(),
+  const now = new Date().toISOString();
+  const { before, after, exists } = await runTransaction(db, async (tx) => {
+    const cRef = customerDoc(customerId);
+    const cSnap = await tx.get(cRef);
+    const ex = cSnap.exists();
+    const b = Number(cSnap.data()?.finance?.loyaltyPoints) || 0;
+    if (b < amt) throw new Error(`คะแนนไม่พอ (มี ${b} ต้องการ ${amt})`);
+    const a = b - amt;
+    if (ex) tx.update(cRef, { 'finance.loyaltyPoints': a });
+    tx.set(pointTxDoc(newTxId), {
+      ptxId: newTxId,
+      customerId: String(customerId),
+      type: 'adjust',
+      amount: amt,
+      pointsBefore: b,
+      pointsAfter: a,
+      referenceType: 'manual', referenceId: '',
+      purchaseAmount: 0, bahtPerPoint: 0,
+      note, staffId, staffName,
+      createdAt: now,
+    });
+    return { before: b, after: a, exists: ex };
   });
-  try {
-    await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
-  } catch (e) {
-    // M9: see _earnPointsInternal for rationale. Tx log authoritative; summary drift flagged.
-    console.error('[backendClient] adjustPoints: finance.loyaltyPoints update failed — tx log is authoritative, summary stale', {
-      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after, error: e?.message,
+  if (!exists) {
+    console.error('[backendClient] adjustPoints: customer doc missing — point tx log written, summary skipped', {
+      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after,
     });
   }
   return { success: true, txId: newTxId, pointsBefore: before, pointsAfter: after };
@@ -5632,27 +5648,34 @@ export async function reversePointsEarned(customerId, referenceId) {
     totalReversed += Number(tx.amount) || 0;
   }
   if (totalReversed > 0) {
-    const before = await getPointBalance(customerId);
-    const after = Math.max(0, before - totalReversed);
     const newTxId = ptxId();
-    await setDoc(pointTxDoc(newTxId), {
-      ptxId: newTxId,
-      customerId: String(customerId),
-      type: 'reverse',
-      amount: totalReversed,
-      pointsBefore: before,
-      pointsAfter: after,
-      referenceType: 'sale', referenceId: String(referenceId),
-      note: `คืนคะแนนจากการยกเลิก/ลบ ${referenceId}`,
-      staffId: '', staffName: '',
-      createdAt: new Date().toISOString(),
+    const now = new Date().toISOString();
+    // V149 (2026-06-02) — atomic points RMW (Rule T). Was getPointBalance→setDoc
+    // →updateDoc with NO tx. The totalReversed sum (query above) is reference data.
+    const { before, after, exists } = await runTransaction(db, async (tx) => {
+      const cRef = customerDoc(customerId);
+      const cSnap = await tx.get(cRef);
+      const ex = cSnap.exists();
+      const b = Number(cSnap.data()?.finance?.loyaltyPoints) || 0;
+      const a = Math.max(0, b - totalReversed);
+      if (ex) tx.update(cRef, { 'finance.loyaltyPoints': a });
+      tx.set(pointTxDoc(newTxId), {
+        ptxId: newTxId,
+        customerId: String(customerId),
+        type: 'reverse',
+        amount: totalReversed,
+        pointsBefore: b,
+        pointsAfter: a,
+        referenceType: 'sale', referenceId: String(referenceId),
+        note: `คืนคะแนนจากการยกเลิก/ลบ ${referenceId}`,
+        staffId: '', staffName: '',
+        createdAt: now,
+      });
+      return { before: b, after: a, exists: ex };
     });
-    try {
-      await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
-    } catch (e) {
-      // M9: see _earnPointsInternal for rationale.
-      console.error('[backendClient] reversePointsEarned: finance.loyaltyPoints update failed — tx log is authoritative, summary stale', {
-        customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after, error: e?.message,
+    if (!exists) {
+      console.error('[backendClient] reversePointsEarned: customer doc missing — point tx log written, summary skipped', {
+        customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after,
       });
     }
   }

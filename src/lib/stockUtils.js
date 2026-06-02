@@ -481,6 +481,7 @@ export function pickNegativeTargetBatch({ allocations, branchBatches, branchId, 
     const last = allocations[allocations.length - 1];
     if (last && last.batchId) return String(last.batchId);
   }
+  const now = new Date();
   const candidates = (Array.isArray(branchBatches) ? branchBatches : [])
     .filter((b) => {
       if (!b || !b.batchId) return false;
@@ -489,6 +490,16 @@ export function pickNegativeTargetBatch({ allocations, branchBatches, branchId, 
       // all branches equal peers, no synthetic 'main' branch. Strict
       // branchId equality preserves central-tier isolation.
       if (branchId && String(b.branchId) !== String(branchId)) return false;
+      // V150 (2026-06-02) — never carry the negative debt on a CANCELLED or
+      // EXPIRED lot. Decrementing an expired lot writes a movement that
+      // DOCUMENTS "expired units dispensed" (a MOPH-audit violation); a
+      // cancelled lot must stay void. If no active, non-expired lot exists, the
+      // caller creates a synthetic AUTO-NEG batch (Fallback C) to carry the debt
+      // cleanly — the expired lot's count stays intact for separate write-off.
+      // (The `allocations` path above is already expired-safe: batchFifoAllocate
+      // excludes expired/cancelled, so allocated lots are always valid.)
+      if (b.status === BATCH_STATUS.CANCELLED || b.status === BATCH_STATUS.EXPIRED) return false;
+      if (hasExpired(b, now)) return false;
       return true;
     })
     .sort((a, b) => {
