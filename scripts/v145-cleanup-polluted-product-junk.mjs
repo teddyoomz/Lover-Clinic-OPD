@@ -1,14 +1,22 @@
 #!/usr/bin/env node
-// Rule M (TWO-PHASE) — clean stock-aggregation junk that the pre-V145 edit bug
-// wrote onto be_products docs (batches/totalRemaining/totalCapacity/nextExpiry/
-// expired/unit/valueCost + stray `id`). DEFAULT = DRY-RUN (no writes). Pass
-// --apply to commit. Strips ONLY the junk keys via FieldValue.delete() — every
-// real field (productType/categoryName/mainUnitName/stockConfig/forensic/…) is
-// left untouched (updateDoc, NOT setDoc).
+// Rule M (TWO-PHASE) — clean the stock-aggregation junk that the pre-V145 edit
+// bug wrote onto be_products docs AND restore the cat/unit/type the same bug
+// blanked. DEFAULT = DRY-RUN (no writes). Pass --apply to commit.
 //
-// SEPARATELY FLAGS (does NOT auto-touch): docs whose junk-pollution also wiped
-// their type/category/unit (corruption signature) + duplicate productNames —
-// those need an explicit user decision (delete dup vs restore fields).
+// This op is PURELY NON-DESTRUCTIVE (updateDoc only — no deletes):
+//   PHASE A — strip junk keys (batches/totalRemaining/totalCapacity/nextExpiry/
+//             expired/unit/valueCost + stray `id`) via FieldValue.delete().
+//   PHASE B — restore productType/categoryName/subCategoryName/mainUnitName for
+//             the 35 corruption-signature docs:
+//               • 28 with a clean copy (same-branch sib > cross-branch) → copy
+//                 the 4 fields verbatim from that clean source.
+//               • 7 with NO clean copy → MANUAL_RESTORE map (inferred values,
+//                 user-reviewed). All 7 are IN USE (have stock batches).
+//   Forensic stamps (_v145JunkStripped* / _v145Restored*) on every touched doc.
+//
+// DEDUP of the 3 true same-branch duplicate names is NOT done here — 1 of the 3
+// (Neuramis 38764↔9B1DEFF7) needs a course/batch MERGE, so all dedup-deletes are
+// deferred to the cascade-safe product-delete built in the orphan-stock debug.
 //
 //   node scripts/v145-cleanup-polluted-product-junk.mjs            # dry-run
 //   node scripts/v145-cleanup-polluted-product-junk.mjs --apply    # commit
@@ -42,110 +50,128 @@ const C = (db, name) => db.collection('artifacts').doc(APP_ID).collection('publi
 
 // the stock-aggregation junk keys (NEVER legit on a be_products doc)
 const JUNK_KEYS = ['batches', 'totalRemaining', 'totalCapacity', 'nextExpiry', 'expired', 'unit', 'valueCost'];
+const RESTORE_FIELDS = ['productType', 'categoryName', 'subCategoryName', 'mainUnitName'];
+
+// 7 corruption-signature docs with NO clean copy anywhere (all IN USE — have
+// stock batches). Values inferred from the product name + the branch's existing
+// category set; subCategoryName='' (matches every clean sibling). USER-REVIEWED.
+const MANUAL_RESTORE = {
+  'PROD-mpp4dmws-d1b937d0da074884': { productType: 'ยา', categoryName: 'ยาทั่วไป', mainUnitName: 'เม็ด' },        // Buscopan (เม็ด)
+  'PROD-mpw64wje-6e3e107618482ef3': { productType: 'ยา', categoryName: 'ยาทั่วไป', mainUnitName: 'เม็ด' },        // Dimenhydrinate (เม็ด)
+  'PROD-mpw68hd7-eec4a9713cf51f8f': { productType: 'ยา', categoryName: 'ยาทั่วไป', mainUnitName: 'เม็ด' },        // Metroclopramide (เม็ด)
+  'PRODUCTS_1778150429849_06E6F90E': { productType: 'ยา', categoryName: 'ยาทั่วไป', mainUnitName: 'ขวด' },        // 2% Lindocain without adrenaline (ยาชา)
+  'PRODUCTS_1778150429849_41DC9B11': { productType: 'สินค้าสิ้นเปลือง', categoryName: 'อุปกรณ์ทั่วไป', mainUnitName: 'กล่อง' }, // เข็มทู่ เบอร์ 21 (70mm) 50ชิ้น/กล่อง
+  'PRODUCTS_1778150429849_5FA24C67': { productType: 'สินค้าสิ้นเปลือง', categoryName: 'อุปกรณ์ทั่วไป', mainUnitName: 'กล่อง' }, // Syring 1 ml 100ชิ้น/กล่อง
+  'PRODUCTS_1778150429849_63949276': { productType: 'สินค้าสิ้นเปลือง', categoryName: 'อุปกรณ์ทั่วไป', mainUnitName: 'กล่อง' }, // เข็มทู่ เบอร์ 18 (50mm) 50ชิ้น/กล่อง
+};
+
 const APPLY = process.argv.includes('--apply');
+const norm = (s) => String(s || '').trim().toLowerCase();
 
 async function main() {
-  console.log(`▶ V145 product-junk cleanup — ${APPLY ? 'APPLY (writing)' : 'DRY-RUN (no writes)'}\n`);
+  console.log(`▶ V145 product cleanup (strip junk + restore cat/unit/type) — ${APPLY ? 'APPLY (writing)' : 'DRY-RUN (no writes)'}\n`);
   const db = getAdmin();
   const snap = await C(db, 'be_products').get();
   console.log(`be_products total: ${snap.size}\n`);
 
-  const polluted = [];          // { docId, name, junk:[keys], strayId, branchId, corruptionFlag }
-  // be_products is BRANCH-SCOPED → group by branchId+name so per-branch copies
-  // are NOT counted as duplicates (only same-branch same-name = a true dup).
-  const nameGroups = new Map();  // `${branchId}|${name}` -> [{docId, blank, junk}]
-  const allDocs = [];            // for clean-sibling lookup
-
-  for (const d of snap.docs) {
-    const data = d.data();
-    allDocs.push({ docId: d.id, data });
-    const nm = String(data.productName || data.name || '').trim().toLowerCase();
-    const blank = !String(data.categoryName || '').trim() || !String(data.mainUnitName || '').trim();
-    const hasJunk = JUNK_KEYS.some(k => k in data);
+  const allDocs = snap.docs.map(d => ({ docId: d.id, data: d.data() }));
+  const nameGroups = new Map();        // `${branchId}|${name}` -> [{docId, blank, junk}]
+  for (const { docId, data } of allDocs) {
+    const nm = norm(data.productName || data.name);
     if (nm) {
       const key = `${data.branchId || '?'}|${nm}`;
       if (!nameGroups.has(key)) nameGroups.set(key, []);
-      nameGroups.get(key).push({ docId: d.id, blank, junk: hasJunk });
+      nameGroups.get(key).push({ docId, blank: !String(data.categoryName || '').trim() || !String(data.mainUnitName || '').trim(), junk: JUNK_KEYS.some(k => k in data) });
     }
-
-    const junk = JUNK_KEYS.filter(k => k in data);
-    const strayId = ('id' in data) && String(data.id) !== d.id; // stray data `id` ≠ doc id
-    if (junk.length === 0 && !strayId) continue;
-
-    // corruption signature: junk-polluted AND blank category AND blank unit
-    // (the pre-V145 wipe set type→default + blanked cat/unit + added junk)
-    const blankCat = !String(data.categoryName || '').trim();
-    const blankUnit = !String(data.mainUnitName || '').trim();
-    polluted.push({
-      docId: d.id, name: data.productName || data.name || '(no name)',
-      junk, strayId, branchId: data.branchId,
-      corruptionFlag: junk.length > 0 && blankCat && blankUnit,
-      type: data.productType, cat: data.categoryName, unit: data.mainUnitName,
-    });
   }
 
-  // ── report: junk-strip candidates ──
-  console.log(`── JUNK-POLLUTED docs (will be cleaned by --apply): ${polluted.length} ──`);
-  const junkKeyCount = {};
-  for (const p of polluted) {
-    for (const k of p.junk) junkKeyCount[k] = (junkKeyCount[k] || 0) + 1;
-    if (p.strayId) junkKeyCount['id(stray)'] = (junkKeyCount['id(stray)'] || 0) + 1;
-  }
-  console.log('  junk-key frequency:', JSON.stringify(junkKeyCount));
-  for (const p of polluted.slice(0, 40)) {
-    console.log(`  ${p.docId} "${p.name}" branch=${p.branchId} strip=[${[...p.junk, ...(p.strayId ? ['id'] : [])].join(',')}]${p.corruptionFlag ? '  ⚠CORRUPTION-SIGNATURE (type/cat/unit wiped)' : ''}`);
-  }
-  if (polluted.length > 40) console.log(`  …and ${polluted.length - 40} more`);
-
-  // ── report: corruption-signature + clean-same-branch-sibling check (DECISION) ──
-  const norm = (s) => String(s || '').trim().toLowerCase();
-  const corrupt = polluted.filter(p => p.corruptionFlag);
-  console.log(`\n── ⚠ CORRUPTION-SIGNATURE docs (type/cat/unit wiped — junk-strip alone won't restore them): ${corrupt.length} ──`);
+  // clean-copy lookup: same name, non-blank cat+unit, no junk
   const isClean = (o, p) => o.docId !== p.docId
     && norm(o.data.productName || o.data.name) === norm(p.name)
     && String(o.data.categoryName || '').trim() && String(o.data.mainUnitName || '').trim()
     && !JUNK_KEYS.some(k => k in o.data);
-  let withSibling = 0, withCross = 0, noSource = 0;
-  for (const p of corrupt) {
-    const sib = allDocs.find(o => String(o.data.branchId) === String(p.branchId) && isClean(o, p));
-    const cross = !sib && allDocs.find(o => String(o.data.branchId) !== String(p.branchId) && isClean(o, p));
-    if (sib) withSibling++; else if (cross) withCross++; else noSource++;
-    const restore = sib ? `same-branch ${sib.docId}` : cross ? `CROSS-branch ${cross.docId} (cat="${cross.data.categoryName}" unit="${cross.data.mainUnitName}" type=${cross.data.productType})` : 'NO clean copy anywhere — manual/ProClinic';
-    console.log(`  ${p.docId} "${p.name}" → restore source: ${restore}`);
+
+  // build the per-doc plan for every polluted doc
+  const plan = [];   // { docId, name, branchId, junk, strayId, restore:{src, fields} | null, corruption }
+  for (const { docId, data } of allDocs) {
+    const junk = JUNK_KEYS.filter(k => k in data);
+    const strayId = ('id' in data) && String(data.id) !== docId;
+    if (junk.length === 0 && !strayId) continue;
+    const name = data.productName || data.name || '(no name)';
+    const blankCat = !String(data.categoryName || '').trim();
+    const blankUnit = !String(data.mainUnitName || '').trim();
+    const corruption = junk.length > 0 && blankCat && blankUnit;
+
+    let restore = null;
+    if (corruption) {
+      const sib = allDocs.find(o => String(o.data.branchId) === String(data.branchId) && isClean(o, { docId, name }));
+      const cross = !sib && allDocs.find(o => String(o.data.branchId) !== String(data.branchId) && isClean(o, { docId, name }));
+      const src = sib || cross;
+      if (src) {
+        const fields = {}; for (const f of RESTORE_FIELDS) fields[f] = src.data[f] ?? '';
+        restore = { src: `${sib ? 'same-branch' : 'cross-branch'} ${src.docId}`, fields };
+      } else if (MANUAL_RESTORE[docId]) {
+        restore = { src: 'manual', fields: { ...MANUAL_RESTORE[docId], subCategoryName: '' } };
+      } else {
+        restore = { src: 'NONE — no clean copy + not in MANUAL_RESTORE', fields: null };
+      }
+    }
+    plan.push({ docId, name, branchId: data.branchId, junk, strayId, restore, corruption, priorType: data.productType });
   }
-  console.log(`  → restore sources: same-branch=${withSibling}, cross-branch=${withCross}, NONE=${noSource} (of ${corrupt.length})`);
 
-  // ── report: TRUE same-branch duplicate names (be_products is branch-scoped) ──
+  // ── report ──
+  console.log(`── ${plan.length} polluted docs (PHASE A junk-strip + PHASE B restore) ──`);
+  let restored = 0, manualCount = 0, noSource = 0;
+  for (const p of plan) {
+    const stripStr = `strip=[${[...p.junk, ...(p.strayId ? ['id'] : [])].join(',')}]`;
+    let restoreStr = '';
+    if (p.restore && p.restore.fields) {
+      const f = p.restore.fields;
+      restoreStr = `  RESTORE←${p.restore.src}: type="${f.productType}" cat="${f.categoryName}" unit="${f.mainUnitName}"`;
+      if (p.restore.src === 'manual') manualCount++; else restored++;
+    } else if (p.restore && !p.restore.fields) {
+      restoreStr = `  ⚠ ${p.restore.src}`; noSource++;
+    }
+    console.log(`  ${p.docId} "${p.name}" ${stripStr}${restoreStr}`);
+  }
+  console.log(`\n  → restore: from-clean-copy=${restored}, manual=${manualCount}, NO-SOURCE(strip only)=${noSource}`);
+
+  // ── dedup report (NOT touched here — deferred to cascade-safe delete) ──
   const dups = [...nameGroups.entries()].filter(([, arr]) => arr.length > 1);
-  console.log(`\n── TRUE same-branch duplicate names (branchId+name): ${dups.length} ──`);
-  for (const [key, arr] of dups.slice(0, 25)) console.log(`  ${key} → ${arr.length} docs: ${arr.map(a => a.docId + (a.junk ? '⚠junk' : '') + (a.blank ? '∅blank' : '')).join(', ')}`);
-  if (dups.length > 25) console.log(`  …and ${dups.length - 25} more`);
+  console.log(`\n── TRUE same-branch duplicate names: ${dups.length} (NOT deduped here — deferred to cascade-safe delete) ──`);
+  for (const [key, arr] of dups) console.log(`  ${key} → ${arr.map(a => a.docId + (a.junk ? '⚠junk' : '') + (a.blank ? '∅blank' : '')).join(', ')}`);
 
-  // ── APPLY (strip junk only) ──
   if (!APPLY) {
-    console.log(`\nDRY-RUN complete. --apply would STRIP junk from ${polluted.length} docs (real fields untouched). NO corruption-restore, NO dedup (those stay manual).`);
+    console.log(`\nDRY-RUN complete. --apply would: strip junk from ${plan.length} docs + restore cat/unit/type on ${restored + manualCount} (${restored} clean-copy + ${manualCount} manual). NO deletes, NO dedup.`);
     process.exit(0);
   }
 
-  console.log(`\n▶ APPLYING junk-strip to ${polluted.length} docs…`);
+  // ── APPLY ──
+  console.log(`\n▶ APPLYING…`);
   let written = 0;
-  for (const p of polluted) {
+  for (const p of plan) {
     const patch = {};
     for (const k of p.junk) patch[k] = FieldValue.delete();
     if (p.strayId) patch.id = FieldValue.delete();
     patch._v145JunkStrippedAt = FieldValue.serverTimestamp();
     patch._v145JunkStrippedKeys = [...p.junk, ...(p.strayId ? ['id'] : [])].join(',');
+    if (p.restore && p.restore.fields) {
+      for (const [f, v] of Object.entries(p.restore.fields)) patch[f] = v;
+      patch._v145RestoredFrom = p.restore.src;
+      patch._v145RestoredLegacyType = p.priorType ?? '';
+      patch._v145RestoredAt = FieldValue.serverTimestamp();
+    }
     await C(db, 'be_products').doc(p.docId).update(patch);
     written++;
   }
-  const auditId = `v145-product-junk-cleanup-${randomBytes(6).toString('hex')}`;
+  const auditId = `v145-product-cleanup-${randomBytes(6).toString('hex')}`;
   await C(db, 'be_admin_audit').doc(auditId).set({
-    op: 'v145-product-junk-cleanup', scanned: snap.size, cleaned: written,
-    junkKeyFrequency: junkKeyCount, corruptionSignatureCount: corrupt.length,
-    duplicateNameCount: dups.length, appliedAt: FieldValue.serverTimestamp(),
+    op: 'v145-product-cleanup', scanned: snap.size, touched: written,
+    restoredFromCleanCopy: restored, restoredManual: manualCount, stripOnlyNoSource: noSource,
+    duplicateNameGroups: dups.length, appliedAt: FieldValue.serverTimestamp(),
   });
-  console.log(`✓ APPLIED — cleaned ${written} docs. audit: ${auditId}`);
-  console.log(`  NOTE: ${corrupt.length} corruption-signature docs + ${dups.length} duplicate names were NOT auto-restored/deduped (manual decision).`);
+  console.log(`✓ APPLIED — touched ${written} docs (restored ${restored + manualCount}). audit: ${auditId}`);
+  console.log(`  NOTE: ${dups.length} duplicate-name groups NOT deduped (deferred to cascade-safe delete).`);
   process.exit(0);
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(e => { console.error(e); process.exit(1); });

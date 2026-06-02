@@ -57,6 +57,10 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // Phase 15.5 / Item 1 — per-product threshold lookup map keyed by productId
   // Shape: { [productId]: { alertDayBeforeExpire, alertQtyBeforeOutOfStock, alertQtyBeforeMaxStock } }
   const [productThresholdMap, setProductThresholdMap] = useState({});
+  // V146 orphan-backstop (2026-06-02) — true once the be_products listener has
+  // fired at least once. Gate the orphan-row filter on this so we never hide
+  // every row during the initial async load (map empty → all look orphan).
+  const [productsLoaded, setProductsLoaded] = useState(false);
   // V35.2-bis (2026-04-28) — clarification from user: "batch ที่หมายถึง
   // หมายถึง lot ที่นำเข้าแล้ววันหมดอายุมันต่างกันอะ ที่เวลากดเข้าไปหน้า
   // ปรับสต็อคอันไหนมี lot มากกว่า 1 ก็จะสามารถเลือกปรับแต่งตาม lot ได้
@@ -138,6 +142,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         };
       }
       setProductThresholdMap(map);
+      setProductsLoaded(true);
     }, (err) => {
       console.error('[StockBalance] listenToProducts failed:', err);
     });
@@ -251,13 +256,31 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         return ae.localeCompare(be);
       });
     }
+    // V146 orphan-backstop (2026-06-02, AV176) — defense-in-depth for the
+    // delete-cascade fix. A batch whose productId has NO be_products doc is an
+    // ORPHAN (the product was hard-deleted but its batch lingered → it rendered
+    // here with "-" cat/type — the user-reported bug). Once products are loaded:
+    //   • orphan with remaining ≤ 0 → DROP (deleted product stops lingering).
+    //   • orphan with remaining > 0 → KEEP + flag isOrphan (NEVER silently hide
+    //     real inventory — Rule Q-honest; the row can warn the admin instead).
+    // Products that exist (tEntry present) are never touched. Primary fix is the
+    // cascade (deleteProductWithCascade); this backstop self-heals any orphan a
+    // future code path / race might still create.
+    const grouped = Array.from(byProduct.values());
+    const afterOrphan = productsLoaded
+      ? grouped.filter((p) => {
+          if (productThresholdMap[String(p.productId)]) return true; // product exists
+          p.isOrphan = true;
+          return p.totalRemaining > 0; // hide empty/negative orphans; keep+flag live ones
+        })
+      : grouped;
     // V43-followup (2026-05-19 NIGHT+5 EOD+1) — filter out products flagged
     // skipStockDeduction:true via the single-source helper (AV97 invariant).
     // The flag is stamped on each row inside the groupBy loop above so the
     // helper can read it directly (Rule O single-source contract).
-    const visibleRows = filterOutSkippedProducts(Array.from(byProduct.values()));
+    const visibleRows = filterOutSkippedProducts(afterOrphan);
     return visibleRows.sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
-  }, [batches, productThresholdMap]);
+  }, [batches, productThresholdMap, productsLoaded]);
 
   // Phase 15.5 / Item 1 — pure helpers exported on shape for testability.
   // Each returns true when the per-product threshold is configured AND breached.

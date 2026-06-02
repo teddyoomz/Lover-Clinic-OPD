@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Package, Loader2, Tag } from 'lucide-react';
-import { listProducts, deleteProduct } from '../../lib/scopedDataLayer.js';
+import { listProducts } from '../../lib/scopedDataLayer.js';
+import { deleteProductWithCascade, previewProductDelete } from '../../lib/productDeleteClient.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -55,14 +56,35 @@ export default function ProductsTab({ clinicSettings, theme }) {
     });
   }, [items, query, filterStatus, filterType]);
 
+  // Guard + cascade delete (systematic-debugging fix 2026-06-02, AV176).
+  // Bare deleteProduct left orphan be_stock_batches (→ lingered in the stock
+  // balance view) + course refs. Now: preview → BLOCK if the product has live
+  // stock (>0) or is a course main product; else cascade (delete product +
+  // clear its batches + pull from courseProducts[]). via productDeleteClient.
   const handleDelete = async (p) => {
     const id = p.productId || p.id;
     const name = p.productName || 'สินค้า';
-    if (!window.confirm(`ลบ "${name}" ?\nลบจาก Firestore — ย้อนไม่ได้`)) return;
     setDeleting(id); setError('');
-    try { await deleteProduct(id); await reload(); }
-    catch (e) { setError(e.message || 'ลบไม่สำเร็จ'); }
-    finally { setDeleting(null); }
+    try {
+      const pv = await previewProductDelete({ productId: id });
+      if (pv.blocked) {
+        setError(`ลบ "${name}" ไม่ได้: ${pv.reasons.map(r => r.message).join(' • ')}`);
+        return;
+      }
+      const parts = [];
+      if (pv.plan.batchesToDelete) parts.push(`ลบ ${pv.plan.batchesToDelete} ล็อตสต็อก`);
+      if (pv.plan.batchesToCancel) parts.push(`ยกเลิก ${pv.plan.batchesToCancel} ล็อตติดลบ`);
+      if (pv.plan.coursesToUpdate) parts.push(`เอาออกจาก ${pv.plan.coursesToUpdate} คอร์ส`);
+      if (pv.plan.groupsToUpdate) parts.push(`เอาออกจาก ${pv.plan.groupsToUpdate} กลุ่มสินค้า`);
+      const extra = parts.length ? `\nจะ${parts.join(' + ')}ด้วย` : '';
+      if (!window.confirm(`ลบ "${name}" ?${extra}\nลบจาก Firestore — ย้อนไม่ได้`)) return;
+      await deleteProductWithCascade({ productId: id });
+      await reload();
+    } catch (e) {
+      setError(e.userMessage || e.message || 'ลบไม่สำเร็จ');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const extraFilters = (

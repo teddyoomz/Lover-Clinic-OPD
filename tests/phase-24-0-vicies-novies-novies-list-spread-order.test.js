@@ -331,9 +331,15 @@ describe('S7 — UI handleDelete contract (ProductsTab + CoursesTab)', () => {
     expect(src).toMatch(/const\s+id\s*=\s*\w+\.courseId\s*\|\|\s*\w+\.id\s*;/);
   });
 
-  it('S7.3 ProductsTab imports deleteProduct from scopedDataLayer (BSA Layer 2)', () => {
+  it('S7.3 ProductsTab routes delete through productDeleteClient cascade (V146/AV176 — was: bare deleteProduct from scopedDataLayer)', () => {
+    // V146 (2026-06-02) — orphan-stock debug fix. ProductsTab delete moved from
+    // the bare scopedDataLayer `deleteProduct` (doc-only, left orphan stock
+    // batches + course refs) to the Guard+cascade `deleteProductWithCascade` /
+    // `previewProductDelete` in productDeleteClient.js. The bare deleteProduct
+    // import is now FORBIDDEN in the Products tab (AV176).
     const src = read(PRODUCTS_TAB_PATH);
-    expect(src).toMatch(/import\s*\{[^}]*deleteProduct[^}]*\}\s*from\s*['"][^'"]*scopedDataLayer/);
+    expect(src).toMatch(/import\s*\{[^}]*deleteProductWithCascade[^}]*\}\s*from\s*['"][^'"]*productDeleteClient/);
+    expect(src).not.toMatch(/import\s*\{[^}]*\bdeleteProduct\b[^}]*\}\s*from\s*['"][^'"]*scopedDataLayer/);
   });
 
   it('S7.4 CoursesTab imports deleteCourse from scopedDataLayer', () => {
