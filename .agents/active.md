@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-06-02 EOD+4 — Stock adversarial-hunt LOOP: V147-V152 (6 concurrency/atomicity fixes) + R16-R21 (6 consecutive CLEAN verification rounds → loop CONVERGED). V147-V150 DEPLOYED; V151+V152 local."
-status: "Loop CONVERGED. 6 real bugs found+fixed (V147-V152, all read-outside-tx RMW / atomicity family → iron-clad Rule T). 6 fresh adversarial rounds (R16-R21) across all distinct stock surfaces found ZERO new app bugs (every 'finding' was MY test-assumption/filter error, corrected to confirm the app is right). Stop condition met."
+updated_at: "2026-06-02 EOD+4 — Stock adversarial-hunt LOOP: V147-V152 (6 concurrency/atomicity fixes) + R16-R21 (6 consecutive CLEAN verification rounds → loop CONVERGED). ALL V147-V152 DEPLOYED LIVE."
+status: "Loop CONVERGED + ALL DEPLOYED. 6 real bugs found+fixed (V147-V152, all read-outside-tx RMW / atomicity family → iron-clad Rule T). 6 fresh adversarial rounds (R16-R21) across all distinct stock surfaces found ZERO new app bugs (every 'finding' was MY test-assumption/filter error, corrected to confirm the app is right). Stop condition met."
 branch: "master"
-last_commit: "010bb24c (R21 regression). All V147-V152 + R16-R21 committed + pushed."
+last_commit: "ae51cc18 (active.md). All V147-V152 + R16-R21 committed + pushed + DEPLOYED."
 tests: "Full vitest 15898/0 (after V152). Every fix: source-grep test + audit invariant. Every round R16-R21: real-prod Rule Q L2 e2e green (17+10+16+10+10+12 = 75 prod assertions, zero orphans). build clean. NOT re-run at session-end."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ab0080e4 (V147+V148+V149+V150) DEPLOYED LIVE this session. V151 (8a95f7ec) + V152 (82170c99) committed+pushed but NOT deployed — frontend-only, await the single end-of-night deploy."
+production_commit: "ae51cc18 — ALL V147-V152 LIVE (vercel --prod EOD+4; frontend-only, aliased to lover-clinic-app.vercel.app)."
 firestore_rules_version: "UNCHANGED — all V147-V152 are client-SDK logic (runTransaction/CAS) fitting existing rules. NO rules change → no Probe-Deploy-Probe."
 ---
 
@@ -32,8 +32,8 @@ firestore_rules_version: "UNCHANGED — all V147-V152 are client-SDK logic (runT
 **Negative-stock from TFP/sale CONFIRMED INTACT** (user's key ask): R16.4 + R17.1 + R18.3 + R20.3 + earlier 18/0 comprehensive.
 
 ## Next action
-- **DEPLOY V151 + V152** (frontend-only, no Probe-Deploy-Probe) — user said "จะ deploy ทีเดียว" (deploy once at the end). User-triggered.
-- Loop is converged — no further rounds warranted (6 clean; every R16-R21 "finding" was a test-assumption error, strong signal the app is correct).
+- **DONE — all V147-V152 DEPLOYED LIVE** (vercel --prod EOD+4). Loop converged. No further rounds warranted (6 clean; every R16-R21 "finding" was a test-assumption error, strong signal the app is correct).
+- Next session = idle on stock; pick up a carryover task below OR await new direction.
 
 ## Outstanding (user-triggered, carryover from EOD+3)
-- Deploy V151+V152 · dropdown หมวดหมู่ task (3rd original ask, not started) · V-log-archive verbose entries (V147-V152) unwritten · Neuramis merge + junk test-course "หฟแฟ" (deferred data).
+- dropdown หมวดหมู่ task (3rd original ask, not started; be_product_groups empty → source = distinct categoryName, brainstorm needed) · V-log-archive verbose entries (V147-V152) unwritten (one-liners in 00-session-start are enough to recognize) · Neuramis merge + junk test-course "หฟแฟ" (deferred data).
