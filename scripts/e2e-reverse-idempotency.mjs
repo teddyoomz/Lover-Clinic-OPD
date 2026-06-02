@@ -29,7 +29,7 @@ import { getAuth as adminAuth } from 'firebase-admin/auth';
 import { signInWithCustomToken, signOut } from 'firebase/auth';
 
 import { auth as clientAuth } from '../src/firebase.js';
-import { refundToWallet, deductWallet, reversePointsEarned } from '../src/lib/backendClient.js';
+import { refundToWallet, deductWallet, reversePointsEarned, earnPoints } from '../src/lib/backendClient.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const NS = `TEST-REVIDEM-${Date.now()}-${randomBytes(3).toString('hex')}`;
@@ -143,13 +143,17 @@ async function main() {
     // ── PE — points edit(reverse→re-earn) ×2 → cancel → delete: net stays right ─
     console.log('\nPE — edit reverse→re-earn ×2 → cancel → delete (net-reverse correctness)');
     const CP2 = `${NS}-PE`, SIDP2 = `${NS}-PE-sale`;
-    cleanup.push(['be_customers', CP2], ['be_point_transactions', `${NS}-PEe1`], ['be_point_transactions', `${NS}-PEe2`], ['be_point_transactions', `${NS}-PEe3`]);
+    cleanup.push(['be_customers', CP2], ['be_point_transactions', `${NS}-PEe1`]);
     await data.collection('be_customers').doc(CP2).set({ customerId: CP2, fullName: 'RevIdem PE', branchId: `${NS}-BR`, finance: { loyaltyPoints: 50 }, createdAt: new Date().toISOString() });
-    await addEarnTx(CP2, SIDP2, 50, 'PEe1');                 // original sale earned 50, points=50
-    await reversePointsEarned(CP2, SIDP2);                    // edit1 reverse → net 50 → points 0
-    await addEarnTx(CP2, SIDP2, 50, 'PEe2'); await setPoints(CP2, 50);  // edit1 re-earn → points 50
-    await reversePointsEarned(CP2, SIDP2);                    // edit2 reverse → net (100-50)=50 → points 0
-    await addEarnTx(CP2, SIDP2, 50, 'PEe3'); await setPoints(CP2, 50);  // edit2 re-earn → points 50
+    // V158: PEe1 = legacy original earn via raw addEarnTx (NO pointsSaleNet marker)
+    // → exercises the legacy-SEED reverse path; the re-earns go through the REAL
+    // earnPoints (which maintains the marker in-tx) → faithfully mirrors a legacy
+    // sale (earned pre-V158) edited post-V158. R14 covers the all-real edit flow.
+    await addEarnTx(CP2, SIDP2, 50, 'PEe1');                 // legacy original earned 50 (no marker), points=50
+    await reversePointsEarned(CP2, SIDP2);                    // edit1 reverse → seed 50 → points 0, marker→0
+    await earnPoints(CP2, { purchaseAmount: 500, bahtPerPoint: 10, referenceType: 'sale', referenceId: SIDP2 });  // edit1 re-earn 50 → points 50, marker 50
+    await reversePointsEarned(CP2, SIDP2);                    // edit2 reverse → marker 50 → points 0, marker→0
+    await earnPoints(CP2, { purchaseAmount: 500, bahtPerPoint: 10, referenceType: 'sale', referenceId: SIDP2 });  // edit2 re-earn 50 → points 50, marker 50
     await reversePointsEarned(CP2, SIDP2);                    // cancel → net (150-100)=50 → points 0
     const peCancel = await readPoints(CP2);
     await reversePointsEarned(CP2, SIDP2);                    // delete → net (150-150)=0 → NO-OP

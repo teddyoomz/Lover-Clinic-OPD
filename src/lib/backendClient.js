@@ -5072,6 +5072,7 @@ export async function deductWallet(customerId, walletTypeId, {
 } = {}) {
   const amt = roundTHB(Number(amount) || 0); // V156 (M12): round at money-write boundary
   if (amt <= 0) throw new Error('ยอดหักต้องมากกว่า 0');
+  const dRef = String(referenceId || ''); // V158
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
 
@@ -5085,12 +5086,17 @@ export async function deductWallet(customerId, walletTypeId, {
     if (before < amt) throw new Error(`ยอดกระเป๋าไม่พอ (มี ${before} ต้องการ ${amt})`);
     const after = before - amt;
     const now = new Date().toISOString();
-    tx.update(ref, {
+    const patch = {
       balance: after,
       totalUsed: (Number(cur.totalUsed) || 0) + amt,
       lastTransactionAt: now,
       updatedAt: now,
-    });
+    };
+    // V158: maintain per-sale net (Σdeduct−Σrefund) on the wallet doc IN-tx so
+    // refundToWallet's dedup can be CONCURRENCY-safe (was a non-tx query → R16
+    // concurrent double-cancel double-refunded). A deduct increments the net.
+    if (dRef) patch[`saleNet.${dRef}`] = (Number(cur.saleNet?.[dRef]) || 0) + amt;
+    tx.update(ref, patch);
     tx.set(walletTxDoc(newTxId), {
       txId: newTxId,
       customerId: String(customerId),
@@ -5135,6 +5141,14 @@ export async function refundToWallet(customerId, walletTypeId, {
   // Same 2-equality query shape as reversePointsEarned (proven indexed); the
   // walletType + type split is done client-side. Skipped when referenceId empty.
   const refId = String(referenceId || '');
+  // V158 — legacy SEED for the in-tx dedup: for wallets WITHOUT a saleNet marker
+  // (sales deducted before V158) compute Σdeduct−Σrefund ONCE to seed the marker.
+  // New sales carry saleNet (maintained in-tx by deductWallet) → the in-tx read in
+  // the transaction below is the CONCURRENCY-safe source. R16 proved the V153
+  // non-tx query double-refunded on a CONCURRENT double-cancel; the in-tx marker
+  // + OCC retry (the 2nd tx re-reads the seeded/decremented marker) fixes it while
+  // staying edit-safe (deduct increments the net, refund decrements it).
+  let legacyOutstanding = Infinity;
   if (refId) {
     const refTxSnap = await getDocs(query(walletTxCol(),
       where('customerId', '==', String(customerId)),
@@ -5148,9 +5162,7 @@ export async function refundToWallet(customerId, walletTypeId, {
       if (t.type === 'deduct') deducted += a;
       else if (t.type === 'refund') refunded += a;
     }
-    if (deducted - refunded < amt) {
-      return { success: true, alreadyRefunded: true, skipped: true, outstanding: deducted - refunded };
-    }
+    legacyOutstanding = deducted - refunded;
   }
 
   // M5: atomic balance + tx-log write.
@@ -5159,14 +5171,21 @@ export async function refundToWallet(customerId, walletTypeId, {
     const snap = await tx.get(ref);
     const cur = snap.data() || {};
     const before = Number(cur.balance) || 0;
-    const after = before + amt;
     const now = new Date().toISOString();
-    tx.update(ref, {
+    // V158 — in-tx dedup (concurrency-safe). outstanding = the saleNet marker if
+    // present (new sales), else the legacy seed. Refund only up to outstanding.
+    const hasMarker = !!(refId && cur.saleNet && Object.prototype.hasOwnProperty.call(cur.saleNet, refId));
+    const outstanding = refId ? (hasMarker ? (Number(cur.saleNet[refId]) || 0) : legacyOutstanding) : Infinity;
+    if (refId && outstanding < amt) return { before, after: before, skipped: true };
+    const after = before + amt;
+    const patch = {
       balance: after,
       // totalUsed is NOT decremented so lifetime usage metrics stay accurate
       lastTransactionAt: now,
       updatedAt: now,
-    });
+    };
+    if (refId) patch[`saleNet.${refId}`] = outstanding - amt;
+    tx.update(ref, patch);
     tx.set(walletTxDoc(newTxId), {
       txId: newTxId,
       customerId: String(customerId),
@@ -5184,6 +5203,7 @@ export async function refundToWallet(customerId, walletTypeId, {
     return { before, after };
   });
 
+  if (result.skipped) return { success: true, alreadyRefunded: true, skipped: true }; // V158 — nothing outstanding for this sale
   await recalcCustomerWalletBalances(customerId);
   return { success: true, txId: newTxId, ...result };
 }
@@ -5587,9 +5607,19 @@ async function _earnPointsInternal(customerId, points, meta = {}) {
     const cRef = customerDoc(customerId);
     const cSnap = await tx.get(cRef);
     const ex = cSnap.exists();
-    const b = Number(cSnap.data()?.finance?.loyaltyPoints) || 0;
+    const fin = cSnap.data()?.finance || {};
+    const b = Number(fin.loyaltyPoints) || 0;
     const a = b + amt;
-    if (ex) tx.update(cRef, { 'finance.loyaltyPoints': a });
+    // V158 (2026-06-03) — maintain per-reference net earned (finance.pointsSaleNet
+    // [refId]) IN-tx so reversePointsEarned's dedup is concurrency-safe (R16 found a
+    // concurrent double-cancel over-reverses loyalty points — V153's Σearn−Σreverse
+    // query was explicitly "not a concurrency lock"). Referenced earns only (sale).
+    const _pRef = String(meta.referenceId || '');
+    if (ex) {
+      const _upd = { 'finance.loyaltyPoints': a };
+      if (_pRef) _upd[`finance.pointsSaleNet.${_pRef}`] = (Number(fin.pointsSaleNet?.[_pRef]) || 0) + amt;
+      tx.update(cRef, _upd);
+    }
     tx.set(pointTxDoc(newTxId), {
       ptxId: newTxId,
       customerId: String(customerId),
@@ -5691,13 +5721,20 @@ export async function reversePointsEarned(customerId, referenceId) {
     where('customerId', '==', String(customerId)),
     where('referenceId', '==', String(referenceId)),
   );
+  const refId = String(referenceId);
   const snap = await getDocs(q);
-  // V153 idempotency (money-leak class — sibling of M1 deposit + S5 stock CAS).
-  // NET the points earned for this reference against points ALREADY reversed for
-  // it, so a repeated reverse (cancel→delete the same sale, or a retry after
-  // cancelBackendSale threw) is a NO-OP instead of re-subtracting. Pre-V153 this
-  // summed 'earn' ONLY (ignored prior 'reverse' txns) → over-reversed the
-  // customer's loyalty balance every extra call (e2e-reverse-idempotency P2).
+  // V153 idempotency (money-leak class — sibling of M1 deposit + S5 stock CAS):
+  // NET points earned for this reference against points ALREADY reversed for it,
+  // so a repeated reverse (cancel→delete the same sale, or a retry after
+  // cancelBackendSale threw) is a NO-OP instead of re-subtracting (pre-V153 summed
+  // 'earn' ONLY → over-reversed the loyalty balance every extra call).
+  // V158 (2026-06-03): the Σearn−Σreverse query is NOT a concurrency lock — two
+  // CONCURRENT cancels both read the same sums and double-reverse (R16 confirmed
+  // loyalty points over-reversed on a double-click / two admins). So the query is
+  // now only a LEGACY SEED (sales earned before V158 carry no marker); the
+  // authoritative dedup reads finance.pointsSaleNet[refId] (maintained in-tx by
+  // _earnPointsInternal) INSIDE the tx → Firestore OCC serializes, the 2nd reverse
+  // re-reads the decremented marker → reverses 0 (mirror of the wallet saleNet fix).
   let earnedSum = 0, alreadyReversed = 0;
   for (const d of snap.docs) {
     const tx = d.data();
@@ -5705,40 +5742,44 @@ export async function reversePointsEarned(customerId, referenceId) {
     if (tx.type === 'earn') earnedSum += amt;
     else if (tx.type === 'reverse') alreadyReversed += amt;
   }
-  const totalReversed = Math.max(0, earnedSum - alreadyReversed);
-  if (totalReversed > 0) {
-    const newTxId = ptxId();
-    const now = new Date().toISOString();
-    // V149 (2026-06-02) — atomic points RMW (Rule T). Was getPointBalance→setDoc
-    // →updateDoc with NO tx. The totalReversed sum (query above) is reference data.
-    const { before, after, exists } = await runTransaction(db, async (tx) => {
-      const cRef = customerDoc(customerId);
-      const cSnap = await tx.get(cRef);
-      const ex = cSnap.exists();
-      const b = Number(cSnap.data()?.finance?.loyaltyPoints) || 0;
-      const a = Math.max(0, b - totalReversed);
-      if (ex) tx.update(cRef, { 'finance.loyaltyPoints': a });
-      tx.set(pointTxDoc(newTxId), {
-        ptxId: newTxId,
-        customerId: String(customerId),
-        type: 'reverse',
-        amount: totalReversed,
-        pointsBefore: b,
-        pointsAfter: a,
-        referenceType: 'sale', referenceId: String(referenceId),
-        note: `คืนคะแนนจากการยกเลิก/ลบ ${referenceId}`,
-        staffId: '', staffName: '',
-        createdAt: now,
-      });
-      return { before: b, after: a, exists: ex };
+  const legacyOutstanding = Math.max(0, earnedSum - alreadyReversed);
+  const newTxId = ptxId();
+  const now = new Date().toISOString();
+  const { reversed, before, after, exists } = await runTransaction(db, async (tx) => {
+    const cRef = customerDoc(customerId);
+    const cSnap = await tx.get(cRef);
+    const ex = cSnap.exists();
+    const fin = cSnap.data()?.finance || {};
+    const b = Number(fin.loyaltyPoints) || 0;
+    const hasMarker = !!(fin.pointsSaleNet && Object.prototype.hasOwnProperty.call(fin.pointsSaleNet, refId));
+    const markerVal = hasMarker ? (Number(fin.pointsSaleNet[refId]) || 0) : legacyOutstanding;
+    const outstanding = Math.max(0, markerVal);
+    if (outstanding <= 0) return { reversed: 0, before: b, after: b, exists: ex };
+    const a = Math.max(0, b - outstanding);
+    if (ex) tx.update(cRef, {
+      'finance.loyaltyPoints': a,
+      [`finance.pointsSaleNet.${refId}`]: markerVal - outstanding,
     });
-    if (!exists) {
-      console.error('[backendClient] reversePointsEarned: customer doc missing — point tx log written, summary skipped', {
-        customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after,
-      });
-    }
+    tx.set(pointTxDoc(newTxId), {
+      ptxId: newTxId,
+      customerId: String(customerId),
+      type: 'reverse',
+      amount: outstanding,
+      pointsBefore: b,
+      pointsAfter: a,
+      referenceType: 'sale', referenceId: refId,
+      note: `คืนคะแนนจากการยกเลิก/ลบ ${refId}`,
+      staffId: '', staffName: '',
+      createdAt: now,
+    });
+    return { reversed: outstanding, before: b, after: a, exists: ex };
+  });
+  if (reversed > 0 && !exists) {
+    console.error('[backendClient] reversePointsEarned: customer doc missing — point tx log written, summary skipped', {
+      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after,
+    });
   }
-  return { success: true, reversed: totalReversed };
+  return { success: true, reversed };
 }
 
 /** Get all point transactions for a customer (desc). */

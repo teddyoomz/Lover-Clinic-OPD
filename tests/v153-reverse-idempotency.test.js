@@ -20,7 +20,7 @@ const SRC = readFileSync(path.resolve(process.cwd(), 'src/lib/backendClient.js')
 function fnBody(name) {
   const start = SRC.indexOf(`export async function ${name}`);
   if (start < 0) throw new Error(`fn ${name} not found`);
-  return SRC.slice(start, start + 3400);
+  return SRC.slice(start, start + 4400); // V158 grew refundToWallet/reversePointsEarned (legacy seed + in-tx marker)
 }
 
 describe('V153.A — reversePointsEarned nets earn − already-reversed (idempotent)', () => {
@@ -49,9 +49,12 @@ describe('V153.B — refundToWallet refunds only up to NET outstanding (idempote
     expect(body).toMatch(/if\s*\(\s*t\.type === 'deduct'\s*\)\s*deducted/);
     expect(body).toMatch(/else if\s*\(\s*t\.type === 'refund'\s*\)\s*refunded/);
   });
-  it('B2 short-circuits when nothing is outstanding (deducted − refunded < amt)', () => {
-    expect(body).toMatch(/if\s*\(\s*deducted - refunded < amt\s*\)/);
-    expect(body).toMatch(/alreadyRefunded:\s*true/);
+  it('B2 short-circuits IN-tx when nothing is outstanding (V158 marker / legacy seed)', () => {
+    // V158: the short-circuit moved INSIDE the tx and reads the saleNet marker
+    // (or the legacyOutstanding seed for pre-V158 wallets) — was the pre-tx
+    // `if (deducted - refunded < amt)` query guard (not concurrency-safe, R16).
+    expect(body).toMatch(/legacyOutstanding = deducted - refunded;/);
+    expect(body).toMatch(/if \(refId && outstanding < amt\) return \{ before, after: before, skipped: true \}/);
   });
   it('B3 only guards when referenceId is present (generic refunds still allowed)', () => {
     expect(body).toMatch(/const refId = String\(referenceId \|\| ''\);/);

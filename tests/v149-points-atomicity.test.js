@@ -37,7 +37,12 @@ describe('V149 — loyalty-points atomic RMW (source-grep lock)', () => {
       expect(body).toContain('runTransaction(db, async (tx) =>');
       expect(body).toMatch(/await tx\.get\(cRef\)/);
       expect(body).toMatch(/finance\.loyaltyPoints/);
-      expect(body).toMatch(/tx\.update\(cRef, \{ 'finance\.loyaltyPoints'/);
+      // V158: earn/reverse build the update object separately (_upd) or add the
+      // finance.pointsSaleNet marker key, so the summary write is no longer a
+      // single inline literal — assert the in-tx tx.update + the computed summary
+      // key instead (the V149 atomic-RMW invariant still holds).
+      expect(body).toMatch(/tx\.update\(cRef,/);
+      expect(body).toMatch(/'finance\.loyaltyPoints': a/);
       expect(body).toMatch(/tx\.set\(pointTxDoc\(newTxId\)/);
     });
   }
