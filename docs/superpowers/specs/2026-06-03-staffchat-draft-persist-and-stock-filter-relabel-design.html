@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff-Chat Draft Persist + Stock Filter Relabel — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color: #333; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px; }
+    pre code { background: none; padding: 0; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+    .tag-before { display:inline-block; font-size:0.7em; font-weight:700; color:#b91c1c; background:#fee2e2; padding:1px 7px; border-radius:10px; }
+    .tag-after { display:inline-block; font-size:0.7em; font-weight:700; color:#15803d; background:#dcfce7; padding:1px 7px; border-radius:10px; }
+
+    /* ---- Faithful replica of the REAL stock filter bar (dark theme) ---- */
+    .stock-bar { background:#0a0a0a; border:1px solid #1c1c1c; border-radius:14px; padding:14px 18px; }
+    .stock-bar .row { display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
+    .stock-bar .search { flex:1; min-width:200px; position:relative; }
+    .stock-bar .search input { width:100%; box-sizing:border-box; padding:8px 12px 8px 30px; border-radius:8px; background:#121212; border:1px solid #262626; color:#bbb; font-size:13px; }
+    .stock-bar .search .mag { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#666; font-size:13px; }
+    .stock-bar label { display:inline-flex; align-items:center; gap:7px; font-size:11px; color:#8a8a8a; cursor:default; white-space:nowrap; }
+    .stock-bar label em { color:#6f6f6f; font-style:italic; }
+    .stock-bar input[type=checkbox] { width:13px; height:13px; }
+    .ck-orange { accent-color:#f97316; } .ck-red { accent-color:#ef4444; } .ck-violet { accent-color:#8b5cf6; } .ck-rose { accent-color:#f43f5e; }
+    .lbl-rose { color:#fda4af !important; } .lbl-red { color:#fca5a5 !important; }
+    .hl { outline:2px solid #f59e0b; outline-offset:3px; border-radius:4px; }
+
+    /* ---- Faithful-ish replica of the staff chat panel (dark) ---- */
+    .chat { width:340px; background:#111; border:1px solid #2a2a2a; border-radius:14px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+    .chat .hdr { background:#9f1239; color:#fff; padding:9px 12px; font-size:13px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+    .chat .hdr .min { background:rgba(255,255,255,.18); width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+    .chat .body { background:#0d0d0d; height:110px; padding:10px; font-size:12px; color:#777; display:flex; flex-direction:column; justify-content:flex-end; gap:6px; }
+    .chat .msg { align-self:flex-start; background:#1c1c1c; color:#ccc; padding:5px 9px; border-radius:9px; max-width:80%; }
+    .chat .reply { background:rgba(244,63,94,.10); border-bottom:1px solid rgba(244,63,94,.3); padding:5px 10px; font-size:11px; color:#fda4af; display:flex; align-items:center; gap:6px; }
+    .chat .stage { padding:7px 10px; display:flex; gap:7px; align-items:flex-start; flex-wrap:wrap; }
+    .chat .thumb { width:46px; height:46px; border-radius:7px; border:1px solid #2a2a2a; background:#1e1e1e; display:flex; align-items:center; justify-content:center; font-size:20px; position:relative; }
+    .chat .thumb .x { position:absolute; top:-5px; right:-5px; width:15px; height:15px; border-radius:50%; background:rgba(0,0,0,.85); color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center; }
+    .chat .thumb .nm { position:absolute; bottom:-14px; left:0; width:46px; font-size:8px; color:#777; text-align:center; }
+    .chat .composer { border-top:1px solid #222; padding:8px 9px; display:flex; align-items:flex-end; gap:7px; }
+    .chat .composer .ta { flex:1; background:#161616; border:1px solid #2a2a2a; border-radius:8px; padding:6px 9px; color:#ddd; font-size:12px; min-height:18px; }
+    .chat .composer .ta.empty { color:#555; }
+    .chat .composer .ic { width:30px; height:30px; border-radius:8px; background:#161616; display:flex; align-items:center; justify-content:center; color:#888; font-size:14px; }
+    .chat .composer .send { background:#e11d48; color:#fff; }
+    .bubble { width:54px; height:54px; border-radius:50%; background:#e11d48; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 6px 18px rgba(225,29,72,.5); position:relative; }
+    .bubble .badge { position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:#fff; color:#e11d48; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+    /* flow diagram */
+    .flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; }
+    .flow .node { border:1px solid #cbd5e1; background:#fff; border-radius:8px; padding:8px 12px; text-align:center; }
+    .flow .node.bad { border-color:#fca5a5; background:#fef2f2; }
+    .flow .node.good { border-color:#86efac; background:#f0fdf4; }
+    .flow .arrow { color:#94a3b8; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>Staff-Chat Draft Persist on Minimize + Stock Filter Relabel/Reorder</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-03 (EOD+2) · <strong>Status:</strong> Approved by user ("ok") ·
+  <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-03-staffchat-draft-persist-and-stock-filter-relabel.html (pending) ·
+  <strong>Type:</strong> 2 independent small UI changes (cosmetic-shell spirit — no flow/logic/wiring rewrite).
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<div class="section">
+  <p><strong>Feature A — Staff-chat draft lost on minimize.</strong> In the staff chatbox, after typing a message / setting a reply / staging image+file uploads, pressing the <code>–</code> (minimize) button and re-opening loses <em>everything</em>. Re-typing is friction during real clinic use. The user wants the in-progress working state preserved across a minimize→reopen cycle <em>on the same screen/tab</em>. Losing it on a full Frontend↔Backend switch / page reload / tab-close is acceptable ("ยกเว้นปิดไปทั้ง tab หรือ เปลี่ยน tab หรือปิดไปทั้งหน้า อันนั้นไม่เป็นไร").</p>
+  <p><strong>Root cause (verified in source):</strong> <code>StaffChatWidget.jsx:66-95</code> renders <code>chat.minimized ? &lt;StaffChatBubble/&gt; : &lt;StaffChatPanel&gt;…&lt;/StaffChatPanel&gt;</code>. Minimizing therefore <strong>unmounts</strong> the entire Panel including <code>StaffChatComposer</code>, whose local React state (<code>text</code>, <code>pendingFiles</code> — holding live <code>File</code> objects + <code>URL.createObjectURL</code> previews) is destroyed; the composer's unmount effect (<code>StaffChatComposer.jsx:58-60</code>) even revokes the object URLs. (<code>replyingTo</code> lives in the always-mounted <code>useStaffChat</code> hook, so it already survives — but the dominant text+file loss makes the whole thing feel wiped.)</p>
+  <p><strong>Feature B — Stock balance filter labels too verbose + wrong order.</strong> On <code>tab=stock → ยอดคงเหลือ</code>, rename the filter <code>หมด (คงเหลือ 0)</code> → <code>หมด</code> and <code>ติดลบ (ต้องเติมสต็อค)</code> → <code>ติดลบ</code>, and swap them so <strong>หมด comes before ติดลบ</strong>. Source: <code>StockBalancePanel.jsx:385-395</code>.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<h3>Feature B — stock filter bar (faithful replica of the real dark-theme bar)</h3>
+<p>Grounded in the user's screenshot + the real source (<code>text-[11px] text-[var(--tx-muted)]</code> labels, <code>accent-orange-500 / red-500 / violet-500 / rose-500</code> checkboxes, rose/red label tints, <code>em</code> hint text). The only change = the last two chips (relabel + swap). Everything else is byte-identical.</p>
+
+<div class="mockup">
+  <div class="mockup-label"><span class="tag-before">BEFORE</span> &nbsp; ติดลบ (ต้องเติมสต็อค) → หมด (คงเหลือ 0)</div>
+  <div class="stock-bar">
+    <div class="row">
+      <div class="search"><span class="mag">🔍</span><input placeholder="ค้นหาสินค้า..." readonly></div>
+      <label><input type="checkbox" class="ck-orange">ใกล้หมดอายุ (ตั้งใน <em>แจ้งก่อนหมดอายุ</em>)</label>
+      <label><input type="checkbox" class="ck-red">ใกล้หมด (ตั้งใน <em>แจ้งใกล้หมด</em>)</label>
+      <label><input type="checkbox" class="ck-violet">เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)</label>
+      <label class="lbl-rose hl"><input type="checkbox" class="ck-rose">ติดลบ (ต้องเติมสต็อค)</label>
+      <label class="lbl-red hl"><input type="checkbox" class="ck-red">หมด (คงเหลือ 0)</label>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label"><span class="tag-after">AFTER</span> &nbsp; หมด → ติดลบ (swapped + shortened)</div>
+  <div class="stock-bar">
+    <div class="row">
+      <div class="search"><span class="mag">🔍</span><input placeholder="ค้นหาสินค้า..." readonly></div>
+      <label><input type="checkbox" class="ck-orange">ใกล้หมดอายุ (ตั้งใน <em>แจ้งก่อนหมดอายุ</em>)</label>
+      <label><input type="checkbox" class="ck-red">ใกล้หมด (ตั้งใน <em>แจ้งใกล้หมด</em>)</label>
+      <label><input type="checkbox" class="ck-violet">เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)</label>
+      <label class="lbl-red hl"><input type="checkbox" class="ck-red">หมด</label>
+      <label class="lbl-rose hl"><input type="checkbox" class="ck-rose">ติดลบ</label>
+    </div>
+  </div>
+  <p style="font-size:0.8em;color:#666;margin:0.6em 0 0">Final order: <strong>ใกล้หมดอายุ · ใกล้หมด · เกินสต็อก · หมด · ติดลบ</strong>. <code>data-testid</code>s, filter state (<code>showOutOfStockOnly</code> / <code>showNegativeStockOnly</code>), predicates, accent colors, label tints — all unchanged. <em>(Row-level badges in the table below stay in their existing order — only the FILTER checkboxes move.)</em></p>
+</div>
+
+<h3>Feature A — staff chat draft (state preserved across minimize)</h3>
+<p>A draft = typed text <em>and</em> a reply context <em>and</em> staged image/file chips. The fix keeps the Panel mounted (hidden) so this is all preserved.</p>
+
+<div class="grid2">
+  <div class="mockup">
+    <div class="mockup-label">1 · Typing + reply + 2 staged files</div>
+    <div class="chat">
+      <div class="hdr"><span>แชทพนักงาน · นครราชสีมา</span><span class="min">–</span></div>
+      <div class="body"><div class="msg">โอนของให้ห้อง 3 แล้วนะ</div></div>
+      <div class="reply">↩ ตอบกลับ: โอนของให้ห้อง 3 แล้วนะ <span style="margin-left:auto">×</span></div>
+      <div class="stage">
+        <div class="thumb">🖼️<span class="x">×</span><span class="nm">scan.jpg</span></div>
+        <div class="thumb">📄<span class="x">×</span><span class="nm">ใบสั่ง.pdf</span></div>
+      </div>
+      <div class="composer"><div class="ic">😀</div><div class="ic">📎</div><div class="ta">รับทราบ กำลังจัด…</div><div class="ic send">➤</div></div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">2 · Press – → minimized (bubble)</div>
+    <div style="height:150px;display:flex;align-items:flex-end;justify-content:flex-end;padding:10px;background:#0d0d0d;border-radius:10px;">
+      <div class="bubble">💬<span class="badge">2</span></div>
+    </div>
+    <p style="font-size:0.78em;color:#666;margin:0.5em 0 0">Panel is <code>display:none</code> (mounted, in memory). Bubble shown.</p>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="mockup">
+    <div class="mockup-label"><span class="tag-before">BEFORE (bug)</span> · re-open → wiped</div>
+    <div class="chat">
+      <div class="hdr"><span>แชทพนักงาน · นครราชสีมา</span><span class="min">–</span></div>
+      <div class="body"><div class="msg">โอนของให้ห้อง 3 แล้วนะ</div></div>
+      <div class="composer"><div class="ic">😀</div><div class="ic">📎</div><div class="ta empty">พิมพ์ข้อความ...</div><div class="ic send">➤</div></div>
+    </div>
+    <p style="font-size:0.78em;color:#b91c1c;margin:0.5em 0 0">Text, reply, both files GONE (composer was unmounted).</p>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label"><span class="tag-after">AFTER (fixed)</span> · re-open → intact</div>
+    <div class="chat">
+      <div class="hdr"><span>แชทพนักงาน · นครราชสีมา</span><span class="min">–</span></div>
+      <div class="body"><div class="msg">โอนของให้ห้อง 3 แล้วนะ</div></div>
+      <div class="reply">↩ ตอบกลับ: โอนของให้ห้อง 3 แล้วนะ <span style="margin-left:auto">×</span></div>
+      <div class="stage">
+        <div class="thumb">🖼️<span class="x">×</span><span class="nm">scan.jpg</span></div>
+        <div class="thumb">📄<span class="x">×</span><span class="nm">ใบสั่ง.pdf</span></div>
+      </div>
+      <div class="composer"><div class="ic">😀</div><div class="ic">📎</div><div class="ta">รับทราบ กำลังจัด…</div><div class="ic send">➤</div></div>
+    </div>
+    <p style="font-size:0.78em;color:#15803d;margin:0.5em 0 0">Text + reply + both staged files preserved. Nothing unmounted.</p>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>Feature A — render lifecycle (unmount vs hide)</h3>
+<div class="mockup">
+  <div class="mockup-label">BEFORE — minimize unmounts the composer (state destroyed)</div>
+  <div class="flow">
+    <span class="node">type text + stage files + set reply</span>
+    <span class="arrow">→</span>
+    <span class="node">press –<br>(<code>chat.minimize()</code>)</span>
+    <span class="arrow">→</span>
+    <span class="node bad">Widget swaps Panel→Bubble<br><strong>Composer UNMOUNTS</strong></span>
+    <span class="arrow">→</span>
+    <span class="node bad">unmount effect revokes<br>object-URLs; <code>text</code>/<code>pendingFiles</code> GC'd</span>
+    <span class="arrow">→</span>
+    <span class="node bad">re-open → fresh Composer<br>= empty</span>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">AFTER — minimize hides the panel (state lives)</div>
+  <div class="flow">
+    <span class="node">type text + stage files + set reply</span>
+    <span class="arrow">→</span>
+    <span class="node">press –<br>(<code>chat.minimize()</code>)</span>
+    <span class="arrow">→</span>
+    <span class="node good">Panel stays mounted,<br><code>hidden</code> = <code>display:none</code>;<br>Bubble shown too</span>
+    <span class="arrow">→</span>
+    <span class="node good">Composer never unmounts →<br><code>text</code>/<code>pendingFiles</code>/URLs alive</span>
+    <span class="arrow">→</span>
+    <span class="node good">re-open (un-hide) →<br>everything intact</span>
+  </div>
+  <p style="font-size:0.8em;color:#666;margin:0.7em 0 0"><strong>Clears (real unmount / unload):</strong> Frontend↔Backend switch (mode early-return swaps widget instance — App.jsx:248-262 vs 264-303) · page reload · tab close. <strong>Survives:</strong> minimize, backend sub-tab nav (Stock→Sales — widget stays mounted, Q2=A), browser-tab focus change, auto force-open on incoming message (V82).</p>
+</div>
+
+<h3>Feature B — data-flow (none — pure presentation)</h3>
+<div class="mockup">
+  <div class="mockup-label">Filter checkbox order + label text only; predicates unchanged</div>
+  <table>
+    <tr><th>Checkbox (data-testid)</th><th>Before label</th><th>After label</th><th>Before pos</th><th>After pos</th><th>Predicate (unchanged)</th></tr>
+    <tr><td>filter-out-of-stock</td><td>หมด (คงเหลือ 0)</td><td><strong>หมด</strong></td><td>5</td><td><strong>4</strong></td><td><code>totalRemaining === 0</code></td></tr>
+    <tr><td>filter-negative-stock</td><td>ติดลบ (ต้องเติมสต็อค)</td><td><strong>ติดลบ</strong></td><td>4</td><td><strong>5</strong></td><td><code>totalRemaining &lt; 0</code></td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+  <h3>Feature A (2 files, ~10 lines)</h3>
+  <ul>
+    <li><code>StaffChatWidget.jsx</code> — replace the <code>minimized ? Bubble : Panel</code> ternary with: <strong>always render</strong> <code>&lt;StaffChatPanel hidden={chat.minimized} …&gt;{children}&lt;/StaffChatPanel&gt;</code>, and render <code>&lt;StaffChatBubble … /&gt;</code> additionally when <code>chat.minimized</code>. Children (MessageList + Composer) stay mounted across minimize.</li>
+    <li><code>StaffChatPanel.jsx</code> — accept a <code>hidden</code> prop; apply Tailwind <code>hidden</code> (= <code>display:none</code>) to the <code>fixed</code> root when true (zero layout impact; it's an overlay). <strong>Required follow-on:</strong> the mobile body-scroll-lock effect (sets <code>data-staff-chat-open</code>, lines 29-34) must key off <em>visible-state</em> not mount — set the attribute when shown, remove when hidden — or minimizing on mobile would leave the page scroll-locked. (<code>useStaffChatPanelResize</code> + grip unaffected.)</li>
+    <li><strong>No change</strong> to <code>StaffChatComposer</code> internals, the upload pipeline (<code>taskRefs</code>/<code>cancelRef</code>/progress/retry), or <code>useStaffChat</code>. Mid-upload minimize keeps the upload running in the still-mounted composer.</li>
+  </ul>
+  <h3>Feature B (1 file)</h3>
+  <ul>
+    <li><code>StockBalancePanel.jsx:385-395</code> — move the <code>filter-out-of-stock</code> (<code>หมด</code>) <code>&lt;label&gt;</code> block <em>before</em> <code>filter-negative-stock</code> (<code>ติดลบ</code>); change the two label texts to drop the parentheticals. Nothing else moves (row badges at ~454-462 stay).</li>
+  </ul>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Feature A approach = "ซ่อนไม่ unmount":</strong> keep the Panel mounted + <code>display:none</code> on minimize. Chosen over (B) lifting draft into the hook (invasive to the upload pipeline, mid-upload-unmount risk) and (C) sessionStorage (can't hold staged <code>File</code>/<code>Blob</code> uploads → fails the "preserve files" requirement).</li>
+  <li><strong>Feature A scope = keep across backend sub-tabs:</strong> draft persists through Stock→Sales sub-tab nav (widget never unmounts there); clears only on Frontend↔Backend switch / reload / tab-close. No extra per-tab clear logic.</li>
+  <li><strong>Feature B = relabel + reorder only:</strong> "หมด (คงเหลือ 0)"→"หมด", "ติดลบ (ต้องเติมสต็อค)"→"ติดลบ", หมด before ติดลบ. (Direct instruction, no alternatives needed.)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><strong>A1:</strong> Type text + set a reply + stage ≥1 image and ≥1 non-image file in the staff chat, press <code>–</code>, then re-open → the typed text, the reply strip, and every staged chip (with working preview/icon) are all still there.</li>
+  <li><strong>A2:</strong> The staged files still upload + send correctly after a minimize→reopen cycle (object-URLs not revoked; <code>File</code> objects intact).</li>
+  <li><strong>A3:</strong> A full page reload OR a Frontend↔Backend switch clears the draft (real unmount/unload) — confirms the persistence is per-mount, not leaked to storage.</li>
+  <li><strong>A4:</strong> On mobile, minimizing un-locks page scroll (the <code>data-staff-chat-open</code> body lock follows visible-state); re-opening re-locks it.</li>
+  <li><strong>A5:</strong> V82 force-open (incoming message auto-expands while minimized) still works and shows the intact draft.</li>
+  <li><strong>B1:</strong> The two filters read exactly <code>หมด</code> and <code>ติดลบ</code> (no parentheticals), in the order <code>… เกินสต็อก · หมด · ติดลบ</code>.</li>
+  <li><strong>B2:</strong> Both filters still filter correctly (<code>=== 0</code> / <code>&lt; 0</code>); badges + colors unchanged.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<div class="section">
+  <ul>
+    <li><strong>V21 fixups (known, from test grep):</strong>
+      <ul>
+        <li><code>tests/v73-staff-chat-widget-rtl.test.jsx</code> <strong>W1.1</strong> asserts <code>queryByTestId('staff-chat-panel')</code> is <code>null</code> when minimized. With hide-don't-unmount the panel is present-but-hidden → update W1.1 to assert the panel is present + hidden (e.g. <code>display:none</code> / <code>hidden</code> attr) AND the bubble is shown. (W2.x — panel visible when not minimized, bubble null — still hold.)</li>
+        <li><code>tests/v144-realtime-lot-clear.test.js</code> <strong>F1.5</strong> asserts the label <code>หมด (คงเหลือ 0)</code> → update to <code>หมด</code> + assert the new checkbox order (out-of-stock before negative-stock).</li>
+        <li><code>tests/phase15.7-negative-stock-badge-filter.test.js</code> <strong>B3.3</strong> already matches <code>/ติดลบ/</code> (passes with plain "ติดลบ"); <strong>B2.4</strong> is the per-row badge order (NOT the filter) → must stay green (don't touch row badges).</li>
+      </ul>
+    </li>
+    <li><strong>IntersectionObserver while hidden:</strong> the V82 read-cursor advances via <code>markScrolledToBottom</code> on a bottom sentinel. While the panel is <code>display:none</code> the sentinel won't intersect → the cursor won't advance (correct: minimized = not reading). On re-show it re-observes. Verify in L1 that re-opening + scrolling to bottom still clears unread.</li>
+    <li><strong>Hidden panel cost:</strong> the MessageList renders while hidden (≤50 messages). The Firestore listener already runs in the hook regardless of panel mount → negligible extra cost.</li>
+    <li><strong>Focus on re-open:</strong> the textarea is not auto-refocused after un-hide (browser blurs on <code>display:none</code>); text is still preserved. Acceptable; not auto-focusing avoids surprising scroll-jump. (Could add later if desired.)</li>
+  </ul>
+  <p><strong>Verification plan:</strong> Rule I flow-simulate (type→minimize→reopen→assert intact) + RTL (widget: minimize keeps panel mounted/hidden; composer value persists) + source-grep regression + <strong>Rule Q L1 real browser</strong> (Chrome MCP per Rule S, or user hands-on): type + stage image+file + reply → press – → press bubble → confirm everything intact + the files still send. Feature B: RTL/source-grep asserting the two labels + order; visual L1.</p>
+</div>
+
+</body>
+</html>
