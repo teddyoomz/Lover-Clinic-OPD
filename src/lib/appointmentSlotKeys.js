@@ -155,3 +155,35 @@ export function buildAppointmentGuardKeys(input, intervalMin = SLOT_INTERVAL_MIN
     ...buildAppointmentRoomSlotKeys({ date, roomId, startTime, endTime }, intervalMin),
   ];
 }
+
+/**
+ * appointment-loop R9 (2026-06-03) — compute the be_appointment_slots docs a LIVE
+ * appointment should hold, for restore-time slot-guard REBUILD. The AP1-bis slot
+ * docs are keyed date_doctor_time (+ ROOM__), NOT by branch/customer, so they're
+ * absent from branch / customer-only backup scopes → a restore brings back live
+ * appts with NO atomic double-booking guard. The restore executors map this over
+ * the restored appts to re-create the slot docs. Pure (no Firestore). Returns []
+ * for a cancelled / doctor-less / time-less / id-less appt. The doc shape mirrors
+ * the reserve path EXACTLY so the guard reads them identically (cancelled:false).
+ * @param {Object} appt — a restored be_appointments doc (carries id/appointmentId,
+ *        date, doctorId, roomId, startTime, endTime, status).
+ * @param {{takenAt?: string}} [opts] — caller supplies the timestamp (keeps pure).
+ * @returns {Array<{key: string, doc: Object}>}
+ */
+export function computeAppointmentSlotDocs(appt, { takenAt = '' } = {}) {
+  if (!appt || appt.status === 'cancelled') return [];
+  const apptId = String(appt.id || appt.appointmentId || appt.docId || '');
+  if (!apptId) return [];
+  const keys = buildAppointmentGuardKeys({
+    date: appt.date, doctorId: appt.doctorId, roomId: appt.roomId,
+    startTime: appt.startTime, endTime: appt.endTime,
+  });
+  return keys.map((k) => ({
+    key: k,
+    doc: {
+      slotId: k, appointmentId: apptId, date: appt.date || '', doctorId: String(appt.doctorId || ''),
+      startTime: appt.startTime || '', endTime: appt.endTime || appt.startTime || '',
+      cancelled: false, takenAt,
+    },
+  }));
+}

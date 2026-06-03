@@ -15,6 +15,7 @@ import {
   mapWithConcurrency,            // V122: bounded-parallel I/O (300s timeout fix)
   FULL_SCOPE_COLLECTION_DENYLIST, // V122: deliberate full-scope exclusions
 } from '../../../src/lib/wholeSystemBackupCore.js';
+import { computeAppointmentSlotDocs } from '../../../src/lib/appointmentSlotKeys.js';
 
 // V81-fix1: SDK constructors used by decodeFirestoreData
 const FB_TYPE_OPTS = { Timestamp, GeoPoint };
@@ -310,6 +311,38 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false, sc
  *
  * @returns {Promise<{backupRef, mode, autoBackupRef, stats, passwordResetEmailsSent}>}
  */
+// appointment-loop R9 (2026-06-03) — rebuild be_appointment_slots for restored
+// live appointments when the manifest did NOT include be_appointment_slots (the
+// customer-only scope's curated list excludes it; slots are keyed
+// date_doctor_time, not by branch/customer). Without this, a customer-only
+// restore brings back live appts with NO atomic double-booking guard → their
+// times silently bookable. No-op for full scope (V122 dynamic enumeration already
+// captures + restores be_appointment_slots consistently). Reads the restored
+// be_appointments file (scoped) + rebuilds; idempotent; chunked.
+async function rebuildAppointmentSlotsIfMissing(db, storage, manifest, backupRef, scope) {
+  const cols = manifest.collections || [];
+  const apptCol = cols.find(c => c.name === 'be_appointments');
+  const hasSlots = cols.some(c => c.name === 'be_appointment_slots');
+  if (!apptCol || hasSlots) return 0;   // nothing to rebuild, OR slots already restored
+  let docs;
+  try {
+    const [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/${apptCol.path}`).download();
+    docs = JSON.parse(buf.toString('utf8')).map(d => decodeFirestoreData(d, FB_TYPE_OPTS));
+  } catch { return 0; }
+  let rebuilt = 0, batch = db.batch(), n = 0;
+  const flush = async () => { if (n > 0) { await batch.commit(); batch = db.batch(); n = 0; } };
+  const takenAt = new Date().toISOString();
+  for (const a of docs) {
+    for (const { key, doc } of computeAppointmentSlotDocs(a, { takenAt })) {
+      batch.set(db.doc(`${PREFIX}/be_appointment_slots/${key}`), doc);
+      n++; rebuilt++;
+      if (n >= BATCH_SIZE) await flush();
+    }
+  }
+  await flush();
+  return rebuilt;
+}
+
 export async function runWholeSystemRestore({
   db, storage, auth, backupRef, mode, callerUid,
   sendPasswordResetEmails,
@@ -379,6 +412,8 @@ export async function runWholeSystemRestore({
 
   // 3. Restore phases
   const colResult = await restoreCollections(db, storage, manifest, backupRef, scope);
+  // R9 — restore the AP1-bis slot guard for restored appts (no-op for full scope).
+  const slotsRebuilt = await rebuildAppointmentSlotsIfMissing(db, storage, manifest, backupRef, scope);
   // V81-fix4/fix6: Auth restore only on full-scope replace mode with explicit opt-in.
   // Customer-only NEVER touches Auth. Whole-system default = preserve.
   const authResult = (scope === 'customer-only' || (mode === 'replace' && !replaceAuthFromBackup))
@@ -418,6 +453,7 @@ export async function runWholeSystemRestore({
       ...colResult,
       ...authResult,
       ...storResult,
+      slotsRebuilt,   // R9 — appointment slots rebuilt (customer-only scope)
     },
     passwordResetEmailsSent,
     elapsedSec: Math.round((Date.now() - start) / 1000),
@@ -434,6 +470,7 @@ export async function runWholeSystemRestore({
       ...colResult,
       ...authResult,
       ...storResult,
+      slotsRebuilt,   // R9 — appointment slots rebuilt (customer-only scope)
     },
     passwordResetEmailsSent,
   };

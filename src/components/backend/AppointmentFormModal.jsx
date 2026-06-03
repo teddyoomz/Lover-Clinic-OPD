@@ -646,13 +646,19 @@ export default function AppointmentFormModal({
           const aEnd = String(a.endTime || a.startTime) || aStart;
           // Overlap iff [aStart, aEnd) intersects [newStart, newEnd)
           if (aEnd <= newStart || aStart >= newEnd) return false;
-          const sameRoom = formData.roomName && a.roomName && a.roomName === formData.roomName;
+          // appointment-loop R9 (2026-06-03) — key the soft room-conflict on
+          // roomId (NOT roomName), to MATCH the atomic guard (buildAppointment-
+          // RoomSlotKeys keys on roomId). Pre-R9 the UI keyed on roomName → it
+          // diverged from the guard (two rooms sharing a display name → false
+          // warn / miss; a renamed room → UI says free, server throws AP1).
+          const sameRoom = formData.roomId && a.roomId && String(a.roomId) === String(formData.roomId);
           const sameDoctor = formData.doctorId && a.doctorId && String(a.doctorId) === String(formData.doctorId);
           return sameRoom || sameDoctor;
         });
         if (conflicts.length > 0) {
           const o = conflicts[0];
-          const who = o.roomName === formData.roomName ? `ห้อง "${o.roomName}"` : `หมอ "${o.doctorName || o.doctorId}"`;
+          const who = (formData.roomId && String(o.roomId) === String(formData.roomId))
+            ? `ห้อง "${o.roomName || formData.roomName}"` : `หมอ "${o.doctorName || o.doctorId}"`;
           if (!window.confirm(`${who} มีนัดอยู่แล้วในช่วง ${o.startTime}-${o.endTime || o.startTime}\nยืนยันสร้างทับซ้อน ?`)) {
             setSaving(false);
             return;
@@ -1034,7 +1040,18 @@ export default function AppointmentFormModal({
       // surfaces a friendly Thai message instead of the raw English code.
       if (e?.code === 'AP1_COLLISION') {
         const c = e.collision || {};
-        setError(`ช่วงเวลานี้ถูกจองให้แพทย์ท่านนี้แล้ว: ${c.startTime || ''}-${c.endTime || ''} (${c.date || ''}). กรุณาเลือกเวลาอื่น`);
+        // appointment-loop R9 (2026-06-03) — the ATOMIC slot-guard throw carries
+        // e.slotKey/e.atomic but NO e.collision, so the old message rendered a
+        // blank "...: - ()" AND always said "แพทย์" even for a ROOM collision.
+        // Use the detailed message only when the soft pre-scan populated it;
+        // otherwise give a clear room-vs-doctor message from the slotKey.
+        if (c.startTime || c.date) {
+          setError(`ช่วงเวลานี้ถูกจองให้แพทย์ท่านนี้แล้ว: ${c.startTime || ''}-${c.endTime || ''} (${c.date || ''}). กรุณาเลือกเวลาอื่น`);
+        } else if (String(e.slotKey || '').startsWith('ROOM__')) {
+          setError('ห้องตรวจนี้ถูกจองในช่วงเวลานี้แล้ว กรุณาเลือกห้องหรือเวลาอื่น');
+        } else {
+          setError('ช่วงเวลานี้มีนัดของแพทย์ท่านนี้อยู่แล้ว กรุณาเลือกเวลาอื่น');
+        }
       } else {
         setError(e?.message || 'บันทึกล้มเหลว');
       }

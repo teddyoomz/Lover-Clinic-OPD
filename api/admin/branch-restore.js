@@ -9,6 +9,30 @@ import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { TIER_MAP, BACKUP_TIER_T1, T1_FK_SPEC, buildFkRemapTable, applyFkRemap, isUniversalCollection } from '../../src/lib/branchBackupCore.js';
 import { validateBackupFile, jsonReviverForNonFinite } from '../../src/lib/branchBackupSchema.js';
+import { computeAppointmentSlotDocs } from '../../src/lib/appointmentSlotKeys.js';
+
+// appointment-loop R9 (2026-06-03) — rebuild be_appointment_slots for restored
+// live appointments. The AP1-bis slot docs are keyed date_doctor_time (+ ROOM__),
+// NOT by branch/customer, so they're absent from every backup tier → a restore
+// brought back live appts with NO atomic double-booking guard → their times were
+// silently bookable (the guard degraded to the dismissible soft scan). Rebuild
+// from the restored appts so the AP1-bis guard is consistent again. Idempotent
+// (overwrites); chunked under the Firestore 500-writes/batch cap.
+async function rebuildAppointmentSlots(db, dataCol, restoredAppts) {
+  let slotsRebuilt = 0;
+  let batch = db.batch(); let n = 0;
+  const flush = async () => { if (n > 0) { await batch.commit(); batch = db.batch(); n = 0; } };
+  const takenAt = new Date().toISOString();
+  for (const a of restoredAppts || []) {
+    for (const { key, doc } of computeAppointmentSlotDocs(a, { takenAt })) {
+      batch.set(dataCol(db, 'be_appointment_slots').doc(key), doc, { merge: false });
+      n++; slotsRebuilt++;
+      if (n >= 400) await flush();
+    }
+  }
+  await flush();
+  return slotsRebuilt;
+}
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -143,6 +167,10 @@ export default async function handler(req, res) {
           }
           result.perCollection[col] = { written };
         }
+      }
+      // R9 — restore the AP1-bis slot guard for restored live appointments.
+      if (Array.isArray(file.collections?.be_appointments)) {
+        result.slotsRebuilt = await rebuildAppointmentSlots(db, dataCol, file.collections.be_appointments);
       }
     } else {
       // CLONE — T1 only — re-mint IDs + FK remap
