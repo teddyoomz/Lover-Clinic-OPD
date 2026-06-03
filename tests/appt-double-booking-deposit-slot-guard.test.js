@@ -201,7 +201,38 @@ describe('appointment-loop R2 — un-cancel re-reserves the slot (C)', () => {
     const body = fnExport(BACKEND, 'updateBackendAppointment');
     expect(body).toMatch(/const becameUncancelled = oldData\.status === ['"]cancelled['"]/);
     expect(body).toMatch(/else if \(becameUncancelled && newKeys\.length > 0\)/);
-    // the re-reserve writes the new slot docs
-    expect(body).toMatch(/reBatch\.set\(appointmentSlotDoc\(key\)/);
+    // R5: the re-reserve goes through the CONDITIONAL helper (no blind overwrite)
+    expect(body).toMatch(/_reserveSlotsConditional\(newKeys,/);
+  });
+});
+
+// ─── R5 — un-cancel / time-change re-reserve must NOT HIJACK a taken slot ─────
+// BUG (my own R2 fix): the timeChanged + becameUncancelled reserve sites did a
+// BLIND writeBatch.set on every new slot key. If, during the cancelled (or
+// pre-move) window, ANOTHER live appointment booked that slot, the blind set
+// OVERWROTE its reservation → the slot doc now points at the wrong appointment
+// (silent corruption) AND both appts are "active" at that slot → a double-booking
+// the AP1 guard was built to prevent. FIX: _reserveSlotsConditional reads each
+// slot in a tx and tx.set ONLY when free / ours / cancelled; it SKIPS a slot held
+// by a different live appointment. Real-prod proof: scripts/diag-appointment-room-
+// uncancel-probe.mjs D.1 (pre-fix RED owner=X / post-fix GREEN owner=Y).
+describe('appointment-loop R5 — conditional reserve (no slot hijack)', () => {
+  const body = fnExport(BACKEND, 'updateBackendAppointment');
+
+  test('R5.1 the conditional helper exists with a skip-if-held-by-other-appt guard', () => {
+    expect(body).toMatch(/const _reserveSlotsConditional = async \(keys, meta\)/);
+    expect(body).toMatch(/await runTransaction\(db, async \(tx\)/);            // reads in a tx
+    // skip a slot owned by a DIFFERENT live (non-cancelled) appointment
+    expect(body).toMatch(/sd && !sd\.cancelled && sd\.appointmentId && sd\.appointmentId !== meta\.appointmentId\) continue;/);
+  });
+
+  test('R5.2 BOTH reserve sites (timeChanged + becameUncancelled) use the conditional helper', () => {
+    const calls = body.match(/_reserveSlotsConditional\(newKeys,/g) || [];
+    expect(calls.length).toBeGreaterThanOrEqual(2);   // timeChanged + becameUncancelled
+  });
+
+  test('R5.3 [ANTI-REGRESSION] no BLIND reserve batch survives in updateBackendAppointment', () => {
+    expect(body).not.toMatch(/reBatch\.set\(appointmentSlotDoc/);     // old becameUncancelled blind set
+    expect(body).not.toMatch(/reserveBatch\.set\(appointmentSlotDoc/); // old timeChanged blind set
   });
 });

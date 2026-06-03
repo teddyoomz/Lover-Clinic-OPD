@@ -350,9 +350,13 @@ describe('A6 source-grep — AP1-bis multi-slot wiring', () => {
     expect(SRC).toMatch(/const newKeys = buildAppointmentGuardKeys\(/);
   });
 
-  test('A6.7 updateBackendAppointment slot rotation uses writeBatch (atomic within slot collection)', () => {
-    expect(SRC).toMatch(/const releaseBatch = writeBatch\(db\)/);
-    expect(SRC).toMatch(/const reserveBatch = writeBatch\(db\)/);
+  test('A6.7 updateBackendAppointment slot rotation: release=writeBatch, reserve=conditional tx (R5 no-hijack)', () => {
+    expect(SRC).toMatch(/const releaseBatch = writeBatch\(db\)/);          // release is unconditional (still a batch)
+    // R5: reserve goes through the conditional helper (reads-then-set-if-free in a tx)
+    // so it can NEVER overwrite a slot a different live appointment already holds.
+    expect(SRC).toMatch(/const _reserveSlotsConditional = async \(keys, meta\)/);
+    expect(SRC).toMatch(/_reserveSlotsConditional\(newKeys,/);
+    expect(SRC).not.toMatch(/const reserveBatch = writeBatch\(db\)/);      // old blind reserve is gone
   });
 
   test('A6.8 collision error message references the slot key for debugging', () => {

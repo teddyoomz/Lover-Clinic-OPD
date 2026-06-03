@@ -2376,6 +2376,32 @@ export async function updateBackendAppointment(appointmentId, data) {
 
     const now = new Date().toISOString();
 
+    // appointment-loop R5 (2026-06-03) — re-reserve slots best-effort but NEVER
+    // HIJACK a slot held by a DIFFERENT live appointment. The pre-R5 blind
+    // writeBatch.set (timeChanged + becameUncancelled) overwrote whatever was
+    // there → if another booking took the slot during the cancelled window
+    // (un-cancel) OR an edit moved onto a taken slot (timeChanged), the OTHER
+    // appointment's slot doc was silently overwritten = slot-doc corruption +
+    // a re-created double-booking (found by the R5 convergence sweep). A
+    // runTransaction reads each slot first + sets ONLY when it is free / already
+    // ours / cancelled. Best-effort (runs AFTER the appointment doc already
+    // committed; a skipped slot is surfaced by the soft collision scan on the
+    // next booking, but the other appt's reservation is NEVER corrupted).
+    const _reserveSlotsConditional = async (keys, meta) => {
+      if (!keys || keys.length === 0) return;
+      try {
+        await runTransaction(db, async (tx) => {
+          const refs = keys.map((k) => appointmentSlotDoc(k));
+          const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+          for (let i = 0; i < refs.length; i++) {
+            const sd = snaps[i].exists() ? (snaps[i].data() || {}) : null;
+            if (sd && !sd.cancelled && sd.appointmentId && sd.appointmentId !== meta.appointmentId) continue;
+            tx.set(refs[i], { slotId: keys[i], ...meta });
+          }
+        });
+      } catch { /* best-effort — slots heal on next create at this slot */ }
+    };
+
     if (becameCancelled && oldKeys.length > 0) {
       try {
         const batch = writeBatch(db);
@@ -2391,39 +2417,20 @@ export async function updateBackendAppointment(appointmentId, data) {
         for (const key of oldKeys) releaseBatch.delete(appointmentSlotDoc(key));
         await releaseBatch.commit();
       } catch { /* noop */ }
-      try {
-        const reserveBatch = writeBatch(db);
-        for (const key of newKeys) {
-          reserveBatch.set(appointmentSlotDoc(key), {
-            slotId: key,
-            appointmentId,
-            date: newDate,
-            doctorId: newDoctorId,
-            startTime: newStart,
-            endTime: newEnd,
-            cancelled: false,
-            takenAt: now,
-          });
-        }
-        await reserveBatch.commit();
-      } catch { /* noop — slots will heal on next create at this slot */ }
+      // appointment-loop R5 — conditional reserve (no hijack); see helper above.
+      await _reserveSlotsConditional(newKeys, {
+        appointmentId, date: newDate, doctorId: newDoctorId,
+        startTime: newStart, endTime: newEnd, cancelled: false, takenAt: now,
+      });
     } else if (becameUncancelled && newKeys.length > 0) {
       // appointment-loop R2 (C) — RE-RESERVE the slots the cancel released so the
-      // reactivated appointment is guarded again. Best-effort (mirrors the
-      // timeChanged reserve); a slot taken during the cancelled window is still
-      // caught by the next booking's create-time guard + soft scan.
-      try {
-        const reBatch = writeBatch(db);
-        for (const key of newKeys) {
-          reBatch.set(appointmentSlotDoc(key), {
-            slotId: key, appointmentId,
-            date: newDate, doctorId: newDoctorId,
-            startTime: newStart, endTime: newEnd,
-            cancelled: false, takenAt: now,
-          });
-        }
-        await reBatch.commit();
-      } catch { /* best-effort */ }
+      // reactivated appointment is guarded again. appointment-loop R5 — conditional
+      // (no hijack): if another booking took the slot during the cancelled window,
+      // do NOT overwrite it (would corrupt that appt + re-create a double-booking).
+      await _reserveSlotsConditional(newKeys, {
+        appointmentId, date: newDate, doctorId: newDoctorId,
+        startTime: newStart, endTime: newEnd, cancelled: false, takenAt: now,
+      });
     }
   }
 

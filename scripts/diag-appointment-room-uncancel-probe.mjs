@@ -65,6 +65,11 @@ async function main() {
     for (const k of keys) if ((await data.collection('be_appointment_slots').doc(k).get()).exists) return true;
     return false;
   };
+  const slotOwner = async (doctorId, start, end) => {
+    const keys = buildAppointmentSlotKeys({ date: DATE, doctorId, startTime: start, endTime: end });
+    for (const k of keys) { const s = await data.collection('be_appointment_slots').doc(k).get(); if (s.exists) return s.data()?.appointmentId || ''; }
+    return '';
+  };
   const activeApptsForRoomSlot = async (start) => (await data.collection('be_appointments').where('branchId', '==', BR).get())
     .docs.map(d => d.data()).filter(a => a.roomId === ROOM && a.date === DATE && a.startTime === start && a.status !== 'cancelled').length;
   const isCollision = (e) => /AP1_COLLISION/i.test(e?.message || String(e));
@@ -95,6 +100,18 @@ async function main() {
     await updateBackendAppointment(cId, { status: 'confirmed' });
     check('C.2 slot RE-RESERVED after un-cancel (cancelled→confirmed)', await slotExists(DOC_A, '14:00', '15:00'),
       'slot NOT re-reserved → the un-cancelled appt is unguarded → double-bookable');
+
+    // ── D (R5) — un-cancel must NOT HIJACK a slot taken during the cancelled window ─
+    console.log('\nD (R5) — X holds @16:00, cancel X, Y takes @16:00, un-cancel X → must NOT hijack Y');
+    const dx = await createBackendAppointment(appt({ doctorId: DOC_A, doctorName: 'A', startTime: '16:00', endTime: '17:00' }));
+    await updateBackendAppointment(dx.appointmentId, { status: 'cancelled' });          // releases @16:00
+    const dy = await createBackendAppointment(appt({ doctorId: DOC_A, doctorName: 'A', startTime: '16:00', endTime: '17:00' })); // Y takes @16:00
+    check('D.0 Y owns @16:00 after taking the released slot', (await slotOwner(DOC_A, '16:00', '17:00')) === dy.appointmentId,
+      `owner mismatch expected Y=${dy.appointmentId}`);
+    await updateBackendAppointment(dx.appointmentId, { status: 'confirmed' });           // un-cancel X
+    const dOwner = await slotOwner(DOC_A, '16:00', '17:00');
+    check('D.1 the slot is STILL owned by Y — un-cancel did NOT hijack the taken slot', dOwner === dy.appointmentId,
+      `owner=${dOwner} X=${dx.appointmentId} Y=${dy.appointmentId} (blind re-reserve would show X → corruption)`);
 
   } finally {
     console.log('\nCleanup');
