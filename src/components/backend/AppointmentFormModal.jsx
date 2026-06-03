@@ -750,7 +750,15 @@ export default function AppointmentFormModal({
         notifyChannel,
         status: formData.status || 'pending',
         // Phase 14.7.H follow-up A — branch-aware appointment writes.
-        branchId: selectedBranchId,
+        // appointment-loop R7 (2026-06-03) — on EDIT, PRESERVE the appointment's
+        // own branchId (mirror the provisionOpdLink path below). Pre-R7 this was
+        // an unconditional `selectedBranchId`, so editing a cross-branch appt
+        // (reachable via CustomerDetailView's branch-unfiltered appt list) while
+        // the BranchSelector pointed elsewhere SILENTLY RELOCATED the appt to the
+        // viewing branch — and left its linked deposit behind (split-brain:
+        // appointment in B, its money record in A). branchId is immutable after
+        // create (the project invariant); create still stamps the current branch.
+        branchId: (mode === 'edit' && appt) ? (appt.branchId || selectedBranchId) : selectedBranchId,
       };
 
       if (mode === 'edit' && appt) {

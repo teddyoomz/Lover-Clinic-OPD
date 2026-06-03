@@ -84,11 +84,21 @@ export async function runReminderPipeline(ctx) {
   const logKey = getReminderLogKey(appt.id, reminderType);
   const logRef = db.doc(`${BASE_PATH}/be_line_reminder_log/${logKey}`);
 
-  // Step 1: idempotency (skipped when force=true)
+  // Step 1: idempotency (skipped when force=true). appointment-loop R7 — a
+  // 'sent' log suppresses only for the SAME date it was sent FOR. If the appt
+  // was RESCHEDULED after the reminder fired (appt.date changed), sentForDate !==
+  // appt.date → fall through + re-fire so the customer gets a reminder for the
+  // NEW date (the log key is date-agnostic, so without this it suppressed
+  // forever). Legacy logs (no sentForDate) suppress as before → no double-send
+  // on the R7 deploy.
   if (!force) {
     const existingLog = await logRef.get();
     if (existingLog.exists && existingLog.data().status === 'sent') {
-      return { status: 'already-sent' };
+      const sentFor = existingLog.data().sentForDate;
+      if (sentFor == null || sentFor === appt.date) {
+        return { status: 'already-sent' };
+      }
+      // else: rescheduled since the last send → re-fire below
     }
   }
 
@@ -179,6 +189,7 @@ export async function runReminderPipeline(ctx) {
     await logRef.set(buildReminderLogDoc({
       appointmentId: appt.id, customerId: appt.customerId, branchId: appt.branchId,
       customerLineUserId: lineUserId, reminderType, status: 'sent', lineApiResult, templateRendered,
+      sentForDate: appt.date,   // R7 — re-fire on reschedule (date-aware idempotency)
     }));
     // Update appointment.notifyMeta (best-effort — appt doc may not exist in fakeDb tests)
     const apptRef = db.doc(`${BASE_PATH}/be_appointments/${appt.id}`);

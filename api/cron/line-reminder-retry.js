@@ -139,7 +139,9 @@ export default async function handler(req, res) {
     summary.retried++;
 
     if (apiRes.statusCode === 200) {
-      await logDoc.ref.update({ status: 'sent', lineApiResult: apiRes, retriedAt: now.toISOString() });
+      // R7 — stamp the date this reminder was sent FOR (date-aware idempotency
+      // in the fire cron re-fires if the appt is later rescheduled).
+      await logDoc.ref.update({ status: 'sent', lineApiResult: apiRes, retriedAt: now.toISOString(), sentForDate: apptData.date || null });
       summary.succeeded++;
     } else if (apiRes.statusCode === 410) {
       await db.doc(`${BASE_PATH}/be_customers/${log.customerId}`).update({

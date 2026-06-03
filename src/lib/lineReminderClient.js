@@ -85,6 +85,12 @@ export function isQuietHour(currentHour, quietHourStart, quietHourEnd) {
 export function buildReminderLogDoc({
   appointmentId, customerId, branchId, customerLineUserId, reminderType,
   status, lineApiResult, retryCount, nextRetryAt, lastError, templateRendered,
+  // appointment-loop R7 (2026-06-03) — the date the reminder was sent FOR. The
+  // log key is date-agnostic (`${appointmentId}_${reminderType}`), so a
+  // reschedule after a 'sent' reminder would be SUPPRESSED forever (the cron saw
+  // 'sent' + skipped → the customer got no reminder for the new date). Stamping
+  // the date lets the idempotency check re-fire when appt.date changed.
+  sentForDate = null,
 }) {
   // V14 guard — Firestore setDoc rejects undefined for required fields.
   // Throw labeled error so callers can distinguish missing-input from
@@ -105,5 +111,6 @@ export function buildReminderLogDoc({
     nextRetryAt: nextRetryAt || null,
     lastError: lastError || null,
     templateRendered: templateRendered || '',
+    sentForDate: sentForDate || null,
   };
 }

@@ -132,8 +132,11 @@ describe('A2 source-grep — backendClient.js wires the runTransaction slot patt
   });
 
   test('A2.8 updateBackendAppointment handles time-change slot rotation (AP1-bis array)', () => {
-    // AP1-bis: comparison is array-based now (length+sig), not single key.
-    expect(SRC).toMatch(/const timeChanged = oldKeys\.length > 0 && newKeys\.length > 0 && oldKeySig !== newKeySig/);
+    // AP1-bis: comparison is array-based (sig). appointment-loop R7 — the change
+    // signal is the key-set diff, NOT gated on newKeys being non-empty (so
+    // clearing the doctor → empty newKeys still RELEASES the old slots, no orphan).
+    expect(SRC).toMatch(/const keysChanged = oldKeySig !== newKeySig;/);
+    expect(SRC).not.toMatch(/oldKeys\.length > 0 && newKeys\.length > 0 && oldKeySig !== newKeySig/);
   });
 
   test('A2.9 fallback path: legacy appts without time fields skip the tx', () => {

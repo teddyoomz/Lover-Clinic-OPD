@@ -2390,7 +2390,13 @@ export async function updateBackendAppointment(appointmentId, data) {
     // length OR same length different values OR same values different order).
     const oldKeySig = [...oldKeys].sort().join('|');
     const newKeySig = [...newKeys].sort().join('|');
-    const timeChanged = oldKeys.length > 0 && newKeys.length > 0 && oldKeySig !== newKeySig;
+    // appointment-loop R7 (2026-06-03) — the guard key-set changed. Pre-R7 this
+    // ALSO required newKeys.length>0, so clearing the doctor (→ ไม่ระบุ) on a
+    // roomless appt (newKeys empty) SKIPPED the release → the old doctor's slot
+    // docs ORPHANED → that doctor's date+time was falsely blocked forever
+    // ("ghost collision": a later booking throws AP1_COLLISION with no visible
+    // conflicting appt). Now release on ANY key-set change, even to empty.
+    const keysChanged = oldKeySig !== newKeySig;
 
     const now = new Date().toISOString();
 
@@ -2426,14 +2432,17 @@ export async function updateBackendAppointment(appointmentId, data) {
         for (const key of oldKeys) batch.delete(appointmentSlotDoc(key));
         await batch.commit();
       } catch { /* best-effort */ }
-    } else if (timeChanged) {
-      // Release old slots, reserve new — both via writeBatch for atomicity
-      // within the slot collection. NOT atomic with the appointment doc
-      // update above (same trade-off as create's pre-write scan).
+    } else if (keysChanged) {
+      // Release old slots, reserve new. NOT atomic with the appointment doc
+      // update above (same trade-off as create's pre-write scan). R7: the
+      // release runs even when newKeys is empty (doctor/room cleared) so the
+      // old slots are never orphaned; the conditional reserve no-ops on [].
       try {
-        const releaseBatch = writeBatch(db);
-        for (const key of oldKeys) releaseBatch.delete(appointmentSlotDoc(key));
-        await releaseBatch.commit();
+        if (oldKeys.length > 0) {
+          const releaseBatch = writeBatch(db);
+          for (const key of oldKeys) releaseBatch.delete(appointmentSlotDoc(key));
+          await releaseBatch.commit();
+        }
       } catch { /* noop */ }
       // appointment-loop R5 — conditional reserve (no hijack); see helper above.
       await _reserveSlotsConditional(newKeys, {
@@ -4690,7 +4699,7 @@ export async function refundDeposit(depositId, { refundAmount, refundChannel = '
   // same `remaining`, both wrote from the stale base → last-write-wins → one
   // refund's record LOST → refundAmount understated the cash actually paid out
   // → deposit over-stated → re-spendable money (e2e-deposit-refund-atomicity R1).
-  const customerId = await runTransaction(db, async (tx) => {
+  const out = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('Deposit not found');
     const cur = snap.data();
@@ -4707,10 +4716,28 @@ export async function refundDeposit(depositId, { refundAmount, refundChannel = '
       remainingAmount: newRemaining,
       updatedAt: new Date().toISOString(),
     });
-    return cur.customerId;
+    return {
+      customerId: cur.customerId,
+      // Release the linked appointment ONLY on a FULL refund of an UNUSED
+      // deposit-booking (customer isn't coming). A used deposit (usedAmount>0)
+      // means the customer already came → never cancel their visit.
+      releaseAppt: fullRefund && (Number(cur.usedAmount) || 0) === 0,
+      linkedAppointmentId: cur.linkedAppointmentId || '',
+    };
   });
-  await recalcCustomerDepositBalance(customerId);
-  return { success: true };
+  await recalcCustomerDepositBalance(out.customerId);
+  // appointment-loop R7 (2026-06-03) — a fully-refunded UNUSED deposit-booking
+  // means the customer isn't coming → cancel the linked appointment so its
+  // AP1-bis slot is RELEASED. Pre-R7 refundDeposit touched ONLY the deposit doc
+  // → the 'pending' appt held its doctor+room+time forever (un-rebookable
+  // revenue-bearing slot) + still rendered as a live booking on the calendar,
+  // with NOTHING linking the refund to the appointment. becameCancelled in
+  // updateBackendAppointment releases the slots. Best-effort (refund committed).
+  if (out.releaseAppt && out.linkedAppointmentId) {
+    try { await updateBackendAppointment(out.linkedAppointmentId, { status: 'cancelled' }); }
+    catch (e) { console.warn('[refundDeposit] linked-appt release skipped:', e?.message || e); }
+  }
+  return { success: true, releaseAppt: out.releaseAppt, linkedAppointmentId: out.linkedAppointmentId };
 }
 
 /** Delete a deposit (hard delete). Only when active and unused. */
