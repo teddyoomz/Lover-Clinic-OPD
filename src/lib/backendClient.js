@@ -7324,6 +7324,95 @@ export async function createStockAdjustment(p, opts = {}) {
   return { ...result, success: true };
 }
 
+// V159 (2026-06-03) — edit a batch/lot's expiry date directly. Admins key
+// expiry wrong easily; this lets them fix it from the existing adjust form
+// without re-opening the import order, anytime, even after partial use.
+//
+// ONE runTransaction (reads before writes): batch.expiresAt + forensic trail
+// + a be_stock_adjustments type:'expiry' audit doc (NO movement → stock
+// conservation untouched) + sync the source order line (Q4=B) by locationType.
+//
+// batch.status is NOT touched: the EXPIRED state is derived live via
+// hasExpired() (stockUtils) and never persisted, so fixing expiresAt is
+// immediately effective in FEFO with zero status change.
+export async function updateStockBatchExpiry(p, opts = {}) {
+  const batchId = p?.batchId;
+  if (!batchId) throw new Error('batchId required');
+  const newExpiresAt = (p?.newExpiresAt === '' || p?.newExpiresAt == null) ? null : String(p.newExpiresAt);
+
+  const adjustmentId = _genAdjustmentId();
+  const now = new Date().toISOString();
+  const user = _normalizeAuditUser(opts.user);
+  const note = String(p.note || '');
+
+  // Rule O — live-resolve productName for the audit doc (pre-tx, non-fatal).
+  let liveName = '';
+  try {
+    const pre = await getDoc(stockBatchDoc(batchId));
+    if (pre.exists()) liveName = await _resolveProductNameLive(pre.data()?.productId);
+  } catch { /* falls back to batch.productName in tx */ }
+
+  const result = await runTransaction(db, async (tx) => {
+    // ── READS FIRST (Firestore tx rule: all reads before any write) ──
+    const batchRef = stockBatchDoc(batchId);
+    const snap = await tx.get(batchRef);
+    if (!snap.exists()) throw new Error(`Batch ${batchId} not found`);
+    const batch = snap.data();
+    if (batch.status === 'cancelled') throw new Error(`Cannot edit expiry of cancelled batch ${batchId}`);
+
+    const oldExpiresAt = batch.expiresAt ?? null;
+    const branchId = p.branchId || batch.branchId;
+    const sourceOrderId = batch.sourceOrderId || '';
+    const orderProductId = batch.orderProductId || '';
+    const orderRef = sourceOrderId
+      ? (batch.locationType === 'central' ? centralStockOrderDoc(sourceOrderId) : stockOrderDoc(sourceOrderId))
+      : null;
+    let orderSnap = null;
+    if (orderRef && orderProductId) orderSnap = await tx.get(orderRef);
+
+    // ── WRITES ──
+    tx.update(batchRef, {
+      expiresAt: newExpiresAt,
+      expiresAtLegacyValue: oldExpiresAt,
+      expiresAtEditedAt: now,
+      expiresAtEditedBy: user?.userId || '',
+      updatedAt: now,
+    });
+
+    tx.set(stockAdjustmentDoc(adjustmentId), {
+      adjustmentId,
+      batchId,
+      productId: batch.productId,
+      productName: liveName || batch.productName || '',
+      type: 'expiry',
+      oldExpiresAt,
+      newExpiresAt,
+      note,
+      branchId,
+      user,
+      movementId: null,
+      createdAt: now,
+    });
+
+    // Q4=B — sync the source order line's expiresAt (1:1 via orderProductId).
+    let orderSynced = false;
+    if (orderSnap && orderSnap.exists()) {
+      const order = orderSnap.data();
+      const items = Array.isArray(order.items) ? order.items : [];
+      let touched = false;
+      const newItems = items.map((it) => {
+        if (it && it.orderProductId === orderProductId) { touched = true; return { ...it, expiresAt: newExpiresAt }; }
+        return it;
+      });
+      if (touched) { tx.update(orderRef, { items: newItems, updatedAt: now }); orderSynced = true; }
+    }
+
+    return { adjustmentId, batchId, oldExpiresAt, newExpiresAt, orderSynced };
+  });
+
+  return { ...result, success: true };
+}
+
 /**
  * Phase 15.4 post-deploy bug 3 (2026-04-28) — fetch single adjustment by id.
  * Used by AdjustDetailModal to render the row-click detail view (mirrors

@@ -615,6 +615,7 @@ export const createStockOrder = (...args) => raw.createStockOrder(...args);
 export const updateStockOrder = (...args) => raw.updateStockOrder(...args);
 export const cancelStockOrder = (...args) => raw.cancelStockOrder(...args);
 export const createStockAdjustment = (...args) => raw.createStockAdjustment(...args);
+export const updateStockBatchExpiry = (...args) => raw.updateStockBatchExpiry(...args); // V159
 export const createStockTransfer = (...args) => raw.createStockTransfer(...args);
 export const updateStockTransferStatus = (...args) => raw.updateStockTransferStatus(...args);
 export const createStockWithdrawal = (...args) => raw.createStockWithdrawal(...args);
