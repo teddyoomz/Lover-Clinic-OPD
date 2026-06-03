@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stock order line-item search + per-batch expiry edit — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI','Noto Sans Thai', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size: 0.9em; }
+    th,td { border: 1px solid var(--bd); padding: 0.4em 0.6em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .files code { font-size: 0.86em; }
+  </style>
+</head>
+<body>
+
+<h1>Stock order line-item search + per-batch expiry edit — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-06-03-stock-order-search-and-batch-expiry-edit-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (1) Make per-branch + central import-order search match products that are line items inside an order; (2) let admins edit a batch/lot's expiry date inside the existing adjust form (no new buttons), anytime, even after partial use.</p>
+  <p><strong>Architecture:</strong> Feature 1 = pure additive filter change in <code>OrderPanel</code>/<code>CentralStockOrderPanel</code> + a <code>matchQuery</code> option on the existing <code>formatOrderItemsSummary</code> helper (sorts the matched item first so it isn't truncated away). Feature 2 = a new <code>updateStockBatchExpiry()</code> in <code>backendClient.js</code> (one <code>runTransaction</code>: batch.expiresAt + forensic fields + a <code>be_stock_adjustments</code> type <code>'expiry'</code> audit doc + sync the source order line by <code>locationType</code>); the existing <code>AdjustCreateForm</code> (shared by ยอดคงเหลือ + ปรับสต็อค + central) gets an editable expiry field and a dual-path submit.</p>
+  <p><strong>Tech Stack:</strong> React 19, Firebase Firestore (client SDK + admin-SDK e2e), Vitest, DateField (canonical date input), lucide-react.</p>
+  <p><strong>Key facts (from recon):</strong> <code>BATCH_STATUS.EXPIRED</code> is NEVER persisted — expiry is derived live via <code>hasExpired()</code>, so fixing <code>expiresAt</code> needs NO status change and the <code>status:'active'</code> dropdown already lists mistyped-past-date lots. <code>firestore.rules</code> already allows <code>be_stock_batches</code> + <code>be_stock_orders</code> update for clinic staff → NO rule change, NO Probe-Deploy-Probe.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 1 · OrderPanel — search "elonza" (AFTER): matched line item surfaced first</div>
+  <div style="border:1px solid #ddd;border-radius:6px;padding:0.8em;font-size:0.85em;">
+    <div style="position:relative;margin-bottom:0.6em;">🔍 <input value="elonza" readonly style="width:90%;padding:0.3em 0.5em;border:1px solid #ccc;border-radius:6px;"></div>
+    <table style="font-size:0.92em;">
+      <tr><th>เลขที่</th><th>คู่ค้า</th><th>รายการ</th><th>สถานะ</th></tr>
+      <tr><td style="color:#2563eb;font-family:monospace">ORD-20250615</td><td>Supplier ABC</td>
+        <td><b>10</b> · <span style="background:#fef3c7;font-weight:700">Elonza x10</span> · Saline · +8 รายการ</td><td>ใช้งาน</td></tr>
+      <tr><td style="color:#2563eb;font-family:monospace">ORD-20250702</td><td>Vendor B</td>
+        <td><b>3</b> · <span style="background:#fef3c7;font-weight:700">Elonza x2</span> · Gauze</td><td>ใช้งาน</td></tr>
+    </table>
+    <p style="color:#666;font-size:0.85em;margin:0.4em 0 0;">matched item sorted first by <code>formatOrderItemsSummary(items, {matchQuery})</code> → never truncated away</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 2 · AdjustCreateForm — selected-batch box (AFTER): หมดอายุ = editable DateField</div>
+  <div style="border:1px solid #ddd;border-radius:6px;padding:0.8em;background:#f7f7f7;display:grid;grid-template-columns:repeat(4,1fr);gap:0.6em;font-size:0.8em;color:#666;">
+    <div>คงเหลือ<div style="font-size:1.1em;color:#111;font-weight:700;font-family:monospace">6 ชิ้น</div></div>
+    <div>ทั้งหมด<div style="font-size:1.1em;color:#111;font-family:monospace">10 ชิ้น</div></div>
+    <div>ต้นทุน/หน่วย<div style="font-size:1.1em;color:#b45309;font-family:monospace">฿150</div></div>
+    <div>หมดอายุ<div style="margin-top:0.2em;border:1px solid #c2410c;border-radius:6px;padding:0.25em 0.4em;background:#fff;color:#111;">31/07/2026 ▾</div></div>
+  </div>
+  <p style="color:#666;font-size:0.85em;margin:0.5em 0 0;">ปุ่ม "บันทึก" เดียว: qty-only / expiry-only / both. ช่อง "หมายเหตุ" เดิม = เหตุผล (audit). lot เดียว/หลาย lot เลือกใน Batch dropdown เหมือนกัน.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 2 · ปรับสต็อค history table — a type:'expiry' row</div>
+  <table style="font-size:0.85em;">
+    <tr><th>วันที่</th><th>สินค้า</th><th>Batch</th><th>ประเภท</th><th>จำนวน / การเปลี่ยน</th></tr>
+    <tr><td>03/06/2026 14:20</td><td>Elonza</td><td style="font-family:monospace">…a1b2c3d4</td>
+      <td><span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:5px;padding:0.05em 0.4em;font-size:0.85em;font-weight:700;">📅 แก้วันหมดอายุ</span></td>
+      <td style="color:#b45309;font-size:0.9em;">30/06/2026 → 31/07/2026</td></tr>
+    <tr><td>03/06/2026 11:05</td><td>Saline</td><td style="font-family:monospace">…99887766</td>
+      <td><span style="background:#d1fae5;color:#047857;border:1px solid #6ee7b7;border-radius:5px;padding:0.05em 0.4em;font-size:0.85em;font-weight:700;">+ เพิ่ม</span></td>
+      <td style="color:#059669;font-family:monospace;">+5</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 1 — search predicate (per order)</div>
+  <table>
+    <tr><th>#</th><th>Stage</th></tr>
+    <tr><td>1</td><td>admin types <code>q</code> = "elonza"</td></tr>
+    <tr><td>2</td><td><code>filteredOrders</code>: keep order if <code>vendorName.includes(q)</code> <b>OR</b> <code>orderId.includes(q)</code> <b>OR</b> <code>items.some(it =&gt; (it.productName||'').toLowerCase().includes(q))</code> ← NEW</td></tr>
+    <tr><td>3</td><td>row renders <code>formatOrderItemsSummary(o.items, {matchQuery: q})</code> → matched item sorted to front (within visible <code>max</code>)</td></tr>
+    <tr><td>4</td><td>identical in <code>CentralStockOrderPanel</code> (Rule P). order-line <code>productName</code> = import-time snapshot → search the snapshot (no live-resolve)</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 2 — expiry edit cascade (ONE runTransaction; reads before writes)</div>
+  <table>
+    <tr><th>#</th><th>Stage</th></tr>
+    <tr><td>0</td><td>form submit: if <code>qty&gt;0</code> → <code>createStockAdjustment()</code> (existing, separate tx). if expiry changed → <code>updateStockBatchExpiry()</code></td></tr>
+    <tr><td>1 (read)</td><td><code>tx.get(batchRef)</code> → <code>oldExpiresAt</code>; reject if status <code>cancelled</code></td></tr>
+    <tr><td>2 (read)</td><td>resolve order ref by <code>locationType</code> (central→<code>centralStockOrderDoc</code> / else <code>stockOrderDoc</code>); if <code>sourceOrderId</code>+<code>orderProductId</code> → <code>tx.get(orderRef)</code></td></tr>
+    <tr><td>3 (write)</td><td><code>tx.update(batchRef, {expiresAt:new, expiresAtLegacyValue:old, expiresAtEditedAt, expiresAtEditedBy, updatedAt})</code> — <b>status untouched</b> (EXPIRED is derived, never persisted)</td></tr>
+    <tr><td>4 (write)</td><td><code>tx.set(stockAdjustmentDoc(id), {type:'expiry', batchId, productId, productName:live, oldExpiresAt, newExpiresAt, note, branchId, user, movementId:null, createdAt})</code> — NO movement doc (conservation untouched)</td></tr>
+    <tr><td>5 (write)</td><td>Q4: if order line found → map <code>items[]</code>, set <code>expiresAt</code> at matching <code>orderProductId</code> → <code>tx.update(orderRef, {items, updatedAt})</code></td></tr>
+    <tr><td>6</td><td>FEFO (<code>hasExpired</code>/<code>batchFifoAllocate</code>/<code>pickNegativeTargetBatch</code>) reads <code>batch.expiresAt</code> live → next deduct uses new date immediately; mistyped-expired lot becomes available again</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table class="files">
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/lib/orderItemsSummary.js</code></td><td>F1: add optional <code>matchQuery</code> → sort matched items first (backward-compat)</td></tr>
+  <tr><td><code>src/components/backend/OrderPanel.jsx</code></td><td>F1: filter +line-item match; pass <code>matchQuery</code>; placeholder</td></tr>
+  <tr><td><code>src/components/backend/CentralStockOrderPanel.jsx</code></td><td>F1: same (Rule P)</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>F2: NEW <code>updateStockBatchExpiry()</code></td></tr>
+  <tr><td><code>src/lib/scopedDataLayer.js</code></td><td>F2: export <code>updateStockBatchExpiry</code> (writer passthrough)</td></tr>
+  <tr><td><code>src/components/backend/StockAdjustPanel.jsx</code></td><td>F2: DateField + editable expiry + dual-path submit; list table 'expiry' row</td></tr>
+  <tr><td><code>src/components/backend/AdjustDetailModal.jsx</code></td><td>F2: render type 'expiry' (badge + old→new)</td></tr>
+  <tr><td><code>.claude/skills/audit-stock-flow/SKILL.md</code> (+ patterns.md)</td><td>F2: S36 invariant</td></tr>
+  <tr><td><code>tests/v159-*.test.js{,x}</code> + <code>scripts/e2e-v159-stock-search-and-expiry.mjs</code></td><td>unit · source-grep · flow-simulate · real-prod Rule Q L2 e2e</td></tr>
+  <tr><td>firestore.rules</td><td><b>NO change</b></td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ───────────────── TASK 1 ───────────────── -->
+<div class="task">
+  <h3>Task 1: <code>formatOrderItemsSummary</code> — optional <code>matchQuery</code> (sort matched first)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/orderItemsSummary.js:26-42</code></li>
+    <li>Test: <code>tests/v159-order-items-summary-match.test.js</code> (new)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/v159-order-items-summary-match.test.js
+import { describe, it, expect } from 'vitest';
+import { formatOrderItemsSummary } from '../src/lib/orderItemsSummary.js';
+
+const items = [
+  { productName: 'Saline', qty: 1 },
+  { productName: 'Gauze', qty: 2 },
+  { productName: 'Betadine', qty: 1 },
+  { productName: 'Elonza', qty: 10 }, // index 3 — would be truncated at max=2
+];
+
+describe('V159 — formatOrderItemsSummary matchQuery', () => {
+  it('A1 backward-compat: no matchQuery → unchanged (first 2 + overflow)', () => {
+    expect(formatOrderItemsSummary(items)).toBe('Saline x1 · Gauze x2 · +2 รายการ');
+  });
+  it('A2 matchQuery surfaces the matched item FIRST (not truncated away)', () => {
+    const out = formatOrderItemsSummary(items, { matchQuery: 'elonza' });
+    expect(out.startsWith('Elonza x10')).toBe(true);
+    expect(out).toContain('Elonza x10');
+  });
+  it('A3 case-insensitive + Thai works', () => {
+    const th = [{ productName: 'น้ำเกลือ', qty: 1 }, { productName: 'อีลอนซ่า', qty: 5 }, { productName: 'ผ้าก๊อซ', qty: 1 }];
+    const out = formatOrderItemsSummary(th, { matchQuery: 'อีลอนซ่า', max: 1 });
+    expect(out.startsWith('อีลอนซ่า x5')).toBe(true);
+  });
+  it('A4 matchQuery no match → original order preserved', () => {
+    expect(formatOrderItemsSummary(items, { matchQuery: 'zzz' })).toBe('Saline x1 · Gauze x2 · +2 รายการ');
+  });
+  it('A5 empty items → empty string', () => {
+    expect(formatOrderItemsSummary([], { matchQuery: 'x' })).toBe('');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run to verify it fails</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-order-items-summary-match.test.js</code></p>
+  <p>Expected: A2/A3 FAIL (matched item not surfaced — current fn ignores matchQuery).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement</strong> — replace the function body</label></div>
+<pre><code class="language-javascript">// src/lib/orderItemsSummary.js — replace lines 26-42
+export function formatOrderItemsSummary(items, { max = 2, matchQuery = '' } = {}) {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  const safeMax = Math.max(1, Number(max) || 2);
+  const q = String(matchQuery || '').trim().toLowerCase();
+  let named = items.map((it) => {
+    const name = String(it?.productName || it?.productId || '').trim();
+    if (!name) return null;
+    const qtyNum = Number(it?.qty);
+    const qtyStr = Number.isFinite(qtyNum) && qtyNum > 0 ? ` x${qtyNum}` : '';
+    return { label: `${name}${qtyStr}`, matched: q ? name.toLowerCase().includes(q) : false };
+  }).filter(Boolean);
+  // V159 — when searching, surface matched items first so they are not
+  // truncated away (e.g. matched product is item 9 of 10). Stable sort →
+  // no matchQuery = byte-identical to pre-V159 output.
+  if (q) named = named.slice().sort((a, b) => (b.matched ? 1 : 0) - (a.matched ? 1 : 0));
+  const labels = named.map((n) => n.label);
+  const visible = labels.slice(0, safeMax);
+  const remaining = Math.max(0, labels.length - safeMax);
+  if (remaining > 0) visible.push(`+${remaining} รายการ`);
+  return visible.join(' · ');
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run to verify it passes</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-order-items-summary-match.test.js</code> → Expected: PASS (5/5)</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/orderItemsSummary.js tests/v159-order-items-summary-match.test.js
+git commit -m "feat(stock): V159 — formatOrderItemsSummary matchQuery (surface matched line item first)"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 2 ───────────────── -->
+<div class="task">
+  <h3>Task 2: OrderPanel — search matches line-item productName + surface match + placeholder</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/OrderPanel.jsx</code> (filter ~161-193; summary call ~323; placeholder ~248)</li>
+    <li>Test: <code>tests/v159-order-search-line-item.test.js</code> (new — pure-mirror of the predicate + source-grep)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/v159-order-search-line-item.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+// Pure mirror of the V159 search predicate (kept in lock-step with OrderPanel).
+function orderMatchesQuery(o, q) {
+  q = String(q || '').trim().toLowerCase();
+  if (!q) return true;
+  return (o.vendorName || '').toLowerCase().includes(q)
+    || (o.orderId || '').toLowerCase().includes(q)
+    || (Array.isArray(o.items) ? o.items : []).some(it => (it.productName || '').toLowerCase().includes(q));
+}
+
+const order = { orderId: 'ORD-20250615', vendorName: 'Supplier ABC',
+  items: [{ productName: 'Saline', qty: 1 }, { productName: 'Elonza', qty: 10 }] };
+
+describe('V159 — order search includes line items', () => {
+  it('B1 finds order by line-item productName', () => {
+    expect(orderMatchesQuery(order, 'elonza')).toBe(true);
+  });
+  it('B2 still finds by vendor + orderId (no regression)', () => {
+    expect(orderMatchesQuery(order, 'supplier')).toBe(true);
+    expect(orderMatchesQuery(order, 'ord-2025')).toBe(true);
+  });
+  it('B3 no match → false', () => {
+    expect(orderMatchesQuery(order, 'zzz')).toBe(false);
+  });
+  it('B4 source-grep: OrderPanel filter searches items[].productName + passes matchQuery', () => {
+    const src = readFileSync('src/components/backend/OrderPanel.jsx', 'utf8');
+    expect(src).toMatch(/items[\s\S]{0,80}some\([\s\S]{0,80}productName/);
+    expect(src).toMatch(/formatOrderItemsSummary\([^)]*matchQuery/);
+    expect(src).not.toMatch(/placeholder="ค้นหา vendor หรือ ORD-\.\.\."/); // old placeholder replaced
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run to verify it fails</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-order-search-line-item.test.js</code> → Expected: B4 FAILS (source not yet changed).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3a: Edit the filter</strong> (OrderPanel.jsx ~163-166)</label></div>
+<pre><code class="language-javascript">// REPLACE:
+//   // Search (vendor / orderId)
+//   if (q && !((o.vendorName || '').toLowerCase().includes(q) || (o.orderId || '').toLowerCase().includes(q))) {
+//     return false;
+//   }
+// WITH:
+    // Search (vendor / orderId / line-item productName) — V159
+    if (q && !(
+      (o.vendorName || '').toLowerCase().includes(q) ||
+      (o.orderId || '').toLowerCase().includes(q) ||
+      (Array.isArray(o.items) ? o.items : []).some(it => (it.productName || '').toLowerCase().includes(q))
+    )) {
+      return false;
+    }
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 3b: Pass matchQuery to the summary</strong> (~323)</label></div>
+<pre><code class="language-javascript">// REPLACE:  const itemsSummary = formatOrderItemsSummary(o.items || []);
+// WITH:
+                const itemsSummary = formatOrderItemsSummary(o.items || [], { matchQuery: search.trim() });
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 3c: Update the placeholder</strong> (~248)</label></div>
+<pre><code class="language-javascript">// REPLACE: placeholder="ค้นหา vendor หรือ ORD-..."
+// WITH:    placeholder="ค้นหา vendor / ORD / ชื่อสินค้า"
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 4: Run to verify it passes</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-order-search-line-item.test.js</code> → PASS. Then <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/OrderPanel.jsx tests/v159-order-search-line-item.test.js
+git commit -m "feat(stock): V159 — OrderPanel search matches line-item productName"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 3 ───────────────── -->
+<div class="task">
+  <h3>Task 3: CentralStockOrderPanel — same line-item search (Rule P)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/CentralStockOrderPanel.jsx</code> (filter ~183; summary call; placeholder)</li>
+    <li>Test: extend <code>tests/v159-order-search-line-item.test.js</code> (add B5 source-grep for central)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add the failing source-grep test (B5)</strong></label></div>
+<pre><code class="language-javascript">// append to tests/v159-order-search-line-item.test.js
+import { readFileSync as _rf } from 'node:fs';
+describe('V159 — central order search includes line items', () => {
+  it('B5 CentralStockOrderPanel filter searches items[].productName + matchQuery', () => {
+    const src = _rf('src/components/backend/CentralStockOrderPanel.jsx', 'utf8');
+    expect(src).toMatch(/items[\s\S]{0,80}some\([\s\S]{0,80}productName/);
+    expect(src).toMatch(/formatOrderItemsSummary\([^)]*matchQuery/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → B5 fails</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-order-search-line-item.test.js</code> → B5 FAILS.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Edit CentralStockOrderPanel</strong> — mirror Task 2 edits</label></div>
+<pre><code class="language-javascript">// 1) filter (~183) — REPLACE the vendor/orderId-only predicate WITH:
+    if (q && !(
+      (o.vendorName || '').toLowerCase().includes(q) ||
+      (o.orderId || '').toLowerCase().includes(q) ||
+      (Array.isArray(o.items) ? o.items : []).some(it => (it.productName || '').toLowerCase().includes(q))
+    )) {
+      return false;
+    }
+// 2) summary call — add { matchQuery: search.trim() } to the formatOrderItemsSummary(...) call
+//    e.g.  formatOrderItemsSummary(o.items || [], { matchQuery: search.trim() })
+// 3) placeholder — set the central search input placeholder to "ค้นหา vendor / ORD / ชื่อสินค้า"
+</code></pre>
+  <p><em>Note:</em> Confirm the exact central summary-call + placeholder lines by reading the file first (its order-list render mirrors OrderPanel but line numbers differ).</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run → PASS</strong> + <code>npm run build</code></label></div>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/CentralStockOrderPanel.jsx tests/v159-order-search-line-item.test.js
+git commit -m "feat(stock): V159 — central order search matches line-item productName (Rule P)"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 4 ───────────────── -->
+<div class="task">
+  <h3>Task 4: <code>updateStockBatchExpiry()</code> — backend transaction + scopedDataLayer export</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/backendClient.js</code> (add near <code>createStockAdjustment</code>, ~after line 7325)</li>
+    <li>Modify: <code>src/lib/scopedDataLayer.js</code> (~line 617, beside <code>createStockAdjustment</code> export)</li>
+    <li>Test: <code>tests/v159-update-batch-expiry.test.js</code> (flow-simulate pure mirror + source-grep)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write the failing test</strong> (pure-mirror of the decision logic + source-grep contract)</label></div>
+<pre><code class="language-javascript">// tests/v159-update-batch-expiry.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+// Pure mirror of updateStockBatchExpiry's decision logic (lock-step).
+function normExpiry(v) { return (v === '' || v == null) ? null : String(v); }
+function resolveOrderRefKind(batch) { return batch.locationType === 'central' ? 'central' : 'branch'; }
+function buildExpirySync(order, orderProductId, newExpiresAt) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  let touched = false;
+  const newItems = items.map((it) => {
+    if (it && it.orderProductId === orderProductId) { touched = true; return { ...it, expiresAt: newExpiresAt }; }
+    return it;
+  });
+  return { touched, newItems };
+}
+
+describe('V159 — updateStockBatchExpiry logic', () => {
+  it('C1 normalize empty/null → null (clearable)', () => {
+    expect(normExpiry('')).toBe(null); expect(normExpiry(null)).toBe(null);
+    expect(normExpiry('2026-07-31')).toBe('2026-07-31');
+  });
+  it('C2 central batch → central order collection', () => {
+    expect(resolveOrderRefKind({ locationType: 'central' })).toBe('central');
+    expect(resolveOrderRefKind({ locationType: 'branch' })).toBe('branch');
+    expect(resolveOrderRefKind({})).toBe('branch');
+  });
+  it('C3 order-line sync touches only the matching orderProductId', () => {
+    const order = { items: [
+      { orderProductId: 'OPI-a', expiresAt: '2026-01-01' },
+      { orderProductId: 'OPI-b', expiresAt: '2026-06-30' },
+    ] };
+    const { touched, newItems } = buildExpirySync(order, 'OPI-b', '2026-07-31');
+    expect(touched).toBe(true);
+    expect(newItems[0].expiresAt).toBe('2026-01-01'); // untouched
+    expect(newItems[1].expiresAt).toBe('2026-07-31');
+  });
+  it('C4 no matching line → touched=false (graceful)', () => {
+    const { touched } = buildExpirySync({ items: [{ orderProductId: 'OPI-x' }] }, 'OPI-z', '2026-07-31');
+    expect(touched).toBe(false);
+  });
+  it('C5 source-grep: updateStockBatchExpiry exists with the right contract', () => {
+    const src = readFileSync('src/lib/backendClient.js', 'utf8');
+    expect(src).toMatch(/export async function updateStockBatchExpiry/);
+    expect(src).toMatch(/runTransaction\(/);
+    // audit doc type 'expiry', NO movement (conservation untouched)
+    expect(src).toMatch(/type:\s*'expiry'/);
+    expect(src).toMatch(/expiresAtLegacyValue/);
+    // forensic + Rule O live-resolve productName
+    expect(src).toMatch(/_resolveProductNameLive/);
+    // status must NOT be written by the expiry path (EXPIRED is derived)
+    const fn = src.slice(src.indexOf('export async function updateStockBatchExpiry'));
+    const fnBody = fn.slice(0, 3500);
+    expect(fnBody).not.toMatch(/status:\s*/);
+    expect(fnBody).not.toMatch(/stockMovementDoc/); // no movement write
+  });
+  it('C6 scopedDataLayer exports updateStockBatchExpiry (writer passthrough)', () => {
+    const src = readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+    expect(src).toMatch(/export const updateStockBatchExpiry\s*=\s*\(\.\.\.args\)\s*=>\s*raw\.updateStockBatchExpiry/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run → C5/C6 fail</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-update-batch-expiry.test.js</code> → C5/C6 FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3a: Add the function</strong> to <code>backendClient.js</code> (immediately after <code>createStockAdjustment</code>)</label></div>
+<pre><code class="language-javascript">// V159 (2026-06-03) — edit a batch/lot's expiry date directly. Admins key
+// expiry wrong easily; this lets them fix it from the existing adjust form
+// without re-opening the import order, anytime, even after partial use.
+//
+// ONE runTransaction (reads before writes): batch.expiresAt + forensic trail
+// + a be_stock_adjustments type:'expiry' audit doc (NO movement → stock
+// conservation untouched) + sync the source order line (Q4=B) by locationType.
+//
+// status is NOT touched: BATCH_STATUS.EXPIRED is derived live via hasExpired()
+// (stockUtils) and never persisted, so fixing expiresAt is immediately
+// effective in FEFO with zero status change.
+export async function updateStockBatchExpiry(p, opts = {}) {
+  const batchId = p?.batchId;
+  if (!batchId) throw new Error('batchId required');
+  const newExpiresAt = (p?.newExpiresAt === '' || p?.newExpiresAt == null) ? null : String(p.newExpiresAt);
+
+  const adjustmentId = _genAdjustmentId();
+  const now = new Date().toISOString();
+  const user = _normalizeAuditUser(opts.user);
+  const note = String(p.note || '');
+
+  // Rule O — live-resolve productName for the audit doc (pre-tx, non-fatal).
+  let liveName = '';
+  try {
+    const pre = await getDoc(stockBatchDoc(batchId));
+    if (pre.exists()) liveName = await _resolveProductNameLive(pre.data()?.productId);
+  } catch { /* falls back to batch.productName in tx */ }
+
+  const result = await runTransaction(db, async (tx) => {
+    // ── READS FIRST (Firestore tx rule) ──
+    const batchRef = stockBatchDoc(batchId);
+    const snap = await tx.get(batchRef);
+    if (!snap.exists()) throw new Error(`Batch ${batchId} not found`);
+    const batch = snap.data();
+    if (batch.status === 'cancelled') throw new Error(`Cannot edit expiry of cancelled batch ${batchId}`);
+
+    const oldExpiresAt = batch.expiresAt ?? null;
+    const branchId = p.branchId || batch.branchId;
+    const sourceOrderId = batch.sourceOrderId || '';
+    const orderProductId = batch.orderProductId || '';
+    const orderRef = sourceOrderId
+      ? (batch.locationType === 'central' ? centralStockOrderDoc(sourceOrderId) : stockOrderDoc(sourceOrderId))
+      : null;
+    let orderSnap = null;
+    if (orderRef && orderProductId) orderSnap = await tx.get(orderRef);
+
+    // ── WRITES ──
+    tx.update(batchRef, {
+      expiresAt: newExpiresAt,
+      expiresAtLegacyValue: oldExpiresAt,
+      expiresAtEditedAt: now,
+      expiresAtEditedBy: user?.userId || '',
+      updatedAt: now,
+    });
+
+    tx.set(stockAdjustmentDoc(adjustmentId), {
+      adjustmentId,
+      batchId,
+      productId: batch.productId,
+      productName: liveName || batch.productName || '',
+      type: 'expiry',
+      oldExpiresAt,
+      newExpiresAt,
+      note,
+      branchId,
+      user,
+      movementId: null,
+      createdAt: now,
+    });
+
+    let orderSynced = false;
+    if (orderSnap && orderSnap.exists()) {
+      const order = orderSnap.data();
+      const items = Array.isArray(order.items) ? order.items : [];
+      let touched = false;
+      const newItems = items.map((it) => {
+        if (it && it.orderProductId === orderProductId) { touched = true; return { ...it, expiresAt: newExpiresAt }; }
+        return it;
+      });
+      if (touched) { tx.update(orderRef, { items: newItems, updatedAt: now }); orderSynced = true; }
+    }
+
+    return { adjustmentId, batchId, oldExpiresAt, newExpiresAt, orderSynced };
+  });
+
+  return { ...result, success: true };
+}
+</code></pre>
+  <p><em>Verify these symbols exist in backendClient.js (recon-confirmed): <code>_genAdjustmentId</code>, <code>_normalizeAuditUser</code>, <code>_resolveProductNameLive</code>, <code>getDoc</code>, <code>runTransaction</code>, <code>db</code>, <code>stockBatchDoc</code>, <code>stockAdjustmentDoc</code>, <code>stockOrderDoc</code>, <code>centralStockOrderDoc</code>.</em></p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 3b: Export from scopedDataLayer</strong> (beside <code>createStockAdjustment</code>, ~line 617)</label></div>
+<pre><code class="language-javascript">export const updateStockBatchExpiry = (...args) => raw.updateStockBatchExpiry(...args);
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 4: Run → PASS</strong> + <code>npm run build</code> (catches missing-symbol imports)</label></div>
+  <p>Run: <code>npm test -- --run tests/v159-update-batch-expiry.test.js</code> → 6/6 PASS. <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/backendClient.js src/lib/scopedDataLayer.js tests/v159-update-batch-expiry.test.js
+git commit -m "feat(stock): V159 — updateStockBatchExpiry (atomic batch+audit+order-line, no movement)"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 5 ───────────────── -->
+<div class="task">
+  <h3>Task 5: AdjustCreateForm — editable expiry + dual-path submit</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/StockAdjustPanel.jsx</code> (imports; <code>AdjustCreateForm</code> ~238-485)</li>
+    <li>Test: <code>tests/v159-adjust-form-expiry.test.jsx</code> (RTL + source-grep)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/v159-adjust-form-expiry.test.jsx
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+describe('V159 — AdjustCreateForm editable expiry + dual-path submit', () => {
+  const src = readFileSync('src/components/backend/StockAdjustPanel.jsx', 'utf8');
+  it('D1 imports DateField + updateStockBatchExpiry', () => {
+    expect(src).toMatch(/import DateField from '\.\.\/DateField\.jsx'/);
+    expect(src).toMatch(/updateStockBatchExpiry/);
+  });
+  it('D2 has newExpiresAt state + DateField wired in the batch box', () => {
+    expect(src).toMatch(/newExpiresAt/);
+    expect(src).toMatch(/&lt;DateField[\s\S]{0,120}value=\{newExpiresAt\}/);
+  });
+  it('D3 canSave allows expiry-only (qty>0 OR expiryChanged)', () => {
+    expect(src).toMatch(/expiryChanged/);
+    expect(src).toMatch(/Number\(qty\)\s*>\s*0[\s\S]{0,40}\|\|[\s\S]{0,40}expiryChanged/);
+  });
+  it('D4 handleSave gates createStockAdjustment on qty>0 and calls updateStockBatchExpiry on expiryChanged', () => {
+    expect(src).toMatch(/if\s*\(\s*Number\(qty\)\s*>\s*0\s*\)[\s\S]{0,160}createStockAdjustment/);
+    expect(src).toMatch(/if\s*\(\s*expiryChanged\s*\)[\s\S]{0,160}updateStockBatchExpiry/);
+  });
+});
+</code></pre>
+  <p>(Optional RTL: render <code>AdjustCreateForm</code> with a mocked <code>scopedDataLayer</code> returning one batch, assert the expiry DateField appears once a batch is selected. Mock <code>updateStockBatchExpiry</code> + <code>createStockAdjustment</code>.)</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Run → D1-D4 fail</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3a: Imports</strong></label></div>
+<pre><code class="language-javascript">// add to the lucide import:  Calendar
+// add a default import near the other component imports:
+import DateField from '../DateField.jsx';
+// add to the scopedDataLayer import list:
+//   createStockAdjustment, updateStockBatchExpiry, ...
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 3b: State + init effect</strong> (in <code>AdjustCreateForm</code>, after the <code>note</code> state ~line 255)</label></div>
+<pre><code class="language-javascript">  const [newExpiresAt, setNewExpiresAt] = useState('');
+  // V159 — re-init editable expiry whenever the selected batch (or its stored
+  // expiry, e.g. after a save reload) changes.
+  useEffect(() => {
+    setNewExpiresAt(selectedBatch?.expiresAt || '');
+  }, [selectedBatch?.batchId, selectedBatch?.expiresAt]);
+</code></pre>
+  <p><em>Note:</em> <code>selectedBatch</code> is declared at ~line 321 (<code>useMemo</code>). Place this effect AFTER that declaration.</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 3c: Derived flags</strong> (after <code>canSave</code> ~line 323)</label></div>
+<pre><code class="language-javascript">  // V159 — normalize '' / null → '' for a stable compare; expiry edit is
+  // independent of the qty adjust.
+  const _normExp = (v) => (v === '' || v == null) ? '' : String(v);
+  const expiryChanged = !!selectedBatch && _normExp(newExpiresAt) !== _normExp(selectedBatch.expiresAt);
+  // REPLACE the existing canSave line with:
+  // const canSave = productId && batchId && Number(qty) > 0 && type && !!actorUser;
+  // ↓
+  const canSave = productId && batchId && !!actorUser && ((Number(qty) > 0 && type) || expiryChanged);
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s6"> <label for="t5s6"><strong>Step 3d: handleSave dual-path</strong> (~332-350)</label></div>
+<pre><code class="language-javascript">  const handleSave = async () => {
+    if (!canSave) {
+      if (!actorUser) setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก');
+      else if (!(Number(qty) > 0) && !expiryChanged) setError('กรอกจำนวนที่จะปรับ หรือแก้วันหมดอายุ');
+      else setError('กรุณากรอกข้อมูลให้ครบ');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      if (Number(qty) > 0) {
+        await createStockAdjustment(
+          { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
+          { user: actorUser }
+        );
+      }
+      if (expiryChanged) {
+        await updateStockBatchExpiry(
+          { batchId, newExpiresAt: _normExp(newExpiresAt) || null, note: note.trim(), branchId: BRANCH_ID },
+          { user: actorUser }
+        );
+      }
+      setSuccess(true);
+      setTimeout(onSaved, 600);
+    } catch (e) {
+      setError(e.message || 'บันทึกไม่สำเร็จ');
+      setSaving(false);
+    }
+  };
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s7"> <label for="t5s7"><strong>Step 3e: Editable expiry in the batch box</strong> (~430)</label></div>
+<pre><code class="language-javascript">// REPLACE:
+//   &lt;div&gt;หมดอายุ &lt;div className="text-sm text-[var(--tx-primary)]"&gt;{selectedBatch.expiresAt || '-'}&lt;/div&gt;&lt;/div&gt;
+// WITH:
+            &lt;div&gt;
+              หมดอายุ
+              &lt;div className="mt-1"&gt;
+                &lt;DateField value={newExpiresAt} onChange={setNewExpiresAt} locale="ce" size="sm" /&gt;
+              &lt;/div&gt;
+              {expiryChanged &amp;&amp; (
+                &lt;div className="text-[9px] text-amber-400 mt-0.5" data-testid="adjust-expiry-changed"&gt;
+                  เดิม {selectedBatch.expiresAt || '— ไม่มี'} → จะบันทึกเป็น {newExpiresAt || '— ไม่มี'}
+                &lt;/div&gt;
+              )}
+            &lt;/div&gt;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s8"> <label for="t5s8"><strong>Step 3f: Update info box copy</strong> (~479-481) — mention expiry edits write an audit (no movement)</label></div>
+<pre><code class="language-javascript">// REPLACE the info text WITH:
+          ℹ ปรับจำนวนเขียน movement log (type=3 เพิ่ม / type=4 ลด) แก้ทีหลังไม่ได้ — ถ้าผิดให้สร้าง adjustment ใหม่ในทิศตรงข้าม · การแก้วันหมดอายุบันทึก audit (ไม่กระทบยอด) และมีผลกับ FEFO ทันที
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s9"> <label for="t5s9"><strong>Step 4: Run → PASS</strong> + <code>npm run build</code></label></div>
+  <p>Run: <code>npm test -- --run tests/v159-adjust-form-expiry.test.jsx</code> → PASS. Build clean.</p>
+
+  <div class="step"><input type="checkbox" id="t5s10"> <label for="t5s10"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/StockAdjustPanel.jsx tests/v159-adjust-form-expiry.test.jsx
+git commit -m "feat(stock): V159 — editable batch expiry in AdjustCreateForm (dual-path submit)"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 6 ───────────────── -->
+<div class="task">
+  <h3>Task 6: Render type <code>'expiry'</code> in the adjust list + detail modal</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/StockAdjustPanel.jsx</code> (list table type/qty cells ~198-214)</li>
+    <li>Modify: <code>src/components/backend/AdjustDetailModal.jsx</code> (TYPE_INFO + qty cell)</li>
+    <li>Test: <code>tests/v159-expiry-adjustment-render.test.js</code> (source-grep)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/v159-expiry-adjustment-render.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+describe('V159 — expiry adjustment renders distinctly', () => {
+  it('E1 StockAdjustPanel list handles type expiry', () => {
+    const src = readFileSync('src/components/backend/StockAdjustPanel.jsx', 'utf8');
+    expect(src).toMatch(/a\.type === 'expiry'/);
+    expect(src).toMatch(/แก้วันหมดอายุ/);
+  });
+  it('E2 AdjustDetailModal handles type expiry (badge + old→new)', () => {
+    const src = readFileSync('src/components/backend/AdjustDetailModal.jsx', 'utf8');
+    expect(src).toMatch(/expiry:\s*\{[\s\S]{0,80}label:/);
+    expect(src).toMatch(/oldExpiresAt/);
+    expect(src).toMatch(/newExpiresAt/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → E1/E2 fail</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3a: StockAdjustPanel list — type cell</strong> (~198-208)</label></div>
+<pre><code class="language-javascript">// In the type &lt;td&gt;, add an 'expiry' branch BEFORE the reduce fallback:
+                  {a.type === 'add' ? (
+                    /* ...existing emerald เพิ่ม badge... */
+                  ) : a.type === 'expiry' ? (
+                    &lt;span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-900/30 text-amber-400 border border-amber-800 inline-flex items-center gap-1"&gt;
+                      &lt;Calendar size={9} /&gt; แก้วันหมดอายุ
+                    &lt;/span&gt;
+                  ) : (
+                    /* ...existing red ลด badge... */
+                  )}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 3b: StockAdjustPanel list — qty cell</strong> (~209-213)</label></div>
+<pre><code class="language-javascript">                  &lt;td className="px-3 py-2 text-right font-mono font-bold"&gt;
+                    {a.type === 'expiry' ? (
+                      &lt;span className="text-amber-400 text-[10px]"&gt;{a.oldExpiresAt || '—'} → {a.newExpiresAt || '—'}&lt;/span&gt;
+                    ) : (
+                      &lt;span className={a.type === 'add' ? 'text-emerald-400' : 'text-red-400'}&gt;
+                        {a.type === 'add' ? '+' : '−'}{fmtQty(a.qty)}
+                      &lt;/span&gt;
+                    )}
+                  &lt;/td&gt;
+</code></pre>
+  <p>Add <code>Calendar</code> to the StockAdjustPanel lucide import (top of file). The <code>fmtSlashDate</code>/<code>fmtDate</code> for the date cell stays unchanged.</p>
+
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 3c: AdjustDetailModal</strong> — TYPE_INFO + badge class + qty cell</label></div>
+<pre><code class="language-javascript">// 1) lucide import: add Calendar
+import { X, Loader2, SlidersHorizontal, AlertCircle, Plus, Minus, Package, Calendar } from 'lucide-react';
+
+// 2) TYPE_INFO (line 20-23) — add expiry:
+const TYPE_INFO = {
+  add: { label: 'เพิ่มสต็อก', color: 'emerald', Icon: Plus },
+  reduce: { label: 'ลดสต็อก', color: 'red', Icon: Minus },
+  expiry: { label: 'แก้วันหมดอายุ', color: 'amber', Icon: Calendar },
+};
+// 3) BADGE_CLS (line 24-27) — add amber:
+const BADGE_CLS = {
+  emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
+  red: 'bg-red-900/30 text-red-400 border-red-800',
+  amber: 'bg-amber-900/30 text-amber-400 border-amber-800',
+};
+// 4) the "จำนวน" overview cell (line 144-149) — branch on expiry:
+              &lt;div&gt;
+                &lt;div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1"&gt;
+                  {type === 'expiry' ? 'วันหมดอายุ' : 'จำนวน'}
+                &lt;/div&gt;
+                {type === 'expiry' ? (
+                  &lt;div className="text-sm text-amber-400 font-mono" data-testid="adjust-detail-qty"&gt;
+                    {data.oldExpiresAt || '—'} → {data.newExpiresAt || '—'}
+                  &lt;/div&gt;
+                ) : (
+                  &lt;div className={`text-sm font-mono font-bold ${type === 'add' ? 'text-emerald-400' : 'text-red-400'}`} data-testid="adjust-detail-qty"&gt;
+                    {type === 'add' ? '+' : '−'}{fmtQty(data.qty)} {batch?.unit || ''}
+                  &lt;/div&gt;
+                )}
+              &lt;/div&gt;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s6"> <label for="t6s6"><strong>Step 4: Run → PASS</strong> + <code>npm run build</code></label></div>
+
+  <div class="step"><input type="checkbox" id="t6s7"> <label for="t6s7"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/StockAdjustPanel.jsx src/components/backend/AdjustDetailModal.jsx tests/v159-expiry-adjustment-render.test.js
+git commit -m "feat(stock): V159 — render type=expiry adjustment (list + detail modal)"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 7 ───────────────── -->
+<div class="task">
+  <h3>Task 7: Real-prod Rule Q L2 e2e</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>scripts/e2e-v159-stock-search-and-expiry.mjs</code></li>
+  </ul>
+  <p>Mirror the boilerplate of <code>scripts/e2e-stock-realtime-lot-clear.mjs</code> (load <code>.env.local.prod</code>, init firebase-admin with PEM <code>\\n</code> fix, <code>signInWithCustomToken</code> as a TEST staff, canonical <code>artifacts/${APP_ID}/public/data</code>, TEST- namespaced IDs via <code>randomBytes</code>, invocation guard). Use the REAL client-SDK functions (NOT admin doc writes) for the code under test.</p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the e2e</strong> — phases (each prints PASS/FAIL):</label></div>
+<pre><code class="language-javascript">// scripts/e2e-v159-stock-search-and-expiry.mjs  (REAL prod, client SDK)
+// Setup (admin SDK): seed a TEST order with items[] incl. a line "Elonza"
+//   at index &gt;2, and its batch (sourceOrderId + orderProductId + expiresAt).
+//
+// P1 search: import { formatOrderItemsSummary } from backendClient/orderItemsSummary
+//   → assert matchQuery 'elonza' surfaces "Elonza ..." first even at index 9.
+//   (predicate is pure → also assert items.some(productName) matches.)
+// P2 expiry edit (client fn): updateStockBatchExpiry({batchId, newExpiresAt:'2027-12-31', note, branchId},{user})
+//   → re-read batch (admin): expiresAt==='2027-12-31', expiresAtLegacyValue===old,
+//     expiresAtEditedBy set, status UNCHANGED ('active').
+// P3 audit: query be_stock_adjustments where batchId==X type=='expiry'
+//   → exactly 1 doc, oldExpiresAt/newExpiresAt correct, movementId null.
+// P4 NO movement: query be_stock_movements where batchId==X (expiry edit)
+//   → no new movement created by the expiry edit.
+// P5 order-line sync (Q4): re-read be_stock_orders/{sourceOrderId}
+//   → items[orderProductId].expiresAt === '2027-12-31'; sibling lines untouched.
+// P6 mistyped-expired-then-fix: set batch.expiresAt to a PAST date via
+//   updateStockBatchExpiry; assert hasExpired(batch)===true (FEFO would skip);
+//   then updateStockBatchExpiry to a FUTURE date; assert hasExpired===false
+//   (FEFO would include) and status still 'active'.
+// P7 clear expiry: updateStockBatchExpiry({newExpiresAt:''}) → batch.expiresAt===null.
+// P8 concurrency: Promise.allSettled two updateStockBatchExpiry on the SAME
+//   batch (diff dates) → both settle, batch.expiresAt === one of them
+//   (last-write-wins, no throw), exactly 2 audit docs, qty/conservation intact.
+// P9 idempotency: updateStockBatchExpiry to the SAME value twice → 2 audit
+//   docs but batch stable (acceptable: each call is an explicit edit).
+// P10 no-order batch: a batch with empty sourceOrderId → updateStockBatchExpiry
+//   succeeds (orderSynced=false), no throw.
+// Cleanup: delete all TEST- docs (batch, order, adjustments). Assert zero orphans.
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run against real prod</strong></label></div>
+  <p>Run: <code>node scripts/e2e-v159-stock-search-and-expiry.mjs</code></p>
+  <p>Expected: all phases PASS, cleanup confirms zero orphan TEST- docs. (Per Rule R/M: env already pull-authorized; e2e uses TEST- prefixed fixtures only — never touches real data.)</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add scripts/e2e-v159-stock-search-and-expiry.mjs
+git commit -m "test(stock): V159 — real-prod Rule Q L2 e2e (search + expiry edit + order sync + concurrency)"</code></pre>
+</div>
+
+<!-- ───────────────── TASK 8 ───────────────── -->
+<div class="task">
+  <h3>Task 8: audit-stock-flow S36 + full verification</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>.claude/skills/audit-stock-flow/SKILL.md</code> (+ <code>patterns.md</code> if present)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Add S36 invariant</strong></label></div>
+<pre><code class="language-text">S36 — Expiry edits go through updateStockBatchExpiry: a be_stock_adjustments
+type 'expiry' doc has NO qty and NO linked movement (movementId:null) and MUST
+NOT write be_stock_movements (stock conservation untouched); the expiry edit
+MUST live-resolve productName (Rule O) and MUST NOT change batch.status
+(EXPIRED is derived live via hasExpired, never persisted); the source order
+line (be_stock_orders / be_central_stock_orders by locationType) is synced in
+the same transaction. Grep: every `type: 'expiry'` write co-locates with
+`movementId: null` and is inside the updateStockBatchExpiry runTransaction.
+</code></pre>
+  <p>Bump the scope line in SKILL.md from "S1–S35" to "S1–S36".</p>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Full suite + build</strong> (Rule P expansion end → full run)</label></div>
+  <p>Run: <code>npm test -- --run</code> → ALL PASS (baseline 15970 + V159 new; fix any V21 lock-in fixups that surface).</p>
+  <p>Run: <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Re-run the e2e</strong> (final Rule Q gate)</label></div>
+  <p>Run: <code>node scripts/e2e-v159-stock-search-and-expiry.mjs</code> → all PASS, zero orphans.</p>
+
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add .claude/skills/audit-stock-flow/
+git commit -m "docs(audit): V159 — audit-stock-flow S36 (expiry-edit invariant)"</code></pre>
+  <p><em>Deploy: NONE this session. No firestore.rules change → no Probe-Deploy-Probe. Await explicit "deploy" (V18). V159 is client-SDK only → vercel-only when authorized.</em></p>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> F1 search (Q1=B) = T1-T3; F2 expiry edit (in-form, Q2) = T4-T6; Q3=C audit = T4 (adjustment 'expiry' doc) + T5 (note=reason) + T4 (forensic batch fields); Q4=B order sync = T4; central coverage = T3 (search) + T5 (shared AdjustCreateForm) + T4 (locationType resolve); strict tests = T1-T8 (unit + source-grep + flow-simulate + real-prod e2e). All spec acceptance criteria mapped.</li>
+  <li><strong>Resolved open-questions:</strong> formatOrderItemsSummary @ <code>src/lib/orderItemsSummary.js</code>; EXPIRED never persisted → no status normalize, no dropdown scope change; central reuses AdjustCreateForm. (Spec risks closed.)</li>
+  <li><strong>Type consistency:</strong> <code>updateStockBatchExpiry(p, opts)</code> signature identical across backendClient def, scopedDataLayer export, AdjustCreateForm call, and e2e. <code>newExpiresAt</code> state name consistent T5. Audit doc shape mirrors createStockAdjustment + adds <code>oldExpiresAt</code>/<code>newExpiresAt</code>/<code>movementId:null</code>.</li>
+  <li><strong>No placeholders:</strong> every code step shows complete code; Task 3 + Task 6 note "confirm exact lines by reading the file" only for line-number drift (the edits themselves are complete).</li>
+</ul>
+
+</body>
+</html>

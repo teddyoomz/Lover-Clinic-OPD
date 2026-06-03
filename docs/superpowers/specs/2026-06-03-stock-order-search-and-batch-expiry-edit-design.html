@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock: order line-item search + per-batch expiry edit — Design Spec</title>
+<style>
+  :root{ --bg:#0d0d0d; --surface:#161616; --hover:#1f1f1f; --bd:#2a2a2a; --rose-bd:rgba(244,63,94,.15);
+         --tx:#e7e7e7; --muted:#8a8a8a; --rose:#fb7185; --orange:#fb923c; --sky:#38bdf8; --emerald:#34d399;
+         --red:#f87171; --amber:#fbbf24; --accent:#dc2626;}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Thai',sans-serif;background:var(--bg);
+       color:var(--tx);max-width:1040px;margin:0 auto;padding:1.6em;line-height:1.65;font-size:14px}
+  h1{font-size:1.45em;border-bottom:2px solid var(--accent);padding-bottom:.3em}
+  h2{font-size:1.15em;margin-top:2em;color:#fff;border-left:4px solid var(--accent);padding-left:.55em}
+  h3{font-size:.95em;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:1.1em 0 .5em}
+  blockquote{border-left:4px solid var(--accent);background:#141414;padding:.6em 1em;border-radius:0 8px 8px 0;color:var(--muted);margin:1em 0}
+  code{background:#1c1c1c;padding:.06em .4em;border-radius:4px;font-size:.86em;color:#f3a7a7;font-family:'SF Mono',Menlo,Consolas,monospace}
+  pre{background:#111;border:1px solid var(--bd);border-radius:8px;padding:1em;overflow-x:auto;font-size:.82em;color:#cfe}
+  ul,ol{padding-left:1.3em} li{margin:.25em 0}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1em;margin:.6em 0 1em}
+  @media(max-width:780px){.split{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1.5px solid var(--rose-bd);border-radius:14px;padding:1em;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+  .mockup{background:var(--surface);border:1px solid var(--bd);border-radius:12px;padding:1em;margin:.6em 0}
+  .mockup-label{font-size:.72em;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.5em}
+  .tag-before{display:inline-block;font-size:.7em;font-weight:700;color:var(--red);background:rgba(248,113,113,.12);border:1px solid #7f1d1d;border-radius:5px;padding:.1em .5em;margin-bottom:.5em}
+  .tag-after{display:inline-block;font-size:.7em;font-weight:700;color:var(--emerald);background:rgba(52,211,153,.12);border:1px solid #065f46;border-radius:5px;padding:.1em .5em;margin-bottom:.5em}
+  .search{position:relative;margin:.3em 0}
+  .search input{width:100%;padding:.5em .6em .5em 1.8em;border-radius:9px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);font-size:.85em}
+  .search .ic{position:absolute;left:.55em;top:50%;transform:translateY(-50%);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:.8em;margin:.5em 0}
+  th{background:var(--hover);color:var(--muted);text-transform:uppercase;font-size:.82em;letter-spacing:.03em;padding:.4em .5em;text-align:left}
+  td{border-top:1px solid var(--bd);padding:.4em .5em}
+  .mono{font-family:'SF Mono',Menlo,Consolas,monospace}
+  .sky{color:var(--sky)} .emerald{color:var(--emerald)} .orange{color:var(--orange)} .muted{color:var(--muted)} .red{color:var(--red);font-weight:700} .amber{color:var(--amber)}
+  .empty{text-align:center;padding:1.4em;color:var(--muted);border:1px dashed var(--bd);border-radius:10px;font-size:.85em}
+  .hi{background:rgba(251,191,36,.18);border-radius:3px;padding:0 .15em;color:var(--amber);font-weight:700}
+  .pill{font-size:.66em;border-radius:5px;padding:.05em .4em;border:1px solid #065f46;color:#34d399;background:rgba(52,211,153,.1)}
+  .formbox{background:var(--surface);border:1px solid var(--bd);border-radius:12px;padding:1em;max-width:560px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:.7em}
+  .lbl{font-size:.66em;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:.2em;display:block}
+  .field{background:var(--bg);border:1px solid var(--bd);border-radius:7px;padding:.4em .55em;font-size:.82em;color:var(--tx)}
+  .field-edit{border-color:#7c2d12;box-shadow:0 0 0 1px rgba(251,146,60,.25) inset}
+  .batchbox{background:var(--hover);border:1px solid var(--bd);border-radius:9px;padding:.7em;display:grid;grid-template-columns:repeat(4,1fr);gap:.6em;font-size:.72em;color:var(--muted);margin:.6em 0}
+  .batchbox .v{font-size:1.05em;color:#fff;font-weight:700;font-family:'SF Mono',Menlo,Consolas,monospace}
+  .btn-save{background:#b45309;color:#fff;border:0;border-radius:8px;padding:.45em 1.1em;font-size:.8em;font-weight:700}
+  .flowtbl td{vertical-align:top}
+  .step{background:#141414;border:1px solid var(--bd);border-radius:9px;padding:.6em .8em;margin:.4em 0}
+  .step b{color:#fff}
+  .arrow{color:var(--orange);text-align:center;font-size:1.1em;margin:.1em 0}
+  .ok{color:var(--emerald);font-weight:700} .no{color:var(--red);font-weight:700}
+  .files td{font-size:.85em} .files code{font-size:.85em}
+</style>
+</head>
+<body>
+
+<h1>Stock — ค้นหา order ตามชื่อสินค้า (line item) + แก้วันหมดอายุต่อ batch/lot</h1>
+
+<blockquote>
+  <strong>วันที่:</strong> 2026-06-03 · <strong>สถานะ:</strong> Approved by user (design) · <strong>Scope:</strong> per-branch tab=stock (+ central order-search ตาม Rule P) · <strong>Tag:</strong> V159 (สองงานในชุดเดียว) · <strong>Deploy:</strong> frontend + backendClient เท่านั้น — <em>ไม่</em>แตะ firestore.rules → <em>ไม่</em>ต้อง Probe-Deploy-Probe
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<ol>
+  <li><strong>ค้น order นำเข้าไม่เจอชื่อสินค้าที่อยู่ "ไส้ใน":</strong> ฟิลเตอร์หน้า order (tab=stock ของแต่ละสาขา) จับแค่ <code>vendorName</code> + <code>orderId</code> ไม่จับ <code>items[].productName</code>. เช่น "elonza" เป็น 1 ใน 10 รายการของ order หนึ่ง → ค้นแล้วไม่เจออะไรเลย. (บั๊คเดียวกันที่คลังกลาง <code>CentralStockOrderPanel</code>.)</li>
+  <li><strong>แก้วันหมดอายุของ batch/lot ไม่ได้ถ้าไม่ไปแก้ที่ order:</strong> admin คีย์วันหมดอายุผิดได้ง่าย ต้องแก้ได้ตลอด ต่อ batch/lot ทันที แม้ lot นั้นถูกใช้ไปบางส่วนแล้ว — โดยไม่ต้องย้อนไปแก้ที่ order นำเข้า.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<h3>Feature 1 — ค้นหา order match ไส้ในรายการสินค้า (Q1 = B: ดันรายการที่ match ให้เห็น)</h3>
+<div class="split">
+  <div class="mockup">
+    <span class="tag-before">ก่อน (บั๊ค)</span>
+    <div class="mockup-label">OrderPanel · ค้น "elonza"</div>
+    <div class="search"><span class="ic">🔍</span><input value="elonza" readonly></div>
+    <div class="empty">📦 ไม่พบ order ที่ตรงกับคำค้น</div>
+    <p class="muted" style="font-size:.78em">filter จับแค่ <code>vendorName</code> + <code>orderId</code></p>
+  </div>
+  <div class="mockup">
+    <span class="tag-after">หลัง</span>
+    <div class="mockup-label">OrderPanel · ค้น "elonza"</div>
+    <div class="search"><span class="ic">🔍</span><input value="elonza" readonly></div>
+    <table>
+      <thead><tr><th>เลขที่</th><th>คู่ค้า</th><th>รายการ</th><th>สถานะ</th></tr></thead>
+      <tbody>
+        <tr><td class="mono sky">ORD-20250615</td><td>Supplier ABC</td>
+          <td><b>10</b> <span class="muted">· <span class="hi">Elonza ×10</span>, Saline, …</span></td>
+          <td><span class="pill">ใช้งาน</span></td></tr>
+        <tr><td class="mono sky">ORD-20250702</td><td>Vendor B</td>
+          <td><b>3</b> <span class="muted">· <span class="hi">Elonza ×2</span>, Gauze</span></td>
+          <td><span class="pill">ใช้งาน</span></td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:.78em">filter เพิ่ม line item + summary ดันตัวที่ match ขึ้นก่อน/ไฮไลต์</p>
+  </div>
+</div>
+
+<h3>Feature 2 — แก้วันหมดอายุ "ในฟอร์มปรับเดิม" (ไม่มีปุ่มใหม่) — ใช้ร่วม 2 หน้า</h3>
+<p class="muted" style="font-size:.85em">ปุ่ม "ปรับ" หน้ายอดคงเหลือ (ผ่าน <code>StockActionModal</code>/V144) และ หน้าปรับสต็อคเอง ใช้ <code>AdjustCreateForm</code> ตัวเดียวกัน. กล่องรายละเอียด batch ที่เลือก (จริงที่ line 425-431) มี "หมดอายุ" อยู่แล้ว — เปลี่ยนเป็นช่องแก้ได้.</p>
+<div class="split">
+  <div class="mockup">
+    <span class="tag-before">ก่อน — กล่อง batch ที่เลือก (read-only)</span>
+    <div class="batchbox">
+      <div>คงเหลือ<div class="v emerald">6 ชิ้น</div></div>
+      <div>ทั้งหมด<div class="v">10 ชิ้น</div></div>
+      <div>ต้นทุน/หน่วย<div class="v orange">฿150</div></div>
+      <div>หมดอายุ<div class="v" style="color:#e7e7e7">30/06/2026</div></div>
+    </div>
+    <p class="muted" style="font-size:.78em">หมดอายุ แสดงอย่างเดียว แก้ไม่ได้</p>
+  </div>
+  <div class="mockup">
+    <span class="tag-after">หลัง — หมดอายุ = DateField แก้ได้</span>
+    <div class="batchbox">
+      <div>คงเหลือ<div class="v emerald">6 ชิ้น</div></div>
+      <div>ทั้งหมด<div class="v">10 ชิ้น</div></div>
+      <div>ต้นทุน/หน่วย<div class="v orange">฿150</div></div>
+      <div>หมดอายุ<div class="field field-edit" style="margin-top:.15em">31/07/2026 ▾</div></div>
+    </div>
+    <p class="muted" style="font-size:.78em">เติมค่าเดิม · เคลียร์เป็นว่างได้ · ช่อง "หมายเหตุ" เดิม = เหตุผล (audit)</p>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">ฟอร์มปรับ (โครงจริง) — ปุ่ม "บันทึก" เดียว รองรับ qty / expiry / ทั้งคู่</div>
+  <div class="formbox">
+    <div class="grid2">
+      <div><span class="lbl">สินค้า *</span><div class="field">Elonza ▾</div></div>
+      <div><span class="lbl">Batch / Lot *</span><div class="field">…a1b2c3d4 — คงเหลือ 6/10 (หมด 30/06/2026) ▾</div></div>
+    </div>
+    <div class="batchbox" style="margin-top:.6em">
+      <div>คงเหลือ<div class="v emerald">6</div></div><div>ทั้งหมด<div class="v">10</div></div>
+      <div>ต้นทุน<div class="v orange">฿150</div></div>
+      <div>หมดอายุ<div class="field field-edit" style="margin-top:.15em">31/07/2026 ▾</div></div>
+    </div>
+    <div style="margin-top:.6em"><span class="lbl">ประเภท</span>
+      <span class="muted" style="font-size:.8em">[ เพิ่ม ] [ ลด ] — ใส่ก็ต่อเมื่อจะปรับ qty (ไม่ใส่ = แก้ expiry อย่างเดียวได้)</span></div>
+    <div style="margin-top:.5em"><span class="lbl">จำนวน</span><div class="field muted">(เว้นว่าง = ไม่ปรับ qty)</div></div>
+    <div style="margin-top:.5em"><span class="lbl">หมายเหตุ / เหตุผล</span><div class="field muted">คีย์วันหมดอายุผิดตอนนำเข้า</div></div>
+    <div style="margin-top:.5em"><span class="lbl">ผู้ทำรายการ *</span><div class="field">เลือกพนักงาน ▾</div></div>
+    <div style="text-align:right;margin-top:.7em"><span class="btn-save">บันทึก</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>Feature 1 — search predicate (per order)</h3>
+<table class="flowtbl">
+  <thead><tr><th>ขั้น</th><th>เกิดอะไร</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>admin พิมพ์ <code>q</code> = "elonza" ในช่องค้นหา</td></tr>
+    <tr><td>2</td><td><code>filteredOrders</code> filter ต่อ order: match ถ้า <code>vendorName.includes(q)</code> <b>OR</b> <code>orderId.includes(q)</code> <b>OR</b> <code class="amber">items.some(it =&gt; it.productName.includes(q))</code> ← เพิ่มใหม่</td></tr>
+    <tr><td>3</td><td>ถ้า match ที่ line item → <code>formatOrderItemsSummary(items, q)</code> ดันตัวที่ match ขึ้นก่อน + ไฮไลต์ (Q1=B) → แถวโชว์ "<span class="hi">Elonza ×10</span>, …"</td></tr>
+    <tr><td>4</td><td>เหมือนกันที่ <code>CentralStockOrderPanel</code> (Rule P). productName ใน line = snapshot ตอนนำเข้า → ค้นตาม snapshot (ไม่ต้อง live-resolve)</td></tr>
+  </tbody>
+</table>
+
+<h3>Feature 2 — expiry edit cascade (1 runTransaction, atomic)</h3>
+<div class="step"><b>กดบันทึก</b> ในฟอร์ม (เลือก batch แล้ว, <code>newExpiresAt</code> ≠ <code>batch.expiresAt</code>)</div>
+<div class="arrow">▼ ถ้า qty &gt; 0 → <code>createStockAdjustment()</code> เดิม (transaction แยก: batch qty + movement + adjustment 'add'/'reduce')</div>
+<div class="arrow">▼ ถ้า expiry เปลี่ยน → <code>updateStockBatchExpiry({batchId,newExpiresAt,note,branchId},{user})</code></div>
+<div class="step"><b>runTransaction:</b>
+  <ol style="margin:.3em 0">
+    <li><code>tx.get(batch)</code> → จับ <code>oldExpiresAt</code> จาก server</li>
+    <li><code>tx.update(batch, {expiresAt:new, expiresAtLegacyValue:old, expiresAtEditedAt, expiresAtEditedBy, status:normalize(remaining), updatedAt})</code> — <span class="amber">status normalize</span>: ถ้า remaining&gt;0 → ACTIVE (ล้าง EXPIRED ที่ค้างจากวันเก่า)</li>
+    <li><code>tx.set(be_stock_adjustments/{id}, {type:'expiry', batchId, productId, productName:liveResolve(productId), oldExpiresAt, newExpiresAt, note, branchId, user, createdAt, linkedMovementId:null})</code> — <span class="amber">Q3=C</span>; ไม่เขียน be_stock_movements</li>
+    <li><b>Q4=B sync:</b> ถ้า <code>batch.sourceOrderId</code> + <code>batch.orderProductId</code> มี → resolve order collection จาก <code>locationType</code> (branch→<code>be_stock_orders</code> / central→<code>be_central_stock_orders</code>) → <code>tx.get(order)</code> → map <code>items[]</code> set <code>expiresAt</code> ที่ orderProductId ตรงกัน → <code>tx.update(order, {items})</code>. ไม่มี order ต้นทาง → ข้าม (เช่น batch จาก AUTO-NEG/transfer)</li>
+  </ol>
+</div>
+<div class="arrow">▼</div>
+<div class="step"><b>มีผลทันที:</b> FEFO (<code>batchFifoAllocate</code>/<code>hasExpired</code>/<code>pickNegativeTargetBatch</code>) อ่าน <code>batch.expiresAt</code> สดทุกครั้ง → การตัดสต็อครอบถัดไปใช้ค่าใหม่เลย; lot ที่เคยติด "หมดอายุเพราะคีย์ผิด" กลับมาใช้ได้</div>
+
+<h2>Architecture / Files</h2>
+<table class="files">
+  <thead><tr><th>ไฟล์</th><th>เปลี่ยนอะไร</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/components/backend/OrderPanel.jsx</code></td><td>F1: filter เพิ่ม <code>items.some(productName)</code>; ส่ง <code>q</code> เข้า summary; แก้ placeholder</td></tr>
+    <tr><td><code>src/components/backend/CentralStockOrderPanel.jsx</code></td><td>F1: filter เดียวกัน + placeholder (Rule P)</td></tr>
+    <tr><td><code>formatOrderItemsSummary</code> (helper เดิม)</td><td>F1: รับ optional <code>matchQuery</code> → ดันตัว match ขึ้นก่อน + ไฮไลต์ (backward-compat: ไม่ส่ง q = เหมือนเดิม)</td></tr>
+    <tr><td><code>src/lib/backendClient.js</code></td><td>F2: <b>ใหม่</b> <code>updateStockBatchExpiry()</code> (runTransaction: batch + audit doc 'expiry' + order-line sync + status normalize + Rule O live-resolve productName)</td></tr>
+    <tr><td><code>src/lib/scopedDataLayer.js</code></td><td>F2: export <code>updateStockBatchExpiry</code> (mirror ทางเดียวกับ <code>createStockAdjustment</code> — BS-1)</td></tr>
+    <tr><td><code>src/components/backend/StockAdjustPanel.jsx</code> (<code>AdjustCreateForm</code>)</td><td>F2: batch box หมดอายุ→DateField (<code>newExpiresAt</code> state); batch dropdown รวม lot ที่ expired-by-date แต่ remaining&gt;0; <code>canSave</code> = qty-adjust <b>หรือ</b> expiry-change; <code>handleSave</code> เรียกทั้ง 2 ตามที่เปลี่ยน; อัปเดต info box</td></tr>
+    <tr><td><code>.claude/skills/audit-stock-flow/*</code></td><td>F2: invariant ใหม่ (Sxx) — adjustment type 'expiry' ไม่มี qty/movement (ไม่กระทบ conservation), live-resolve productName, batch+order-line+audit เขียน atomic</td></tr>
+    <tr><td>firestore.rules</td><td><span class="ok">ไม่แตะ</span> (be_stock_batches + be_stock_orders update = staff เขียนได้อยู่แล้ว)</td></tr>
+    <tr><td>tests + scripts</td><td>unit · source-grep · Rule I flow-simulate · real-prod Rule Q L2 e2e</td></tr>
+  </tbody>
+</table>
+
+<h2>Decisions (locked via Q&A)</h2>
+<ul>
+  <li><strong>Q1 = B</strong> — order match line item → แถวโชว์ + ดันรายการที่ match ขึ้น/ไฮไลต์ (กันปัญหา summary โดนตัดก่อนถึงตัวที่ค้น)</li>
+  <li><strong>Q2 = แก้ในฟอร์มปรับเดิม (user directive)</strong> — ไม่ทำปุ่ม ✎ บนตาราง; ใช้ batch selector ของ <code>AdjustCreateForm</code> ที่มีอยู่ → lot เดียว/หลาย lot เลือกใน dropdown เหมือนกัน → ครอบ 2 หน้าด้วย control เดียว</li>
+  <li><strong>Q3 = C</strong> — audit doc ใน <code>be_stock_adjustments</code> type 'expiry' (ครบประวัติ) + ฟิลด์ forensic บน batch (โชว์ inline); <em>ไม่</em> เขียน be_stock_movements</li>
+  <li><strong>Q4 = B</strong> — sync สองทาง batch ↔ บรรทัด order ต้นทาง (branch/central) ใน transaction เดียว</li>
+  <li><strong>Edge</strong> — dropdown รวม lot ที่ "หมดอายุเพราะคีย์ผิด" (remaining&gt;0); status normalize ตอนแก้ → วันใหม่ในอนาคต = FEFO ใช้ได้กลับมา; ตัด cancelled/depleted ออก</li>
+  <li><strong>No rule change → no Probe-Deploy-Probe;</strong> deploy รอ user สั่ง "deploy" (V18)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>ค้น "elonza" ที่ <code>OrderPanel</code> + <code>CentralStockOrderPanel</code> → เจอทุก order ที่มี elonza เป็น line item (รวมตัวที่อยู่ลำดับท้ายๆ ของ items[]); แถวแสดงให้เห็นว่า match เพราะรายการไหน</li>
+  <li>ค้น vendor / ORD-... ยังทำงานเหมือนเดิม (ไม่ regress)</li>
+  <li>ในฟอร์มปรับ (ทั้งจากหน้ายอดคงเหลือ + หน้าปรับสต็อค): เลือก batch → แก้ "หมดอายุ" → บันทึก → <code>be_stock_batches.expiresAt</code> เปลี่ยนทันที</li>
+  <li>แก้ expiry อย่างเดียวได้ (ไม่กรอก qty) และ แก้ qty+expiry พร้อมกันได้</li>
+  <li>แก้ได้แม้ lot ถูกใช้ไปบางส่วน (remaining&lt;total) และ แม้ lot ติด "หมดอายุเพราะคีย์ผิด"</li>
+  <li>วันใหม่เป็นอนาคต + remaining&gt;0 → FEFO กลับมาตัด lot นั้นได้ (status ไม่ค้าง EXPIRED)</li>
+  <li>เขียน audit doc type 'expiry' (old→new+เหตุผล+ผู้ทำ) + ฟิลด์ forensic บน batch; conservation/รายงานสต็อคไม่เพี้ยน (ไม่มี movement)</li>
+  <li>บรรทัดสินค้าใน order ต้นทาง sync วันใหม่ด้วย (ถ้ามี); ไม่มี order ต้นทาง → ไม่ error</li>
+  <li>idempotent + concurrency-safe (สองคนแก้ expiry batch เดียวกันพร้อมกัน → last-write-wins ถูกต้อง, audit ครบ, ไม่ทำ qty/conservation พัง)</li>
+  <li>full vitest เขียว + build clean + real-prod Rule Q L2 e2e ผ่าน</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>ตำแหน่ง <code>formatOrderItemsSummary</code>:</strong> ต้องหาไฟล์จริง (import ใน OrderPanel) + ดูพฤติกรรม truncation ตอนใส่ highlight (plan จะ locate)</li>
+  <li><strong>status EXPIRED ถูก persist หรือ derive?</strong> ต้องยืนยันว่ามี cron/field set status=EXPIRED จริงไหม → ถ้ามี ต้อง normalize ตอนแก้ (รวมไว้ใน transaction แล้ว); ถ้า derive จาก expiresAt ล้วน ก็ไม่ต้องทำอะไรเพิ่ม</li>
+  <li><strong>batch dropdown ขยาย scope:</strong> <code>listStockBatches({status:'active'})</code> ปัจจุบันตัด expired — ต้องดู semantics ของ status param เพื่อรวม expired-remaining&gt;0 โดยไม่ดึง cancelled/depleted; กระทบ qty-adjust ของ lot ที่หมดอายุด้วย (เพิ่ม/ลด lot หมดอายุ = write-off ปกติทำได้)</li>
+  <li><strong>คลังกลาง — ฟอร์มปรับ:</strong> ยืนยันใน plan ว่า central warehouse adjust ใช้ <code>AdjustCreateForm</code> ตัวเดียวกันไหม (ใช้ร่วม → ครอบฟรี) หรือมีฟอร์มแยก (→ flag เป็น Rule-P follow-up; primary scope = per-branch ตามที่ user ระบุ)</li>
+  <li><strong>order-line array RMW:</strong> ทำใน transaction (Rule T) ปลอดภัย; order ใหญ่ (หลายร้อย items) = array เขียนทั้งก้อน — ปกติ items ต่อ order ไม่เยอะ</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brainstorm — Stock order-search + per-batch expiry edit (BEFORE → AFTER)</title>
+<style>
+  :root{ --bg:#0d0d0d; --surface:#161616; --hover:#1f1f1f; --bd:#2a2a2a; --rose-bd:rgba(244,63,94,.15);
+         --tx:#e7e7e7; --muted:#8a8a8a; --rose:#fb7185; --orange:#fb923c; --sky:#38bdf8; --emerald:#34d399;
+         --red:#f87171; --amber:#fbbf24; }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Thai',sans-serif;background:var(--bg);
+       color:var(--tx);max-width:1100px;margin:0 auto;padding:1.5em;line-height:1.6;font-size:14px}
+  h1{font-size:1.4em;border-bottom:2px solid #be123c;padding-bottom:.3em}
+  h2{font-size:1.1em;margin-top:1.8em;color:#fff;border-left:4px solid #be123c;padding-left:.5em}
+  h3{font-size:.95em;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:.2em 0 .6em}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1em;margin:.6em 0 1.2em}
+  @media(max-width:760px){.split{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1.5px solid var(--rose-bd);border-radius:14px;padding:1em;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+  .tag-before{display:inline-block;font-size:.7em;font-weight:700;color:var(--red);background:rgba(248,113,113,.12);
+       border:1px solid #7f1d1d;border-radius:5px;padding:.1em .5em;margin-bottom:.6em}
+  .tag-after{display:inline-block;font-size:.7em;font-weight:700;color:var(--emerald);background:rgba(52,211,153,.12);
+       border:1px solid #065f46;border-radius:5px;padding:.1em .5em;margin-bottom:.6em}
+  .search{position:relative;margin:.4em 0}
+  .search input{width:100%;padding:.5em .6em .5em 1.8em;border-radius:9px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);font-size:.85em}
+  .search .ic{position:absolute;left:.55em;top:50%;transform:translateY(-50%);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:.78em;margin-top:.5em}
+  th{background:var(--hover);color:var(--muted);text-transform:uppercase;font-size:.85em;letter-spacing:.03em;padding:.4em .5em;text-align:left}
+  td{border-top:1px solid var(--bd);padding:.4em .5em}
+  .mono{font-family:'SF Mono',Menlo,Consolas,monospace}
+  .sky{color:var(--sky)} .emerald{color:var(--emerald)} .orange{color:var(--orange)} .rose{color:var(--rose)}
+  .muted{color:var(--muted)} .red{color:var(--red);font-weight:700} .amber{color:var(--amber)}
+  .empty{text-align:center;padding:1.6em;color:var(--muted);border:1px dashed var(--bd);border-radius:10px}
+  .lot{background:rgba(31,31,31,.5)}
+  .btn{font-size:.72em;border-radius:6px;padding:.2em .5em;display:inline-flex;align-items:center;gap:.25em;cursor:default}
+  .btn-orange{color:var(--orange);background:rgba(251,146,60,.12);border:1px solid #7c2d12}
+  .btn-sky{color:var(--sky);background:rgba(56,189,248,.12);border:1px solid #075985}
+  .btn-rose{color:var(--rose);background:rgba(244,63,94,.12);border:1px solid #9f1239}
+  .hi{background:rgba(251,191,36,.18);border-radius:3px;padding:0 .15em;color:var(--amber);font-weight:700}
+  .pill{font-size:.68em;border-radius:5px;padding:.05em .4em;border:1px solid #075985;color:var(--sky);background:rgba(56,189,248,.1)}
+  .note{font-size:.8em;color:var(--muted);margin:.3em 0 .1em}
+  .opt{border:1px solid var(--bd);border-radius:10px;padding:.7em .9em;margin:.5em 0;background:#121212}
+  .opt b{color:#fff}
+  .rec{border-color:#065f46;box-shadow:0 0 0 1px rgba(52,211,153,.25) inset}
+  .rec::before{content:'★ แนะนำ';float:right;font-size:.7em;color:var(--emerald);font-weight:700}
+  .modal{max-width:420px;margin:.6em auto;background:#161616;border:1.5px solid var(--rose-bd);border-radius:14px;padding:1em;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+  .modal .row{display:flex;justify-content:space-between;font-size:.82em;padding:.25em 0;border-bottom:1px solid var(--bd)}
+  .modal input{background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:7px;padding:.35em .5em;font-size:.85em}
+  .modal .actions{display:flex;gap:.5em;justify-content:flex-end;margin-top:.7em}
+  .modal .save{background:#be123c;color:#fff;border:0;border-radius:7px;padding:.4em .9em;font-size:.8em;font-weight:700}
+  .modal .cancel{background:transparent;color:var(--muted);border:1px solid var(--bd);border-radius:7px;padding:.4em .9em;font-size:.8em}
+  code{background:#1c1c1c;padding:.05em .35em;border-radius:4px;font-size:.85em;color:#f0abab}
+</style>
+</head>
+<body>
+
+<h1>Stock: order-search fix + per-batch expiry edit — มุมมอง BEFORE → AFTER</h1>
+<p class="note">มุ่งให้เหมือนหน้าจริง (สี/โครงตาราง/ปุ่ม คัดจาก <code>OrderPanel.jsx</code> + <code>StockBalancePanel.jsx</code> จริง). ใช้ประกอบการตอบ Q1–Q4 ด้านล่าง.</p>
+
+<!-- ───────────────────────── FEATURE 1 ───────────────────────── -->
+<h2>1 · ค้นหา order นำเข้า — ค้นไส้ในรายการสินค้าได้ (เช่น "elonza")</h2>
+<div class="split">
+
+  <div class="card">
+    <span class="tag-before">ก่อน (บั๊ค)</span>
+    <h3>ค้นหา "elonza" → ไม่เจอ</h3>
+    <div class="search"><span class="ic">🔍</span><input value="elonza" readonly></div>
+    <p class="note">filter จับแค่ <code>vendorName</code> + <code>orderId</code> (placeholder จริง: "ค้นหา vendor หรือ ORD-...")</p>
+    <div class="empty">📦<br>ไม่พบ order ที่ตรงกับคำค้น</div>
+    <p class="note">แต่จริงๆ "Elonza" เป็น 1 ใน 10 รายการของ ORD-20250615 → ระบบมองไม่เห็นไส้ใน</p>
+  </div>
+
+  <div class="card">
+    <span class="tag-after">หลัง (แก้)</span>
+    <h3>ค้นหา "elonza" → เจอ order ที่มีรายการนี้</h3>
+    <div class="search"><span class="ic">🔍</span><input value="elonza" readonly></div>
+    <table>
+      <thead><tr><th>เลขที่</th><th>คู่ค้า</th><th>รายการ</th><th>สถานะ</th></tr></thead>
+      <tbody>
+        <tr><td class="mono sky">ORD-20250615</td><td>Supplier ABC</td>
+            <td><b>10</b> <span class="muted">· <span class="hi">Elonza ×10</span>, Saline, …</span></td>
+            <td><span class="pill" style="color:#34d399;border-color:#065f46;background:rgba(52,211,153,.1)">ใช้งาน</span></td></tr>
+        <tr><td class="mono sky">ORD-20250702</td><td>Vendor B</td>
+            <td><b>3</b> <span class="muted">· <span class="hi">Elonza ×2</span>, Gauze</span></td>
+            <td><span class="pill" style="color:#34d399;border-color:#065f46;background:rgba(52,211,153,.1)">ใช้งาน</span></td></tr>
+      </tbody>
+    </table>
+    <p class="note">เพิ่ม <code>items.some(it =&gt; it.productName ตรงคำค้น)</code> เข้าไปใน filter เดิม (วน items[] อยู่แล้วใน cost-type filter)</p>
+  </div>
+</div>
+
+<h3>Q1 — เวลาเจอ order จากการ match ไส้ใน ให้แสดงผลแบบไหน?</h3>
+<div class="opt"><b>A · มินิมัล</b> — แค่ทำให้ order แถวนั้นโผล่ (ใช้ summary เดิมที่ตัดข้อความ max-280px). ถ้า Elonza เป็นรายการที่ 9/10 อาจโดนตัดหายจาก summary → ผู้ใช้เห็นแถวแต่ไม่รู้ว่าตรงเพราะอะไร</div>
+<div class="opt rec"><b>B · ดันรายการที่ match ให้เห็น</b> — order แถวนั้นโผล่ + summary จัดให้ตัวที่ค้นเจอ (เช่น <span class="hi">Elonza ×10</span>) ขึ้นก่อน/ไฮไลต์ ไม่ว่าจะอยู่ลำดับไหน → เห็นทันทีว่าตรงเพราะอะไร</div>
+<div class="opt"><b>C · มุมมองรายการสินค้า (flatten)</b> — โหมดผลลัพธ์ใหม่ที่โชว์ "ไส้ใน" ตรงๆ: Elonza ×10 · ORD-20250615 · exp 30/06/2026 · lot …. แรงสุดแต่เป็นของใหม่ทั้งก้อน + test เยอะกว่า</div>
+<p class="note">ทั้ง 2 หน้าจะแก้พร้อมกัน: per-branch (<code>OrderPanel</code>) + คลังกลาง (<code>CentralStockOrderPanel</code>) — บั๊คเดียวกัน (Rule P)</p>
+
+<!-- ───────────────────────── FEATURE 2 ───────────────────────── -->
+<h2>2 · แก้วันหมดอายุของแต่ละ batch/lot จากปุ่ม "ปรับ" (ไม่ต้องไปแก้ที่ order)</h2>
+<div class="split">
+
+  <div class="card">
+    <span class="tag-before">ก่อน</span>
+    <h3>หน้ายอดคงเหลือ — กดดู lots (วันหมดอายุ read-only)</h3>
+    <table>
+      <thead><tr><th>สินค้า</th><th>คงเหลือ</th><th>หมดอายุ</th><th>จัดการ</th></tr></thead>
+      <tbody>
+        <tr><td>Elonza <span class="btn btn-rose">2 lots ▼</span></td><td class="emerald mono">16 ชิ้น</td>
+            <td class="muted">30/06/2026<div style="font-size:.8em">อีก 12d</div></td>
+            <td><span class="btn btn-orange">⇅ ปรับ</span> <span class="btn btn-rose">＋ เพิ่ม</span> <span class="btn btn-sky">✎ แก้ไข</span></td></tr>
+        <tr class="lot"><td class="muted" style="padding-left:1.4em">↳ Lot …a1b2c3d4</td><td class="emerald mono">6 ชิ้น</td>
+            <td class="muted">30/06/2026<div style="font-size:.8em">อีก 12d</div></td><td class="muted">@฿150/หน่วย</td></tr>
+        <tr class="lot"><td class="muted" style="padding-left:1.4em">↳ Lot …e5f6g7h8</td><td class="emerald mono">10 ชิ้น</td>
+            <td class="muted">15/08/2026<div style="font-size:.8em">อีก 58d</div></td><td class="muted">@฿150/หน่วย</td></tr>
+      </tbody>
+    </table>
+    <p class="note">วันหมดอายุแสดงอย่างเดียว แก้ไม่ได้ ต้องไปเปิด order detail. lot เดี่ยว (1 lot) ไม่มีปุ่มกางด้วย</p>
+  </div>
+
+  <div class="card">
+    <span class="tag-after">หลัง</span>
+    <h3>แต่ละ lot มีปุ่มแก้วันหมดอายุ (กางได้แม้มี lot เดียว)</h3>
+    <table>
+      <thead><tr><th>สินค้า</th><th>คงเหลือ</th><th>หมดอายุ</th><th></th></tr></thead>
+      <tbody>
+        <tr class="lot"><td class="muted" style="padding-left:1.4em">↳ Lot …a1b2c3d4</td><td class="emerald mono">6 ชิ้น</td>
+            <td class="muted">30/06/2026<div style="font-size:.8em">อีก 12d</div></td>
+            <td><span class="btn btn-sky">✎ แก้วันหมดอายุ</span></td></tr>
+        <tr class="lot"><td class="muted" style="padding-left:1.4em">↳ Lot …e5f6g7h8</td><td class="emerald mono">10 ชิ้น</td>
+            <td class="muted">15/08/2026<div style="font-size:.8em">อีก 58d</div></td>
+            <td><span class="btn btn-sky">✎ แก้วันหมดอายุ</span></td></tr>
+      </tbody>
+    </table>
+    <p class="note">+ มีจุดแก้เดียวกันใน "หน้าปรับสต็อค" (ฟอร์มปรับ เลือก batch ได้อยู่แล้ว). แก้ได้แม้ lot ถูกใช้ไปบางส่วน. FEFO อ่าน <code>expiresAt</code> สดทันที → มีผลทันที</p>
+  </div>
+</div>
+
+<h3>หน้าตา "กล่องแก้วันหมดอายุ" (mini-modal)</h3>
+<div class="modal">
+  <div style="font-weight:700;color:#fff;margin-bottom:.4em">✎ แก้วันหมดอายุ — Lot …a1b2c3d4</div>
+  <div class="row"><span class="muted">สินค้า</span><span>Elonza</span></div>
+  <div class="row"><span class="muted">คงเหลือ</span><span class="emerald">6 / 10 ชิ้น</span></div>
+  <div class="row"><span class="muted">เดิม</span><span class="muted">30/06/2026</span></div>
+  <div class="row" style="border:0"><span class="muted">ใหม่</span><input type="text" value="31/07/2026" readonly style="width:130px"></div>
+  <div class="row" style="border:0"><span class="muted">เหตุผล (ไม่บังคับ)</span><input type="text" placeholder="คีย์ผิดตอนนำเข้า" readonly style="width:170px"></div>
+  <div class="actions"><span class="cancel">ยกเลิก</span><span class="save">บันทึก</span></div>
+</div>
+
+<h3>Q2 — รูปแบบการแก้วันหมดอายุ</h3>
+<div class="opt"><b>A · แก้ inline ในแถว</b> — กดที่วันหมดอายุ → ช่อง DateField โผล่ในแถวเลย → กด ✓ บันทึก. เร็วที่สุด แต่เผลอแก้ง่าย + ไม่มีที่ใส่เหตุผล/ยืนยัน</div>
+<div class="opt rec"><b>B · mini-modal (ตามภาพ)</b> — ปุ่ม ✎ เปิดกล่องเล็ก: โชว์ค่าเดิม → ใส่ค่าใหม่ + เหตุผล → บันทึก/ยกเลิก. กันเผลอ + เก็บ audit ดีกว่า + reuse ได้ทั้ง 2 หน้า (แนวเดียวกับ V144 modal-in-place)</div>
+
+<h3>Q3 — เก็บร่องรอยการแก้ (audit) ยังไง?</h3>
+<div class="opt"><b>A · ฟิลด์บน batch อย่างเดียว</b> — <code>expiresAtLegacyValue</code> + <code>expiresAtEditedAt</code> + <code>expiresAtEditedBy</code>. เบา เห็นครั้งล่าสุด แต่ไม่เก็บประวัติหลายครั้ง</div>
+<div class="opt"><b>B · เอกสาร audit ใน be_stock_adjustments</b> — type <code>'expiry'</code> เก็บ old→new + เหตุผล + ผู้ทำ + เวลา (เข้าหน้าประวัติปรับสต็อคที่มีอยู่ ไม่ยุ่งกับ movement/conservation)</div>
+<div class="opt rec"><b>C · ทั้งคู่</b> — เอกสาร audit (ครบประวัติ เพราะ "แก้ได้ตลอด") + ฟิลด์บน batch (โชว์ "✎ แก้ล่าสุด …" inline). *ไม่* เขียนลง be_stock_movements (ไม่ใช่การขยับจำนวน → กัน conservation เพี้ยน)</div>
+
+<h3>Q4 — ตอนแก้ expiry ของ batch ให้ sync กลับไปที่บรรทัดสินค้าใน order ต้นทางไหม?</h3>
+<div class="opt"><b>A · แก้แค่ batch</b> — บรรทัดใน order (<code>items[].expiresAt</code>) คงเป็นบันทึกตอนนำเข้าเดิม. ง่ายสุด **แต่** ถ้าภายหลังมีคนแก้ order ผ่าน OrderDetailModal (มันcascade expiry → batch) ค่าที่แก้ batch จะโดนทับด้วยค่าเก่า</div>
+<div class="opt rec"><b>B · sync สองทาง</b> — แก้ batch แล้วเขียนกลับบรรทัด order ต้นทางด้วย (batch มี <code>sourceOrderId</code>+<code>orderProductId</code> → หา 1:1 ได้) → ตรงกันเสมอ + กันโดนทับภายหลัง (สอดคล้องกับ cascade order→batch เดิม)</p>
+</div>
+
+<p class="note" style="margin-top:1.6em">★ = ที่ผมแนะนำ. ตอบ Q1–Q4 ได้เลย (เลือก default ทั้งหมดก็ได้). หลังเลือกเสร็จผมจะเขียน spec (HTML + mockup + flow) ให้รีวิวก่อนลงมือ.</p>
+
+</body>
+</html>
