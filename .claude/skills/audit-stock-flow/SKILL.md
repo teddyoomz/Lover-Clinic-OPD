@@ -1,6 +1,6 @@
 ---
 name: audit-stock-flow
-description: "Audit stock conservation across batches, movements, transfers, and withdrawals in the LoverClinic backend. Grep-checks 28 invariants and reports violations as a punch list. Use after stock-related changes, before releases, or when reconciling physical stock against Firestore. Read-only (no Edit/Write/Bash)."
+description: "Audit stock conservation across batches, movements, transfers, and withdrawals in the LoverClinic backend. Grep-checks 36 invariants and reports violations as a punch list. Use after stock-related changes, before releases, or when reconciling physical stock against Firestore. Read-only (no Edit/Write/Bash)."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob"
@@ -11,7 +11,7 @@ allowed-tools: "Read, Grep, Glob"
 **Purpose**: Detect places where stock quantities can vanish, appear free, or drift from the movement log ledger. FIFO/FEFO correctness, batch integrity, audit-trail completeness. READ-ONLY.
 
 ## Scope
-**35 invariants across 8 subsystems** (V34 added S16–S20 on 2026-04-28; Phase 15.5 added S21–S25 on 2026-04-28; Phase 15.6 / V35 added S26–S28 on 2026-04-28; Phase 15.7-bis added S29–S31; V147 added S32 — multi-batch FIFO deduction concurrency-race retry; V150 added S33 — negative-debt carrier excludes expired/cancelled lots; V151 added S34 — reverse re-creates a vanished lot (V144-interaction); V152 added S35 — central-PO receive CAS claim (no concurrent double-receive) — on 2026-06-02):
+**36 invariants across 8 subsystems** (V34 added S16–S20 on 2026-04-28; Phase 15.5 added S21–S25 on 2026-04-28; Phase 15.6 / V35 added S26–S28 on 2026-04-28; Phase 15.7-bis added S29–S31; V147 added S32 — multi-batch FIFO deduction concurrency-race retry; V150 added S33 — negative-debt carrier excludes expired/cancelled lots; V151 added S34 — reverse re-creates a vanished lot (V144-interaction); V152 added S35 — central-PO receive CAS claim (no concurrent double-receive) — on 2026-06-02; V159 added S36 — per-batch expiry edit (updateStockBatchExpiry): type='expiry' adjustment, no qty/no movement, status untouched, in-tx order-line sync — on 2026-06-03):
 - **Batch integrity**: qty caps, append-only log, status transitions
 - **FIFO/FEFO allocation**: sort ordering monotonic, exactBatchId override, skip-expired/depleted
 - **Movement log**: reversedByMovementId chain intact, user+sourceDocPath always set
