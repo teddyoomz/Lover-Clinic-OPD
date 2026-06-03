@@ -1,32 +1,32 @@
 ---
-updated_at: "2026-06-03 EOD+2 — category dropdown + systematic-debugging stock loop (B1/B2/B3/B5) SHIPPED + DEPLOYED + L1-verified."
-status: "Loop converged (R1 B1+B2 · R2 clean · R3 B5 · R4 clean) + DEPLOYED. Verified: full vitest 15992→16049/0 · build clean · real-prod Rule Q L2 e2e 34/0 · live-app L1 all 4 features green · 3 Rule R diags 0-anomaly."
+updated_at: "2026-06-03 EOD+3 — staff-chat draft-persist on minimize + bubble draft indicator + stock balance filter relabel/reorder. SHIPPED local + L1-verified. NOT deployed."
+status: "Done + Rule Q L1-verified (Chrome MCP). full vitest 16063/0 (+1 perf-budget flake → isolated 10/0) · build clean · RTL flow-sim + source-grep + real-app L1 all green."
 branch: "master"
-last_commit: "62593b2c (Rule R order-search real-shape diag) — 9 commits 2e96a847..62593b2c this session"
-tests: "Full vitest 16049/0 (this session) · build clean · real-prod e2e-v159 34/0. NOT re-run at EOD."
+last_commit: "5f201738 (stock filter relabel/reorder) — 3 commits 9a76a8ca..5f201738 this session (plan + staffchat + stock)"
+tests: "Full vitest 16063/0 (subtab-filters-stress S4.2 perf flake = isolated pass; unrelated to changes). build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "62593b2c — DEPLOYED this session (ships V158→V159 + dropdown + B1/B2/B3/B5). prod == master, LIVE."
-firestore_rules_version: "UNCHANGED (all changes client-SDK → no Probe-Deploy-Probe; vercel-only deploy)."
+production_commit: "62593b2c (V158→V159 + dropdown + B1/B2/B3/B5). NOT YET caught up — this session's 2 feat commits await a deploy."
+firestore_rules_version: "UNCHANGED (all changes client-SDK/UI → vercel-only deploy, no Probe-Deploy-Probe)."
 ---
 
-# Active — 2026-06-03 EOD+2 — category dropdown + stock bug-loop + deploy
+# Active — 2026-06-03 EOD+3 — staff-chat draft persist + stock filter relabel
 
 ## State
-- master `62593b2c`; prod `62593b2c` LIVE (deployed this session — prod caught up from V158).
+- master `5f201738`; prod `62593b2c` LIVE (this session NOT deployed — awaiting explicit "deploy").
 - Working tree clean. No firestore.rules change.
-- systematic-debugging loop CONVERGED (round 4 clean) → deployed per user "พอหมดลูปค่อย deploy".
+- Flow: `/brainstorming` (2 features + draft-indicator added in spec-review) → `/writing-plans` → `/executing-plans` inline (5 tasks).
 
-## What this session shipped (detail → checkpoint 2026-06-03-stock-expiry-bugloop-deploy.md)
-- **Category dropdown** (`/brainstorming`→spec×2-rev→plan→TDD): ProductFormModal หมวดหมู่ datalist = distinct `categoryName` from be_products ONLY (no master, plain options, type-new); removed dead `listProductGroups`/`groups`. 1 file → products/stock/central tabs.
-- **B1** (conservation): dual-path adjust ran qty before expiry as 2 awaits → transient fail + retry DOUBLE-applied qty. Fix: reorder expiry-FIRST/qty-LAST + in-tx idempotency guard in `updateStockBatchExpiry`.
-- **B2** (central sync no-op): central items key `centralOrderProductId`, sync matched only `orderProductId` → match BOTH tier keys.
-- **B3+B5** (date display): stock expiry/importedDate raw ISO → `fmtSlashDate` (NEW, TZ-safe, canonical dateFormat.js) → dd/mm/yyyy across 8 components (display-only; DB stays ISO).
-- **Refuted with REAL data** (no fabricated bugs): C1 category field-name · C5 DateField format · C6 balance refresh · C7 order→batch sync · C8 type/status select.
-- **L1 live-app verified** (Chrome MCP): dd/mm/yyyy dates (zoomed) · 35 plain category options · expiry-edit form · "Lidocain" search→1 match.
+## What this session shipped (detail → checkpoint 2026-06-03-staffchat-draft-stock-filter.md if created)
+- **Feature A — staff-chat draft survives minimize** (hide-don't-unmount): `StaffChatWidget` always renders the Panel (`hidden={chat.minimized}` → inline `display:none`) so the Composer's text + reply + staged image/file uploads (live File objects + object-URLs) live through a minimize→reopen. `StaffChatPanel` body-scroll-lock keyed on visible-state. Clears only on Frontend↔Backend / reload / tab-close (Q2: kept across backend sub-tabs).
+- **Feature A-bis — draft indicator on minimized bubble**: Composer reports `hasDraft` (text||files||reply) up via `onDraftChange` (boolean only; draft stays in composer); Widget relays to `StaffChatBubble` → **dark-zinc ✏️ badge top-LEFT** (`staff-chat-bubble-draft`), distinct from white/red unread (top-right). Color/side/✏️-on-dark locked via visual Q&A (Chrome MCP mockups).
+- **Feature B — stock ยอดคงเหลือ filters**: `หมด (คงเหลือ 0)`→`หมด`, `ติดลบ (ต้องเติมสต็อค)`→`ติดลบ`, reordered `…เกินสต็อก · หมด · ติดลบ`. Pure presentation (predicates/testids/row-badges untouched).
+- **Additive only** (cosmetic-shell): no upload-pipeline / hook / filter-predicate logic touched.
+- **Tests**: NEW `staffchat-draft-persist-minimize` (RTL flow-sim F1/F2 + source-grep SG1-5) · `stock-balance-filter-relabel`. V21 fixups: v73-widget-rtl W1.1 (panel hidden≠absent) · v144 F1.5/F1.6 (label + order).
+- **Rule Q L1 (Chrome MCP, real authed app)**: typed draft → minimize → **bubble shows dark-zinc ✏️ top-left** → reopen → draft text intact (no send/no mutation). Stock filter order/labels confirmed live.
 
 ## Next action
-- IDLE / await direction. No firestore.rules pending. Deploy already done.
+- IDLE / await direction. **Deploy pending** — say "deploy" to ship (vercel-only; no rules → no Probe-Deploy-Probe). Per V18 no deploy without explicit "deploy" this turn.
 
 ## Outstanding user-triggered actions
-- Optional Rule P closure: `audit-stock-flow` S37 (dual-path order + tier-key sync + idempotency) + a 00-session-start §2 V-log entry for B1/B2 (regression tests `v159-fix-expiry-hardening` already lock behavior).
-- Low-pri carryover: be_products data cleanup (V145 — 36 junk docs, dry-run done) · Neuramis merge + junk course "หฟแฟ" · cross-collection reconciliation report (V157 follow-on) · SESSION_HANDOFF head trim <150 KB.
+- Deploy this session's 2 commits (vercel --prod) when ready.
+- Carryover (low-pri): Rule P closure audit-stock-flow S37 + V-log B1/B2 · be_products junk cleanup (V145) · Neuramis merge + junk course "หฟแฟ" · cross-collection reconciliation report · SESSION_HANDOFF head trim <150 KB.
