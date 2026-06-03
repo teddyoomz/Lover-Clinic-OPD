@@ -2879,17 +2879,28 @@ export async function addStaffChatMessage(messageDoc) {
   return messageDoc.id;
 }
 
-// (2026-05-26) Feature 3 Unsend — hard-delete a staff-chat message: sweep its
-// Storage folder (attachments / custom sticker) THEN delete the Firestore doc.
-// Best-effort on Storage (text-only / bundled-sticker messages have no folder →
-// tolerated). Own-only is enforced UI-side (deviceId); the rule permits clinic-staff.
-export async function deleteStaffChatMessage(branchId, messageId) {
-  if (!branchId || !messageId) throw new Error('STAFF_CHAT_DELETE_ARGS');
+// (2026-06-03 EOD+4 — D, AV188) Sweep ONLY the per-message Storage folder (no doc
+// delete). Extracted from deleteStaffChatMessage (Rule of 3) so the SEND path can
+// clean orphans at the source: the pipeline mints messageId → uploads to
+// staff-chat-attachments/{branchId}/{messageId}/ → THEN creates the doc; a partial
+// upload failure (message never sent) OR a doc-create failure AFTER the upload
+// leaves blobs under {messageId}/ with no message doc → orphan until the 30-day
+// retention sweep. Best-effort (no folder = text-only / bundled sticker → fine).
+export async function deleteStaffChatAttachmentFolder(branchId, messageId) {
+  if (!branchId || !messageId) return;
   try {
     const prefix = storagePrefixForMessage(branchId, messageId).replace(/\/$/, '');
     const listing = await listAll(storageRef(getStorage(), prefix));
     await Promise.all(listing.items.map((it) => deleteObject(it).catch(() => {})));
   } catch { /* no folder (text-only / bundled sticker) — fine */ }
+}
+
+// (2026-05-26) Feature 3 Unsend — hard-delete a staff-chat message: sweep its
+// Storage folder (attachments / custom sticker) THEN delete the Firestore doc.
+// Own-only is enforced UI-side (deviceId); the rule permits clinic-staff.
+export async function deleteStaffChatMessage(branchId, messageId) {
+  if (!branchId || !messageId) throw new Error('STAFF_CHAT_DELETE_ARGS');
+  await deleteStaffChatAttachmentFolder(branchId, messageId);
   await deleteDoc(staffChatMessageDoc(messageId));
 }
 

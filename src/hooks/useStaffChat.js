@@ -33,6 +33,8 @@ import {
   listenToStaffChatMessages,
   addStaffChatMessage,
   deleteStaffChatMessage,
+  // (2026-06-03 EOD+4 — D, AV188) send-path orphan cleanup (folder-sweep only).
+  deleteStaffChatAttachmentFolder,
 } from '../lib/scopedDataLayer.js';
 import { buildMessageDoc, newStaffChatMessageId } from '../lib/staffChatClient.js';
 import {
@@ -278,6 +280,16 @@ export function useStaffChat() {
     }
     return addStaffChatMessage(doc).catch((e) => {
       setError(String(e?.message || e));
+      // (2026-06-03 EOD+4 — D/AV188, Site B) The doc-create failed AFTER the
+      // attachments / custom-sticker were uploaded to {doc.id}/ (send swallows its
+      // own addDoc error). Those blobs are now orphaned → sweep them at the source
+      // instead of waiting up to 30 days for the retention Pass B. Best-effort.
+      // Covers the multi-attachment send AND the custom-sticker path (sendSticker→send).
+      const hasStorage = (Array.isArray(doc.attachments) && doc.attachments.length > 0)
+        || !!(doc.sticker && doc.sticker.storagePath);
+      if (hasStorage && doc.id) {
+        deleteStaffChatAttachmentFolder(doc.branchId, doc.id).catch(() => {});
+      }
     });
   }, [selectedBranchId, deviceId]);
 
@@ -414,6 +426,13 @@ export function useStaffChat() {
         if (String(e?.message) === 'STAFF_CHAT_UPLOAD_CANCELLED') continue;  // ✕ mid-upload → skip
         failed.push({ index: i, name: list[i]?.name || '', message: String(e?.message || e) });
       }
+    }
+    // (2026-06-03 EOD+4 — D/AV188, Site A) Partial failure → the composer returns
+    // WITHOUT sending (and a retry mints a NEW messageId), so any file that DID
+    // upload under {messageId}/ is now an orphan. Sweep it at the source instead of
+    // waiting up to 30 days for Pass B. Best-effort; only when something uploaded.
+    if (failed.length > 0 && attachments.length > 0) {
+      await deleteStaffChatAttachmentFolder(selectedBranchId, messageId).catch(() => {});
     }
     return { messageId, attachments, failed };
   }, [selectedBranchId]);

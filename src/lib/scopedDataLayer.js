@@ -343,6 +343,8 @@ export const listenToStaffChatMessages = (opts = {}, onChange, onError) =>
 export const addStaffChatMessage = (messageDoc) => raw.addStaffChatMessage(messageDoc);
 // (2026-05-26) Feature 3 Unsend — passthrough (staff chat is universal; delete by id).
 export const deleteStaffChatMessage = (...args) => raw.deleteStaffChatMessage(...args);
+// (2026-06-03 EOD+4 — D, AV188) Folder-sweep passthrough — send-path orphan cleanup.
+export const deleteStaffChatAttachmentFolder = (...args) => raw.deleteStaffChatAttachmentFolder(...args);
 
 // V75 Item 3 (2026-05-16) — listenToChatConversationsByBranch wrapper (BS-16).
 // Auto-injects resolveSelectedBranchId() when caller passes {} (BSA Layer 2).
