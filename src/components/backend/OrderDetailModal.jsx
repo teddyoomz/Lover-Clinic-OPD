@@ -207,7 +207,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">วันที่นำเข้า</div>
-                <div className="text-sm text-[var(--tx-primary)]">{order.importedDate || '-'}</div>
+                <div className="text-sm text-[var(--tx-primary)]">{fmtSlashDate(order.importedDate) || '-'}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">สาขา</div>

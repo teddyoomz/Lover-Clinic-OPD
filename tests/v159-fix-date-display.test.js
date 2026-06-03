@@ -47,7 +47,7 @@ const FILES = {
   'StockBalancePanel.jsx': ['{fmtSlashDate(p.nextExpiry)', '{fmtSlashDate(b.expiresAt)', '(exp ${fmtSlashDate(b.expiresAt)'],
   'StockAdjustPanel.jsx': ['{fmtSlashDate(a.oldExpiresAt)', '${fmtSlashDate(b.expiresAt)', '{fmtSlashDate(selectedBatch.expiresAt)', '{fmtSlashDate(newExpiresAt)'],
   'AdjustDetailModal.jsx': ['{fmtSlashDate(batch.expiresAt)', '{fmtSlashDate(data.oldExpiresAt)', '{fmtSlashDate(data.newExpiresAt)'],
-  'OrderDetailModal.jsx': ['{fmtSlashDate(it.expiresAt)'],
+  'OrderDetailModal.jsx': ['{fmtSlashDate(it.expiresAt)', '{fmtSlashDate(order.importedDate)'],
   'CentralOrderDetailModal.jsx': ['{fmtSlashDate(it.expiresAt)'],
   'TransferDetailModal.jsx': ['หมด {fmtSlashDate(src.expiresAt)}'],
   'WithdrawalDetailModal.jsx': ['หมด {fmtSlashDate(src.expiresAt)}'],
