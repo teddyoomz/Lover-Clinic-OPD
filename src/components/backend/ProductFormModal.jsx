@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveProduct, listProductGroups, listProductUnitGroups, listProducts } from '../../lib/scopedDataLayer.js';
+import { saveProduct, listProductUnitGroups, listProducts } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS,
   validateProduct, emptyProductForm, generateProductId,
@@ -18,8 +18,9 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
   const [form, setForm] = useState(() => product ? { ...emptyProductForm(), ...product } : emptyProductForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [groups, setGroups] = useState([]);
   const [units, setUnits] = useState([]);
+  // 2026-06-03 — distinct categoryName harvested from existing be_products (no master).
+  const [productCategories, setProductCategories] = useState([]);
   // Phase 15.5 / Item 2 (2026-04-28) — eager-load existing products' mainUnitName
   // values to enrich the unit datalist. Refetch on each modal mount (R1 real-time:
   // closing + reopening modal picks up newly-saved units immediately).
@@ -28,25 +29,34 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
   useEffect(() => {
     (async () => {
       try {
-        const [g, u, p] = await Promise.all([
-          listProductGroups(),
+        const [u, p] = await Promise.all([
           listProductUnitGroups(),
-          listProducts().catch(() => []), // non-fatal — datalist degrades gracefully
+          listProducts().catch(() => []), // non-fatal — datalists degrade gracefully
         ]);
-        setGroups(g);
         setUnits(u);
+        const arr = Array.isArray(p) ? p : [];
         // Extract unique non-empty mainUnitName values from existing products
-        const seen = new Set();
+        const seenU = new Set();
         const productUnitOpts = [];
-        for (const prod of (Array.isArray(p) ? p : [])) {
-          const u = typeof prod?.mainUnitName === 'string' ? prod.mainUnitName.trim() : '';
-          if (!u) continue;
-          if (seen.has(u)) continue;
-          seen.add(u);
-          productUnitOpts.push(u);
+        for (const prod of arr) {
+          const v = typeof prod?.mainUnitName === 'string' ? prod.mainUnitName.trim() : '';
+          if (!v || seenU.has(v)) continue;
+          seenU.add(v);
+          productUnitOpts.push(v);
         }
         productUnitOpts.sort((a, b) => a.localeCompare(b, 'th'));
         setProductUnits(productUnitOpts);
+        // 2026-06-03 — same harvest for หมวดหมู่ (distinct categoryName, no master)
+        const seenC = new Set();
+        const productCategoryOpts = [];
+        for (const prod of arr) {
+          const c = typeof prod?.categoryName === 'string' ? prod.categoryName.trim() : '';
+          if (!c || seenC.has(c)) continue;
+          seenC.add(c);
+          productCategoryOpts.push(c);
+        }
+        productCategoryOpts.sort((a, b) => a.localeCompare(b, 'th'));
+        setProductCategories(productCategoryOpts);
       } catch (e) {
         setError(e.message || 'โหลดข้อมูลอ้างอิงล้มเหลว');
       }
@@ -76,6 +86,19 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
     }
     return out;
   }, [units, productUnits]);
+
+  // 2026-06-03 — category datalist options: product-harvested ONLY (no master
+  // be_product_groups). Plain {key,value} → rendered as plain <option value>.
+  const categoryDatalistOptions = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const name of productCategories) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ key: `product-${name}`, value: name });
+    }
+    return out;
+  }, [productCategories]);
 
   const update = useCallback((patch) => setForm(prev => ({ ...prev, ...patch })), []);
 
@@ -160,8 +183,10 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
           <input type="text" list="product-group-list" value={form.categoryName} onChange={(e) => update({ categoryName: e.target.value })}
             placeholder="หมวดหมู่"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
-          <datalist id="product-group-list">
-            {groups.map(g => <option key={g.groupId || g.id} value={g.name} />)}
+          <datalist id="product-group-list" data-testid="product-group-datalist">
+            {categoryDatalistOptions.map((opt) => (
+              <option key={opt.key} value={opt.value} />
+            ))}
           </datalist>
         </div>
         <div data-field="mainUnitName">
