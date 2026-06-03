@@ -4,8 +4,8 @@
 User "ultrathink" smell directive ("there must be a bug not matching the program's purpose; loop until a fresh hunt finds nothing"). `/systematic-debugging` + an `Explore` adversarial sweep over the staff-chat subsystem surfaced **10 latent bugs** across two architectural classes + singletons; each fixed failing-test-first → green + an AVxx (AV180-188). Looped until a final fresh hunt found nothing purpose-breaking → **converged**. Deployed (Vercel LIVE; officeToPdf Cloud Run in-flight).
 
 ## Current State
-- master `bff0bde6`; prod **`bff0bde6` Vercel LIVE** (aliased `lover-clinic-app.vercel.app`, deployed this turn).
-- officeToPdf Cloud Run (S2) deploy IN-FLIGHT (background task bv6qto72h, ~10-15min Cloud Build) — outcome pending.
+- master `bff0bde6` (+ session-end docs `15765b52`); prod **`bff0bde6` Vercel LIVE** (aliased `lover-clinic-app.vercel.app`, deployed this turn).
+- officeToPdf Cloud Run (S2) DEPLOYED — revision `office-to-pdf-00008-d2p` serving 100% (exit 0).
 - Staff-chat test family 648/648 · full vitest 16127/16130 (3 PRE-EXISTING flakes, pass isolated) · build clean.
 - No firestore.rules change → no Probe-Deploy-Probe. Working tree clean.
 
@@ -39,10 +39,10 @@ a541ccc6 fix(staffchat): mention-spaces + read-cursor same-ms tie (AV183/AV184)
 - The 3 full-suite reds are pre-existing execSync/birthday-paradox flakes in untouched files (verified isolated) — NOT this session's regression (Rule Q-honest).
 
 ## Next Todo
-- Confirm officeToPdf Cloud Run revision lands (task bv6qto72h) → then Rule Q L2 `node scripts/e2e-staff-chat-office-preview.mjs`.
-- (optional) S1 cron L2 — `node scripts/diag-trigger-...` or wait for 03:00 cron.
+- **S2 live-conversion L2** (NOT yet run): the canonical `scripts/e2e-staff-chat-office-preview.mjs` is BLOCKED by a stale `import 'dotenv/config'` (dotenv uninstalled; predates the repo's inline `loadEnvLocal()`). Port it to `loadEnvLocal()` (mirror `e2e-stock-realtime-lot-clear.mjs:49`) OR `npm i -D dotenv` + `DOTENV_CONFIG_PATH=.env.local.prod node …`, then run against live revision 00008-d2p. (S2 retry logic IS unit-verified R1-R4; only the live-conversion of the new revision is pending.)
+- (optional) S1 cron L2 — or wait for 03:00 cron.
 - User L1 hands-on of the staff-chat fixes on prod.
 - Carryover (low-pri): audit-stock-flow S37 + V-log B1/B2 · be_products junk cleanup (V145) · Neuramis merge + junk course "หฟแฟ" · cross-collection reconciliation report · SESSION_HANDOFF trim.
 
 ## Resume Prompt
-Resume LoverClinic — continue from 2026-06-03 EOD+4. Staff-chatbox bug-hunt loop (V161) converged + deployed (Vercel LIVE bff0bde6; officeToPdf Cloud Run S2 was in-flight — VERIFY it landed). Read CLAUDE.md + SESSION_HANDOFF.md + .agents/active.md + .claude/rules/00-session-start.md first. Next: confirm S2 Cloud Run revision + L2 e2e; else idle. No deploy without "deploy" this turn (V18). /session-start
+Resume LoverClinic — continue from 2026-06-03 EOD+4. Staff-chatbox bug-hunt loop (V161) converged + DEPLOYED (Vercel LIVE bff0bde6; officeToPdf Cloud Run S2 revision 00008-d2p LIVE). Read CLAUDE.md + SESSION_HANDOFF.md + .agents/active.md + .claude/rules/00-session-start.md first. Next: S2 live-conversion L2 still pending — un-block `scripts/e2e-staff-chat-office-preview.mjs` (port stale dotenv→loadEnvLocal) then run vs revision 00008; else idle. No deploy without "deploy" this turn (V18). /session-start

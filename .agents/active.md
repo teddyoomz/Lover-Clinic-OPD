@@ -5,7 +5,7 @@ branch: "master"
 last_commit: "bff0bde6 (docs: V161 v-log + active.md). This session: 6 staff-chat fixes 18ad69bb..a164b9fd + Rule M data cleanup 574ff2ad + docs bff0bde6."
 tests: "Full vitest 16127/16130 (this session). 3 reds = PRE-EXISTING flakes (bsa-task7 execSync git-grep matches a comment in TFP:913 · v85-glow cmd.exe grep PATH · genShortId birthday-paradox) — all pass isolated, none touch changed files. Staff-chat family 648/648. NOT re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "bff0bde6 — Vercel CAUGHT UP (deployed EOD+4, aliased lover-clinic-app.vercel.app). officeToPdf Cloud Run (S2) deploy IN-FLIGHT (task bv6qto72h, ~10-15min Cloud Build) — outcome pending."
+production_commit: "bff0bde6 — Vercel LIVE (aliased lover-clinic-app.vercel.app). officeToPdf Cloud Run (S2) DEPLOYED — revision office-to-pdf-00008-d2p serving 100% traffic (deployed EOD+4)."
 firestore_rules_version: "UNCHANGED. No firestore.rules change → no Probe-Deploy-Probe."
 ---
 
@@ -22,9 +22,9 @@ firestore_rules_version: "UNCHANGED. No firestore.rules change → no Probe-Depl
 - **Deployed**: Vercel (frontend + S1 cron) LIVE. officeToPdf Cloud Run (S2) in-flight via `gcloud run deploy --source functions/officeToPdf`.
 
 ## Next action
-- IDLE / await direction. Loop converged.
-- **Pending verify (Rule Q-honest)**: (1) confirm officeToPdf Cloud Run revision lands (task bv6qto72h) → then L2 `node scripts/e2e-staff-chat-office-preview.mjs`. (2) S1 cron live but un-triggered — optional L2 `node scripts/diag-trigger-...` or wait for 03:00 cron.
+- IDLE / await direction. Loop converged. BOTH deploys done (Vercel bff0bde6 LIVE · officeToPdf Cloud Run revision 00008-d2p LIVE).
+- **Pending verify (Rule Q-honest — S2 live-conversion L2 NOT yet run)**: S2 retry logic is unit-verified (R1-R4 drive the real `patchOfficeAttachment` against a scripted snap sequence) + revision 00008 healthy + the Eventarc→function→patch wiring was proven in V109/V110; but a real-prod conversion L2 of the NEW revision is still pending. BLOCKER: the canonical `scripts/e2e-staff-chat-office-preview.mjs` uses a stale `import 'dotenv/config'` (dotenv not installed; predates the repo's inline `loadEnvLocal()` pattern). To run: port it to `loadEnvLocal()` (mirror `scripts/e2e-stock-realtime-lot-clear.mjs:49`) OR `npm i -D dotenv` + `DOTENV_CONFIG_PATH=.env.local.prod node …`. S1 cron live but un-triggered (optional L2 / wait for 03:00 cron).
 
 ## Outstanding user-triggered actions
-- Confirm officeToPdf Cloud Run deploy outcome (in-flight) + L1 hands-on of staff-chat fixes on prod.
+- Run the S2 live-conversion L2 once the e2e script is un-blocked (port to loadEnvLocal) + L1 hands-on of staff-chat fixes on prod.
 - Carryover (low-pri): audit-stock-flow S37 + V-log B1/B2 · be_products junk cleanup (V145) · Neuramis merge + junk course "หฟแฟ" · cross-collection reconciliation report · SESSION_HANDOFF head trim <150 KB.
