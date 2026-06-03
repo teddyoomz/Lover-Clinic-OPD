@@ -2090,7 +2090,15 @@ export async function createBackendAppointment(data) {
     }
   }
 
-  const appointmentId = `BA-${Date.now()}`;
+  // appointment-loop R3 (2026-06-03) — crypto-random suffix (mirror the deposit
+  // path's mintPairIds) so two DIFFERENT appointments created in the SAME
+  // millisecond (two admins) can't mint the SAME id → the 2nd would overwrite
+  // the 1st's doc + orphan its slots (silent appointment loss). Bare `BA-${ts}`
+  // was the lone unsuffixed be_appointments id writer.
+  const _baTs = Date.now();
+  const _baBuf = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(_baBuf);
+  const appointmentId = `BA-${_baTs}-${Array.from(_baBuf, (b) => b.toString(16).padStart(2, '0')).join('')}`;
   const now = new Date().toISOString();
   // Strip the gate flag so it never leaks into the persisted doc.
   const { skipServerCollisionCheck: _stripGate, ...persistData } = data || {};

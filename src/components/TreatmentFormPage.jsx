@@ -447,6 +447,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // ── Core state ──────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // appointment-loop R3 (2026-06-03) — SYNCHRONOUS double-submit guard. The
+  // save buttons use disabled={saving}, but React state lags one render, so a
+  // rapid double-click (or same-frame double-fire) can run handleSubmit TWICE
+  // before the button disables → two createBackendTreatment + two auto-sales =
+  // DOUBLE CHARGE + double stock + double DF. A ref flips synchronously.
+  const submitInFlightRef = useRef(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   // TF3 a11y polish (audit, 2026-05-04): per-field error map mirroring
@@ -2305,6 +2311,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       setEditAttributionModal({ isOpen: true });
       return;  // Suspend; modal-confirm handler re-enters with editorContext
     }
+    // appointment-loop R3 — synchronous re-entry guard (placed AFTER the editor-
+    // attribution suspend-return so the modal-confirm re-invoke is NOT blocked).
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setSaving(true);
     setError('');
     try {
@@ -3357,6 +3367,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       setError(e.message);
     } finally {
       setSaving(false);
+      submitInFlightRef.current = false;  // appointment-loop R3 — release the re-entry guard
     }
   };
 
