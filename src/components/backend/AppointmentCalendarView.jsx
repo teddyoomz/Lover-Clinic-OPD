@@ -88,7 +88,7 @@ import {
 // Phase 15.7 (2026-04-28) — shared assistant-name resolver. Used for
 // rendering "+ ผู้ช่วย: A, B, C" below the doctor name. Helper falls back
 // to doctorMap lookup for legacy appts that lack assistantNames denorm.
-import { resolveAssistantNames, buildDoctorMap, APPT_STATUSES } from '../../lib/appointmentDisplay.js';
+import { resolveAssistantNames, resolveDoctorName, buildDoctorMap, APPT_STATUSES } from '../../lib/appointmentDisplay.js';
 import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
 // V53 (2026-05-08, BS-12) — per-branch openHours filter the visible time grid
 // + flag legacy out-of-hours appts. Helper is pure JS; reads V51 merged
@@ -194,7 +194,7 @@ function AppointmentSlotMeta({ appt, span, doctorMap }) {
           enough vertical room. */}
       {span >= 3 && (
         <p className="text-[11px] text-[var(--tx-muted)] truncate mt-0.5" data-testid="appt-doctor-row">
-          👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}
+          👨‍⚕️ {resolveDoctorName(appt, doctorMap) || 'ไม่ระบุแพทย์'}
         </p>
       )}
       {/* Assistant row — Phase 15.7 — needs even more vertical room. */}
@@ -959,7 +959,7 @@ export default function AppointmentCalendarView({
              the SAME typedDayAppts the grid uses (no refetch); room labels
              resolve via effectiveRoom; card tap → openDetail (popover). */
           <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }} data-testid="appt-agenda-wrapper">
-            <AppointmentAgendaView appts={typedDayAppts} resolveRoom={effectiveRoom} onSelect={openDetail} getHoverProps={getHoverProps} />
+            <AppointmentAgendaView appts={typedDayAppts} resolveRoom={effectiveRoom} onSelect={openDetail} getHoverProps={getHoverProps} doctorMap={doctorMap} />
           </div>
         ) : (
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>

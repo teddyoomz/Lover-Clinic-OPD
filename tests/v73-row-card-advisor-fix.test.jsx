@@ -53,8 +53,11 @@ describe('V73.RC1 — RowCard advisor reads canonical advisorName', () => {
     expect(rowCard).not.toMatch(/\{appt\.advisor\s*\|\|\s*'-'\}/);
   });
 
-  it('RC1.4 sibling fields (doctor/room) still use canonical *Name pattern', () => {
-    expect(rowCard).toMatch(/appt\.doctorName\s*\|\|\s*'-'/);
+  it('RC1.4 doctor live-resolves (2026-06-04); room keeps the snapshot field', () => {
+    // 2026-06-04 — doctor name now live-resolves from be_doctors via doctorMap
+    // (resolveDoctorName) so a tab=doctors rename propagates to existing appt cards;
+    // room still renders the snapshot appt.roomName.
+    expect(rowCard).toMatch(/resolveDoctorName\(appt,\s*doctorMap\)\s*\|\|\s*'-'/);
     expect(rowCard).toMatch(/appt\.roomName\s*\|\|\s*'-'/);
   });
 

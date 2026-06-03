@@ -22,6 +22,7 @@ import {
   // imported here to avoid dead-import code smell.
 } from '../../lib/scopedDataLayer.js';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
+import { useDoctorMap } from '../../hooks/useDoctorMap.js';
 import { thaiTodayISO } from '../../utils.js';
 import {
   applyTabFilter,
@@ -93,6 +94,9 @@ export default function AppointmentHubView({
   opdSaveBusyByApptId = {},
 }) {
   const { branchId: selectedBranchId } = useSelectedBranch();
+  // 2026-06-04 — live doctor lookup so renaming a doctor in tab=doctors propagates
+  // to existing appointment cards at render (was the frozen appt.doctorName snapshot).
+  const doctorMap = useDoctorMap();
   const [activeTab, setActiveTab] = useState('today');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('__all__');
@@ -749,6 +753,7 @@ export default function AppointmentHubView({
           <AppointmentHubRowCard
             key={a.id}
             appt={a}
+            doctorMap={doctorMap}
             summary={summaryMap.get(String(a.customerId))}
             apptDeposit={depositByApptId.get(String(a.id))}
             apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}

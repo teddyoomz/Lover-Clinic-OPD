@@ -5,6 +5,7 @@ import {
   apptDisplayName,
   apptPhoneValue,
   apptTimeRange,
+  resolveDoctorName,
 } from '../../lib/appointmentDisplay.js';
 
 /**
@@ -26,7 +27,7 @@ import {
  * is valid HTML (interactive-content-in-button is illegal). Thai-culture:
  * name + HN never red.
  */
-export function AppointmentAgendaView({ appts, onSelect, resolveRoom, getHoverProps = () => ({}) }) {
+export function AppointmentAgendaView({ appts, onSelect, resolveRoom, getHoverProps = () => ({}), doctorMap = null }) {
   const sorted = useMemo(
     () => [...(appts || [])].sort((a, b) =>
       String(a.startTime || '').localeCompare(String(b.startTime || '')),
@@ -84,7 +85,7 @@ export function AppointmentAgendaView({ appts, onSelect, resolveRoom, getHoverPr
               </div>
             )}
             <div className="text-[11px] text-[var(--tx-muted)] mt-0.5">
-              👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}
+              👨‍⚕️ {resolveDoctorName(appt, doctorMap) || 'ไม่ระบุแพทย์'}
               {phone && (
                 <>
                   {' · '}

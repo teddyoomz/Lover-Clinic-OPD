@@ -3,6 +3,7 @@ import PhoneLink from '../PhoneLink.jsx';
 import { resolveAppointmentTypeLabel } from '../../lib/appointmentTypes.js';
 import {
   resolveAssistantNames,
+  resolveDoctorName,
   getApptStatusMeta,
   apptDisplayName,
   apptPhoneValue,
@@ -93,7 +94,7 @@ export default function AppointmentDetailBody({ appt, roomName, doctorMap, varia
       )}
 
       <div className="mt-1 text-xs text-[var(--tx-muted)]" data-testid="appt-detail-doctor">
-        👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}{assistants.length ? ` · + ${assistants.join(', ')}` : ''}
+        👨‍⚕️ {resolveDoctorName(appt, doctorMap) || 'ไม่ระบุแพทย์'}{assistants.length ? ` · + ${assistants.join(', ')}` : ''}
       </div>
 
       {recurring && (

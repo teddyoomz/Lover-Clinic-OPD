@@ -80,6 +80,35 @@ export function buildDoctorMap(doctors) {
   return m;
 }
 
+/**
+ * Resolve the doctor display name for an appointment, preferring the LIVE
+ * doctor-master name (via doctorMap, keyed by doctorId) over the snapshotted
+ * `appt.doctorName`. Mirrors resolveAssistantNames: the master is the source of
+ * truth; the snapshot is the fallback (deleted doctor / no map / legacy appt).
+ *
+ * Why (2026-06-04): the appointment views rendered `appt.doctorName` RAW — a
+ * value frozen at appointment-creation time — so renaming a doctor in tab=doctors
+ * never propagated to EXISTING appointments ("ไม่อัพเดทตามฐานข้อมูล"). Live-resolve
+ * at render makes be_doctors the single source of truth (V108/V111/V113 class) and
+ * removes any need for manual name backfills.
+ *
+ * @param {object} appt - appointment doc (be_appointments)
+ * @param {Map<string,{name:string}>|object|null} doctorMap - id→{name} lookup
+ * @returns {string} live name → snapshot → '' (caller renders its own placeholder)
+ */
+export function resolveDoctorName(appt, doctorMap) {
+  if (!appt) return '';
+  const id = appt.doctorId != null ? String(appt.doctorId) : '';
+  if (id && doctorMap) {
+    let entry = null;
+    if (typeof doctorMap.get === 'function') entry = doctorMap.get(id);
+    else if (typeof doctorMap === 'object') entry = doctorMap[id];
+    const live = entry ? String(entry.name || '').trim() : '';
+    if (live) return live;
+  }
+  return String(appt.doctorName || '').trim();
+}
+
 // ─── Appointment display formatting (calendar-density, 2026-05-20) ─────────
 // Shared by AppointmentDetailPopover + AppointmentAgendaView + the calendar
 // grid block. APPT_STATUSES is the SINGLE source for the status palette —

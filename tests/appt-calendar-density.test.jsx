@@ -95,6 +95,6 @@ describe('appt-calendar-density · T6 responsive switch + toggle', () => {
 
   it('T6.4 render gated on effectiveView; agenda branch fed by typedDayAppts + effectiveRoom + openDetail', () => {
     expect(SRC).toMatch(/\{effectiveView === 'agenda' \? \(/);
-    expect(SRC).toMatch(/<AppointmentAgendaView appts=\{typedDayAppts\} resolveRoom=\{effectiveRoom\} onSelect=\{openDetail\} getHoverProps=\{getHoverProps\} \/>/); // V127: + getHoverProps (hover peek)
+    expect(SRC).toMatch(/<AppointmentAgendaView appts=\{typedDayAppts\} resolveRoom=\{effectiveRoom\} onSelect=\{openDetail\} getHoverProps=\{getHoverProps\} doctorMap=\{doctorMap\} \/>/); // V127: + getHoverProps (hover peek) · 2026-06-04: + doctorMap (live-resolve doctor name)
   });
 });

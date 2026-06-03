@@ -14,6 +14,7 @@ import React from 'react';
 import { isMissedAppointment } from '../../lib/appointmentHubFilters.js';
 import { resolveAppointmentTypeLabel } from '../../lib/appointmentTypes.js';
 import { buildCustomerDetailUrl } from '../../lib/customerNavigation.js';
+import { resolveDoctorName } from '../../lib/appointmentDisplay.js';
 import {
   BTN_PRIMARY, BTN_SECONDARY, BTN_DESTRUCTIVE, BTN_LINE,
   ACCENT_BAR_BASE, ACCENT_BAR, STATUS_CHIP_CLS,
@@ -72,6 +73,7 @@ function fmtMoney(n) {
 
 export default function AppointmentHubRowCard({
   appt,
+  doctorMap = null,
   summary,
   apptDeposit,
   apptDateTreatments = [],
@@ -366,7 +368,7 @@ export default function AppointmentHubRowCard({
                 Mirror sibling lines 249 (doctorName) + 253 (roomName) pattern. */}
             <dd className="text-[var(--tx-heading)]">{appt.advisorName || appt.advisor || '-'}</dd>
             <dt className="text-[var(--tx-muted)]">แพทย์</dt>
-            <dd className="text-[var(--tx-heading)]">{appt.doctorName || '-'}</dd>
+            <dd className="text-[var(--tx-heading)]">{resolveDoctorName(appt, doctorMap) || '-'}</dd>
             <dt className="text-[var(--tx-muted)]">ผู้ช่วย</dt>
             <dd className="text-[var(--tx-heading)]">{(appt.assistantNames || []).join(', ') || appt.assistantName || '-'}</dd>
             <dt className="text-[var(--tx-muted)]">ห้องตรวจ</dt>
