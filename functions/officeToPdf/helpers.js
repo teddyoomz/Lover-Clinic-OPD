@@ -83,3 +83,45 @@ export function classifyGotenbergError(message) {
   if (/unsupported|format not supported/.test(lower)) return 'unsupported-format';
   return 'unknown';
 }
+
+// (2026-06-03 EOD+4 — S2 race fix) Patch the matching attachments[i] entry of a
+// staff-chat message doc in a runTransaction, WITH a bounded retry when the doc
+// doesn't exist YET. Why the retry: the composer creates the message doc only
+// AFTER every upload in the batch finishes (it awaits onPrepareAndUpload, then
+// onSend→setDoc). A fast Office conversion (download + Gotenberg + upload +
+// patch ≈ 1-2s) sent ALONGSIDE a large file (still uploading for many seconds)
+// can run BEFORE the doc is created → the pre-fix code saw !snap.exists, warned,
+// and returned → the status patch was LOST → the attachment stayed 'pending' →
+// ⚠. Retrying re-checks until the doc appears (or gives up after the window).
+//
+// Firebase-admin-free (db + messageRef are injected) so it unit-tests in
+// isolation. `sleep` + `now` are injectable for deterministic tests.
+//
+// Returns: 'ok' | 'no-attachment' (doc exists but this attachment isn't in it —
+// don't retry) | 'no-doc-timeout' (doc never appeared within the window).
+export async function patchOfficeAttachment({
+  db, messageRef, filePath, patch,
+  maxAttempts = 6, delayMs = 2000, sleep, now,
+} = {}) {
+  const doSleep = typeof sleep === 'function' ? sleep : (ms) => new Promise((r) => setTimeout(r, ms));
+  const stamp = typeof now === 'function' ? now : () => new Date();
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const outcome = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(messageRef);
+      if (!snap.exists) return 'no-doc';
+      const data = snap.data() || {};
+      const atts = Array.isArray(data.attachments) ? data.attachments.slice() : [];
+      const idx = atts.findIndex((a) => a && a.fullPath === filePath);
+      if (idx === -1) return 'no-attachment';
+      atts[idx] = { ...atts[idx], ...patch, pdfPreviewedAt: stamp() };
+      tx.update(messageRef, { attachments: atts });
+      return 'ok';
+    });
+    if (outcome === 'ok' || outcome === 'no-attachment') return outcome;
+    // outcome === 'no-doc' → wait for the late setDoc, then retry.
+    // eslint-disable-next-line no-await-in-loop
+    if (attempt < maxAttempts - 1) await doSleep(delayMs);
+  }
+  return 'no-doc-timeout';
+}

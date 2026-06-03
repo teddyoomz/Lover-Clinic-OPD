@@ -54,6 +54,23 @@ async function deletePrefix(storage, prefix, apply) {
   return files.length;
 }
 
+// (2026-06-03 EOD+4 — S1) Bounded-parallel map (index-stable). Used for the Pass B
+// per-folder doc-existence checks: once Pass B paginates the FULL file list, the
+// folder count can be large, and N sequential getDocs would risk the cron
+// timeout (V122 lesson). Runs `limit` checks at a time.
+async function mapBounded(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 function createdAtMs(data) {
   const c = data && data.createdAt;
   if (c && typeof c.toMillis === 'function') { try { return c.toMillis(); } catch { return null; } }
@@ -90,7 +107,20 @@ export async function sweepStaffChatRetention({ db, storage, now = Date.now(), l
   // ── Pass B · orphan-sweep ─────────────────────────────────────────────────
   // List image files; group by {branchId}/{messageId}; a folder with no doc and
   // older than the grace window is an abandoned upload → delete it.
-  const [allFiles] = await storage.getFiles({ prefix: `${STAFF_CHAT_STORAGE_ROOT}/`, maxResults: limit * 4 });
+  // (2026-06-03 EOD+4 — S1) PAGINATE the FULL file list. The pre-fix capped the
+  // listing at 2000 files → in a clinic whose 30-day window holds more than that,
+  // orphan folders beyond the first 2000 (by name) were NEVER examined → the
+  // "ลบจริงหายจริง / no-orphan" guarantee silently failed. The pageToken loop
+  // reads every page; the per-folder doc checks then run bounded-parallel
+  // (mapBounded) so the larger folder set doesn't risk the cron timeout (V122
+  // lesson).
+  const allFiles = [];
+  let pageQuery = { prefix: `${STAFF_CHAT_STORAGE_ROOT}/`, maxResults: 1000, autoPaginate: false };
+  while (pageQuery) {
+    const [files, nextQuery] = await storage.getFiles(pageQuery);
+    for (const f of (files || [])) allFiles.push(f);
+    pageQuery = nextQuery || null; // SDK returns the next query (with pageToken) or null/undefined when done
+  }
   const folders = new Map(); // key "branchId/messageId" → { messageId, files[], maxMs }
   for (const f of allFiles) {
     const parts = f.name.split('/'); // [root, branchId, X, ...]
@@ -103,9 +133,14 @@ export async function sweepStaffChatRetention({ db, storage, now = Date.now(), l
     if (tc > e.maxMs) e.maxMs = tc;
     folders.set(key, e);
   }
-  for (const e of folders.values()) {
+  const folderList = [...folders.values()];
+  // bounded-parallel doc-existence check (was N sequential round-trips)
+  const checked = await mapBounded(folderList, 20, async (e) => {
     const docSnap = await db.collection(MESSAGES_COL).doc(e.messageId).get();
-    if (docSnap.exists) continue;
+    return { e, exists: docSnap.exists };
+  });
+  for (const { e, exists } of checked) {
+    if (exists) continue;
     if (!e.maxMs) { skippedUnknownAge++; continue; } // conservative: never nuke unknown-age folder
     if (!isOrphanFolder({ docExists: false, folderCreatedMs: e.maxMs, nowMs: now })) continue;
     if (apply) await Promise.all(e.files.map(f => f.delete().catch(() => {})));

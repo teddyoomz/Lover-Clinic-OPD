@@ -27,6 +27,7 @@ import {
   deriveOutputPath,
   deriveFailureReason,
   classifyGotenbergError,
+  patchOfficeAttachment,
 } from './helpers.js';
 // V110 (2026-05-23 EOD+1) — font-fidelity observability. Logs which Thai fonts
 // THIS docx requires + which are missing from the container's installed set.
@@ -98,24 +99,21 @@ export const officeToPdf = onObjectFinalized(
     // The V73 normalizer preserves fullPath; we use that as the join key.
     //
     // NOTE: FieldValue.serverTimestamp() CANNOT be nested inside an array
-    // element. Use a plain Date (becomes a Timestamp via admin SDK conversion).
+    // element. patchOfficeAttachment uses a plain Date (→ Timestamp via admin SDK).
+    //
+    // (2026-06-03 EOD+4 — S2 race fix) The patch now RETRIES when the message doc
+    // doesn't exist yet: the composer creates the doc only AFTER every upload in
+    // the batch finishes, so a fast Office conversion sent alongside a large file
+    // could patch BEFORE the doc was created → the patch was silently lost →
+    // status stuck 'pending' → ⚠. The bounded retry (~6×/2s) covers the late
+    // setDoc; 'no-attachment' (doc exists w/o this attachment) does NOT retry.
     const stampAttachment = async (patch) => {
-      await db.runTransaction(async (tx) => {
-        const snap = await tx.get(messageRef);
-        if (!snap.exists) {
-          console.warn('[officeToPdf] message not found', { messageId, filePath });
-          return;
-        }
-        const data = snap.data() || {};
-        const atts = Array.isArray(data.attachments) ? data.attachments.slice() : [];
-        const idx = atts.findIndex(a => a && a.fullPath === filePath);
-        if (idx === -1) {
-          console.warn('[officeToPdf] attachment not found in doc', { messageId, filePath });
-          return;
-        }
-        atts[idx] = { ...atts[idx], ...patch, pdfPreviewedAt: new Date() };
-        tx.update(messageRef, { attachments: atts });
-      });
+      const outcome = await patchOfficeAttachment({ db, messageRef, filePath, patch });
+      if (outcome === 'no-attachment') {
+        console.warn('[officeToPdf] attachment not found in doc', { messageId, filePath });
+      } else if (outcome === 'no-doc-timeout') {
+        console.warn('[officeToPdf] message doc not created within retry window — patch lost', { messageId, filePath });
+      }
     };
 
     try {

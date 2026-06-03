@@ -54,12 +54,19 @@ describe('OP-SG — source-grep regression for Office preview contracts', () => 
   });
 
   it('OP-SG.6 — Cloud Function patches the matching attachment ONLY (race-safe, NOT whole-array clobber)', () => {
-    const c = R('functions/officeToPdf/index.js');
+    // (2026-06-03 V21-fixup, S2) the matching-attachment patch logic moved from
+    // index.js's inline stampAttachment into helpers.patchOfficeAttachment, which
+    // adds a bounded retry for the late-created message doc (a fast Office
+    // conversion can run before the composer's post-upload setDoc). index.js now
+    // routes through the helper; the join-by-fullPath + slice logic lives in it.
+    const idx = R('functions/officeToPdf/index.js');
+    expect(idx).toMatch(/patchOfficeAttachment\(/);
+    const h = R('functions/officeToPdf/helpers.js');
     // The match key is `fullPath` — the V73 normalizer drops `id` but preserves
-    // `fullPath`, so the Cloud Function joins by fullPath equality.
-    expect(c).toMatch(/findIndex\(a\s*=>\s*a\s*&&\s*a\.fullPath\s*===\s*filePath\)/);
+    // `fullPath`, so the patch joins by fullPath equality.
+    expect(h).toMatch(/findIndex\(\(?a\)?\s*=>\s*a\s*&&\s*a\.fullPath\s*===\s*filePath\)/);
     // No naive whole-array overwrite (the attachments array is sliced + mutated by index)
-    expect(c).toMatch(/\.attachments\.slice\(\)/);
+    expect(h).toMatch(/\.attachments\.slice\(\)/);
   });
 
   it('OP-SG.7 — V73 pre-existing PDF branch retained (no regression)', () => {
