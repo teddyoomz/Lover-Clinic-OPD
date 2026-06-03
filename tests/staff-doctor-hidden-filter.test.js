@@ -43,6 +43,9 @@ vi.mock('../src/lib/staffValidation.js', () => ({
 vi.mock('../src/lib/doctorValidation.js', () => ({
   normalizeDoctor: (data) => data,
   validateDoctor: () => null,
+  // saveDoctor recomputes the display name at the write chokepoint (2026-06-04) —
+  // mock must mirror the real export or destructuring it yields undefined → throw.
+  composeDoctorName: (f) => (`${(f?.firstname || '').trim()} ${(f?.lastname || '').trim()}`.trim() || (f?.nickname || '').trim()),
   STATUS_OPTIONS: [],
   POSITION_OPTIONS: [],
   DF_PAID_TYPE_OPTIONS: [],

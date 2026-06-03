@@ -10963,7 +10963,7 @@ export async function saveDoctor(doctorId, data) {
   const id = String(doctorId || '');
   if (!id) throw new Error('doctorId required');
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
-  const { normalizeDoctor, validateDoctor } = await import('./doctorValidation.js');
+  const { normalizeDoctor, validateDoctor, composeDoctorName } = await import('./doctorValidation.js');
 
   const normalized = normalizeDoctor(data);
   const fail = validateDoctor(normalized);
@@ -10973,6 +10973,12 @@ export async function saveDoctor(doctorId, data) {
   }
 
   const { password: _drop, ...safe } = normalized;
+  // Write chokepoint (2026-06-04): the appointment form + hub + reports read
+  // `name` RAW (no resolver). The form has no `name` input, so recompute it from
+  // the editable fields on EVERY save — never carry the old `name` verbatim (that
+  // is how it went stale: rename → firstname/nickname change but `name` kept the
+  // old value). composeDoctorName = (firstname+lastname).trim() || nickname.
+  safe.name = composeDoctorName(normalized);
 
   // V41 (2026-05-08) — audit-stamp isHidden transition (mirror saveStaff).
   const existingSnap = await getDoc(doctorDoc(id));

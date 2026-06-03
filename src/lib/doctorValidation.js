@@ -218,6 +218,24 @@ export function normalizeDoctor(form) {
   };
 }
 
+// ─── Display-name composition (write chokepoint) ────────────────────────────
+// `be_doctors.name` is read RAW by AppointmentFormModal (แพทย์ dropdown +
+// ผู้ช่วยแพทย์ checkboxes + the snapshotted appt.doctorName), the Appointment Hub,
+// reports, etc. — there is NO display-name resolver and NO `name` input in
+// DoctorFormModal. So `name` MUST be (re)composed from the editable fields on
+// EVERY save; otherwise it carries verbatim through `{...form}` → setDoc and goes
+// stale on rename. Root cause of the 2026-06-04 "บริบูรณ์ วังแก้ว" stale-name bug
+// (firstname/nickname renamed to "หมอมุก" but `name` stayed the old value) AND the
+// empty-name assistant ("ยาหยี" had name=""). Rule: full name (firstname+lastname)
+// when present, else nickname — reproduces every pre-existing correct doc and heals
+// stale + empty. firstname is required by validateDoctor, so a valid doc never
+// yields an empty name.
+export function composeDoctorName(form) {
+  const t = (v) => (typeof v === 'string' ? v.trim() : '');
+  const full = `${t(form?.firstname)} ${t(form?.lastname)}`.trim();
+  return full || t(form?.nickname);
+}
+
 export function generateDoctorId(position) {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const bytes = new Uint8Array(8);
