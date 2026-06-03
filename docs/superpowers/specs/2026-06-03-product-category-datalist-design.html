@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ProductFormModal — หมวดหมู่ Datalist Enrichment — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .ok { color: #15803d; font-weight: 600; }
+    .no { color: var(--accent); font-weight: 600; }
+
+    /* ── Faithful dark-modal mockup (grounded in the real ProductFormModal screenshot) ── */
+    .modal-dark { background: #0d0d0f; border: 1px solid #2a2a2e; border-radius: 14px; padding: 1.4em 1.6em; max-width: 720px; color: #ededed; box-shadow: 0 8px 40px rgba(0,0,0,0.5); }
+    .modal-dark .m-title { color: #ef4444; font-weight: 800; font-size: 1.25em; margin: 0 0 1em; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9em; }
+    .fld label { display: block; font-size: 0.66em; text-transform: uppercase; letter-spacing: 0.06em; color: #8a8a90; font-weight: 700; margin-bottom: 0.35em; }
+    .fld .inp { background: #1a1a1d; border: 1px solid #2e2e33; border-radius: 9px; padding: 0.62em 0.8em; font-size: 0.92em; color: #ededed; position: relative; }
+    .fld .inp .chev { position: absolute; right: 0.7em; top: 50%; transform: translateY(-50%); color: #8a8a90; }
+    .fld .inp.focus { border-color: #ef4444; }
+    .dd { background: #161618; border: 1px solid #2e2e33; border-radius: 9px; margin-top: 4px; overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+    .dd .opt { padding: 0.5em 0.85em; font-size: 0.88em; display: flex; justify-content: space-between; gap: 1em; border-bottom: 1px solid #232328; }
+    .dd .opt:last-child { border-bottom: none; }
+    .dd .opt:hover { background: #1f1f24; }
+    .dd .tag { font-size: 0.78em; color: #7a7a82; }
+    .dd .tag.new { color: #34d399; }
+    .dd .opt.sel { background: #2a1416; }
+    .dd .empty { padding: 0.7em 0.85em; font-size: 0.85em; color: #6a6a70; font-style: italic; }
+    .arrow-row { display:flex; align-items:center; gap: 1em; flex-wrap: wrap; margin: 1em 0; }
+    .arrow { font-size: 1.6em; color: var(--accent); }
+    /* flow boxes */
+    .flow { display: flex; align-items: stretch; gap: 0.5em; flex-wrap: wrap; }
+    .flow .box { background: #fff; border: 2px solid var(--accent); border-radius: 8px; padding: 0.6em 0.9em; font-size: 0.84em; flex: 1; min-width: 130px; }
+    .flow .box .n { display:inline-block; background: var(--accent); color:#fff; border-radius: 50%; width: 1.5em; height: 1.5em; text-align:center; line-height:1.5em; font-size:0.8em; font-weight:700; margin-right:0.4em; }
+    .flow .sep { align-self:center; font-size: 1.4em; color: var(--accent); }
+    .flow .box.reuse { border-style: dashed; border-color: #15803d; }
+  </style>
+</head>
+<body>
+
+<h1>ProductFormModal — หมวดหมู่ Datalist Enrichment</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-03 · <strong>Status:</strong> Approved by user (design) · <strong>Scope:</strong> 1 file (<code>src/components/backend/ProductFormModal.jsx</code>) — covers tab=products, tab=stock, tab=central-stock · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-03-product-category-datalist.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+ในโมดัล <strong>"แก้ไขสินค้า" / "เพิ่มสินค้า"</strong> ช่อง <strong>หมวดหมู่</strong> เป็น <code>&lt;input list="product-group-list"&gt;</code> (datalist combobox) อยู่แล้ว
+แต่ตัวเลือกใน datalist ดึงมา <strong>เฉพาะ master <code>be_product_groups</code></strong> (ตัวแปร <code>groups</code>) ซึ่งมักว่าง/บางตา →
+ผู้ใช้รู้สึกว่า "ไม่มี dropdown ให้เลือก". ในทางกลับกัน ช่อง <strong>หน่วย</strong> ทำงานดีเพราะ datalist ของมัน (<code>unitDatalistOptions</code>)
+<strong>merge 2 แหล่ง</strong>: master <code>be_product_units</code> <em>+ หน่วยที่มีอยู่จริงบนสินค้าใน be_products</em> (harvest distinct <code>mainUnitName</code>).
+</p>
+<p>
+<strong>เป้าหมาย:</strong> ให้หมวดหมู่ได้ "harvest + merge" เหมือนหน่วยเป๊ะ — ตัวเลือก = master groups + หมวดหมู่ที่มีอยู่จริงบนสินค้า (distinct <code>categoryName</code>) —
+โดยคง widget เดิม (<code>&lt;input list&gt;</code> = พิมพ์เลือก หรือ พิมพ์หมวดใหม่ได้, ไม่ทำของเดิมพัง). <strong>อ่านอย่างเดียว (read-time enrich) — ไม่ migrate/seed master.</strong>
+</p>
+
+<h2>Mockup Design</h2>
+<p class="mockup-label" style="margin-top:0">Grounded in the real ProductFormModal (dark theme, red accent) — BEFORE → AFTER, field <code>หมวดหมู่</code> open.</p>
+
+<div class="mockup">
+  <div class="mockup-label">BEFORE — ตอนนี้ (datalist ดึงแค่ master ที่ว่าง → รู้สึกไม่มีตัวเลือก)</div>
+  <div class="modal-dark">
+    <p class="m-title">แก้ไขสินค้า</p>
+    <div class="field-grid">
+      <div class="fld">
+        <label>หมวดหมู่</label>
+        <div class="inp focus">อุปกรณ์ทั่วไป<span class="chev">▾</span></div>
+        <div class="dd">
+          <div class="empty">— (ลิสต์แทบว่าง — มีแค่ master ที่ sync มา) —</div>
+        </div>
+      </div>
+      <div class="fld">
+        <label>หน่วย</label>
+        <div class="inp">ขวด<span class="chev">▾</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">AFTER — Option A (เหมือนหน่วยเป๊ะ): master + หมวดที่มีอยู่จริงบนสินค้า, พิมพ์ใหม่ได้</div>
+  <div class="modal-dark">
+    <p class="m-title">แก้ไขสินค้า</p>
+    <div class="field-grid">
+      <div class="fld">
+        <label>หมวดหมู่</label>
+        <div class="inp focus">อุปกรณ์ทั่วไป<span class="chev">▾</span></div>
+        <div class="dd" data-testid="product-group-datalist">
+          <div class="opt"><span>ยา</span><span class="tag">master</span></div>
+          <div class="opt"><span>เวชภัณฑ์</span><span class="tag">master</span></div>
+          <div class="opt sel"><span>อุปกรณ์ทั่วไป</span><span class="tag new">มีในสินค้าแล้ว ✚</span></div>
+          <div class="opt"><span>Filler</span><span class="tag new">มีในสินค้าแล้ว ✚</span></div>
+          <div class="opt"><span>เลเซอร์</span><span class="tag new">มีในสินค้าแล้ว ✚</span></div>
+        </div>
+      </div>
+      <div class="fld">
+        <label>หน่วย <span style="font-size:0.8em;color:#7a7a82;font-weight:400">(แหล่งอ้างอิงของดีไซน์นี้)</span></label>
+        <div class="inp">ขวด<span class="chev">▾</span></div>
+      </div>
+    </div>
+    <p style="font-size:0.78em;color:#7a7a82;margin:1em 0 0">• เลือกจากลิสต์ <em>หรือ</em> พิมพ์หมวดใหม่ได้เลย &nbsp;•&nbsp; off-list category ของสินค้าเดิมไม่หาย &nbsp;•&nbsp; 1 ไฟล์ ครบ tab=products / stock / central-stock</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape — datalist option object (mirror of unitDatalistOptions)</div>
+<pre><code>// master ก่อน (source:'master') → product-harvested ที่ไม่ซ้ำ master (source:'product')
+[
+  { key: 'master-G001-ยา',          value: 'ยา',           source: 'master'  },
+  { key: 'master-G002-เวชภัณฑ์',     value: 'เวชภัณฑ์',      source: 'master'  },
+  { key: 'product-อุปกรณ์ทั่วไป',    value: 'อุปกรณ์ทั่วไป', source: 'product' },  // harvested
+  { key: 'product-Filler',          value: 'Filler',       source: 'product' },  // harvested
+]
+// dedup by trimmed value · master wins · Thai-locale sort within product group</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Data-flow: modal mount → merge → datalist render (NO new Firestore read — listProducts already fetched)</div>
+  <div class="flow">
+    <div class="box"><span class="n">1</span>modal mount — existing <code>useEffect</code> <code>Promise.all([listProductGroups, listProductUnitGroups, listProducts])</code></div>
+    <div class="sep">→</div>
+    <div class="box reuse"><span class="n">2</span><strong>harvest</strong> distinct <code>categoryName</code> from <code>p</code> (the <em>already-fetched</em> products) → <code>productCategories</code> state <em>(mirror of productUnits, lines 39-49)</em></div>
+    <div class="sep">→</div>
+    <div class="box"><span class="n">3</span><code>categoryDatalistOptions</code> useMemo: master <code>groups</code> first, then product-harvested not in master (dedup)</div>
+    <div class="sep">→</div>
+    <div class="box"><span class="n">4</span>render in existing <code>#product-group-list</code> datalist + <code>data-testid="product-group-datalist"</code></div>
+    <div class="sep">→</div>
+    <div class="box"><span class="n">5</span>user picks existing <em>or</em> types new → <code>form.categoryName</code> → save (unchanged)</div>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted);margin-top:1em">Dashed green box = reuses data already in memory. The whole change is additive — no read, no write-path, no validation change. Save/normalize (<code>validateProduct</code> → <code>categoryName: trim(...)</code>) untouched.</p>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Concern</th><th>หน่วย (existing reference)</th><th>หมวดหมู่ (this change — mirror)</th></tr>
+  <tr><td>Widget</td><td><code>&lt;input list="product-unit-list"&gt;</code></td><td><code>&lt;input list="product-group-list"&gt;</code> <span class="ok">(unchanged)</span></td></tr>
+  <tr><td>Master source</td><td><code>listProductUnitGroups()</code> → <code>units</code></td><td><code>listProductGroups()</code> → <code>groups</code> <span class="ok">(already loaded)</span></td></tr>
+  <tr><td>Product harvest</td><td><code>productUnits</code> (distinct <code>mainUnitName</code>)</td><td><strong>NEW</strong> <code>productCategories</code> (distinct <code>categoryName</code>) — same <code>p</code></td></tr>
+  <tr><td>Merge memo</td><td><code>unitDatalistOptions</code></td><td><strong>NEW</strong> <code>categoryDatalistOptions</code> (mirror)</td></tr>
+  <tr><td>Test hook</td><td><code>data-testid="product-unit-datalist"</code></td><td><strong>NEW</strong> <code>data-testid="product-group-datalist"</code></td></tr>
+  <tr><td>Reads added</td><td>—</td><td><span class="ok">ZERO</span> (reuses fetched products)</td></tr>
+  <tr><td>Write/validate path</td><td>—</td><td><span class="ok">UNCHANGED</span> (<code>categoryName</code> trim only)</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Widget = datalist combobox (เหมือนหน่วยเป๊ะ) — เลือก/พิมพ์ใหม่ได้, non-breaking. (Rejected B: strict <code>&lt;select&gt;</code> — would block inline add-new + change workflow.)</li>
+  <li><strong>Scope:</strong> read-time enrich only — <strong>NO</strong> migration/seeding into <code>be_product_groups</code> master (mirror หน่วย, which is read-time only).</li>
+  <li><strong>Rule C1 watch:</strong> unit + category = 2 near-identical "master + product-harvest merge" blocks. Keep as direct mirror now (proven หน่วย code, lowest risk; master shapes differ — <code>u.units[].name</code> vs <code>groups[].name</code>). Extract a shared helper on the 3rd occurrence.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Opening "แก้ไขสินค้า" (and "เพิ่มสินค้า") from tab=products / tab=stock / tab=central-stock shows a หมวดหมู่ datalist containing <strong>both</strong> master <code>be_product_groups</code> names <strong>and</strong> every distinct non-empty <code>categoryName</code> currently on <code>be_products</code> (e.g. "อุปกรณ์ทั่วไป").</li>
+  <li>Options are deduped (master wins) and a value appearing in both shows once.</li>
+  <li>User can still type a brand-new category not in the list, and save it (no validation regression).</li>
+  <li>An existing product whose category is off-master is preserved on edit/save (no clobber, no blank).</li>
+  <li>No additional Firestore read vs. before (the existing <code>listProducts()</code> is reused).</li>
+  <li>หน่วย behavior is unchanged (no regression to the reference field).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Low risk:</strong> additive UI over data already in memory; no read/write/rules/validation change. Single shared modal → no V12 multi-site drift.</li>
+  <li><strong>Honest Rule Q scope:</strong> merge logic is pure JS → unit-tested + RTL (datalist renders harvested options) + source-grep regression. The "real harvest from real prod be_products" is exercised by the same already-shipped <code>listProducts()</code> path used by หน่วย; the L1 "open modal → click หมวดหมู่ → see real category in list" is user hands-on (or a quick live-browser check). No new compound query / index / rule → no L2 Firestore-query verification needed beyond the existing path.</li>
+  <li><strong>Not a bug-class (feature):</strong> Rule P expansion not triggered; normal feature test bank suffices.</li>
+</ul>
+
+</body>
+</html>
