@@ -1,30 +1,31 @@
 ---
-updated_at: "2026-06-03 EOD — 4-system audit (TFP/Stock/Sales/Finance) /systematic-debugging loop CONVERGED + V158 DEPLOYED."
-status: "IDLE. Loop done: R16 found V158 (concurrent double-cancel money leak) → fixed → R17-R22 = 6 consecutive FRESH clean rounds → deployed. Money domain (deposit/wallet/points/course/stock) atomic for sequential AND concurrent."
+updated_at: "2026-06-03 EOD+1 — V159 SHIPPED (stock order line-item search + per-batch expiry edit). Local, NOT deployed."
+status: "V159 done + verified (full vitest 15992/0 · build clean · real-prod Rule Q L2 e2e 28/0). NOT deployed — await 'deploy' (V18). Client-SDK only (no firestore.rules) → vercel-only when authorized."
 branch: "master"
-last_commit: "c31248ed (EOD docs) · V158 = 91bb3349"
-tests: "Full vitest 15970/0 (this-session JSON run; not re-run at EOD). Real-prod Rule Q L2: R16 5/0 · R17 8/0 · R18 6/0 · R19 21/0 · R21 12/0 · R22 9/0 + reverse-idem 11/0 + points-conc 2/0 + R13 11/0 + R14 7/0 + R15 15/0. build clean."
+last_commit: "39c603b6 (V159 audit S36) — 8 commits f690cfed..39c603b6"
+tests: "Full vitest 15992/0 (this session) · build clean · real-prod Rule Q L2 e2e-v159 28/0. Not re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "91bb3349 (V158) LIVE — vercel --prod aliased 2026-06-03. Was d780750c (V153-V157). Client-SDK only, NO firestore.rules change → no Probe-Deploy-Probe."
-firestore_rules_version: "UNCHANGED."
+production_commit: "91bb3349 (V158) LIVE — V159 NOT deployed yet."
+firestore_rules_version: "UNCHANGED (V159 = no rules change → no Probe-Deploy-Probe)."
 ---
 
-# Active — 2026-06-03 EOD — 4-system audit loop CONVERGED + V158 DEPLOYED
+# Active — 2026-06-03 EOD+1 — V159 SHIPPED (search + per-batch expiry edit)
 
 ## State
-- master `c31248ed`; prod `91bb3349` (V158) LIVE + aliased.
-- Loop stop-condition MET: R16 found a bug; R17-R22 = 6 consecutive fresh clean rounds (matches prior stock-loop bar).
-- Money domain Rule-T atomic-RMW COMPLETE for both sequential AND concurrent reverse.
+- master `39c603b6`; prod `91bb3349` (V158) LIVE. V159 = 8 commits ahead, NOT deployed.
+- V159 (2 features) done + verified; no firestore.rules change → vercel-only deploy when authorized.
+- Honest Rule Q scope: L2 (real client SDK on real prod) + full vitest + build = green. L1 (real browser: open ปรับ → edit date → save → see update) = user hands-on per workstyle. Form wiring = source-grep+build verified; the fn is L2-verified end-to-end.
 
-## What this session shipped (detail → checkpoint 2026-06-03-v158-four-system-loop.md)
-- **V158 (M19, Rule T)** — `refundToWallet` + `reversePointsEarned` CONCURRENCY-safe via per-reference in-tx net marker (`saleNet` / `finance.pointsSaleNet`); legacy Σ query kept as seed for pre-V158 refs. Fixes concurrent double-cancel wallet +200 leak / points −50 over-reverse. R16 5/0.
-- **R17-R22** — 6 fresh real-prod adversarial e2e rounds, all clean (concurrent sale-edit · course lifecycle+race · 4-system capstone cancel-cascade 21/0 · report-accuracy audit · deposit-multi-sale · adjust×marker interplay).
-- Rule P artifacts: `tests/v158-concurrent-reverse-marker.test.js` 14/0 · audit-money-flow M19 · V158 V-entry · 2 V21 fixups (v149 + v153).
-- Deployed V158 once at loop end per user "ลุยให้จบ loop แล้ว deploy ที่เดียว".
+## What this session shipped (detail → checkpoint 2026-06-03-v159-stock-search-expiry.md)
+- **F1 search** — `OrderPanel` + `CentralStockOrderPanel` match line-item `productName` (was vendor/orderId only); matched item surfaced first via `formatOrderItemsSummary` `matchQuery` (backward-compat preserved).
+- **F2 expiry** — NEW `updateStockBatchExpiry` (1 runTransaction: batch.expiresAt + forensic trail + `be_stock_adjustments` type=`expiry` (movementId null) + source order-line sync by locationType; NO movement → conservation; status untouched (EXPIRED derived); Rule O live-resolve).
+- **F2 UI** — editable `DateField` in the existing `AdjustCreateForm` (dual-path submit: qty / expiry / both; covers ยอดคงเหลือ + ปรับสต็อค + central via the shared form, NO new buttons); `type=expiry` rendered in the adjust list + `AdjustDetailModal`.
+- audit-stock-flow **S36** (35→36). +22 vitest (unit + source-grep + flow-simulate) + real-prod e2e `scripts/e2e-v159-stock-search-and-expiry.mjs` 28/0.
+- Subagent dispatch blocked by 1M-context credit gate → executed INLINE (TDD per task, 8 commits).
 
 ## Next action
-- IDLE (loop converged, deployed, verified). Await user direction.
+- IDLE / await direction. If "deploy" → `vercel --prod` only (no rules change → no Probe-Deploy-Probe). Optional: add V159 V-log entry to `.claude/rules/00-session-start.md` §2.
 
 ## Outstanding user-triggered actions
-- None blocking. Carryover (non-loop, low-pri): dropdown หมวดหมู่ task · Neuramis merge + junk test-course "หฟแฟ".
-- Optional future feature (not a bug): cross-collection partial-failure auto-reconciliation report (builds on V157 surfacing).
+- Deploy V159 (vercel-only) when authorized (V18).
+- Carryover (non-loop, low-pri): dropdown หมวดหมู่ task · Neuramis merge + junk test-course "หฟแฟ" · optional cross-collection partial-failure reconciliation report (V157 follow-on) · SESSION_HANDOFF head trim <150 KB.
