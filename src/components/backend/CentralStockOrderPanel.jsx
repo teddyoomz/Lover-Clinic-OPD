@@ -180,7 +180,12 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter(o => {
-      if (q && !((o.vendorName || '').toLowerCase().includes(q) || (o.orderId || '').toLowerCase().includes(q))) {
+      // V159 — search vendor / orderId / line-item productName
+      if (q && !(
+        (o.vendorName || '').toLowerCase().includes(q) ||
+        (o.orderId || '').toLowerCase().includes(q) ||
+        (Array.isArray(o.items) ? o.items : []).some(it => (it.productName || '').toLowerCase().includes(q))
+      )) {
         return false;
       }
       // Phase 16.4 G2 — status filter
@@ -267,7 +272,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
           <div className="flex-1 relative min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="ค้นหาเลขที่/vendor..."
+              placeholder="ค้นหาเลขที่/vendor/ชื่อสินค้า"
               className="w-full pl-9 pr-3 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
           </div>
           <button onClick={openCreate}
@@ -352,7 +357,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
                 const canCancel = o.status !== 'cancelled' && o.status !== 'cancelled_post_receive';
                 // Phase 15.4 post-deploy s22 — inline product summary so admin
                 // can scan list without clicking each row.
-                const itemsSummary = formatOrderItemsSummary(o.items || []);
+                const itemsSummary = formatOrderItemsSummary(o.items || [], { matchQuery: search.trim() });
                 return (
                   <tr
                     key={o.orderId}

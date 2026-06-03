@@ -161,8 +161,12 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter(o => {
-      // Search (vendor / orderId)
-      if (q && !((o.vendorName || '').toLowerCase().includes(q) || (o.orderId || '').toLowerCase().includes(q))) {
+      // Search (vendor / orderId / line-item productName) — V159
+      if (q && !(
+        (o.vendorName || '').toLowerCase().includes(q) ||
+        (o.orderId || '').toLowerCase().includes(q) ||
+        (Array.isArray(o.items) ? o.items : []).some(it => (it.productName || '').toLowerCase().includes(q))
+      )) {
         return false;
       }
       // Phase 16.4 G2 — status filter
@@ -245,7 +249,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
         </div>
         <div className="mt-4 relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหา vendor หรือ ORD-..."
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหา vendor / ORD / ชื่อสินค้า"
             className="w-full pl-9 pr-3 py-2 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
         </div>
         {/* Phase 16.4 G2/G3/G6 (2026-04-29) — list filters */}
@@ -320,7 +324,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
                 const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                 const total = (o.items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0);
                 // Phase 15.4 post-deploy s22 — inline product summary
-                const itemsSummary = formatOrderItemsSummary(o.items || []);
+                const itemsSummary = formatOrderItemsSummary(o.items || [], { matchQuery: search.trim() });
                 return (
                   <tr key={o.orderId} onClick={() => openDetail(o.orderId)}
                     className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer"
