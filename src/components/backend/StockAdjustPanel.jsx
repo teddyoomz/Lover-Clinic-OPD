@@ -201,6 +201,10 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/30 text-emerald-400 border border-emerald-800 inline-flex items-center gap-1">
                         <Plus size={9} /> เพิ่ม
                       </span>
+                    ) : a.type === 'expiry' ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-900/30 text-amber-400 border border-amber-800 inline-flex items-center gap-1">
+                        <Calendar size={9} /> แก้วันหมดอายุ
+                      </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/30 text-red-400 border border-red-800 inline-flex items-center gap-1">
                         <Minus size={9} /> ลด
@@ -208,9 +212,13 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
                     )}
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-bold">
-                    <span className={a.type === 'add' ? 'text-emerald-400' : 'text-red-400'}>
-                      {a.type === 'add' ? '+' : '−'}{fmtQty(a.qty)}
-                    </span>
+                    {a.type === 'expiry' ? (
+                      <span className="text-amber-400 text-[10px]">{a.oldExpiresAt || '—'} → {a.newExpiresAt || '—'}</span>
+                    ) : (
+                      <span className={a.type === 'add' ? 'text-emerald-400' : 'text-red-400'}>
+                        {a.type === 'add' ? '+' : '−'}{fmtQty(a.qty)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-[var(--tx-muted)] text-[11px]">{a.note || '-'}</td>
                 </tr>

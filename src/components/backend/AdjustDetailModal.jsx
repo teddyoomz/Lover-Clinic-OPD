@@ -10,7 +10,7 @@
 // metadata.
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Loader2, SlidersHorizontal, AlertCircle, Plus, Minus, Package } from 'lucide-react';
+import { X, Loader2, SlidersHorizontal, AlertCircle, Plus, Minus, Package, Calendar } from 'lucide-react';
 import {
   getStockAdjustment, getStockBatch, listStockLocations,
 } from '../../lib/scopedDataLayer.js';
@@ -20,10 +20,12 @@ import { resolveBranchName } from '../../lib/BranchContext.jsx';
 const TYPE_INFO = {
   add: { label: 'เพิ่มสต็อก', color: 'emerald', Icon: Plus },
   reduce: { label: 'ลดสต็อก', color: 'red', Icon: Minus },
+  expiry: { label: 'แก้วันหมดอายุ', color: 'amber', Icon: Calendar }, // V159
 };
 const BADGE_CLS = {
   emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
   red: 'bg-red-900/30 text-red-400 border-red-800',
+  amber: 'bg-amber-900/30 text-amber-400 border-amber-800',
 };
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
@@ -142,10 +144,18 @@ export default function AdjustDetailModal({ adjustmentId, onClose, branches = []
                 </div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">จำนวน</div>
-                <div className={`text-sm font-mono font-bold ${type === 'add' ? 'text-emerald-400' : 'text-red-400'}`} data-testid="adjust-detail-qty">
-                  {type === 'add' ? '+' : '−'}{fmtQty(data.qty)} {batch?.unit || ''}
+                <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">
+                  {type === 'expiry' ? 'วันหมดอายุ' : 'จำนวน'}
                 </div>
+                {type === 'expiry' ? (
+                  <div className="text-sm text-amber-400 font-mono" data-testid="adjust-detail-qty">
+                    {data.oldExpiresAt || '—'} → {data.newExpiresAt || '—'}
+                  </div>
+                ) : (
+                  <div className={`text-sm font-mono font-bold ${type === 'add' ? 'text-emerald-400' : 'text-red-400'}`} data-testid="adjust-detail-qty">
+                    {type === 'add' ? '+' : '−'}{fmtQty(data.qty)} {batch?.unit || ''}
+                  </div>
+                )}
               </div>
             </div>
 
