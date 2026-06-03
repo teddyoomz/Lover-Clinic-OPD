@@ -33,10 +33,15 @@ function mockChatState(overrides = {}) {
 describe('V73.W1 StaffChatWidget render gate', () => {
   beforeEach(() => useStaffChat.mockReturnValue(mockChatState()));
 
-  it('W1.1 renders bubble when minimized + has user + branch', () => {
+  it('W1.1 renders bubble when minimized; panel stays mounted but hidden (2026-06-03)', () => {
+    // V21 fixup (2026-06-03): pre-change the panel UNMOUNTED on minimize. Now it
+    // stays mounted (display:none) so the composer draft survives a reopen — so
+    // assert hidden, not absent. Bubble still renders when minimized.
     render(<StaffChatWidget user={{ uid: 'U1' }} needsPublicAuth={false} />);
     expect(screen.getByTestId('staff-chat-bubble')).toBeInTheDocument();
-    expect(screen.queryByTestId('staff-chat-panel')).toBeNull();
+    const panel = screen.getByTestId('staff-chat-panel');
+    expect(panel).toBeInTheDocument();
+    expect(panel.style.display).toBe('none');
   });
 
   it('W1.2 hidden when user is null', () => {

@@ -34,7 +34,7 @@ function pendingIcon(p) {
   return KIND_ICON[k] || '📎';
 }
 
-export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onPrepareAndUpload, onSendSticker }) {
+export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onPrepareAndUpload, onSendSticker, onDraftChange }) {
   const [text, setText] = useState('');
   const [mentionTrigger, setMentionTrigger] = useState(null);
   // pendingFiles: [{ id, file, previewUrl|null, kind, name, progress, cancelled }]
@@ -58,6 +58,15 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
   useEffect(() => () => {
     pendingRef.current.forEach(p => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); });
   }, []);
+
+  // (2026-06-03) — Report draft presence up so the minimized bubble can show a
+  // draft indicator. hasDraft = unsent text OR ≥1 staged file OR an active reply.
+  // Only this boolean lifts; the heavy draft (text/pendingFiles/File-objects)
+  // stays here (preserved by the panel's hide-don't-unmount). setHasDraft from
+  // the parent is stable + same-value calls no-op → no render loop.
+  useEffect(() => {
+    onDraftChange?.(text.trim() !== '' || pendingFiles.length > 0 || !!replyingTo);
+  }, [text, pendingFiles, replyingTo, onDraftChange]);
 
   const trimmed = text.trim();
   const tooLong = trimmed.length > 500;

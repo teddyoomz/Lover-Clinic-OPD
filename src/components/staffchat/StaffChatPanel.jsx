@@ -13,7 +13,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { StaffChatHeader } from './StaffChatHeader.jsx';
 import { useStaffChatPanelResize } from '../../hooks/useStaffChatPanelResize.js';
 
-export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
+export function StaffChatPanel({ hidden = false, branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
   // (2026-05-31) Desktop-only resize: drag the top-left grip to resize
   // (bottom-right anchored); size persisted per-device + restored on remount
   // (minimize-reopen / auto-popup). Mobile (<768px) → isDesktop=false →
@@ -26,12 +26,20 @@ export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName
   // V82-fix7-bis — body scroll lock on mount, restore on unmount. CSS rule
   // in src/index.css `@media (max-width: 767px) { html[data-staff-chat-open] { overflow: hidden; touch-action: none; } }`
   // ensures the lock applies ONLY on mobile (desktop panel is 360×480 corner-anchored, doesn't need lock).
+  // (2026-06-03) — the Panel now stays MOUNTED (hidden via display:none) on
+  // minimize so the composer draft (text + staged files + object-URLs) survives.
+  // The mobile body-scroll-lock must therefore follow the VISIBLE state, not the
+  // mount: release it while hidden, re-apply when shown.
   useEffect(() => {
+    if (hidden) {
+      document.documentElement.removeAttribute('data-staff-chat-open');
+      return;
+    }
     document.documentElement.setAttribute('data-staff-chat-open', 'true');
     return () => {
       document.documentElement.removeAttribute('data-staff-chat-open');
     };
-  }, []);
+  }, [hidden]);
 
   return (
     <div
@@ -42,7 +50,7 @@ export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName
         md:w-[360px] md:h-[480px]
         bg-[var(--bg-card)] border border-[var(--bd-strong)] rounded-xl shadow-2xl
         flex flex-col overflow-hidden overscroll-contain z-[9000]"
-      style={{ touchAction: 'pan-y', ...desktopSize }}
+      style={{ touchAction: 'pan-y', ...desktopSize, ...(hidden ? { display: 'none' } : {}) }}
     >
       {/* (2026-05-31) Desktop resize grip — top-left corner. Drag = resize
           (bottom-right anchored); double-click = reset to 360×480. Mobile: not

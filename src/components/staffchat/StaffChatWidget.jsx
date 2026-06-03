@@ -8,7 +8,7 @@
 // useSelectedBranch.branches (Bug A from L1: App.jsx never passed branchName
 // prop → header rendered "—"). Also surfaces hook error to UI banner (Bug D
 // silent-listener-error → V66-class trust collapse).
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStaffChat } from '../../hooks/useStaffChat.js';
 import { buildReplySnapshot } from '../../lib/staffChatClient.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
@@ -21,6 +21,10 @@ import { StaffChatNamePicker } from './StaffChatNamePicker.jsx';
 export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchName }) {
   const { branchId: selectedBranchId, branches } = useSelectedBranch();
   const chat = useStaffChat();
+  // (2026-06-03) — draft indicator: the (now always-mounted, hidden-on-minimize)
+  // Composer reports a single hasDraft boolean up via onDraftChange; we relay it
+  // to the minimized Bubble so the user sees a draft is waiting.
+  const [hasDraft, setHasDraft] = useState(false);
 
   // Backend Menu D — alternative trigger surface. Additive: existing
   // StaffChatBubble onClick still works. DuoPill dispatches these events.
@@ -63,35 +67,39 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
 
   return (
     <>
-      {chat.minimized ? (
-        <StaffChatBubble unreadCount={chat.unreadCount} onClick={chat.expand} />
-      ) : (
-        <StaffChatPanel
-          branchName={resolvedBranchName}
-          onMinimize={chat.minimize}
-          onEditName={chat.openNameEdit}
-          displayName={chat.displayName}
-          error={chat.error}
-          loading={chat.loading}
-          canMinimize={chat.canMinimize}
-        >
-          <StaffChatMessageList
-            messages={chat.messages}
-            ownDeviceId={chat.deviceId}
-            onReply={handleReply}
-            onDelete={chat.deleteMessage}
-            onScrolledToBottom={chat.markScrolledToBottom}
-            unreadCount={chat.unreadCount}
-          />
-          <StaffChatComposer
-            onSend={chat.send}
-            recentMentionCandidates={chat.recentMentionCandidates}
-            replyingTo={chat.replyingTo}
-            onClearReply={() => chat.setReplyingTo?.(null)}
-            onPrepareAndUpload={chat.prepareAndUpload}
-            onSendSticker={chat.sendSticker}
-          />
-        </StaffChatPanel>
+      {/* (2026-06-03) — Panel ALWAYS mounted (hidden when minimized) so the
+          Composer's draft (text + reply + staged files + object-URLs) survives a
+          minimize→reopen. The Bubble renders additionally while minimized. */}
+      <StaffChatPanel
+        hidden={chat.minimized}
+        branchName={resolvedBranchName}
+        onMinimize={chat.minimize}
+        onEditName={chat.openNameEdit}
+        displayName={chat.displayName}
+        error={chat.error}
+        loading={chat.loading}
+        canMinimize={chat.canMinimize}
+      >
+        <StaffChatMessageList
+          messages={chat.messages}
+          ownDeviceId={chat.deviceId}
+          onReply={handleReply}
+          onDelete={chat.deleteMessage}
+          onScrolledToBottom={chat.markScrolledToBottom}
+          unreadCount={chat.unreadCount}
+        />
+        <StaffChatComposer
+          onSend={chat.send}
+          recentMentionCandidates={chat.recentMentionCandidates}
+          replyingTo={chat.replyingTo}
+          onClearReply={() => chat.setReplyingTo?.(null)}
+          onPrepareAndUpload={chat.prepareAndUpload}
+          onSendSticker={chat.sendSticker}
+          onDraftChange={setHasDraft}
+        />
+      </StaffChatPanel>
+      {chat.minimized && (
+        <StaffChatBubble unreadCount={chat.unreadCount} hasDraft={hasDraft} onClick={chat.expand} />
       )}
       {chat.namePickerOpen && (
         <StaffChatNamePicker

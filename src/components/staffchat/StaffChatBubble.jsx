@@ -3,7 +3,7 @@
 import React from 'react';
 import { MessageCircle } from 'lucide-react';
 
-export function StaffChatBubble({ unreadCount, onClick }) {
+export function StaffChatBubble({ unreadCount, hasDraft, onClick }) {
   const displayCount = unreadCount > 99 ? '99+' : String(unreadCount);
   return (
     <button
@@ -14,6 +14,18 @@ export function StaffChatBubble({ unreadCount, onClick }) {
       aria-label="เปิดแชทในสาขา"
     >
       <MessageCircle size={24} />
+      {/* (2026-06-03) Draft indicator — top-LEFT, dark zinc + ✏️. Distinct color
+          AND side from the unread badge (white/red, top-right) so the two never
+          confuse: "unread messages" vs "I have unsent text/files waiting". */}
+      {hasDraft && (
+        <span
+          data-testid="staff-chat-bubble-draft"
+          className="absolute -top-1.5 -left-1.5 w-[21px] h-[21px] rounded-full bg-zinc-900 border-2 border-zinc-600 text-[11px] flex items-center justify-center"
+          aria-label="มีข้อความหรือไฟล์ที่ยังไม่ได้ส่ง"
+        >
+          ✏️
+        </span>
+      )}
       {unreadCount > 0 && (
         <span
           data-testid="staff-chat-bubble-unread"
