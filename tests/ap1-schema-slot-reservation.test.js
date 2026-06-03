@@ -363,7 +363,9 @@ describe('A6 source-grep — AP1-bis multi-slot wiring', () => {
   });
 
   test('A6.8 collision error message references the slot key for debugging', () => {
-    expect(SRC).toMatch(/AP1_COLLISION: slot \$\{slotKeys\[i\]\}/);
+    // R8 — the collision is now reported per the occupied-slot index (the guard
+    // reads the parent appt status; only a LIVE-parent slot throws).
+    expect(SRC).toMatch(/AP1_COLLISION: slot \$\{slotKeys\[occupied\[j\]\.i\]\}/);
   });
 
   test('A6.9 AP1-bis marker comment present (institutional memory)', () => {

@@ -44,8 +44,10 @@ describe('V73-BS1 — STATUS_LABELS expanded confirmed label', () => {
 });
 
 describe('V73-BS1 — effectiveStatus driven by serviceCompletedAt', () => {
-  it('BS1.5 effectiveStatus = appt.serviceCompletedAt ? "done" : rawStatus', () => {
-    expect(rowCard).toMatch(/const effectiveStatus = appt\.serviceCompletedAt \? ['"]done['"] : rawStatus;/);
+  it('BS1.5 effectiveStatus = serviceCompletedAt ? "done" : rawStatus, but CANCELLED wins (R8)', () => {
+    // R8 — a 'cancelled' rawStatus takes precedence over a stale serviceCompletedAt
+    // (the deposit-cancel path bypasses the V139 sync, leaving serviceCompletedAt set).
+    expect(rowCard).toMatch(/const effectiveStatus = rawStatus === 'cancelled' \? 'cancelled' : \(appt\.serviceCompletedAt \? 'done' : rawStatus\);/);
   });
 
   it('BS1.6 pre-fix shape REMOVED — no longer `hasTreatmentForDay ? "done"`', () => {

@@ -99,16 +99,29 @@ async function _reserveAppointmentSlotsInTx(tx, { date, doctorId, roomId, startT
   if (slotKeys.length === 0) return [];
   const slotRefs = slotKeys.map((k) => appointmentSlotDoc(k));
   const snaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+  // appointment-loop R8 (2026-06-03) — an occupied slot only COLLIDES if its
+  // parent appointment is actually LIVE; a slot whose parent is cancelled/deleted
+  // is a STALE ORPHAN → treat it as FREE (auto-heal). Mirrors createBackend-
+  // Appointment's R8 guard so deposit-bookings heal orphan slots too. (Reads
+  // precede writes — all the owner tx.get's run before this helper's tx.set's.)
+  const occupied = [];
   for (let i = 0; i < snaps.length; i++) {
-    const snap = snaps[i];
-    if (!snap.exists()) continue;
-    const sd = snap.data() || {};
+    if (!snaps[i].exists()) continue;
+    const sd = snaps[i].data() || {};
     if (sd.cancelled) continue;
+    occupied.push({ i, ownerId: String(sd.appointmentId || '') });
+  }
+  const ownerSnaps = await Promise.all(occupied.map((o) =>
+    o.ownerId ? tx.get(appointmentDoc(o.ownerId)) : Promise.resolve(null)));
+  for (let j = 0; j < occupied.length; j++) {
+    const os = ownerSnaps[j];
+    const live = os && os.exists() && (os.data()?.status !== 'cancelled');
+    if (!live) continue;   // orphan slot (parent cancelled/missing) → free
     const err = new Error(
-      `AP1_COLLISION: slot ${slotKeys[i]} already taken by ${sd.appointmentId || '(unknown)'}`,
+      `AP1_COLLISION: slot ${slotKeys[occupied[j].i]} already taken by ${occupied[j].ownerId || '(unknown)'}`,
     );
     err.code = 'AP1_COLLISION';
-    err.slotKey = slotKeys[i];
+    err.slotKey = slotKeys[occupied[j].i];
     err.atomic = true;
     throw err;
   }

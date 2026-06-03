@@ -89,11 +89,14 @@ describe('appointment-loop R1 — deposit-booking writers reserve slots atomical
   });
 
   test('R1.7 the reservation helper throws AP1_COLLISION + reserves every guard slot', () => {
-    const body = span(DEPOSIT, '_reserveAppointmentSlotsInTx', 1500);
+    // R8 grew the helper (parent-appt-status auto-heal guard) — widen the span.
+    const body = span(DEPOSIT, '_reserveAppointmentSlotsInTx', 2800);
     expect(body).toMatch(/buildAppointmentGuardKeys/);   // R2: doctor + room namespaces
     expect(body).toMatch(/tx\.get/);
     expect(body).toMatch(/err\.code = ['"]AP1_COLLISION['"]/);
     expect(body).toMatch(/tx\.set\(slotRefs/);
+    // R8 — the guard reads the slot's parent appt + frees a cancelled/missing one
+    expect(body).toMatch(/tx\.get\(appointmentDoc\(/);
   });
 
   test('R1.8 createDepositBookingPair uses runTransaction + reserves slots (NOT a bare writeBatch.set)', () => {
@@ -220,11 +223,14 @@ describe('appointment-loop R2 — un-cancel re-reserves the slot (C)', () => {
 describe('appointment-loop R5 — conditional reserve (no slot hijack)', () => {
   const body = fnExport(BACKEND, 'updateBackendAppointment');
 
-  test('R5.1 the conditional helper exists with a skip-if-held-by-other-appt guard', () => {
+  test('R5.1 the conditional helper exists with a skip-if-held-by-other-LIVE-appt guard', () => {
     expect(body).toMatch(/const _reserveSlotsConditional = async \(keys, meta\)/);
     expect(body).toMatch(/await runTransaction\(db, async \(tx\)/);            // reads in a tx
-    // skip a slot owned by a DIFFERENT live (non-cancelled) appointment
-    expect(body).toMatch(/sd && !sd\.cancelled && sd\.appointmentId && sd\.appointmentId !== meta\.appointmentId\) continue;/);
+    // R8 — a slot held by a DIFFERENT appt is collected, then its parent is
+    // read; only a LIVE holder blocks (a cancelled/missing holder is freed).
+    expect(body).toMatch(/sd && !sd\.cancelled && sd\.appointmentId && sd\.appointmentId !== meta\.appointmentId\) \{/);
+    expect(body).toMatch(/if \(os && os\.exists\(\) && os\.data\(\)\?\.status !== 'cancelled'\) liveBlocked\.add/);
+    expect(body).toMatch(/if \(liveBlocked\.has\(i\)\) continue;/);
   });
 
   test('R5.2 BOTH reserve sites (timeChanged + becameUncancelled) use the conditional helper', () => {

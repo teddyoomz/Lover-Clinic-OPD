@@ -2204,16 +2204,31 @@ export async function createBackendAppointment(data) {
       await runTransaction(db, async (tx) => {
         // Read all slot docs first (Firestore tx requires reads before writes).
         const snaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+        // appointment-loop R8 (2026-06-03) — an occupied slot only COLLIDES if its
+        // parent appointment is actually LIVE. A slot whose parent is cancelled or
+        // deleted is a STALE ORPHAN (a concurrent cancel racing a time-change edit
+        // leaves the new-time slot behind, CONF-1) → treat it as FREE so the
+        // booking succeeds + the orphan is overwritten (auto-heal). Pre-R8 the
+        // guard keyed only on slotData.cancelled, so an orphan blocked that
+        // doctor's time FOREVER with NO visible conflicting appointment.
+        const occupied = [];
         for (let i = 0; i < snaps.length; i++) {
-          const snap = snaps[i];
-          if (!snap.exists()) continue;
-          const slotData = snap.data() || {};
+          if (!snaps[i].exists()) continue;
+          const slotData = snaps[i].data() || {};
           if (slotData.cancelled) continue;
+          occupied.push({ i, ownerId: String(slotData.appointmentId || '') });
+        }
+        const ownerSnaps = await Promise.all(occupied.map((o) =>
+          o.ownerId ? tx.get(appointmentDoc(o.ownerId)) : Promise.resolve(null)));
+        for (let j = 0; j < occupied.length; j++) {
+          const os = ownerSnaps[j];
+          const live = os && os.exists() && (os.data()?.status !== 'cancelled');
+          if (!live) continue;   // orphan slot (parent cancelled/missing) → free
           const err = new Error(
-            `AP1_COLLISION: slot ${slotKeys[i]} already taken by ${slotData.appointmentId || '(unknown)'}`,
+            `AP1_COLLISION: slot ${slotKeys[occupied[j].i]} already taken by ${occupied[j].ownerId || '(unknown)'}`,
           );
           err.code = 'AP1_COLLISION';
-          err.slotKey = slotKeys[i];
+          err.slotKey = slotKeys[occupied[j].i];
           err.atomic = true;
           throw err;
         }
@@ -2417,9 +2432,24 @@ export async function updateBackendAppointment(appointmentId, data) {
         await runTransaction(db, async (tx) => {
           const refs = keys.map((k) => appointmentSlotDoc(k));
           const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+          // appointment-loop R8 — a slot held by a DIFFERENT appt is a real
+          // conflict (don't hijack, R5) ONLY if that appt is LIVE. If the holder
+          // is cancelled/deleted (a stale orphan), overwrite it (auto-heal).
+          const otherHeld = [];
           for (let i = 0; i < refs.length; i++) {
             const sd = snaps[i].exists() ? (snaps[i].data() || {}) : null;
-            if (sd && !sd.cancelled && sd.appointmentId && sd.appointmentId !== meta.appointmentId) continue;
+            if (sd && !sd.cancelled && sd.appointmentId && sd.appointmentId !== meta.appointmentId) {
+              otherHeld.push({ i, ownerId: String(sd.appointmentId) });
+            }
+          }
+          const ownerSnaps = await Promise.all(otherHeld.map((o) => tx.get(appointmentDoc(o.ownerId))));
+          const liveBlocked = new Set();
+          for (let j = 0; j < otherHeld.length; j++) {
+            const os = ownerSnaps[j];
+            if (os && os.exists() && os.data()?.status !== 'cancelled') liveBlocked.add(otherHeld[j].i);
+          }
+          for (let i = 0; i < refs.length; i++) {
+            if (liveBlocked.has(i)) continue;   // held by a different LIVE appt → never hijack
             tx.set(refs[i], { slotId: keys[i], ...meta });
           }
         });

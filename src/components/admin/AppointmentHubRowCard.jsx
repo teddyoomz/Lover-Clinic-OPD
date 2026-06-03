@@ -122,7 +122,13 @@ export default function AppointmentHubRowCard({
   // (treatment record exists, just not yet service-completed). Post-fix:
   // un-mark clears serviceCompletedAt → effectiveStatus reverts to 'confirmed'
   // → badge shows "ยืนยันแล้ว · รอการรักษา" matching the waiting-queue state.
-  const effectiveStatus = appt.serviceCompletedAt ? 'done' : rawStatus;
+  // appointment-loop R8 (2026-06-03) — a CANCELLED status ALWAYS wins. The
+  // deposit-cancel path (cancelDepositBookingPair) sets status='cancelled' via a
+  // raw tx.update that does NOT clear serviceCompletedAt (it bypasses the V139
+  // status↔service sync), so a service-completed appt later cancelled would
+  // otherwise show a green "เสร็จแล้ว" badge over a cancelled doc (contradictory;
+  // masks the cancellation in the ย้อนหลัง tab). Give 'cancelled' precedence.
+  const effectiveStatus = rawStatus === 'cancelled' ? 'cancelled' : (appt.serviceCompletedAt ? 'done' : rawStatus);
   const status = effectiveStatus;
   // ① (2026-05-31) — confirmed (not yet served) gets a clear GREEN-tinted box
   // (matches the green "ยืนยันแล้ว" accent/chip; user 2026-05-31 — was sky). Cosmetic
