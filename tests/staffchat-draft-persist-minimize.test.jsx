@@ -59,6 +59,31 @@ describe('F1 — draft survives minimize (hide-don\'t-unmount)', () => {
     rerender(widget());
     expect(screen.getByTestId('staff-chat-composer-input').value).toBe('รับทราบ กำลังจัด');
   });
+
+  it('F1.3 a STAGED IMAGE survives minimize→reopen; its object-URL is NOT revoked', () => {
+    // The headline reason hide-don't-unmount beats sessionStorage: staged File
+    // objects + their preview object-URLs must live through a minimize. Because
+    // the composer never unmounts, its pendingFiles useState (+ the URLs)
+    // persist, and the unmount-only revoke effect never fires while hidden.
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const { container, rerender } = render(widget());
+    const fileInput = container.querySelector('input[type="file"]');
+    const file = new File([new Uint8Array([137, 80, 78, 71])], 'scan.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    expect(screen.getByTestId('staff-chat-composer-image-thumb')).toBeInTheDocument();
+    // minimize → composer hidden but NOT unmounted
+    useStaffChat.mockReturnValue(mockChat({ minimized: true }));
+    rerender(widget());
+    expect(screen.getByTestId('staff-chat-composer-image-thumb')).toBeInTheDocument();
+    expect(revokeSpy).not.toHaveBeenCalled(); // object-URL still alive (no unmount)
+    // reopen → still staged
+    useStaffChat.mockReturnValue(mockChat({ minimized: false }));
+    rerender(widget());
+    expect(screen.getByTestId('staff-chat-composer-image-thumb')).toBeInTheDocument();
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
+  });
 });
 
 describe('F2 — draft indicator on the minimized bubble', () => {
