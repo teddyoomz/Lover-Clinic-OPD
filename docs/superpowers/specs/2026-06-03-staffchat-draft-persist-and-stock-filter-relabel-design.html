@@ -54,6 +54,7 @@
     .chat .composer .send { background:#e11d48; color:#fff; }
     .bubble { width:54px; height:54px; border-radius:50%; background:#e11d48; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 6px 18px rgba(225,29,72,.5); position:relative; }
     .bubble .badge { position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:#fff; color:#e11d48; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+    .bubble .draftbadge { position:absolute; top:-4px; left:-4px; width:21px; height:21px; border-radius:50%; background:#18181b; border:2px solid #3f3f46; display:flex; align-items:center; justify-content:center; font-size:11px; box-shadow:0 1px 4px rgba(0,0,0,.5); }
 
     /* flow diagram */
     .flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; }
@@ -77,6 +78,8 @@
 <div class="section">
   <p><strong>Feature A — Staff-chat draft lost on minimize.</strong> In the staff chatbox, after typing a message / setting a reply / staging image+file uploads, pressing the <code>–</code> (minimize) button and re-opening loses <em>everything</em>. Re-typing is friction during real clinic use. The user wants the in-progress working state preserved across a minimize→reopen cycle <em>on the same screen/tab</em>. Losing it on a full Frontend↔Backend switch / page reload / tab-close is acceptable ("ยกเว้นปิดไปทั้ง tab หรือ เปลี่ยน tab หรือปิดไปทั้งหน้า อันนั้นไม่เป็นไร").</p>
   <p><strong>Root cause (verified in source):</strong> <code>StaffChatWidget.jsx:66-95</code> renders <code>chat.minimized ? &lt;StaffChatBubble/&gt; : &lt;StaffChatPanel&gt;…&lt;/StaffChatPanel&gt;</code>. Minimizing therefore <strong>unmounts</strong> the entire Panel including <code>StaffChatComposer</code>, whose local React state (<code>text</code>, <code>pendingFiles</code> — holding live <code>File</code> objects + <code>URL.createObjectURL</code> previews) is destroyed; the composer's unmount effect (<code>StaffChatComposer.jsx:58-60</code>) even revokes the object URLs. (<code>replyingTo</code> lives in the always-mounted <code>useStaffChat</code> hook, so it already survives — but the dominant text+file loss makes the whole thing feel wiped.)</p>
+  <p><strong>Feature A-bis — distinguish "draft pending" from "unread" on the minimized bubble (added during spec review).</strong> Once the draft survives minimize, the minimized bubble must <em>tell the user</em> a draft is waiting — and that signal must be a <strong>different color AND a different side</strong> from the existing unread badge, or the user can't tell "unread messages" apart from "I have typed/attached content waiting" ("ต้องเป็นคนละสีและอยู่คนละฝั่งกับ bubble แชท unread ไม่งั้น User แยกไม่ออก"). The unread badge today = white circle / red number, <strong>top-right</strong> (<code>StaffChatBubble.jsx:17-24</code>, shown when <code>unreadCount &gt; 0</code>). The draft indicator = a <strong>dark zinc badge + ✏️, top-left</strong> (chosen via visual Q&amp;A — the ✏️ emoji pops hardest on a near-black background; amber blended). The two can show simultaneously and stay unambiguous.</p>
+
   <p><strong>Feature B — Stock balance filter labels too verbose + wrong order.</strong> On <code>tab=stock → ยอดคงเหลือ</code>, rename the filter <code>หมด (คงเหลือ 0)</code> → <code>หมด</code> and <code>ติดลบ (ต้องเติมสต็อค)</code> → <code>ติดลบ</code>, and swap them so <strong>หมด comes before ติดลบ</strong>. Source: <code>StockBalancePanel.jsx:385-395</code>.</p>
 </div>
 
@@ -166,6 +169,18 @@
   </div>
 </div>
 
+<h3>Feature A-bis — minimized bubble: draft (top-left) vs unread (top-right) · LOCKED via visual Q&amp;A</h3>
+<div class="mockup">
+  <div class="mockup-label">Real rose bubble · unread = white/red count top-RIGHT (unchanged) · draft = dark-zinc ✏️ top-LEFT (new)</div>
+  <div style="display:flex; gap:46px; align-items:flex-end; background:#070707; padding:22px 28px; border-radius:10px;">
+    <div style="text-align:center"><div class="bubble">💬</div><div style="font-size:10px;color:#888;margin-top:8px">idle</div></div>
+    <div style="text-align:center"><div class="bubble">💬<span class="badge">2</span></div><div style="font-size:10px;color:#888;margin-top:8px">2 unread</div></div>
+    <div style="text-align:center"><div class="bubble"><span class="draftbadge">✏️</span>💬</div><div style="font-size:10px;color:#888;margin-top:8px">draft pending</div></div>
+    <div style="text-align:center"><div class="bubble"><span class="draftbadge">✏️</span>💬<span class="badge">2</span></div><div style="font-size:10px;color:#888;margin-top:8px">unread + draft</div></div>
+  </div>
+  <p style="font-size:0.8em;color:#666;margin:0.7em 0 0">Chosen: dark zinc badge <code>bg-zinc-900</code> + <code>border-2 border-zinc-600</code> + ✏️, top-left (<code>-top-1.5 -left-1.5</code>). Unread stays <code>bg-white text-rose-700</code>, top-right. Different color + different side → never confused. New <code>data-testid="staff-chat-bubble-draft"</code>.</p>
+</div>
+
 <h2>Flow</h2>
 
 <h3>Feature A — render lifecycle (unmount vs hide)</h3>
@@ -211,11 +226,12 @@
 
 <h2>Architecture</h2>
 <div class="section">
-  <h3>Feature A (2 files, ~10 lines)</h3>
+  <h3>Feature A + A-bis (4 files, ~30 lines — additive only)</h3>
   <ul>
-    <li><code>StaffChatWidget.jsx</code> — replace the <code>minimized ? Bubble : Panel</code> ternary with: <strong>always render</strong> <code>&lt;StaffChatPanel hidden={chat.minimized} …&gt;{children}&lt;/StaffChatPanel&gt;</code>, and render <code>&lt;StaffChatBubble … /&gt;</code> additionally when <code>chat.minimized</code>. Children (MessageList + Composer) stay mounted across minimize.</li>
+    <li><code>StaffChatWidget.jsx</code> — replace the <code>minimized ? Bubble : Panel</code> ternary with: <strong>always render</strong> <code>&lt;StaffChatPanel hidden={chat.minimized} …&gt;{children}&lt;/StaffChatPanel&gt;</code>, and render <code>&lt;StaffChatBubble hasDraft={hasDraft} … /&gt;</code> additionally when <code>chat.minimized</code>. Hold <code>const [hasDraft, setHasDraft] = useState(false)</code> and pass <code>onDraftChange={setHasDraft}</code> down to the Composer. Children (MessageList + Composer) stay mounted across minimize.</li>
     <li><code>StaffChatPanel.jsx</code> — accept a <code>hidden</code> prop; apply Tailwind <code>hidden</code> (= <code>display:none</code>) to the <code>fixed</code> root when true (zero layout impact; it's an overlay). <strong>Required follow-on:</strong> the mobile body-scroll-lock effect (sets <code>data-staff-chat-open</code>, lines 29-34) must key off <em>visible-state</em> not mount — set the attribute when shown, remove when hidden — or minimizing on mobile would leave the page scroll-locked. (<code>useStaffChatPanelResize</code> + grip unaffected.)</li>
-    <li><strong>No change</strong> to <code>StaffChatComposer</code> internals, the upload pipeline (<code>taskRefs</code>/<code>cancelRef</code>/progress/retry), or <code>useStaffChat</code>. Mid-upload minimize keeps the upload running in the still-mounted composer.</li>
+    <li><code>StaffChatComposer.jsx</code> — <strong>one additive effect only</strong>: <code>useEffect(() =&gt; onDraftChange?.(text.trim() !== '' || pendingFiles.length &gt; 0 || !!replyingTo), [text, pendingFiles, replyingTo])</code>. Reports a single boolean up; the heavy draft state (<code>text</code>/<code>pendingFiles</code> + <code>File</code>s/object-URLs) <strong>stays in the composer</strong> (Q1=A). <strong>No change</strong> to the upload pipeline (<code>taskRefs</code>/<code>cancelRef</code>/progress/retry) or <code>useStaffChat</code>. Mid-upload minimize keeps the upload running in the still-mounted composer.</li>
+    <li><code>StaffChatBubble.jsx</code> — accept a <code>hasDraft</code> prop; when true, render a second badge: <code>&lt;span data-testid="staff-chat-bubble-draft" class="absolute -top-1.5 -left-1.5 w-[21px] h-[21px] rounded-full bg-zinc-900 border-2 border-zinc-600 text-[11px] flex items-center justify-center"&gt;✏️&lt;/span&gt;</code>. Mirrors the existing unread badge (top-right) on the opposite corner. Both can render at once.</li>
   </ul>
   <h3>Feature B (1 file)</h3>
   <ul>
@@ -227,6 +243,7 @@
 <ul>
   <li><strong>Feature A approach = "ซ่อนไม่ unmount":</strong> keep the Panel mounted + <code>display:none</code> on minimize. Chosen over (B) lifting draft into the hook (invasive to the upload pipeline, mid-upload-unmount risk) and (C) sessionStorage (can't hold staged <code>File</code>/<code>Blob</code> uploads → fails the "preserve files" requirement).</li>
   <li><strong>Feature A scope = keep across backend sub-tabs:</strong> draft persists through Stock→Sales sub-tab nav (widget never unmounts there); clears only on Frontend↔Backend switch / reload / tab-close. No extra per-tab clear logic.</li>
+  <li><strong>Feature A-bis draft indicator (locked via visual Q&amp;A):</strong> minimized bubble shows a <strong>dark zinc</strong> badge (<code>bg-zinc-900</code> + <code>border-2 border-zinc-600</code>) containing the <strong>✏️ emoji</strong>, at the <strong>top-LEFT</strong> — vs the unread badge's white/red count at the top-right. (Kept the ✏️ emoji per user; changed the badge BG to near-black so the emoji pops — amber/Lucide-icon options rejected.) <strong>Trigger:</strong> <code>text</code> non-empty OR ≥1 staged file OR an active reply.</li>
   <li><strong>Feature B = relabel + reorder only:</strong> "หมด (คงเหลือ 0)"→"หมด", "ติดลบ (ต้องเติมสต็อค)"→"ติดลบ", หมด before ติดลบ. (Direct instruction, no alternatives needed.)</li>
 </ul>
 
@@ -237,6 +254,7 @@
   <li><strong>A3:</strong> A full page reload OR a Frontend↔Backend switch clears the draft (real unmount/unload) — confirms the persistence is per-mount, not leaked to storage.</li>
   <li><strong>A4:</strong> On mobile, minimizing un-locks page scroll (the <code>data-staff-chat-open</code> body lock follows visible-state); re-opening re-locks it.</li>
   <li><strong>A5:</strong> V82 force-open (incoming message auto-expands while minimized) still works and shows the intact draft.</li>
+  <li><strong>A6:</strong> While minimized, the bubble shows the dark-zinc ✏️ badge (top-left) iff the composer has a draft (text / staged file / reply), and the white-red unread count (top-right) iff <code>unreadCount &gt; 0</code> — independently; both can show at once and are visually distinct. Clearing the draft (send / remove all) hides the draft badge; the indicator updates live.</li>
   <li><strong>B1:</strong> The two filters read exactly <code>หมด</code> and <code>ติดลบ</code> (no parentheticals), in the order <code>… เกินสต็อก · หมด · ติดลบ</code>.</li>
   <li><strong>B2:</strong> Both filters still filter correctly (<code>=== 0</code> / <code>&lt; 0</code>); badges + colors unchanged.</li>
 </ol>
@@ -251,11 +269,12 @@
         <li><code>tests/phase15.7-negative-stock-badge-filter.test.js</code> <strong>B3.3</strong> already matches <code>/ติดลบ/</code> (passes with plain "ติดลบ"); <strong>B2.4</strong> is the per-row badge order (NOT the filter) → must stay green (don't touch row badges).</li>
       </ul>
     </li>
+    <li><strong>Bubble test (additive):</strong> <code>StaffChatBubble</code> gains a <code>hasDraft</code> prop + a 2nd badge (<code>staff-chat-bubble-draft</code>) — purely additive, so existing W2.x bubble assertions stay green. New RTL: the draft badge renders iff <code>hasDraft</code>, on the left, coexisting with the unread badge.</li>
     <li><strong>IntersectionObserver while hidden:</strong> the V82 read-cursor advances via <code>markScrolledToBottom</code> on a bottom sentinel. While the panel is <code>display:none</code> the sentinel won't intersect → the cursor won't advance (correct: minimized = not reading). On re-show it re-observes. Verify in L1 that re-opening + scrolling to bottom still clears unread.</li>
     <li><strong>Hidden panel cost:</strong> the MessageList renders while hidden (≤50 messages). The Firestore listener already runs in the hook regardless of panel mount → negligible extra cost.</li>
     <li><strong>Focus on re-open:</strong> the textarea is not auto-refocused after un-hide (browser blurs on <code>display:none</code>); text is still preserved. Acceptable; not auto-focusing avoids surprising scroll-jump. (Could add later if desired.)</li>
   </ul>
-  <p><strong>Verification plan:</strong> Rule I flow-simulate (type→minimize→reopen→assert intact) + RTL (widget: minimize keeps panel mounted/hidden; composer value persists) + source-grep regression + <strong>Rule Q L1 real browser</strong> (Chrome MCP per Rule S, or user hands-on): type + stage image+file + reply → press – → press bubble → confirm everything intact + the files still send. Feature B: RTL/source-grep asserting the two labels + order; visual L1.</p>
+  <p><strong>Verification plan:</strong> Rule I flow-simulate (type→minimize→reopen→assert intact) + RTL (widget: minimize keeps panel mounted/hidden + composer value persists; <code>StaffChatBubble</code> renders <code>staff-chat-bubble-draft</code> when <code>hasDraft</code> AND the unread badge independently; composer fires <code>onDraftChange</code> on text/file/reply change and on clear) + source-grep regression + <strong>Rule Q L1 real browser</strong> (Chrome MCP per Rule S, or user hands-on): type + stage image+file + reply → confirm the dark-zinc ✏️ badge appears top-left (distinct from a top-right unread count) → press – → press bubble → confirm everything intact + the files still send. Feature B: RTL/source-grep asserting the two labels + order; visual L1.</p>
 </div>
 
 </body>
