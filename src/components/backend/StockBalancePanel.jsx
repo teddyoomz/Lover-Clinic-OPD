@@ -378,20 +378,22 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
             <input type="checkbox" checked={showOverStockOnly} onChange={e => setShowOverStockOnly(e.target.checked)} className="accent-violet-500" />
             เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)
           </label>
+          {/* V144 (2026-06-02) — out-of-stock filter. Surfaces products whose
+              totalRemaining === 0 ("หมด"). Distinct from ติดลบ (<0). Red accent
+              matches the existing "หมด" row badge.
+              (2026-06-03) — moved BEFORE ติดลบ + label shortened to "หมด". */}
+          <label className="flex items-center gap-2 text-[11px] text-red-300 cursor-pointer" data-testid="filter-out-of-stock">
+            <input type="checkbox" checked={showOutOfStockOnly} onChange={e => setShowOutOfStockOnly(e.target.checked)} className="accent-red-500" />
+            หมด
+          </label>
           {/* Phase 15.7 (2026-04-28) — negative-stock filter. Surfaces
               products whose totalRemaining < 0 (debt). Admin can drill in
               and use Adjust ADD / Transfer In / Receive Import / Withdrawal
-              Receive to repay the debt. */}
+              Receive to repay the debt.
+              (2026-06-03) — label shortened to "ติดลบ". */}
           <label className="flex items-center gap-2 text-[11px] text-rose-300 cursor-pointer" data-testid="filter-negative-stock">
             <input type="checkbox" checked={showNegativeStockOnly} onChange={e => setShowNegativeStockOnly(e.target.checked)} className="accent-rose-500" />
-            ติดลบ (ต้องเติมสต็อค)
-          </label>
-          {/* V144 (2026-06-02) — out-of-stock filter. Surfaces products whose
-              totalRemaining === 0 ("หมด"). Distinct from ติดลบ (<0). Red accent
-              matches the existing "หมด" row badge. */}
-          <label className="flex items-center gap-2 text-[11px] text-red-300 cursor-pointer" data-testid="filter-out-of-stock">
-            <input type="checkbox" checked={showOutOfStockOnly} onChange={e => setShowOutOfStockOnly(e.target.checked)} className="accent-red-500" />
-            หมด (คงเหลือ 0)
+            ติดลบ
           </label>
         </div>
       </div>

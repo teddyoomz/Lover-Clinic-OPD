@@ -54,14 +54,20 @@ describe('V144 — "หมด" out-of-stock filter (StockBalancePanel)', () => {
       expect(depsMatch[1]).toMatch(/showOutOfStockOnly/);
       expect(depsMatch[1]).toMatch(/isOutOfStock/);
     });
-    it('F1.5 checkbox has data-testid="filter-out-of-stock" + label "หมด (คงเหลือ 0)"', () => {
+    it('F1.5 checkbox has data-testid="filter-out-of-stock" + label "หมด" (2026-06-03: shortened)', () => {
+      // V21 fixup (2026-06-03): label shortened "หมด (คงเหลือ 0)" → "หมด".
       expect(PanelSrc).toMatch(/data-testid="filter-out-of-stock"/);
       const block = PanelSrc.split('data-testid="filter-out-of-stock"')[1] || '';
-      expect(block.slice(0, 400)).toMatch(/หมด \(คงเหลือ 0\)/);
+      expect(block.slice(0, 400)).toMatch(/หมด\s*<\/label>/);
+      expect(block.slice(0, 400)).not.toMatch(/หมด \(คงเหลือ 0\)/);
     });
-    it('F1.6 checkbox sits AFTER the ติดลบ (negative) filter', () => {
-      const head = PanelSrc.split('data-testid="filter-out-of-stock"')[0] || '';
-      expect(head).toMatch(/data-testid="filter-negative-stock"/); // negative comes first
+    it('F1.6 checkbox sits BEFORE the ติดลบ (negative) filter (2026-06-03: reordered)', () => {
+      // V21 fixup (2026-06-03): order swapped — หมด now precedes ติดลบ.
+      const iOut = PanelSrc.indexOf('data-testid="filter-out-of-stock"');
+      const iNeg = PanelSrc.indexOf('data-testid="filter-negative-stock"');
+      expect(iOut).toBeGreaterThan(0);
+      expect(iNeg).toBeGreaterThan(0);
+      expect(iOut).toBeLessThan(iNeg); // หมด comes first now
     });
   });
 
