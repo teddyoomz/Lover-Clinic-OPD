@@ -434,7 +434,15 @@ async function handlePostback(event, db, config, branchId) {
     'notifyMeta.lastPostbackAction': postbackActionToFlag(parsed.action),
     'notifyMeta.lastPostbackAt': FieldValue.serverTimestamp(),
   };
-  if (parsed.action === 'confirm') {
+  // appointment-loop R11 (2026-06-03) — a customer tapping "ยืนยันนัด" on an old
+  // reminder must NOT change the appointment's status unless it's in a confirmable
+  // state. Pre-R11 this blindly set status='confirmed', so confirming a CANCELLED
+  // appt RESURRECTED it (live again, but with NO be_appointment_slots → unguarded,
+  // bypassing the atomic guard) and confirming a DONE/completed visit downgraded it.
+  // The tap is still audit-logged (postback_log + notifyMeta) either way.
+  const curStatus = String(apptData.status || '').toLowerCase();
+  const confirmable = curStatus !== 'cancelled' && curStatus !== 'done' && curStatus !== 'completed';
+  if (parsed.action === 'confirm' && confirmable) {
     apptUpdate.status = 'confirmed';
     apptUpdate.confirmedAt = FieldValue.serverTimestamp();
     apptUpdate.confirmedVia = 'line-postback';
@@ -444,7 +452,13 @@ async function handlePostback(event, db, config, branchId) {
 
   // User-facing reply per action.
   if (parsed.action === 'confirm') {
-    await replyLineMessage(event.replyToken, '✓ ยืนยันนัดเรียบร้อย — เจอกันค่ะ', config.channelAccessToken);
+    await replyLineMessage(
+      event.replyToken,
+      curStatus === 'cancelled'
+        ? 'นัดนี้ถูกยกเลิกแล้ว กรุณาติดต่อคลินิกเพื่อนัดใหม่ค่ะ'
+        : '✓ ยืนยันนัดเรียบร้อย — เจอกันค่ะ',
+      config.channelAccessToken,
+    );
   } else if (parsed.action === 'reschedule') {
     await replyLineMessage(event.replyToken, 'ขอเลื่อนนัดได้รับเรียบร้อย — แอดมินจะติดต่อกลับเร็วๆ นี้ค่ะ', config.channelAccessToken);
   } else if (parsed.action === 'contact') {
