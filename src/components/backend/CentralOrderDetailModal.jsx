@@ -110,7 +110,7 @@ export default function CentralOrderDetailModal({ orderId, onClose }) {
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้ทำรายการ</div>
-                <div data-testid="central-detail-actor">{order.user?.userName || '-'}</div>
+                <div data-testid="central-detail-actor">{order.createdBy?.userName || order.user?.userName || '-'}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">สร้างเมื่อ</div>

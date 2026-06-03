@@ -344,6 +344,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
                 <th className="px-3 py-2 text-left font-bold">เลขที่</th>
                 <th className="px-3 py-2 text-left font-bold">วันที่</th>
                 <th className="px-3 py-2 text-left font-bold">Vendor</th>
+                <th className="px-3 py-2 text-left font-bold">ผู้ทำรายการ</th>
                 <th className="px-3 py-2 text-center font-bold">รายการ</th>
                 <th className="px-3 py-2 text-right font-bold">ส่วนลด</th>
                 <th className="px-3 py-2 text-center font-bold">สถานะ</th>
@@ -368,6 +369,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
                     <td className="px-3 py-2 font-mono text-orange-400" data-testid="cpo-row-id">{o.orderId}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(o.importedDate || o.createdAt)}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">{o.vendorName || o.vendorId}</td>
+                    <td className="px-3 py-2 text-[var(--tx-muted)] text-[11px]" data-testid="cpo-row-actor">{o.createdBy?.userName || o.user?.userName || '-'}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-[var(--tx-primary)]">{(o.items || []).length}</span>

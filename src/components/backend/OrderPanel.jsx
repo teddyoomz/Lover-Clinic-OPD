@@ -312,6 +312,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
               <tr>
                 <th className="px-3 py-2 text-left font-bold">เลขที่</th>
                 <th className="px-3 py-2 text-left font-bold">คู่ค้า</th>
+                <th className="px-3 py-2 text-left font-bold">ผู้ทำรายการ</th>
                 <th className="px-3 py-2 text-left font-bold">วันที่</th>
                 <th className="px-3 py-2 text-center font-bold">รายการ</th>
                 <th className="px-3 py-2 text-right font-bold">ยอด</th>
@@ -331,6 +332,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
                     data-testid="order-row">
                     <td className="px-3 py-2 font-mono text-sky-400">{o.orderId}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)]">{o.vendorName || '-'}</td>
+                    <td className="px-3 py-2 text-[var(--tx-muted)]" data-testid="order-row-actor">{o.createdBy?.userName || o.user?.userName || '-'}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)]">{fmtDate(o.importedDate)}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       <div className="flex items-center gap-2">

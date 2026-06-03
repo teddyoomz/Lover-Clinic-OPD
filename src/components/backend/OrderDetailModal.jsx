@@ -210,6 +210,10 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
                 <div className="text-sm text-[var(--tx-primary)]">{fmtSlashDate(order.importedDate) || '-'}</div>
               </div>
               <div>
+                <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้ทำรายการ</div>
+                <div className="text-sm text-[var(--tx-primary)]" data-testid="order-detail-actor">{order.createdBy?.userName || order.user?.userName || '-'}</div>
+              </div>
+              <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">สาขา</div>
                 <div className="text-sm text-[var(--tx-primary)]" data-testid="order-detail-branch-name">
                   {resolveBranchName(order.branchId, branches) || (order.branchId === 'main' ? 'สาขาหลัก' : '-')}
