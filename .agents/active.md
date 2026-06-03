@@ -1,29 +1,29 @@
 ---
-updated_at: "2026-06-04 EOD — Appointment-system looping bug-hunt CONVERGED (12 rounds) + DEPLOYED. No-regression verified 3 layers."
-status: "Appointment Core hardened R5-R11 (~12 real bugs fixed, all L2 on real prod) → fresh hunt finds nothing → converged. DEPLOYED to Vercel prod. Full vitest 16219/0."
+updated_at: "2026-06-04 EOD+1 — Doctor-name propagation FIXED end-to-end (write chokepoint + live-resolve) + FEFO18 test-branch cleanup. DEPLOYED to prod."
+status: "Renaming a doctor in tab=doctors now propagates automatically — saveDoctor recomputes be_doctors.name (write) + appointment views live-resolve doctorName at render (read). No more manual backfills. Deployed."
 branch: "master"
-last_commit: "0e80af8d (test: happy-path regression e2e). Loop: d241ac69 R5 · 021974b9 R6 · e32646cf R7 · 1e9d85b1 R8 · cf63e0ba R9 · 3e50e0c8 R10 · e2ca97b7 R11."
-tests: "Full vitest 16219/0 (ran this session, exit 0). Happy-path e2e 29/0 + behavior/RTL 122/0 + 7 round e2e all on REAL prod. Build clean. NOT re-run at EOD."
+last_commit: "e56d2ac7 (live-resolve doctor name at render). Prev: 861711a3 (saveDoctor name chokepoint + FEFO18 cleanup)."
+tests: "doctor-name-compose 11/0 + appt-doctor-name-live-resolve 17/0 + build clean. Full vitest 16247 → 16245 pass / 2 PRE-EXISTING env-flakes (bsa-task7 execSync git-grep + v85-glow grep-PATH; zero overlap with diff). 15 hub-render fails (my hook) FIXED via defensive useDoctorMap; 6 hub files re-run green."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "Vercel prod = 0e80af8d (DEPLOYED this session — brought prod bff0bde6 → 0e80af8d: the 4 prior undeployed commits + R5-R11 + happy-path). Aliased + live."
-firestore_rules_version: "UNCHANGED. No firestore.rules/storage.rules change across R5-R11 → no Probe-Deploy-Probe."
+production_commit: "Vercel prod = e56d2ac7 (DEPLOYED this session, aliased, live). Was 0e80af8d. vercel-only — NO firestore.rules change → no Probe-Deploy-Probe."
+firestore_rules_version: "UNCHANGED."
 ---
 
-# Active — 2026-06-04 EOD — Appointment looping bug-hunt converged + deployed
+# Active — 2026-06-04 EOD+1 — Doctor-name propagation fixed (write + read) + deployed
 
 ## State
-- master `0e80af8d` = Vercel prod `0e80af8d` (DEPLOYED, aliased, live). Working tree clean.
-- 12-round adversarial loop CONVERGED: final fresh hunt (R12) + 2 independent R11 hunts + Rule-P class-check all confirm the appointment Core is bulletproof at the money/double-book/double-charge/corruption bar.
-- No firestore.rules change → vercel-only deploy, no Probe-Deploy-Probe.
+- master `e56d2ac7` = Vercel prod `e56d2ac7` (DEPLOYED, aliased, live). Tree: only docs/handoff pending.
+- Prod DATA already healed earlier (Rule M, LIVE): be_doctors.name (บริบูรณ์ วังแก้ว→หมอมุก, ""→ยาหยี) + 18 TEST-FEFO18-* docs deleted.
 
-## What this session shipped (detail → checkpoint 2026-06-04-appointment-loop-converged.md)
-- **~12 real purpose-breaking bugs fixed (R5-R11), each L2-verified on REAL prod + RED→GREEN**: R5 un-cancel/edit slot HIJACK · R6 deposit-booking reminder never fired + non-atomic deposit cancel/delete (Rule T money) + treatment-delete brick + cron isolation · R7 doctor-clear orphan + edit cross-branch relocate + refund→slot-leak + reschedule reminder-suppress · R8 orphan-slot over-block (parent-status guard) + cancelled badge · R9 restore-rebuild slot guard + AP1 message + roomName→roomId · R10 treatment-link customer join-validation + concurrent-edit phantom-slot reconcile · R11 LINE-confirm resurrects cancelled appt.
-- **No-regression proof (Rule A)**: happy-path e2e 29/0 (prod) + existing behavior/RTL/flow-simulate 122/0 + full vitest 16219/0. Every normal flow (create/edit/cancel/un-cancel/delete/deposit-lifecycle/reminder) unchanged; guards catch only bug scenarios.
-- Artifacts: 8 new `scripts/e2e-appt-r{5..10}-*.mjs` + happy-path e2e + 7 new `tests/appt-r{5..11}-*.test.js` + AVxx invariants + V21 fixups.
+## What this session shipped (/systematic-debugging — user "ไม่อัพเดทตามฐานข้อมูล")
+- **Surface 1 — WRITE (861711a3)**: DoctorFormModal has no `name` input; old saveDoctor carried `name` verbatim → renames never persisted the display name. Fix: `composeDoctorName` (doctorValidation.js) + saveDoctor recomputes `safe.name` every save. + Rule M backfill of the 2 stale docs.
+- **Surface 2 — READ (e56d2ac7)**: appt views rendered `appt.doctorName` RAW (frozen snapshot) at calendar/agenda/detail-body/hub-card → existing appts never tracked a rename. Fix: NEW `resolveDoctorName(appt, doctorMap)` (appointmentDisplay.js, V108/V111/V113 class) + NEW `useDoctorMap` hook (defensive: degrades to snapshot, never crashes) wired at all 4 sites.
+- **Cleanup**: deleted leaked FEFO18 stock-test pollution (Rule M, idempotent, audited).
 
 ## Next action
-- IDLE / await direction. Loop converged + deployed + no-regression confirmed.
+- IDLE / await direction. Both surfaces deployed; data healed.
 
 ## Outstanding user-triggered actions
-- **Deferred (sub-bar, documented, NOT bugs)**: C2 note-edit stale-status resurrection (needs 2nd race; soft-scan backstop), B2 restore-dangling link for out-of-window deleted treatment (rare partial-backup), hub future-tab cross-month real-time staleness (self-reconciles), recurring-multiplier date math (correct for TH admins). Pick up only if asked.
-- L1 hands-on on prod (user's, optional): create/edit/cancel a real appointment; tap LINE "ยืนยันนัด".
+- **L1 hands-on (the real proof)**: rename a doctor (esp. one WITH existing appointments) in tab=doctors → confirm the appointment dropdown AND existing appointment cards (calendar/hub) show the new name automatically, no backfill.
+- be_staff `STAFF-mofkgy4e` name="Mild" vs firstname="มายด์" — left as-is (likely intentional EN display; not reported). Say so to normalize.
+- 2 pre-existing env-flake tests (bsa-task7 execSync git-grep POSIX-redir + v85-glow grep-PATH) — pass when git-bash/grep is on PATH; unrelated to this work.
