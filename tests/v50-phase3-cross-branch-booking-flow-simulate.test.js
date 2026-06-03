@@ -456,10 +456,11 @@ describe('V50 Phase 3 — F5 lifecycle / customer.branchId immutability', () => 
   it('F5.4 — cancelDepositBookingPair uses partial update (no branchId touch)', () => {
     const apptDeposit = readSrc('src/lib/appointmentDepositBatch.js');
     const slice = fnSlice(apptDeposit, 'cancelDepositBookingPair');
-    // Only status/cancelNote/cancelEvidenceUrl/cancelledAt/remainingAmount/updatedAt fields
-    expect(slice).toMatch(/batch\.update\(depositRef/);
-    // No branchId stamping in the cancel path
-    const updateBlock = slice.match(/batch\.update\(depositRef[^)]*,\s*\{[^}]*\}/s)?.[0] || '';
+    // R6 — the deposit mutation is now an in-tx tx.update (atomic, Rule T); it
+    // still only touches status/cancelNote/cancelEvidenceUrl/cancelledAt/
+    // remainingAmount/updatedAt — never branchId.
+    expect(slice).toMatch(/tx\.update\(depositRef/);
+    const updateBlock = slice.match(/tx\.update\(depositRef[^)]*,\s*\{[^}]*\}/s)?.[0] || '';
     expect(updateBlock).not.toMatch(/branchId/);
   });
 });

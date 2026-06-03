@@ -1236,6 +1236,24 @@ export async function deleteBackendTreatment(treatmentId) {
     console.warn('[deleteBackendTreatment] Storage cleanup skipped:', e?.message || e);
   }
   await deleteDoc(treatmentDoc(treatmentId));
+  // appointment-loop R6 (2026-06-03) — clear any appointment's persistent
+  // linkedTreatmentId that pointed at THIS treatment. The R4 fix stamps
+  // appt.linkedTreatmentId when a treatment is created from an appointment (to
+  // backstop the date-match gate against double-charge); but NOTHING cleared it
+  // on delete → the appointment stayed permanently "treated" with a dead pointer
+  // → its "สร้างบันทึกการรักษา" button hid forever (the visit could never be
+  // re-recorded), it could never flag "ไม่มาตามนัด" (missed), and clicking edit
+  // opened an empty, unsaveable form. Clearing it at this single shared delete
+  // chokepoint covers EVERY delete surface (TFP create-rollback, TreatmentTimeline
+  // cancel, CustomerDetailView delete). Best-effort — never block the delete.
+  try {
+    const linkSnap = await getDocs(query(appointmentsCol(), where('linkedTreatmentId', '==', treatmentId)));
+    await Promise.all(linkSnap.docs.map((d) => updateDoc(d.ref, {
+      linkedTreatmentId: '', updatedAt: new Date().toISOString(),
+    })));
+  } catch (e) {
+    console.warn('[deleteBackendTreatment] linkedTreatmentId clear skipped:', e?.message || e);
+  }
   return { success: true };
 }
 

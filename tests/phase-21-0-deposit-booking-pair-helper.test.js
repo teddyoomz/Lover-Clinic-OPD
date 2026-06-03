@@ -32,6 +32,7 @@ vi.mock('firebase/firestore', () => ({
     get: vi.fn(async () => ({ exists: () => false, data: () => ({}) })),
     set: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),   // R6 — cancel/delete pair release slots via tx.delete
   })),
   serverTimestamp: () => ({ __serverTimestamp: true }),
 }));
@@ -206,49 +207,47 @@ describe('Phase 21.0 — P1 pure helpers', () => {
     })).rejects.toMatchObject({ code: 'AP1_COLLISION' });
   });
 
+  // appointment-loop R6 (2026-06-03) — cancelDepositBookingPair is now ATOMIC
+  // (Rule T): the usedAmount guard + the deposit/appt writes live in ONE
+  // runTransaction (was getDoc→writeBatch, non-atomic → a concurrent
+  // applyDepositToSale lost-updated → a cancelled deposit holding used funds).
+  // The appt is read in-tx + updated only if it still exists (tolerate a
+  // keep-deposit dangling FK). Tests assert via the tx.update spy.
   test('P1.11 cancelDepositBookingPair returns pairCancelled=false when no link', async () => {
-    const { getDoc, writeBatch } = await import('firebase/firestore');
-    getDoc.mockResolvedValue({
-      exists: () => true,
-      data: () => ({ usedAmount: 0, linkedAppointmentId: '' }),
-    });
+    const { getDoc, runTransaction } = await import('firebase/firestore');
+    getDoc.mockResolvedValue({ exists: () => true, data: () => ({ usedAmount: 0, linkedAppointmentId: '' }) });
     const updateMock = vi.fn();
-    const commitMock = vi.fn(async () => undefined);
-    writeBatch.mockReturnValue({
-      set: vi.fn(),
-      update: updateMock,
-      commit: commitMock,
-    });
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb({
+      get: vi.fn(async () => ({ exists: () => true, data: () => ({ usedAmount: 0, linkedAppointmentId: '' }) })),
+      update: updateMock, delete: vi.fn(), set: vi.fn(),
+    }));
     const result = await helper.cancelDepositBookingPair('DEP-1', { cancelNote: 'test' });
     expect(result.pairCancelled).toBe(false);
-    expect(updateMock).toHaveBeenCalledTimes(1);  // Only deposit, no appt
+    expect(updateMock).toHaveBeenCalledTimes(1);  // only the deposit (no appt link)
   });
 
   test('P1.12 cancelDepositBookingPair updates BOTH docs when link present', async () => {
-    const { getDoc, writeBatch } = await import('firebase/firestore');
-    getDoc.mockResolvedValue({
-      exists: () => true,
-      data: () => ({ usedAmount: 0, linkedAppointmentId: 'BA-X' }),
-    });
+    const { getDoc, runTransaction } = await import('firebase/firestore');
+    getDoc.mockResolvedValue({ exists: () => true, data: () => ({ usedAmount: 0, linkedAppointmentId: 'BA-X' }) });
     const updateMock = vi.fn();
-    const commitMock = vi.fn(async () => undefined);
-    writeBatch.mockReturnValue({
-      set: vi.fn(),
-      update: updateMock,
-      commit: commitMock,
-    });
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb({
+      // in-tx: deposit read (re-guard) + appt read (exists → update it)
+      get: vi.fn(async () => ({ exists: () => true, data: () => ({ usedAmount: 0, linkedAppointmentId: 'BA-X' }) })),
+      update: updateMock, delete: vi.fn(), set: vi.fn(),
+    }));
     const result = await helper.cancelDepositBookingPair('DEP-1', { cancelNote: 'test' });
     expect(result.pairCancelled).toBe(true);
-    expect(updateMock).toHaveBeenCalledTimes(2);  // deposit + appointment
+    expect(updateMock).toHaveBeenCalledTimes(2);  // deposit + appointment (appt exists in-tx)
     expect(result.appointmentId).toBe('BA-X');
   });
 
-  test('P1.13 cancelDepositBookingPair refuses when usedAmount > 0', async () => {
-    const { getDoc } = await import('firebase/firestore');
-    getDoc.mockResolvedValue({
-      exists: () => true,
-      data: () => ({ usedAmount: 100, linkedAppointmentId: 'BA-X' }),
-    });
+  test('P1.13 cancelDepositBookingPair refuses when usedAmount > 0 (re-guarded IN the tx)', async () => {
+    const { getDoc, runTransaction } = await import('firebase/firestore');
+    getDoc.mockResolvedValue({ exists: () => true, data: () => ({ usedAmount: 100, linkedAppointmentId: 'BA-X' }) });
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb({
+      get: vi.fn(async () => ({ exists: () => true, data: () => ({ usedAmount: 100, linkedAppointmentId: 'BA-X' }) })),
+      update: vi.fn(), delete: vi.fn(), set: vi.fn(),
+    }));
     await expect(helper.cancelDepositBookingPair('DEP-1', { cancelNote: 'x' }))
       .rejects.toThrow(/มัดจำถูกใช้/);
   });

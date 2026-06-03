@@ -309,24 +309,35 @@ export default async function handler(req, res) {
       // Skip if notifyChannel doesn't include 'line'
       if (!Array.isArray(appt.notifyChannel) || !appt.notifyChannel.includes('line')) continue;
 
-      const custSnap = await db.doc(`${BASE_PATH}/be_customers/${appt.customerId}`).get();
-      if (!custSnap.exists) continue;
-      const cust = { id: custSnap.id, ...custSnap.data() };
+      // appointment-loop R6 (2026-06-03) — per-appointment fault isolation. A
+      // single bad recipient / a transient Firestore read / a race-deleted appt
+      // hitting the unguarded post-send notifyMeta update inside the pipeline
+      // would throw out of THIS loop and KILL every remaining appointment's
+      // reminder this tick (and the rest of the branches). Wrap so one failure
+      // counts as a failed reminder + the batch continues.
+      try {
+        const custSnap = await db.doc(`${BASE_PATH}/be_customers/${appt.customerId}`).get();
+        if (!custSnap.exists) continue;
+        const cust = { id: custSnap.id, ...custSnap.data() };
 
-      // Doctor + treatments (best-effort; nulls OK)
-      const doctor = appt.doctorId
-        ? await db.doc(`${BASE_PATH}/be_doctors/${appt.doctorId}`).get()
-            .then(s => s.exists ? { id: s.id, ...s.data() } : null)
-            .catch(() => null)
-        : null;
-      const treatments = Array.isArray(appt.treatments) ? appt.treatments : [];
+        // Doctor + treatments (best-effort; nulls OK)
+        const doctor = appt.doctorId
+          ? await db.doc(`${BASE_PATH}/be_doctors/${appt.doctorId}`).get()
+              .then(s => s.exists ? { id: s.id, ...s.data() } : null)
+              .catch(() => null)
+          : null;
+        const treatments = Array.isArray(appt.treatments) ? appt.treatments : [];
 
-      const result = await runReminderPipeline({
-        db, appt, cust, branch, doctor, treatments, branchCfg, reminderType, currentHour,
-      });
-      if (result.status === 'sent') summary.sent++;
-      else if (result.status && result.status.startsWith('skipped')) summary.skipped++;
-      else summary.failed++;
+        const result = await runReminderPipeline({
+          db, appt, cust, branch, doctor, treatments, branchCfg, reminderType, currentHour,
+        });
+        if (result.status === 'sent') summary.sent++;
+        else if (result.status && result.status.startsWith('skipped')) summary.skipped++;
+        else summary.failed++;
+      } catch (err) {
+        summary.failed++;
+        console.error(`[line-reminder-fire] appt ${appt.id} failed (isolated):`, err?.message || err);
+      }
     }
   }
 

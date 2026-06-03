@@ -215,6 +215,12 @@ export function buildAppointmentPairPayload({
     notes: appt.note || appt.notes || '',
     appointmentColor: appt.color || appt.appointmentColor || '',
     status: 'pending',
+    // appointment-loop R6 (2026-06-03) — V67-class field-drop FIX. DepositPanel
+    // sets appointment.notifyChannel (['line']) and its UI promises a reminder,
+    // but this builder dropped the field → the be_appointments doc had no
+    // notifyChannel → the cron (line-reminder-fire: notifyChannel.includes('line'))
+    // SKIPPED every deposit-booking → the customer NEVER got a reminder, silently.
+    notifyChannel: Array.isArray(appt.notifyChannel) ? appt.notifyChannel : [],
     branchId: branchId || null,
     // Cross-link to deposit doc (queryable both directions).
     linkedDepositId: depositId,
@@ -417,44 +423,61 @@ export async function cancelDepositBookingPair(depositId, {
   cancelEvidenceUrl = '',
 } = {}) {
   const depositRef = depositDoc(depositId);
-  const snap = await getDoc(depositRef);
-  if (!snap.exists()) {
+  // Pre-read for the linked appointmentId + its slot keys (deterministic; the
+  // MONEY guard below is re-checked inside the tx). _appointmentSlotKeysForRelease
+  // returns [] gracefully when the appt is already gone.
+  const pre = await getDoc(depositRef);
+  if (!pre.exists()) {
     throw new Error('Deposit not found');
   }
-  const data = snap.data() || {};
-  const appointmentId = data.linkedAppointmentId || '';
-  if ((Number(data.usedAmount) || 0) > 0) {
-    throw new Error(
-      'มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถยกเลิกได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน',
-    );
-  }
+  const appointmentId = pre.data()?.linkedAppointmentId || '';
   const now = new Date().toISOString();
   // appointment-loop R1 (2026-06-03) — release the AP1-bis slot docs the appt
   // held so the time is bookable again (deposit appts now reserve slots at
   // create; not releasing them = orphan slots that block the time forever).
   const slotKeys = await _appointmentSlotKeysForRelease(appointmentId);
-  const batch = writeBatch(db);
-  batch.update(depositRef, {
-    status: 'cancelled',
-    cancelNote,
-    cancelEvidenceUrl,
-    cancelledAt: now,
-    remainingAmount: 0,
-    updatedAt: now,
-  });
-  if (appointmentId) {
-    batch.update(appointmentDoc(appointmentId), {
-      status: 'cancelled',
-      // Forensic trail — when the cancel was triggered via the pair helper.
-      pairCancelledAt: now,
-      pairCancelReason: cancelNote || '',
-      updatedAt: now,
+  // appointment-loop R6 (2026-06-03) — ATOMIC (iron-clad Rule T). V155 made the
+  // single-doc cancelDeposit atomic but the PAIR helpers were missed: a
+  // getDoc→writeBatch races a concurrent applyDepositToSale (usedAmount 0→amt
+  // between the read and the commit) → the blind batch forces remainingAmount:0
+  // while usedAmount>0 → lost-update → a cancelled deposit with positive used
+  // funds → re-spendable / stranded money. FIX: re-read + re-guard usedAmount
+  // IN the tx so OCC serializes. ALSO tolerate a missing appointment (a
+  // keep-deposit appointment delete leaves the deposit's linkedAppointmentId
+  // dangling → a blind batch.update on the deleted appt doc threw NOT_FOUND →
+  // the WHOLE commit failed → the deposit became permanently un-cancellable):
+  // read the appt in-tx and update it only when it still exists.
+  const pairCancelled = await runTransaction(db, async (tx) => {
+    const s = await tx.get(depositRef);
+    if (!s.exists()) throw new Error('Deposit not found');
+    const d = s.data() || {};
+    if ((Number(d.usedAmount) || 0) > 0) {
+      throw new Error(
+        'มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถยกเลิกได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน',
+      );
+    }
+    const apptRef = appointmentId ? appointmentDoc(appointmentId) : null;
+    const apptSnap = apptRef ? await tx.get(apptRef) : null;   // all reads precede all writes
+    tx.update(depositRef, {
+      status: 'cancelled', cancelNote, cancelEvidenceUrl,
+      cancelledAt: now, remainingAmount: 0, updatedAt: now,
     });
-  }
-  for (const k of slotKeys) batch.delete(appointmentSlotDoc(k));
-  await batch.commit();
+    let didCancelAppt = false;
+    if (apptRef && apptSnap.exists()) {
+      tx.update(apptRef, {
+        status: 'cancelled',
+        // Forensic trail — when the cancel was triggered via the pair helper.
+        pairCancelledAt: now,
+        pairCancelReason: cancelNote || '',
+        updatedAt: now,
+      });
+      didCancelAppt = true;
+    }
+    for (const k of slotKeys) tx.delete(appointmentSlotDoc(k));
+    return didCancelAppt;
+  });
   return {
-    pairCancelled: !!appointmentId,
+    pairCancelled,
     depositId,
     appointmentId: appointmentId || undefined,
   };
@@ -646,6 +669,9 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
     notes: apptPayload.notes || '',
     appointmentColor: apptPayload.appointmentColor || '',
     status: 'pending',
+    // appointment-loop R6 — carry notifyChannel so this create path's bookings
+    // get LINE reminders too (mirror buildAppointmentPairPayload V67-class fix).
+    notifyChannel: Array.isArray(apptPayload.notifyChannel) ? apptPayload.notifyChannel : [],
     branchId,
     linkedDepositId: depositId,
     spawnedFromDepositId: depositId,
@@ -831,31 +857,34 @@ export async function syncCustomerTempToLinkedDeposit(depositId, {
 export async function deleteDepositBookingPair(depositId) {
   if (!depositId) throw new Error('deleteDepositBookingPair: depositId required');
   const depRef = depositDoc(depositId);
-  const snap = await getDoc(depRef);
-  if (!snap.exists()) {
+  const pre = await getDoc(depRef);
+  if (!pre.exists()) {
     // Already deleted — idempotent. Return success with no appointmentId.
     return { depositId, deleted: true, pairDeleted: false };
   }
-  const data = snap.data() || {};
-  const appointmentId = data.linkedAppointmentId || '';
-  // Refuse to delete if any of the deposit's funds have been used (admin
-  // must un-apply payments first via Finance.มัดจำ refund flow). Mirrors
-  // cancelDepositBookingPair's guard so the hard-delete path can't bypass
-  // the same financial integrity check.
-  if ((Number(data.usedAmount) || 0) > 0) {
-    throw new Error(
-      'มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถลบได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน',
-    );
-  }
+  const appointmentId = pre.data()?.linkedAppointmentId || '';
   // appointment-loop R1 (2026-06-03) — release the AP1-bis slot docs too (deposit
   // appts now reserve slots at create; a bare delete would orphan them → the
   // doctor's time stays blocked forever).
   const slotKeys = await _appointmentSlotKeysForRelease(appointmentId);
-  const batch = writeBatch(db);
-  batch.delete(depRef);
-  if (appointmentId) batch.delete(appointmentDoc(appointmentId));
-  for (const k of slotKeys) batch.delete(appointmentSlotDoc(k));
-  await batch.commit();
+  // appointment-loop R6 (2026-06-03) — ATOMIC (iron-clad Rule T). Re-guard
+  // usedAmount IN the tx (a concurrent applyDepositToSale must not be able to
+  // turn usedAmount>0 between the read and the commit and have its funds
+  // hard-deleted — that strands a sale's deposit credit; reverseDepositUsage
+  // would then throw "Deposit not found"). tx.delete is idempotent on missing
+  // appt/slot docs (this is why delete never hit the cancel-path NOT_FOUND).
+  await runTransaction(db, async (tx) => {
+    const s = await tx.get(depRef);
+    if (!s.exists()) return;   // concurrently deleted — idempotent no-op
+    if ((Number(s.data()?.usedAmount) || 0) > 0) {
+      throw new Error(
+        'มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถลบได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน',
+      );
+    }
+    tx.delete(depRef);
+    if (appointmentId) tx.delete(appointmentDoc(appointmentId));
+    for (const k of slotKeys) tx.delete(appointmentSlotDoc(k));
+  });
   return {
     depositId,
     appointmentId: appointmentId || undefined,

@@ -114,12 +114,13 @@ describe('appointment-loop R1 — deposit-booking writers reserve slots atomical
   });
 
   test('R1.10 cancel + delete pair RELEASE the slot docs (no orphan slots)', () => {
+    // R6: the release rides the atomic runTransaction (tx.delete), not a writeBatch.
     const cancel = fnExport(DEPOSIT, 'cancelDepositBookingPair');
     expect(cancel).toMatch(/_appointmentSlotKeysForRelease\(appointmentId\)/);
-    expect(cancel).toMatch(/batch\.delete\(appointmentSlotDoc\(k\)\)/);
+    expect(cancel).toMatch(/tx\.delete\(appointmentSlotDoc\(k\)\)/);
     const del = fnExport(DEPOSIT, 'deleteDepositBookingPair');
     expect(del).toMatch(/_appointmentSlotKeysForRelease\(appointmentId\)/);
-    expect(del).toMatch(/batch\.delete\(appointmentSlotDoc\(k\)\)/);
+    expect(del).toMatch(/tx\.delete\(appointmentSlotDoc\(k\)\)/);
   });
 });
 

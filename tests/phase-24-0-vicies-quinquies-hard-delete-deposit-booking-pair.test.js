@@ -69,23 +69,28 @@ describe('Phase 24.0-vicies-quinquies — deleteDepositBookingPair helper', () =
     await expect(deleteDepositBookingPair('')).rejects.toThrow(/depositId required/);
   });
 
-  it('VQQ.A.3 — uses writeBatch with delete (not update)', () => {
+  // appointment-loop R6 (2026-06-03) — deleteDepositBookingPair is now ATOMIC
+  // (Rule T): the usedAmount guard + the deletes live in ONE runTransaction
+  // (was getDoc→writeBatch, non-atomic → a concurrent applyDepositToSale could
+  // turn usedAmount>0 between read+commit and have its funds hard-deleted →
+  // reverseDepositUsage then throws "Deposit not found" → stranded sale credit).
+  it('VQQ.A.3 — deletes BOTH docs inside a runTransaction with tx.delete (no blind writeBatch)', () => {
     const block = extractFn(PAIR_HELPER, 'export async function deleteDepositBookingPair');
-    expect(block).toMatch(/writeBatch\(db\)/);
-    expect(block).toMatch(/batch\.delete\(depRef\)/);
-    expect(block).toMatch(/batch\.delete\(appointmentDoc\(appointmentId\)\)/);
-    expect(block).toMatch(/await\s+batch\.commit\(\)/);
+    expect(block).toMatch(/await runTransaction\(db, async \(tx\)/);
+    expect(block).toMatch(/tx\.delete\(depRef\)/);
+    expect(block).toMatch(/tx\.delete\(appointmentDoc\(appointmentId\)\)/);
+    expect(block).not.toMatch(/const batch = writeBatch\(db\)/);
   });
 
-  it('VQQ.A.4 — preserves usedAmount guard (refuse delete when funds applied)', () => {
+  it('VQQ.A.4 — preserves usedAmount guard, RE-CHECKED in-tx (refuse delete when funds applied)', () => {
     const block = extractFn(PAIR_HELPER, 'export async function deleteDepositBookingPair');
-    expect(block).toMatch(/Number\(data\.usedAmount\)\s*\|\|\s*0\)\s*>\s*0/);
+    expect(block).toMatch(/Number\(s\.data\(\)\?\.usedAmount\)\s*\|\|\s*0\)\s*>\s*0/);
     expect(block).toMatch(/มัดจำถูกใช้ไปบางส่วนแล้ว/);
   });
 
   it('VQQ.A.5 — idempotent: returns success when doc already gone', () => {
     const block = extractFn(PAIR_HELPER, 'export async function deleteDepositBookingPair');
-    expect(block).toMatch(/if\s*\(!snap\.exists\(\)\)\s*\{[\s\S]{0,200}?return\s*\{\s*depositId,\s*deleted:\s*true,\s*pairDeleted:\s*false\s*\}/);
+    expect(block).toMatch(/if\s*\(!pre\.exists\(\)\)\s*\{[\s\S]{0,200}?return\s*\{\s*depositId,\s*deleted:\s*true,\s*pairDeleted:\s*false\s*\}/);
   });
 
   it('VQQ.A.6 — return shape: { depositId, appointmentId?, deleted, pairDeleted }', () => {
