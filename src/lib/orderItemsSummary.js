@@ -21,22 +21,33 @@
  * @param {Array} items — order line items (productName + qty)
  * @param {Object} [opts]
  * @param {number} [opts.max=2] — max items to show before "+N รายการ" fold
+ * @param {string} [opts.matchQuery=''] — V159: when set, items whose name
+ *        matches sort to the front so the matched product is never truncated
+ *        away by the fold (no matchQuery = byte-identical to prior output)
  * @returns {string}
  */
-export function formatOrderItemsSummary(items, { max = 2 } = {}) {
+export function formatOrderItemsSummary(items, { max = 2, matchQuery = '' } = {}) {
   if (!Array.isArray(items) || items.length === 0) return '';
   const safeMax = Math.max(1, Number(max) || 2);
+  const q = String(matchQuery || '').trim().toLowerCase();
   // Filter empty names FIRST, then slice — so "+N รายการ" reflects the
   // count of NAMED items beyond max, not items with empty names.
-  const named = items.map((it) => {
+  let named = items.map((it) => {
     const name = String(it?.productName || it?.productId || '').trim();
     if (!name) return null;
     const qtyNum = Number(it?.qty);
     const qtyStr = Number.isFinite(qtyNum) && qtyNum > 0 ? ` x${qtyNum}` : '';
-    return `${name}${qtyStr}`;
+    return { label: `${name}${qtyStr}`, matched: q ? name.toLowerCase().includes(q) : false };
   }).filter(Boolean);
-  const visible = named.slice(0, safeMax);
-  const remaining = Math.max(0, named.length - safeMax);
+  // V159 (2026-06-03) — when searching, surface matched items first so they
+  // are not truncated away by the slice (e.g. the matched product is item 9
+  // of 10). Array.prototype.sort is stable → no matchQuery = byte-identical
+  // to the pre-V159 output (the search call sites in OrderPanel /
+  // CentralStockOrderPanel pass matchQuery; every other caller passes none).
+  if (q) named = named.slice().sort((a, b) => (b.matched ? 1 : 0) - (a.matched ? 1 : 0));
+  const labels = named.map((n) => n.label);
+  const visible = labels.slice(0, safeMax);
+  const remaining = Math.max(0, labels.length - safeMax);
   if (remaining > 0) visible.push(`+${remaining} รายการ`);
   return visible.join(' · ');
 }
