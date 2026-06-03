@@ -7783,7 +7783,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           db={db}
           appId={appId}
           onClose={() => setTreatmentFormMode(null)}
-          onSaved={(savedTreatmentId) => { setTreatmentFormMode(null); setAutoExpandTreatmentId(savedTreatmentId || ''); setTreatmentRefreshKey(k => k + 1); }}
+          onSaved={(savedTreatmentId) => {
+            // appointment-loop R4 (2026-06-03) — persist the appt→treatment link so
+            // the hub card reliably knows the appointment was treated (vs the fragile
+            // date-match heuristic) → no accidental 2nd treatment → no double charge.
+            // Best-effort fire-and-forget (the treatment already saved). Only fires
+            // for create-FROM-appointment (treatmentFormMode.appointmentId set).
+            const srcApptId = treatmentFormMode?.appointmentId || '';
+            setTreatmentFormMode(null);
+            setAutoExpandTreatmentId(savedTreatmentId || '');
+            setTreatmentRefreshKey(k => k + 1);
+            if (srcApptId && savedTreatmentId) {
+              (async () => {
+                try {
+                  const { updateBackendAppointment } = await import('../lib/scopedDataLayer.js');
+                  await updateBackendAppointment(srcApptId, { linkedTreatmentId: savedTreatmentId });
+                } catch (e) { console.warn('[onSaved] appt linkedTreatmentId stamp failed (best-effort):', e); }
+              })();
+            }
+          }}
         />
       )}
 

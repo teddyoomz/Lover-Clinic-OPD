@@ -89,7 +89,15 @@ export default function AppointmentHubRowCard({
 }) {
   const rawStatus = appt.status || 'pending';
   const latestTreatment = apptDateTreatments[0] || null;
-  const hasTreatmentForDay = !!latestTreatment;
+  // appointment-loop R4 (2026-06-03) — back the FRAGILE date-match heuristic
+  // (latestTreatment = apptDateTreatments[0], matched by customerId + appt.date ===
+  // treatment.detail.treatmentDate) with the PERSISTENT appt.linkedTreatmentId
+  // (stamped by AdminDashboard onSaved when a treatment is created from this
+  // appointment). When the heuristic fails (treatmentDate drifts from appt.date)
+  // the appointment STILL knows it has a treatment → the create-treatment blocks
+  // hide + the edit block shows → no accidental 2nd treatment → no double auto-sale
+  // = no double charge. Reproduced-class: AppointmentHubRowCard:500/544 create.
+  const hasTreatmentForDay = !!latestTreatment || !!appt.linkedTreatmentId;
   // V71 (2026-05-15) → V71.B-ter (2026-05-18) → V126 (2026-05-24 EOD+1) —
   // service-completed button gate.
   // V71.B-ter dropped TREATMENT-related gates (hasTreatmentForDay,

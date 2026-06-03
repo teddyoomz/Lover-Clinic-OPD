@@ -115,9 +115,14 @@ describe('V64.R AppointmentHubRowCard', () => {
   });
 
   it('R4.3 done with linkedTreatment shows edit-treatment', () => {
+    // appointment-loop R4 (2026-06-03) — hasTreatmentForDay now honors the
+    // persistent appt.linkedTreatmentId (closes the double-treatment→double-charge
+    // vector). A linked appt therefore routes to the PRIMARY treated-appt block
+    // (label "แก้ไขบันทึกการรักษา"), not the done-only fallback ("แก้ไขการรักษา").
+    // Same edit-treatment affordance (row-action-edit-treatment) + edits the link.
     render(<AppointmentHubRowCard appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', status: 'done', linkedTreatmentId: 'T1' }} summary={baseSummary} now={FIXED_NOW} />);
     const btn = screen.getByTestId('row-action-edit-treatment');
-    expect(btn.textContent).toMatch(/แก้ไขการรักษา/);
+    expect(btn.textContent).toMatch(/แก้ไขบันทึกการรักษา/);
   });
 
   it('R4.4 done without linkedTreatment shows fallback create-treatment', () => {
