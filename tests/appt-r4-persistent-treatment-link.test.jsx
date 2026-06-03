@@ -83,8 +83,12 @@ describe('appointment-loop R4 — source-grep wiring', () => {
   const CARD = read('src/components/admin/AppointmentHubRowCard.jsx');
   const ADMIN = read('src/pages/AdminDashboard.jsx');
 
-  test('R4.4 hasTreatmentForDay honors the persistent appt.linkedTreatmentId', () => {
-    expect(CARD).toMatch(/const hasTreatmentForDay = !!latestTreatment \|\| !!appt\.linkedTreatmentId;/);
+  test('R4.4 hasTreatmentForDay honors the persistent appt.linkedTreatmentId (R10: join-validated)', () => {
+    // R10 — the link is still honored, but join-validated: a LOADED link whose
+    // customerId ≠ the appt's current customer is invalid (the appt's customer was
+    // changed / a stale restore); an UNLOADED link is still trusted (R4 backstop).
+    expect(CARD).toMatch(/const linkValid = !!appt\.linkedTreatmentId/);
+    expect(CARD).toMatch(/const hasTreatmentForDay = !!latestTreatment \|\| linkValid;/);
   });
 
   test('R4.5 AdminDashboard onSaved stamps appt.linkedTreatmentId from the source appointment', () => {

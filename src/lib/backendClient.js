@@ -2489,6 +2489,45 @@ export async function updateBackendAppointment(appointmentId, data) {
         startTime: newStart, endTime: newEnd, cancelled: false, takenAt: now,
       });
     }
+
+    // appointment-loop R10 (2026-06-03) — reconcile THIS appt's slot docs to its
+    // CURRENT authoritative keys, closing the concurrent-same-appt-edit GHOST
+    // COLLISION (C1). The slot maintenance above is best-effort, post-commit, and
+    // computes keys from a pre-read snapshot — so two admins editing the SAME appt
+    // to DIFFERENT times at once each reserve their own (stale) new slot, leaving a
+    // PHANTOM slot at a time the appt no longer occupies. R8's orphan-heal can't
+    // free it (the owner appt is LIVE at the winning time) and the soft scan can't
+    // see it → a permanent INVISIBLE over-block of that 15-min slot. Re-read the
+    // appt for its authoritative keys, then release any slot STAMPED to this appt
+    // that is NOT a current key. Gated to slot-affecting edits (note-only edits
+    // stay cheap). Best-effort (a leftover phantom is the next reconcile's job).
+    if (keysChanged || becameCancelled || becameUncancelled) {
+      try {
+        const fresh = await getDoc(appointmentDoc(appointmentId));
+        if (fresh.exists()) {
+          const fa = fresh.data() || {};
+          const freshKeys = (fa.status === 'cancelled') ? [] : buildAppointmentGuardKeys({
+            date: normalizeApptDate(fa.date), doctorId: fa.doctorId, roomId: fa.roomId,
+            startTime: fa.startTime, endTime: fa.endTime,
+          });
+          const curSet = new Set(freshKeys);
+          const stamped = await getDocs(query(appointmentSlotsCol(), where('appointmentId', '==', appointmentId)));
+          const stale = stamped.docs.filter((d) => !curSet.has(d.id));
+          if (stale.length > 0) {
+            await runTransaction(db, async (tx) => {
+              const reads = await Promise.all(stale.map((d) => tx.get(d.ref)));
+              for (let i = 0; i < reads.length; i++) {
+                const sd = reads[i].exists() ? (reads[i].data() || {}) : null;
+                // release ONLY if still stamped to us AND still not a current key
+                if (sd && String(sd.appointmentId) === String(appointmentId) && !curSet.has(stale[i].id)) {
+                  tx.delete(stale[i].ref);
+                }
+              }
+            });
+          }
+        }
+      } catch { /* best-effort — a leftover phantom is the next reconcile's job */ }
+    }
   }
 
   return { success: true };

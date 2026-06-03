@@ -86,6 +86,10 @@ export default function AppointmentHubRowCard({
   // `hidden:true` short-circuits render (used on the ยกเลิก sub-tab).
   // null/undefined → row not rendered (back-compat for old callers).
   opdLifecycle = null,
+  // appointment-loop R10 (2026-06-03) — the loaded treatment that
+  // appt.linkedTreatmentId points at (or null/undefined when not loaded), for FK
+  // validation against the appt's CURRENT customer.
+  linkedTreatment = null,
 }) {
   const rawStatus = appt.status || 'pending';
   const latestTreatment = apptDateTreatments[0] || null;
@@ -97,7 +101,16 @@ export default function AppointmentHubRowCard({
   // the appointment STILL knows it has a treatment → the create-treatment blocks
   // hide + the edit block shows → no accidental 2nd treatment → no double auto-sale
   // = no double charge. Reproduced-class: AppointmentHubRowCard:500/544 create.
-  const hasTreatmentForDay = !!latestTreatment || !!appt.linkedTreatmentId;
+  // appointment-loop R10 — validate the persistent link. Trust appt.linkedTreatmentId
+  // ONLY when the linked treatment isn't loaded (out-of-window → R4 backstop, avoids
+  // re-introducing the double-charge R4 closed) OR it's loaded AND belongs to THIS
+  // appt's CURRENT customer. A LOADED link whose customerId differs (the appt's
+  // customer was changed after the link was stamped, or a stale restore) is INVALID
+  // → must NOT brick the appt (the create-treatment button reappears for the real
+  // customer; the edit button no longer opens a different customer's treatment).
+  const linkValid = !!appt.linkedTreatmentId
+    && (!linkedTreatment || String(linkedTreatment.customerId) === String(appt.customerId));
+  const hasTreatmentForDay = !!latestTreatment || linkValid;
   // V71 (2026-05-15) → V71.B-ter (2026-05-18) → V126 (2026-05-24 EOD+1) —
   // service-completed button gate.
   // V71.B-ter dropped TREATMENT-related gates (hasTreatmentForDay,

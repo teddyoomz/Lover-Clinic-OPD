@@ -350,6 +350,22 @@ export default function AppointmentHubView({
     return map;
   }, [allTreatments]);
 
+  // appointment-loop R10 (2026-06-03) — loaded treatments keyed by id, so the
+  // row card can VALIDATE a persistent appt.linkedTreatmentId against the
+  // treatment it points at. appt.linkedTreatmentId is a denormalized FK only
+  // invalidated at treatment-DELETE (R6); a CUSTOMER-CHANGE on the appointment
+  // (or a stale restore) leaves it pointing at a DIFFERENT customer's treatment →
+  // the gate would brick the new customer's appt forever. The card invalidates a
+  // loaded link whose customerId ≠ the appt's current customerId.
+  const treatmentsById = useMemo(() => {
+    const map = new Map();
+    for (const t of allTreatments) {
+      const id = String(t?.treatmentId || t?.id || '');
+      if (id) map.set(id, t);
+    }
+    return map;
+  }, [allTreatments]);
+
   // Per-tab filtered list (active tab)
   // V64-fix9 (2026-05-09): sort by date+startTime ASC via sortApptsByDateTimeAsc
   // — earliest queue first at top. User: "เรียงแบบลูกค้าที่จะต้องมาถึงก่อนอยู่บน".
@@ -736,6 +752,7 @@ export default function AppointmentHubView({
             summary={summaryMap.get(String(a.customerId))}
             apptDeposit={depositByApptId.get(String(a.id))}
             apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
+            linkedTreatment={a.linkedTreatmentId ? treatmentsById.get(String(a.linkedTreatmentId)) : null}  /* R10 — FK validation */
             isTodayTab={activeTab === 'today'}                             /* V71 NEW */
             now={new Date()}
             onConfirm={handleConfirmOptimistic}
