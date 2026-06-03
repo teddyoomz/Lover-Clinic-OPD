@@ -7361,6 +7361,14 @@ export async function updateStockBatchExpiry(p, opts = {}) {
     if (batch.status === 'cancelled') throw new Error(`Cannot edit expiry of cancelled batch ${batchId}`);
 
     const oldExpiresAt = batch.expiresAt ?? null;
+    // V159-fix (B1): idempotency — an unchanged expiry is a no-op (no batch
+    // write, no adjustment doc, no order sync). Makes a retry-after-partial-
+    // failure safe to re-run + avoids spurious "edit" audit docs that changed
+    // nothing. newExpiresAt is pre-normalized ('' / null → null) so the compare
+    // is apples-to-apples for the null/date cases.
+    if (newExpiresAt === oldExpiresAt) {
+      return { adjustmentId: null, batchId, oldExpiresAt, newExpiresAt, orderSynced: false, noChange: true };
+    }
     const branchId = p.branchId || batch.branchId;
     const sourceOrderId = batch.sourceOrderId || '';
     const orderProductId = batch.orderProductId || '';
@@ -7401,7 +7409,14 @@ export async function updateStockBatchExpiry(p, opts = {}) {
       const items = Array.isArray(order.items) ? order.items : [];
       let touched = false;
       const newItems = items.map((it) => {
-        if (it && it.orderProductId === orderProductId) { touched = true; return { ...it, expiresAt: newExpiresAt }; }
+        // V159-fix (B2): match the tier-appropriate line key. Branch order items
+        // carry `orderProductId`; CENTRAL order items carry `centralOrderProductId`
+        // (and the central batch.orderProductId === that value). The old
+        // branch-only `it.orderProductId === orderProductId` check made the
+        // central tier's order-line sync a silent no-op.
+        if (it && (it.orderProductId === orderProductId || it.centralOrderProductId === orderProductId)) {
+          touched = true; return { ...it, expiresAt: newExpiresAt };
+        }
         return it;
       });
       if (touched) { tx.update(orderRef, { items: newItems, updatedAt: now }); orderSynced = true; }

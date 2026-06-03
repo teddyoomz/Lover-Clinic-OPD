@@ -14,7 +14,7 @@ import { X, Loader2, SlidersHorizontal, AlertCircle, Plus, Minus, Package, Calen
 import {
   getStockAdjustment, getStockBatch, listStockLocations,
 } from '../../lib/scopedDataLayer.js';
-import { fmtSlashDateTime } from '../../lib/dateFormat.js';
+import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
 import { resolveBranchName } from '../../lib/BranchContext.jsx';
 
 const TYPE_INFO = {
@@ -138,7 +138,7 @@ export default function AdjustDetailModal({ adjustmentId, onClose, branches = []
                   {data.batchId ? `…${String(data.batchId).slice(-12)}` : '-'}
                   {batch?.expiresAt && (
                     <span className="ml-2 text-[var(--tx-muted)] font-sans text-[10px]">
-                      หมดอายุ {batch.expiresAt}
+                      หมดอายุ {fmtSlashDate(batch.expiresAt)}
                     </span>
                   )}
                 </div>
@@ -149,7 +149,7 @@ export default function AdjustDetailModal({ adjustmentId, onClose, branches = []
                 </div>
                 {type === 'expiry' ? (
                   <div className="text-sm text-amber-400 font-mono" data-testid="adjust-detail-qty">
-                    {data.oldExpiresAt || '—'} → {data.newExpiresAt || '—'}
+                    {fmtSlashDate(data.oldExpiresAt) || '—'} → {fmtSlashDate(data.newExpiresAt) || '—'}
                   </div>
                 ) : (
                   <div className={`text-sm font-mono font-bold ${type === 'add' ? 'text-emerald-400' : 'text-red-400'}`} data-testid="adjust-detail-qty">

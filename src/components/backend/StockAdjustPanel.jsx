@@ -28,7 +28,7 @@ import DateField from '../DateField.jsx'; // V159 — editable batch expiry
 // Transfer/Withdrawal pattern. User report: "รายการหน้าปรับสต็อคจะต้องกด
 // เข้าไปดูรายละเอียดในแต่ละรายการได้เหมือนหน้าอื่นๆ".
 import AdjustDetailModal from './AdjustDetailModal.jsx';
-import { fmtSlashDateTime } from '../../lib/dateFormat.js';
+import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
 import {
   getFirestore, collection, getDocs, query, where,
 } from 'firebase/firestore';
@@ -213,7 +213,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-bold">
                     {a.type === 'expiry' ? (
-                      <span className="text-amber-400 text-[10px]">{a.oldExpiresAt || '—'} → {a.newExpiresAt || '—'}</span>
+                      <span className="text-amber-400 text-[10px]">{fmtSlashDate(a.oldExpiresAt) || '—'} → {fmtSlashDate(a.newExpiresAt) || '—'}</span>
                     ) : (
                       <span className={a.type === 'add' ? 'text-emerald-400' : 'text-red-400'}>
                         {a.type === 'add' ? '+' : '−'}{fmtQty(a.qty)}
@@ -359,16 +359,21 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
     }
     setSaving(true); setError('');
     try {
-      // V159 — dual-path: qty adjust and/or expiry edit (either or both).
-      if (Number(qty) > 0) {
-        await createStockAdjustment(
-          { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
-          { user: actorUser }
-        );
-      }
+      // V159-fix (B1) — dual-path: do the IDEMPOTENT expiry edit FIRST, the
+      // NON-idempotent qty adjust LAST. If the qty step (last) fails, a retry
+      // re-runs the expiry edit (now a no-op via updateStockBatchExpiry's in-tx
+      // idempotency guard) + applies the qty EXACTLY ONCE — no double-apply /
+      // conservation violation. (Old order ran qty first → a transient failure
+      // between the two awaits + a natural retry double-applied the qty adjust.)
       if (expiryChanged) {
         await updateStockBatchExpiry(
           { batchId, newExpiresAt: _normExp(newExpiresAt) || null, note: note.trim(), branchId: BRANCH_ID },
+          { user: actorUser }
+        );
+      }
+      if (Number(qty) > 0) {
+        await createStockAdjustment(
+          { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
           { user: actorUser }
         );
       }
@@ -442,7 +447,7 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
               {batches.map(b => (
                 <option key={b.batchId} value={b.batchId}>
                   ...{b.batchId.slice(-8)} — คงเหลือ {fmtQty(b.qty.remaining)}/{fmtQty(b.qty.total)} {b.unit || ''}
-                  {b.expiresAt ? ` (หมด ${b.expiresAt})` : ''}
+                  {b.expiresAt ? ` (หมด ${fmtSlashDate(b.expiresAt)})` : ''}
                 </option>
               ))}
             </select>
@@ -465,7 +470,7 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
               </div>
               {expiryChanged && (
                 <div className="text-[9px] text-amber-400 mt-0.5" data-testid="adjust-expiry-changed">
-                  เดิม {selectedBatch.expiresAt || '— ไม่มี'} → จะบันทึกเป็น {newExpiresAt || '— ไม่มี'}
+                  เดิม {fmtSlashDate(selectedBatch.expiresAt) || '— ไม่มี'} → จะบันทึกเป็น {fmtSlashDate(newExpiresAt) || '— ไม่มี'}
                 </div>
               )}
             </div>

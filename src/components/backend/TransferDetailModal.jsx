@@ -7,7 +7,7 @@ import { X, Loader2, Truck, AlertCircle, ArrowRightLeft, Package } from 'lucide-
 import {
   getStockTransfer, getStockBatch, listStockLocations,
 } from '../../lib/scopedDataLayer.js';
-import { fmtSlashDateTime } from '../../lib/dateFormat.js';
+import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
 
 const STATUS_INFO = {
   0: { label: 'รอส่ง', color: 'amber' },
@@ -196,7 +196,7 @@ export default function TransferDetailModal({ transferId, onClose }) {
                           <td className="px-2 py-2 text-center text-[var(--tx-muted)]">{idx + 1}</td>
                           <td className="px-2 py-2 text-[var(--tx-primary)]">
                             <div>{name}</div>
-                            {src?.expiresAt && <div className="text-[9px] text-[var(--tx-muted)]">หมด {src.expiresAt}</div>}
+                            {src?.expiresAt && <div className="text-[9px] text-[var(--tx-muted)]">หมด {fmtSlashDate(src.expiresAt)}</div>}
                           </td>
                           <td className="px-2 py-2 font-mono text-[10px] text-sky-400" title={it.sourceBatchId}>
                             {it.sourceBatchId ? `…${it.sourceBatchId.slice(-8)}` : '-'}

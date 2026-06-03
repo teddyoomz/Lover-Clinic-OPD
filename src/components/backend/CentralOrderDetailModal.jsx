@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, AlertCircle, Package, ShoppingBag } from 'lucide-react';
 import { getCentralStockOrder } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
-import { fmtSlashDateTime } from '../../lib/dateFormat.js';
+import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
 
 const STATUS_INFO = {
   pending: { label: 'รอรับ', color: 'amber' },
@@ -172,7 +172,7 @@ export default function CentralOrderDetailModal({ orderId, onClose }) {
                           <td className="px-2 py-2 text-[var(--tx-muted)] text-[11px]">{it.unit || '-'}</td>
                           <td className="px-2 py-2 text-right font-mono text-[var(--tx-muted)]">฿{fmtQty(cost)}</td>
                           <td className="px-2 py-2 text-right font-mono text-orange-400">฿{fmtMoney(lineTotal)}</td>
-                          <td className="px-2 py-2 text-[var(--tx-muted)] text-[11px]">{it.expiresAt || '-'}</td>
+                          <td className="px-2 py-2 text-[var(--tx-muted)] text-[11px]">{fmtSlashDate(it.expiresAt) || '-'}</td>
                           <td className="px-2 py-2 text-center">
                             {received ? (
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-900/30 text-emerald-400 border border-emerald-800">รับแล้ว</span>

@@ -63,3 +63,38 @@ export function fmtSlashDateTime(input, { withTime = true } = {}) {
     return String(input);
   }
 }
+
+/**
+ * Format a date-ONLY value as numeric dd/mm/yyyy (no time, no Thai words).
+ *
+ * A pure "YYYY-MM-DD" (or an ISO-with-time whose first 10 chars are YYYY-MM-DD)
+ * is treated as a CALENDAR date with NO timezone math — "2026-09-30" stays
+ * "30/09/2026" on any host (mirrors fmtThaiDate's pure-date branch; avoids the
+ * off-by-one that `new Date("2026-09-30")` would cause on non-GMT+7 hosts).
+ * Other shapes (Date object, odd strings) fall back to Date parsing.
+ *
+ * locale 'ce' (default — backend/admin per rule 04) keeps the CE year;
+ * 'be' adds +543. Returns '' for empty input so the CALLER controls the empty
+ * placeholder (e.g. `fmtSlashDate(x) || '-'`). An already-formatted or
+ * unparseable string is returned unchanged (idempotent-safe).
+ *
+ * Examples: "2026-09-30" → "30/09/2026"; "2026-09-30T00:00:00Z" → "30/09/2026";
+ *           "30/09/2026" → "30/09/2026" (unchanged); "" → "".
+ */
+export function fmtSlashDate(input, { locale = 'ce' } = {}) {
+  if (!input && input !== 0) return '';
+  if (typeof input === 'string') {
+    const m = input.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const year = locale === 'be' ? Number(m[1]) + 543 : Number(m[1]);
+      return `${m[3]}/${m[2]}/${year}`;
+    }
+    if (!/\d{4}-\d{2}-\d{2}/.test(input)) return input; // already formatted / unknown → as-is
+  }
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d.getTime())) return String(input);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const year = locale === 'be' ? d.getFullYear() + 543 : d.getFullYear();
+  return `${dd}/${mm}/${year}`;
+}

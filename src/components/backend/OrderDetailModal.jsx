@@ -13,6 +13,7 @@ import {
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
 import { fmtMoney } from '../../lib/financeUtils.js';
+import { fmtSlashDate } from '../../lib/dateFormat.js';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 
 function currentAuditUser() {
@@ -285,7 +286,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
                                 [it.orderProductId]: { ...(prev[it.orderProductId] || {}), expiresAt: v },
                               }))} locale="ce" size="sm" />
                             ) : (
-                              <span className="text-[var(--tx-primary)]">{it.expiresAt || '-'}</span>
+                              <span className="text-[var(--tx-primary)]">{fmtSlashDate(it.expiresAt) || '-'}</span>
                             )}
                           </td>
                           <td className="px-2 py-2 text-center">

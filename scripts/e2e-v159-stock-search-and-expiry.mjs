@@ -60,6 +60,7 @@ const mvtsFor = async (batchId) => (await listStockMovements({ branchId: BR, inc
 async function main() {
   const adb = initAdmin(); const data = base(adb);
   const ELZ = `${NS}-ELZ`, SAL = `${NS}-SAL`, GZE = `${NS}-GZE`, BTD = `${NS}-BTD`, NOORD = `${NS}-NOORD`;
+  let cpoId = null; // V159-fix B2 — central order id (deleted in cleanup)
   try {
     const token = await adminAuth().createCustomToken(STAFF_UID, { admin: true });
     await signInWithCustomToken(clientAuth, token);
@@ -160,12 +161,15 @@ async function main() {
     check('P8.3 exactly 2 new audit docs from the 2 concurrent calls', adjN1 - adjN0 === 2, `delta=${adjN1 - adjN0}`);
     check('P8.4 qty intact after concurrent expiry edits', Number(bConc.qty?.remaining) === 10, `qty=${JSON.stringify(bConc.qty)}`);
 
-    // ─── P9 — idempotency (same value twice) ─────────────────────────────────
-    console.log('\nP9 — editing to the SAME value twice keeps the batch stable');
+    // ─── P9 — idempotency (same value twice) — V159-fix B1 in-tx guard ────────
+    console.log('\nP9 — same value twice → batch stable + 2nd is a guarded no-op (B1)');
     await updateStockBatchExpiry({ batchId: elzId, newExpiresAt: '2030-03-03', branchId: BR }, { user: USER });
-    await updateStockBatchExpiry({ batchId: elzId, newExpiresAt: '2030-03-03', branchId: BR }, { user: USER });
+    const adjN9 = (await expiryAdjusts(data, elzId)).length;
+    const r9b = await updateStockBatchExpiry({ batchId: elzId, newExpiresAt: '2030-03-03', branchId: BR }, { user: USER });
     const bIdem = await getBatch(data, elzId);
     check('P9.1 expiresAt stable at the repeated value', bIdem.expiresAt === '2030-03-03', `expiresAt=${bIdem.expiresAt}`);
+    check('P9.2 ★ 2nd identical edit is a no-op (noChange flag, B1 guard)', r9b.noChange === true, `r9b=${JSON.stringify(r9b)}`);
+    check('P9.3 ★ no NEW adjustment doc from the no-op repeat', (await expiryAdjusts(data, elzId)).length === adjN9, `delta=${(await expiryAdjusts(data, elzId)).length - adjN9}`);
 
     // ─── P10 — no-order batch (empty sourceOrderId) ──────────────────────────
     console.log('\nP10 — a batch with no source order edits fine (orderSynced=false, no throw)');
@@ -180,6 +184,39 @@ async function main() {
     check('P10.1 ★ no-order batch expiry updated', b10.expiresAt === '2027-01-01', `expiresAt=${b10.expiresAt}`);
     check('P10.2 orderSynced=false (no order line to sync)', r10.orderSynced === false, `orderSynced=${r10.orderSynced}`);
 
+    // ─── P11 — CENTRAL tier order-line sync (V159-fix B2) ─────────────────────
+    // Central order items key on `centralOrderProductId` (not `orderProductId`);
+    // the central batch.orderProductId === that value. Faithful to real
+    // createCentralStockOrder + receiveCentralStockOrder shapes. Pre-fix the sync
+    // matched only `it.orderProductId` → the central order-line sync was a SILENT
+    // no-op (this block would FAIL pre-fix: orderSynced=false, line not synced).
+    console.log('\nP11 — central-tier batch expiry edit syncs the central order line (B2)');
+    cpoId = `${NS}-CPO`;
+    const cLine0 = `${cpoId}-0`, cLine1 = `${cpoId}-1`;
+    const cBatchId = `${NS}-CBATCH`;
+    await data.collection('be_central_stock_orders').doc(cpoId).set({
+      orderId: cpoId, vendorName: 'V159 CENTRAL TEST', branchId: BR, centralWarehouseId: BR,
+      status: 'received', createdAt: new Date().toISOString(),
+      items: [
+        { centralOrderProductId: cLine0, productId: ELZ, productName: 'Elonza', qty: 4, cost: 150, expiresAt: '2026-05-05', receivedBatchId: cBatchId },
+        { centralOrderProductId: cLine1, productId: SAL, productName: 'Saline', qty: 2, cost: 5, expiresAt: '2026-06-06' },
+      ],
+    });
+    await data.collection('be_stock_batches').doc(cBatchId).set({
+      batchId: cBatchId, productId: ELZ, productName: 'Elonza', branchId: BR,
+      locationType: 'central', locationId: BR, orderProductId: cLine0, sourceOrderId: cpoId,
+      expiresAt: '2026-05-05', unit: 'ชิ้น', qty: { total: 4, remaining: 4 },
+      status: BATCH_STATUS.ACTIVE, receivedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    });
+    const r11 = await updateStockBatchExpiry({ batchId: cBatchId, newExpiresAt: '2028-08-08', branchId: BR }, { user: USER });
+    const cOrder = (await data.collection('be_central_stock_orders').doc(cpoId).get()).data();
+    const cSynced = (cOrder.items || []).find(it => it.centralOrderProductId === cLine0);
+    const cSibling = (cOrder.items || []).find(it => it.centralOrderProductId === cLine1);
+    check('P11.1 ★ central batch expiry updated', (await getBatch(data, cBatchId)).expiresAt === '2028-08-08', '');
+    check('P11.2 ★ central ORDER LINE synced (silent no-op pre-fix)', cSynced?.expiresAt === '2028-08-08', `line=${cSynced?.expiresAt}`);
+    check('P11.3 ★ result.orderSynced=true for central tier', r11.orderSynced === true, `orderSynced=${r11.orderSynced}`);
+    check('P11.4 central sibling line untouched', cSibling?.expiresAt === '2026-06-06', `sib=${cSibling?.expiresAt}`);
+
   } finally {
     console.log('\ncleanup (delete every TEST doc on the TEST branch)...');
     try {
@@ -189,6 +226,7 @@ async function main() {
         console.log(`  ${col}: deleted ${snap.size}`);
       }
       for (const pid of [ELZ, SAL, GZE, BTD, NOORD]) await data.collection('be_products').doc(pid).delete();
+      if (cpoId) await data.collection('be_central_stock_orders').doc(cpoId).delete().catch(() => {});
       const orphan = (await data.collection('be_stock_batches').where('branchId', '==', BR).get()).size;
       console.log(orphan === 0 ? '  zero orphan ✓' : `  ⚠ ${orphan} orphan batches`);
       await adminAuth().deleteUser(STAFF_UID).catch(() => {});

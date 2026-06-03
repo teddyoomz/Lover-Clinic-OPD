@@ -11,6 +11,7 @@ import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Wareh
 import { listenToStockBatchesByBranch, listStockLocations, listenToProducts } from '../../lib/scopedDataLayer.js';
 import { filterOutSkippedProducts } from '../../lib/skipStockFilter.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
+import { fmtSlashDate } from '../../lib/dateFormat.js';
 // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration script
 // rewrites all legacy `branchId='main'` batches to real branch IDs. Strict
 // branchId filter only.
@@ -447,7 +448,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                 const isExpanded = !!expandedRows[String(p.productId)];
                 return (
                   <Fragment key={p.productId}>
-                  <tr className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${b.expiresAt || '-'})`).join('\n')}`} data-testid="balance-row">
+                  <tr className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${fmtSlashDate(b.expiresAt) || '-'})`).join('\n')}`} data-testid="balance-row">
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       {p.productName || `Product ${p.productId}`}
                       {/* Phase 15.7 — ติดลบ badge has highest priority. Visually
@@ -493,7 +494,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                     <td className="px-3 py-2 text-left text-[var(--tx-primary)]" data-testid="td-category">{p.category || '-'}</td>
                     <td className="px-3 py-2 text-left text-[var(--tx-muted)]" data-testid="td-type">{p.productType || '-'}</td>
                     <td className={`px-3 py-2 text-center ${expiryClass}`}>
-                      {p.nextExpiry || '-'}
+                      {fmtSlashDate(p.nextExpiry) || '-'}
                       {days != null && <div className="text-[9px]">{days < 0 ? `หมดแล้ว ${-days}d` : `อีก ${days}d`}</div>}
                     </td>
                     <td className="px-3 py-2 text-center whitespace-nowrap">
@@ -552,7 +553,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                         <td className="px-3 py-1 text-center text-[10px] text-[var(--tx-muted)]">—</td>
                         <td className="px-3 py-1 text-center text-[10px] text-[var(--tx-muted)]">—</td>
                         <td className={`px-3 py-1 text-center text-[11px] ${lotExpClass}`}>
-                          {b.expiresAt || '-'}
+                          {fmtSlashDate(b.expiresAt) || '-'}
                           {lotDays != null && <div className="text-[8px]">{lotDays < 0 ? `หมดแล้ว ${-lotDays}d` : `อีก ${lotDays}d`}</div>}
                         </td>
                         <td className="px-3 py-1 text-center text-[10px] text-[var(--tx-muted)]">@฿{fmtQty(b.originalCost || 0)}/หน่วย</td>
