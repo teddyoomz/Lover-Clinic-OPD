@@ -1,30 +1,30 @@
 ---
-updated_at: "2026-06-03 EOD+4 — Staff-chatbox fresh-adversarial bug-hunt LOOP (V161) CONVERGED: 10 latent bugs fixed (AV180-188). DEPLOYED (Vercel LIVE; officeToPdf Cloud Run in-flight)."
-status: "Loop converged + deployed. Vercel prod LIVE (aliased). Staff-chat family 648/648 · full vitest 16127/16130 (3 PRE-EXISTING flakes, pass isolated) · build clean. H2+client L1-verified (Chrome MCP)."
+updated_at: "2026-06-03 EOD+5 — V161 Outstanding CLEARED (S1+S2 verified · Neuramis merge + junk course APPLIED on prod · handoff trim) + import-order creator display fix SHIPPED (local)."
+status: "All V161 Outstanding closed. New order-creator fix committed local (NOT deployed). Full vitest 16142/0 · build clean. Branch table+modal L1-verified on real authed app."
 branch: "master"
-last_commit: "bff0bde6 (docs: V161 v-log + active.md). This session: 6 staff-chat fixes 18ad69bb..a164b9fd + Rule M data cleanup 574ff2ad + docs bff0bde6."
-tests: "Full vitest 16127/16130 (this session). 3 reds = PRE-EXISTING flakes (bsa-task7 execSync git-grep matches a comment in TFP:913 · v85-glow cmd.exe grep PATH · genShortId birthday-paradox) — all pass isolated, none touch changed files. Staff-chat family 648/648. NOT re-run at EOD."
+last_commit: "491770f4 (fix: import-order creator display). This session: a586d073 (officeToPdf L2 e2e fix) · 3d4ff611 (Neuramis merge+junk course, Rule M applied prod) · 0c043010 (handoff trim) · 491770f4 (order creator)."
+tests: "Full vitest 16142/0 (ran this session, exit 0 — 3 prior flakes passed this run). Build clean. NOT re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "bff0bde6 — Vercel LIVE (aliased lover-clinic-app.vercel.app). officeToPdf Cloud Run (S2) DEPLOYED — revision office-to-pdf-00008-d2p serving 100% traffic (deployed EOD+4)."
-firestore_rules_version: "UNCHANGED. No firestore.rules change → no Probe-Deploy-Probe."
+production_commit: "Vercel prod = bff0bde6 (UNCHANGED this session — 4 commits ahead, NOT deployed). officeToPdf Cloud Run = rev 00008-d2p (S2 deployed last session, L2-verified this session)."
+firestore_rules_version: "UNCHANGED. No firestore.rules change this session."
 ---
 
-# Active — 2026-06-03 EOD+4 — Staff-chatbox bug-hunt loop CONVERGED + DEPLOYED (V161)
+# Active — 2026-06-03 EOD+5 — V161 Outstanding cleared + order-creator display fix
 
 ## State
-- master `bff0bde6`; prod `bff0bde6` Vercel LIVE (deployed this turn). officeToPdf Cloud Run S2 deploy in-flight (bv6qto72h).
-- Working tree clean. No firestore.rules change.
-- `/systematic-debugging` + `Explore` adversarial sweep → fix-loop until a fresh hunt found nothing (user's "ผมมีกลิ่น" smell).
+- master `491770f4`; prod Vercel `bff0bde6` (4 commits ahead, NOT deployed). Working tree clean.
+- officeToPdf Cloud Run rev `00008-d2p` live (S2/AV187 retry L2-verified on real prod, e2e 9/0).
+- No firestore.rules change → no Probe-Deploy-Probe.
 
-## What this session shipped (detail → checkpoint 2026-06-03-staffchat-bughunt-loop-v161.md)
-- **10 bugs, each failing-test-first→green+AVxx (AV180-188).** Hide-don't-unmount blast-radius: H2 draft/reply cross-branch leak (AV180) · H11 media not paused on hide (AV182) · open-gate. Send-path orphan D: mint-id→upload→create-doc leaks blobs → `deleteStaffChatAttachmentFolder` at both sites (AV188). Singletons: H4 conditional scroll (AV181) · mention-spaces (AV183) · cursor same-ms tie (AV184) · sticker object-URL once-per-item (AV185) · **S2** officeToPdf late-doc retry (AV187) · **S1** retention orphan-sweep pagination+mapBounded (AV186).
-- **Tests**: 10 dedicated files + 3 V21 fixups. Staff-chat family 648/648.
-- **Deployed**: Vercel (frontend + S1 cron) LIVE. officeToPdf Cloud Run (S2) in-flight via `gcloud run deploy --source functions/officeToPdf`.
+## What this session shipped (detail → checkpoint 2026-06-03-order-creator-and-outstanding.md)
+- **Cleared all V161 Outstanding**: S2 officeToPdf (e2e 9/0; fixed 3 latent script bugs — dotenv import, PROJECT_ID fallback, TDZ guard); S1 retention pagination (real-prod dry-run clean, 0 orphans); SESSION_HANDOFF trim 198.5→184KB; **Neuramis merge** `38764←9B1DEFF7` (20 CC preserved; course/batch/movement/order repointed; dup deleted) + **junk course "หฟแฟ" deleted** — Rule M two-phase APPLIED on prod (audit `…f5c9fd53`), idempotent, post-apply verified.
+- **NEW fix (order-creator display, V47-class)**: import-order surfaces never rendered `createdBy.userName` (29/29 orders have it). Added ผู้ทำรายการ to branch table+modal + central table; **fixed central modal latent bug** (read `order.user` → always '-', now `createdBy`). adjust/transfer correctly read `user` (untouched). L1-verified branch table ("วัน" ×20) + modal ("วัน") on real authed app. `tests/order-creator-display.test.js` 12/0.
 
 ## Next action
-- IDLE / await direction. Loop converged. BOTH deploys done (Vercel bff0bde6 LIVE · officeToPdf Cloud Run revision 00008-d2p LIVE).
-- **Pending verify (Rule Q-honest — S2 live-conversion L2 NOT yet run)**: S2 retry logic is unit-verified (R1-R4 drive the real `patchOfficeAttachment` against a scripted snap sequence) + revision 00008 healthy + the Eventarc→function→patch wiring was proven in V109/V110; but a real-prod conversion L2 of the NEW revision is still pending. BLOCKER: the canonical `scripts/e2e-staff-chat-office-preview.mjs` uses a stale `import 'dotenv/config'` (dotenv not installed; predates the repo's inline `loadEnvLocal()` pattern). To run: port it to `loadEnvLocal()` (mirror `scripts/e2e-stock-realtime-lot-clear.mjs:49`) OR `npm i -D dotenv` + `DOTENV_CONFIG_PATH=.env.local.prod node …`. S1 cron live but un-triggered (optional L2 / wait for 03:00 cron).
+- IDLE / await direction. User cleared the verification deep-dive ("กุตรวจให้หมดแล้ว พอ").
+- **Big queued task (user interrupted twice this session)**: appointment-system audit loop — V161-style looping adversarial bug-hunt over the appointment Core + cross-system wiring (TFP/sales/deposits/stock/calendar/customers), fix → re-hunt → until clean. Say "go" to start (recommend fresh session for full context).
 
 ## Outstanding user-triggered actions
-- Run the S2 live-conversion L2 once the e2e script is un-blocked (port to loadEnvLocal) + L1 hands-on of staff-chat fixes on prod.
-- Carryover (low-pri): audit-stock-flow S37 + V-log B1/B2 · be_products junk cleanup (V145) · Neuramis merge + junk course "หฟแฟ" · cross-collection reconciliation report · SESSION_HANDOFF head trim <150 KB.
+- **Deploy**: 4 commits ahead of Vercel prod (`a586d073..491770f4`) — `vercel --prod` when authorized (all frontend/scripts, no rules → no Probe-Deploy-Probe).
+- Dismissed by user this session: audit-stock-flow S37, cross-collection reconciliation report, V-log B1/B2 ("ไม่ทำ/ไม่สำคัญ").
+- L1 hands-on of staff-chat (V161) on prod (user's, optional).
