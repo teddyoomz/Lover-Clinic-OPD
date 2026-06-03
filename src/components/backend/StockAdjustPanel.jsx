@@ -6,10 +6,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Package, Plus, Minus, X, Loader2, AlertCircle, CheckCircle2,
-  SlidersHorizontal, ArrowLeft, Search,
+  SlidersHorizontal, ArrowLeft, Search, Calendar,
 } from 'lucide-react';
 import {
-  listStockBatches, createStockAdjustment,
+  listStockBatches, createStockAdjustment, updateStockBatchExpiry,
   listStockMovements, getStockBatch,
   // Phase 14.10-tris (2026-04-26) — be_products canonical
   listProducts,
@@ -23,6 +23,7 @@ import { usePagination } from '../../lib/usePagination.js';
 // Phase 15.6 / V35 (2026-04-28) — searchable product picker (Rule C1).
 // Tier-scoped: caller passes pre-filtered availableProducts as options.
 import ProductSelectField from './ProductSelectField.jsx';
+import DateField from '../DateField.jsx'; // V159 — editable batch expiry
 // Phase 15.4 post-deploy bug 3 (2026-04-28) — Adjust detail modal mirroring
 // Transfer/Withdrawal pattern. User report: "รายการหน้าปรับสต็อคจะต้องกด
 // เข้าไปดูรายละเอียดในแต่ละรายการได้เหมือนหน้าอื่นๆ".
@@ -253,6 +254,7 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
   const [type, setType] = useState('reduce');
   const [qty, setQty] = useState('');
   const [note, setNote] = useState('');
+  const [newExpiresAt, setNewExpiresAt] = useState(''); // V159 — editable per-batch expiry
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -320,7 +322,18 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
 
   const selectedBatch = useMemo(() => batches.find(b => b.batchId === batchId), [batches, batchId]);
   const actorUser = resolveActorUser(actorId, sellers);
-  const canSave = productId && batchId && Number(qty) > 0 && type && !!actorUser;
+
+  // V159 — re-init the editable expiry whenever the selected batch (or its
+  // stored expiry, e.g. after a save reload) changes.
+  useEffect(() => {
+    setNewExpiresAt(selectedBatch?.expiresAt || '');
+  }, [selectedBatch?.batchId, selectedBatch?.expiresAt]);
+
+  // V159 — expiry edit is independent of the qty adjust; normalize '' / null
+  // so an unchanged date never counts as an edit.
+  const _normExp = (v) => (v === '' || v == null) ? '' : String(v);
+  const expiryChanged = !!selectedBatch && _normExp(newExpiresAt) !== _normExp(selectedBatch.expiresAt);
+  const canSave = productId && batchId && !!actorUser && ((Number(qty) > 0 && type) || expiryChanged);
 
   const onPickProduct = (pid) => {
     const p = products.find(x => String(x.id) === String(pid));
@@ -332,15 +345,25 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
   const handleSave = async () => {
     if (!canSave) {
       if (!actorUser) setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก');
+      else if (!(Number(qty) > 0) && !expiryChanged) setError('กรอกจำนวนที่จะปรับ หรือแก้วันหมดอายุ');
       else setError('กรุณากรอกข้อมูลให้ครบ');
       return;
     }
     setSaving(true); setError('');
     try {
-      await createStockAdjustment(
-        { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
-        { user: actorUser }
-      );
+      // V159 — dual-path: qty adjust and/or expiry edit (either or both).
+      if (Number(qty) > 0) {
+        await createStockAdjustment(
+          { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
+          { user: actorUser }
+        );
+      }
+      if (expiryChanged) {
+        await updateStockBatchExpiry(
+          { batchId, newExpiresAt: _normExp(newExpiresAt) || null, note: note.trim(), branchId: BRANCH_ID },
+          { user: actorUser }
+        );
+      }
       setSuccess(true);
       setTimeout(onSaved, 600);
     } catch (e) {
@@ -427,7 +450,17 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
             <div>คงเหลือ <div className="text-sm font-mono text-[var(--tx-heading)] font-bold">{fmtQty(selectedBatch.qty.remaining)} {selectedBatch.unit}</div></div>
             <div>ทั้งหมด <div className="text-sm font-mono text-[var(--tx-primary)]">{fmtQty(selectedBatch.qty.total)} {selectedBatch.unit}</div></div>
             <div>ต้นทุน/หน่วย <div className="text-sm font-mono text-orange-400">฿{fmtQty(selectedBatch.originalCost)}</div></div>
-            <div>หมดอายุ <div className="text-sm text-[var(--tx-primary)]">{selectedBatch.expiresAt || '-'}</div></div>
+            <div>
+              หมดอายุ
+              <div className="mt-1">
+                <DateField value={newExpiresAt} onChange={setNewExpiresAt} locale="ce" size="sm" />
+              </div>
+              {expiryChanged && (
+                <div className="text-[9px] text-amber-400 mt-0.5" data-testid="adjust-expiry-changed">
+                  เดิม {selectedBatch.expiresAt || '— ไม่มี'} → จะบันทึกเป็น {newExpiresAt || '— ไม่มี'}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -477,7 +510,7 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
         />
 
         <div className="p-3 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[10px] text-[var(--tx-muted)]">
-          ℹ การปรับจะเขียน movement log (type=3 เพิ่ม / type=4 ลด) ไม่สามารถแก้ไขหรือลบทีหลังได้ — ถ้าผิดให้สร้าง adjustment ใหม่ในทิศทางตรงกันข้าม
+          ℹ ปรับจำนวนเขียน movement log (type=3 เพิ่ม / type=4 ลด) แก้ทีหลังไม่ได้ — ถ้าผิดให้สร้าง adjustment ใหม่ในทิศตรงข้าม · การแก้วันหมดอายุบันทึก audit (ไม่กระทบยอด) และมีผลกับ FEFO ทันที
         </div>
       </div>
     </div>
