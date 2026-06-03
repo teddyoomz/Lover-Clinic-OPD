@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff-Chat Draft Persist + Stock Filter Relabel — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    /* bubble replica for mockup */
+    .bubble { width:54px; height:54px; border-radius:50%; background:#e11d48; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 6px 18px rgba(225,29,72,.5); position:relative; }
+    .bubble .badge { position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:#fff; color:#e11d48; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+    .bubble .draftbadge { position:absolute; top:-4px; left:-4px; width:21px; height:21px; border-radius:50%; background:#18181b; border:2px solid #3f3f46; display:flex; align-items:center; justify-content:center; font-size:11px; }
+  </style>
+</head>
+<body>
+
+<h1>Staff-Chat Draft Persist on Minimize + Stock Filter Relabel — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute inline (executing-plans). Tightly-coupled small UI work; subagents thrash on this codebase baseline (V81/V86/V159 lesson). Steps use checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (A) Preserve in-progress staff-chat work (text + reply + staged image/file uploads) when the chat is minimized with "–", clearing only on Frontend↔Backend switch / reload / tab-close. (A-bis) Show a distinct draft indicator on the minimized bubble. (B) Relabel + reorder the stock balance หมด/ติดลบ filters.</p>
+  <p><strong>Architecture:</strong> Hide-don't-unmount — the chat Panel stays mounted (<code>display:none</code>) on minimize so the Composer's local state never dies. Composer reports a single <code>hasDraft</code> boolean up via <code>onDraftChange</code> (heavy draft stays in the composer); the Widget passes it to the Bubble, which shows a dark-zinc ✏️ badge top-left (distinct from the white/red unread count top-right). Feature B = pure JSX relabel + block swap. All changes additive.</p>
+  <p><strong>Tech Stack:</strong> React 19, Tailwind, lucide-react, Vitest + RTL. Spec: <code>docs/superpowers/specs/2026-06-03-staffchat-draft-persist-and-stock-filter-relabel-design.html</code>.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Minimized bubble — draft (top-left, dark-zinc ✏️) vs unread (top-right, white/red)</div>
+  <div style="display:flex; gap:44px; align-items:flex-end; background:#070707; padding:20px 26px; border-radius:10px;">
+    <div style="text-align:center"><div class="bubble">💬</div><div style="font-size:10px;color:#888;margin-top:7px">idle</div></div>
+    <div style="text-align:center"><div class="bubble">💬<span class="badge">2</span></div><div style="font-size:10px;color:#888;margin-top:7px">2 unread</div></div>
+    <div style="text-align:center"><div class="bubble"><span class="draftbadge">✏️</span>💬</div><div style="font-size:10px;color:#888;margin-top:7px">draft</div></div>
+    <div style="text-align:center"><div class="bubble"><span class="draftbadge">✏️</span>💬<span class="badge">2</span></div><div style="font-size:10px;color:#888;margin-top:7px">unread + draft</div></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Stock filter bar — BEFORE → AFTER (last 2 chips)</div>
+  <p style="font-family:monospace;font-size:13px;margin:0.2em 0">BEFORE: …เกินสต็อก · <b>ติดลบ (ต้องเติมสต็อค)</b> · <b>หมด (คงเหลือ 0)</b></p>
+  <p style="font-family:monospace;font-size:13px;margin:0.2em 0">AFTER:&nbsp; …เกินสต็อก · <b>หมด</b> · <b>ติดลบ</b></p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature A + A-bis — draft signal + lifecycle</div>
+  <table>
+    <tr><th>Event</th><th>What happens</th></tr>
+    <tr><td>type / stage file / set reply</td><td>Composer local state changes → <code>useEffect</code> calls <code>onDraftChange(true)</code> → Widget <code>setHasDraft(true)</code>.</td></tr>
+    <tr><td>press – (minimize)</td><td><code>chat.minimize()</code> → <code>chat.minimized=true</code>. Widget keeps <code>&lt;StaffChatPanel hidden&gt;</code> mounted (<code>display:none</code>) → Composer NOT unmounted → text/files/URLs alive. Bubble renders with <code>hasDraft</code> → dark-zinc ✏️ top-left (+ unread top-right if any).</td></tr>
+    <tr><td>press bubble (expand)</td><td><code>chat.expand()</code> → <code>minimized=false</code> → Panel un-hides → everything intact.</td></tr>
+    <tr><td>send / remove all</td><td>Composer state empties → <code>onDraftChange(false)</code> → draft badge hides.</td></tr>
+    <tr><td>Frontend↔Backend / reload / tab-close</td><td>Widget instance unmounts / page unloads → React state gone (draft cleared — acceptable).</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature B — filter checkbox order + labels (predicates unchanged)</div>
+  <table>
+    <tr><th>data-testid</th><th>Before label / pos</th><th>After label / pos</th><th>Predicate (unchanged)</th></tr>
+    <tr><td>filter-out-of-stock</td><td>หมด (คงเหลือ 0) · 5th</td><td><b>หมด</b> · 4th</td><td><code>totalRemaining === 0</code></td></tr>
+    <tr><td>filter-negative-stock</td><td>ติดลบ (ต้องเติมสต็อค) · 4th</td><td><b>ติดลบ</b> · 5th</td><td><code>totalRemaining &lt; 0</code></td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/components/staffchat/StaffChatWidget.jsx</code></td><td>Always render Panel (<code>hidden={chat.minimized}</code>); render Bubble additionally when minimized; hold <code>hasDraft</code> state; pass <code>onDraftChange</code> to Composer + <code>hasDraft</code> to Bubble.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatPanel.jsx</code></td><td>Accept <code>hidden</code> prop → inline <code>display:none</code>; body-scroll-lock effect keyed on <code>hidden</code>.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatComposer.jsx</code></td><td>Add <code>onDraftChange</code> prop + one <code>useEffect</code> reporting <code>text||files||reply</code>.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatBubble.jsx</code></td><td>Add <code>hasDraft</code> prop → dark-zinc ✏️ badge top-left.</td></tr>
+  <tr><td><code>src/components/backend/StockBalancePanel.jsx</code></td><td>Swap the 2 filter <code>&lt;label&gt;</code> blocks + shorten labels.</td></tr>
+  <tr><td><code>tests/staffchat-draft-persist-minimize.test.jsx</code></td><td>NEW — RTL flow-sim + source-grep (Feature A + A-bis).</td></tr>
+  <tr><td><code>tests/stock-balance-filter-relabel.test.js</code></td><td>NEW — source-grep labels + order (Feature B).</td></tr>
+  <tr><td><code>tests/v73-staff-chat-widget-rtl.test.jsx</code></td><td>V21 fixup — W1.1 (panel hidden, not absent).</td></tr>
+  <tr><td><code>tests/v144-realtime-lot-clear.test.js</code></td><td>V21 fixup — F1.5 (label "หมด").</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Feature A core — hide-don't-unmount (Panel + Widget)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatPanel.jsx</code>, <code>src/components/staffchat/StaffChatWidget.jsx</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>StaffChatPanel.jsx</code> — add <code>hidden</code> prop, inline <code>display:none</code>, and key the body-scroll-lock on it.</div>
+<pre><code>// signature
+export function StaffChatPanel({ hidden = false, branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
+
+// body-scroll-lock effect (replace the existing []-deps effect)
+  useEffect(() =&gt; {
+    if (hidden) { document.documentElement.removeAttribute('data-staff-chat-open'); return; }
+    document.documentElement.setAttribute('data-staff-chat-open', 'true');
+    return () =&gt; { document.documentElement.removeAttribute('data-staff-chat-open'); };
+  }, [hidden]);
+
+// root div — add display:none to the inline style when hidden (beats the `flex` class reliably)
+    style={{ touchAction: 'pan-y', ...desktopSize, ...(hidden ? { display: 'none' } : {}) }}</code></pre>
+  <p>Keep <code>data-testid="staff-chat-panel"</code> on the root (it stays in the DOM, just hidden).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>StaffChatWidget.jsx</code> — import <code>useState</code>; always render the Panel (hidden when minimized) + render the Bubble when minimized.</div>
+<pre><code>import React, { useState, useEffect } from 'react';
+// ...
+export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchName }) {
+  const { branchId: selectedBranchId, branches } = useSelectedBranch();
+  const chat = useStaffChat();
+  const [hasDraft, setHasDraft] = useState(false);
+  // ...existing effect + gates unchanged...
+
+  return (
+    &lt;&gt;
+      {/* Panel ALWAYS mounted (hidden when minimized) so the Composer's draft
+          (text + staged files + object-URLs) survives a minimize→reopen. */}
+      &lt;StaffChatPanel
+        hidden={chat.minimized}
+        branchName={resolvedBranchName}
+        onMinimize={chat.minimize}
+        onEditName={chat.openNameEdit}
+        displayName={chat.displayName}
+        error={chat.error}
+        loading={chat.loading}
+        canMinimize={chat.canMinimize}
+      &gt;
+        &lt;StaffChatMessageList
+          messages={chat.messages}
+          ownDeviceId={chat.deviceId}
+          onReply={handleReply}
+          onDelete={chat.deleteMessage}
+          onScrolledToBottom={chat.markScrolledToBottom}
+          unreadCount={chat.unreadCount}
+        /&gt;
+        &lt;StaffChatComposer
+          onSend={chat.send}
+          recentMentionCandidates={chat.recentMentionCandidates}
+          replyingTo={chat.replyingTo}
+          onClearReply={() =&gt; chat.setReplyingTo?.(null)}
+          onPrepareAndUpload={chat.prepareAndUpload}
+          onSendSticker={chat.sendSticker}
+          onDraftChange={setHasDraft}
+        /&gt;
+      &lt;/StaffChatPanel&gt;
+      {chat.minimized &amp;&amp; (
+        &lt;StaffChatBubble unreadCount={chat.unreadCount} hasDraft={hasDraft} onClick={chat.expand} /&gt;
+      )}
+      {chat.namePickerOpen &amp;&amp; (
+        /* ...existing StaffChatNamePicker block UNCHANGED... */
+      )}
+    &lt;/&gt;
+  );
+}</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Build check — <code>npm run build</code> → clean (catches the import/JSX shape).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Commit.</div>
+<pre><code class="language-bash">git add src/components/staffchat/StaffChatPanel.jsx src/components/staffchat/StaffChatWidget.jsx
+git commit -m "feat(staffchat): hide-don't-unmount panel on minimize so composer draft survives"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Feature A-bis — draft signal + bubble indicator (Composer + Bubble)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatComposer.jsx</code>, <code>src/components/staffchat/StaffChatBubble.jsx</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>StaffChatComposer.jsx</code> — add <code>onDraftChange</code> prop + report effect (additive; pipeline untouched). <code>useEffect</code> is already imported.</div>
+<pre><code>export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onPrepareAndUpload, onSendSticker, onDraftChange }) {
+  // ...existing state...
+
+  // Report draft presence up so the minimized bubble can show an indicator.
+  // hasDraft = unsent text OR ≥1 staged file OR an active reply. setHasDraft
+  // from the parent is stable; same-value calls no-op (React bails). The heavy
+  // draft (text/pendingFiles/File-objects) stays here — only a boolean lifts.
+  useEffect(() =&gt; {
+    onDraftChange?.(text.trim() !== '' || pendingFiles.length &gt; 0 || !!replyingTo);
+  }, [text, pendingFiles, replyingTo, onDraftChange]);</code></pre>
+  <p>Place this effect right after the existing <code>pendingRef</code> revoke effect (lines ~57-60).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>StaffChatBubble.jsx</code> — add <code>hasDraft</code> prop + the dark-zinc ✏️ badge (top-left, mirrors the unread badge).</div>
+<pre><code>export function StaffChatBubble({ unreadCount, hasDraft, onClick }) {
+  const displayCount = unreadCount &gt; 99 ? '99+' : String(unreadCount);
+  return (
+    &lt;button
+      type="button"
+      onClick={onClick}
+      data-testid="staff-chat-bubble"
+      className="fixed bottom-[88px] right-3 md:bottom-4 md:right-4 w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-xl hover:shadow-2xl transition-all hover:scale-105 flex items-center justify-center z-[9000]"
+      aria-label="เปิดแชทในสาขา"
+    &gt;
+      &lt;MessageCircle size={24} /&gt;
+      {/* Draft indicator — top-LEFT, dark zinc + ✏️. Distinct color + side from
+          the unread badge (white/red, top-right) so the two never confuse. */}
+      {hasDraft &amp;&amp; (
+        &lt;span
+          data-testid="staff-chat-bubble-draft"
+          className="absolute -top-1.5 -left-1.5 w-[21px] h-[21px] rounded-full bg-zinc-900 border-2 border-zinc-600 text-[11px] flex items-center justify-center"
+          aria-label="มีข้อความหรือไฟล์ที่ยังไม่ได้ส่ง"
+        &gt;
+          ✏️
+        &lt;/span&gt;
+      )}
+      {unreadCount &gt; 0 &amp;&amp; (
+        &lt;span
+          data-testid="staff-chat-bubble-unread"
+          className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-white text-rose-700 text-[10px] font-black flex items-center justify-center border-2 border-rose-600"
+        &gt;
+          {displayCount}
+        &lt;/span&gt;
+      )}
+    &lt;/button&gt;
+  );
+}</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Build check — <code>npm run build</code> → clean.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Commit.</div>
+<pre><code class="language-bash">git add src/components/staffchat/StaffChatComposer.jsx src/components/staffchat/StaffChatBubble.jsx
+git commit -m "feat(staffchat): draft indicator on minimized bubble (dark-zinc pencil, top-left)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Staff-chat test bank (RTL flow-simulate + source-grep) + V21 fixup</h3>
+  <p><strong>Files:</strong> Create <code>tests/staffchat-draft-persist-minimize.test.jsx</code>; Modify <code>tests/v73-staff-chat-widget-rtl.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Write <code>tests/staffchat-draft-persist-minimize.test.jsx</code>. Mock <code>useStaffChat</code> to control <code>minimized</code>; render the REAL Widget + REAL Composer/Bubble; drive the user flow.</div>
+<pre><code class="language-jsx">import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import fs from 'node:fs';
+import path from 'node:path';
+import { StaffChatWidget } from '../src/components/staffchat/StaffChatWidget.jsx';
+
+vi.mock('../src/lib/BranchContext.jsx', () =&gt; ({
+  useSelectedBranch: () =&gt; ({ branchId: 'BR-1', branches: [{ id: 'BR-1', name: 'นครราชสีมา' }] }),
+}));
+import { useStaffChat } from '../src/hooks/useStaffChat.js';
+vi.mock('../src/hooks/useStaffChat.js', () =&gt; ({ useStaffChat: vi.fn() }));
+
+function mockChat(over = {}) {
+  return {
+    messages: [], minimized: false, unreadCount: 0, deviceId: 'd1', error: null, loading: false,
+    namePickerOpen: false, setNamePickerOpen: vi.fn(),
+    send: vi.fn(), confirmName: vi.fn(), expand: vi.fn(), minimize: vi.fn(),
+    recentMentionCandidates: [], replyingTo: null, setReplyingTo: vi.fn(),
+    uploadImage: vi.fn(), prepareAndUpload: vi.fn(),
+    displayName: 'เอ', nameEditMode: false, openNameEdit: vi.fn(), closeNameEdit: vi.fn(), color: '#e11d48',
+    canMinimize: true, markScrolledToBottom: vi.fn(), role: null,
+    deleteMessage: vi.fn(), sendSticker: vi.fn(),
+    ...over,
+  };
+}
+beforeEach(() =&gt; useStaffChat.mockReturnValue(mockChat()));
+
+describe('F1 — draft survives minimize (hide-don't-unmount)', () =&gt; {
+  it('F1.1 panel STAYS mounted (hidden) when minimized; bubble shown', () =&gt; {
+    const { rerender } = render(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.getByTestId('staff-chat-panel')).toBeInTheDocument();
+    useStaffChat.mockReturnValue(mockChat({ minimized: true }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    const panel = screen.getByTestId('staff-chat-panel');     // still in DOM
+    expect(panel).toBeInTheDocument();
+    expect(panel.style.display).toBe('none');                  // just hidden
+    expect(screen.getByTestId('staff-chat-bubble')).toBeInTheDocument();
+  });
+
+  it('F1.2 composer text persists across minimize → reopen', () =&gt; {
+    const { rerender } = render(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    fireEvent.change(screen.getByTestId('staff-chat-composer-input'), { target: { value: 'รับทราบ กำลังจัด' } });
+    expect(screen.getByTestId('staff-chat-composer-input').value).toBe('รับทราบ กำลังจัด');
+    // minimize → panel hidden, composer NOT unmounted
+    useStaffChat.mockReturnValue(mockChat({ minimized: true }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.getByTestId('staff-chat-composer-input').value).toBe('รับทราบ กำลังจัด');
+    // reopen → still there
+    useStaffChat.mockReturnValue(mockChat({ minimized: false }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.getByTestId('staff-chat-composer-input').value).toBe('รับทราบ กำลังจัด');
+  });
+});
+
+describe('F2 — draft indicator on bubble', () =&gt; {
+  it('F2.1 typing → minimize → bubble shows draft badge (distinct from unread)', () =&gt; {
+    const { rerender } = render(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    fireEvent.change(screen.getByTestId('staff-chat-composer-input'), { target: { value: 'hi' } });
+    useStaffChat.mockReturnValue(mockChat({ minimized: true, unreadCount: 2 }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.getByTestId('staff-chat-bubble-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('staff-chat-bubble-unread')).toBeInTheDocument(); // both, independent
+  });
+
+  it('F2.2 no draft → no draft badge', () =&gt; {
+    useStaffChat.mockReturnValue(mockChat({ minimized: true }));
+    render(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.queryByTestId('staff-chat-bubble-draft')).toBeNull();
+  });
+
+  it('F2.3 clearing text → draft badge hides', () =&gt; {
+    const { rerender } = render(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    fireEvent.change(screen.getByTestId('staff-chat-composer-input'), { target: { value: 'hi' } });
+    useStaffChat.mockReturnValue(mockChat({ minimized: true }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.getByTestId('staff-chat-bubble-draft')).toBeInTheDocument();
+    // reopen + clear the text
+    useStaffChat.mockReturnValue(mockChat({ minimized: false }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    fireEvent.change(screen.getByTestId('staff-chat-composer-input'), { target: { value: '' } });
+    useStaffChat.mockReturnValue(mockChat({ minimized: true }));
+    rerender(&lt;StaffChatWidget user={{ uid: 'u' }} needsPublicAuth={false} /&gt;);
+    expect(screen.queryByTestId('staff-chat-bubble-draft')).toBeNull();
+  });
+});
+
+describe('SG — source-grep regression locks', () =&gt; {
+  const read = (p) =&gt; fs.readFileSync(path.resolve(__dirname, p), 'utf8');
+  const W = read('../src/components/staffchat/StaffChatWidget.jsx');
+  const P = read('../src/components/staffchat/StaffChatPanel.jsx');
+  const C = read('../src/components/staffchat/StaffChatComposer.jsx');
+  const B = read('../src/components/staffchat/StaffChatBubble.jsx');
+
+  it('SG1 Widget always renders Panel with hidden prop (no minimized-ternary swap)', () =&gt; {
+    expect(W).toMatch(/&lt;StaffChatPanel[\s\S]*?hidden={chat\.minimized}/);
+    expect(W).not.toMatch(/chat\.minimized\s*\?\s*\(?\s*&lt;StaffChatBubble/); // not the old swap
+  });
+  it('SG2 Widget passes onDraftChange + hasDraft', () =&gt; {
+    expect(W).toMatch(/onDraftChange={setHasDraft}/);
+    expect(W).toMatch(/&lt;StaffChatBubble[\s\S]*?hasDraft={hasDraft}/);
+  });
+  it('SG3 Panel hides via inline display:none keyed on hidden', () =&gt; {
+    expect(P).toMatch(/hidden\s*\?\s*{\s*display:\s*'none'\s*}/);
+    expect(P).toMatch(/if\s*\(hidden\)\s*{\s*document\.documentElement\.removeAttribute/);
+  });
+  it('SG4 Composer reports draft via onDraftChange', () =&gt; {
+    expect(C).toMatch(/onDraftChange\?\.\(text\.trim\(\)\s*!==\s*''\s*\|\|\s*pendingFiles\.length\s*&gt;\s*0\s*\|\|\s*!!replyingTo\)/);
+  });
+  it('SG5 Bubble has the dark-zinc draft badge', () =&gt; {
+    expect(B).toMatch(/data-testid="staff-chat-bubble-draft"/);
+    expect(B).toMatch(/bg-zinc-900/);
+    expect(B).toMatch(/-left-1\.5/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Run the new file → all green.</div>
+  <p>Run: <code>npm test -- --run tests/staffchat-draft-persist-minimize.test.jsx</code> → Expected: PASS.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> V21 fixup — <code>tests/v73-staff-chat-widget-rtl.test.jsx</code> W1.1. The old assertion <code>expect(screen.queryByTestId('staff-chat-panel')).toBeNull();</code> is now wrong (panel is present-but-hidden). Replace that one assertion:</div>
+<pre><code class="language-jsx">// W1.1 — pre-2026-06-03 the panel UNMOUNTED on minimize; now it stays mounted
+// (display:none) so the composer draft survives. Assert hidden, not absent.
+const panel = screen.getByTestId('staff-chat-panel');
+expect(panel).toBeInTheDocument();
+expect(panel.style.display).toBe('none');
+// bubble still rendered when minimized:
+expect(screen.getByTestId('staff-chat-bubble')).toBeInTheDocument();</code></pre>
+  <p>Read the file first to match W1.1's exact surrounding lines; change ONLY the panel-absent assertion. Leave W1.2/W1.3/W2.x untouched.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Run the fixed file → green.</div>
+  <p>Run: <code>npm test -- --run tests/v73-staff-chat-widget-rtl.test.jsx</code> → Expected: PASS.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 5:</strong> Commit.</div>
+<pre><code class="language-bash">git add tests/staffchat-draft-persist-minimize.test.jsx tests/v73-staff-chat-widget-rtl.test.jsx
+git commit -m "test(staffchat): draft-persist + bubble-indicator RTL/source-grep + W1.1 V21 fixup"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Feature B — stock filter relabel + reorder + test + V21 fixup</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/StockBalancePanel.jsx</code>; Create <code>tests/stock-balance-filter-relabel.test.js</code>; Modify <code>tests/v144-realtime-lot-clear.test.js</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>StockBalancePanel.jsx</code> (~lines 381-395) — replace the ติดลบ-then-หมด pair with หมด-then-ติดลบ + shortened labels.</div>
+<pre><code>          {/* V144 out-of-stock filter (totalRemaining === 0).
+              2026-06-03: moved BEFORE ติดลบ + label shortened to "หมด". */}
+          &lt;label className="flex items-center gap-2 text-[11px] text-red-300 cursor-pointer" data-testid="filter-out-of-stock"&gt;
+            &lt;input type="checkbox" checked={showOutOfStockOnly} onChange={e =&gt; setShowOutOfStockOnly(e.target.checked)} className="accent-red-500" /&gt;
+            หมด
+          &lt;/label&gt;
+          {/* Phase 15.7 negative-stock filter (totalRemaining &lt; 0).
+              2026-06-03: label shortened to "ติดลบ". */}
+          &lt;label className="flex items-center gap-2 text-[11px] text-rose-300 cursor-pointer" data-testid="filter-negative-stock"&gt;
+            &lt;input type="checkbox" checked={showNegativeStockOnly} onChange={e =&gt; setShowNegativeStockOnly(e.target.checked)} className="accent-rose-500" /&gt;
+            ติดลบ
+          &lt;/label&gt;</code></pre>
+  <p>Do NOT touch the row-level badges (~lines 454-462) or any filter state/predicate.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Write <code>tests/stock-balance-filter-relabel.test.js</code> (source-grep on the panel source).</div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+const SRC = fs.readFileSync(path.resolve(__dirname, '../src/components/backend/StockBalancePanel.jsx'), 'utf8');
+
+describe('stock balance filter relabel + reorder (2026-06-03)', () =&gt; {
+  const outBlock = SRC.split('data-testid="filter-out-of-stock"')[1]?.slice(0, 260) || '';
+  const negBlock = SRC.split('data-testid="filter-negative-stock"')[1]?.slice(0, 260) || '';
+
+  it('R1 หมด label has no parenthetical', () =&gt; {
+    expect(outBlock).toMatch(/หมด\s*&lt;\/label&gt;/);
+    expect(outBlock).not.toMatch(/หมด \(คงเหลือ 0\)/);
+  });
+  it('R2 ติดลบ label has no parenthetical', () =&gt; {
+    expect(negBlock).toMatch(/ติดลบ\s*&lt;\/label&gt;/);
+    expect(negBlock).not.toMatch(/ติดลบ \(ต้องเติมสต็อค\)/);
+  });
+  it('R3 หมด (out-of-stock) appears BEFORE ติดลบ (negative-stock)', () =&gt; {
+    const iOut = SRC.indexOf('data-testid="filter-out-of-stock"');
+    const iNeg = SRC.indexOf('data-testid="filter-negative-stock"');
+    expect(iOut).toBeGreaterThan(0);
+    expect(iNeg).toBeGreaterThan(0);
+    expect(iOut).toBeLessThan(iNeg);
+  });
+  it('R4 predicates untouched (state setters still wired)', () =&gt; {
+    expect(outBlock).toMatch(/setShowOutOfStockOnly/);
+    expect(negBlock).toMatch(/setShowNegativeStockOnly/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> V21 fixup — <code>tests/v144-realtime-lot-clear.test.js</code> F1.5. The assertion <code>expect(block.slice(0, 400)).toMatch(/หมด \(คงเหลือ 0\)/);</code> must become the short label.</div>
+<pre><code class="language-js">// F1.5 — 2026-06-03 the label was shortened "หมด (คงเหลือ 0)" → "หมด".
+expect(PanelSrc).toMatch(/data-testid="filter-out-of-stock"/);
+const block = PanelSrc.split('data-testid="filter-out-of-stock"')[1] || '';
+expect(block.slice(0, 400)).toMatch(/หมด\s*&lt;\/label&gt;/);
+expect(block.slice(0, 400)).not.toMatch(/หมด \(คงเหลือ 0\)/);</code></pre>
+  <p>Read the file first to match F1.5's exact lines; change only that assertion.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Run both + the negative-stock filter test (ensure no collateral break).</div>
+  <p>Run: <code>npm test -- --run tests/stock-balance-filter-relabel.test.js tests/v144-realtime-lot-clear.test.js tests/phase15.7-negative-stock-badge-filter.test.js</code> → Expected: PASS (phase15.7 B3.3 still matches <code>/ติดลบ/</code>; B2.4 row-badge order untouched).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 5:</strong> Commit.</div>
+<pre><code class="language-bash">git add src/components/backend/StockBalancePanel.jsx tests/stock-balance-filter-relabel.test.js tests/v144-realtime-lot-clear.test.js
+git commit -m "feat(stock): balance filters — relabel หมด/ติดลบ + reorder (หมด before ติดลบ)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Full verify + Rule Q L1 + wrap</h3>
+  <p><strong>Files:</strong> none (verification + state).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Full suite (Rule N: structural UI change touching shared chat widget → run full).</div>
+  <p>Run: <code>npm test -- --run</code> → Expected:全 PASS (baseline 16049 + new). Investigate any red (no flake-dismissal — Rule Q).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>npm run build</code> → clean.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> <strong>Rule Q L1 (real browser, Chrome MCP — Rule S).</strong> On the running dev server, open Backend → staff chat: type a message + set a reply + stage 1 image + 1 non-image file → confirm the dark-zinc ✏️ badge target; press – (minimize) → confirm the bubble shows ✏️ top-left (+ unread top-right if any), distinct; press the bubble → confirm text + reply + both staged files are intact + still sendable. Feature B: open ยอดคงเหลือ → confirm the order <code>…เกินสต็อก · หมด · ติดลบ</code> + short labels. Screenshot proof. (User hands-on acceptable per workstyle if a live authed session is needed.)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Update <code>.agents/active.md</code> + (light) <code>SESSION_HANDOFF.md</code>. No deploy without explicit "deploy" this turn (V18).</div>
+</div>
+
+<h2>Notes</h2>
+<ul>
+  <li><strong>Cosmetic-shell discipline:</strong> no handler / hook / upload-pipeline / filter-predicate logic changes — only render placement (mount→hidden), one additive boolean signal, one additive badge, and label text/order.</li>
+  <li><strong>Deferred / out of scope:</strong> auto-refocus the textarea on re-open (browser blurs on display:none; text is preserved — acceptable). Cross-mode (Frontend↔Backend) draft carry is intentionally NOT done (Q2 — clears on mode switch).</li>
+  <li><strong>No firestore.rules / Storage / data changes</strong> → vercel-only deploy when authorized; no Probe-Deploy-Probe.</li>
+</ul>
+
+</body>
+</html>
