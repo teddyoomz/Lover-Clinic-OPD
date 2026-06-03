@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { BUNDLED_STICKERS, bundledStickerSrc } from '../../lib/staffChatStickers.js';
 import {
-  listStickers, addSticker, addStickerFromUrl, removeSticker, stickerObjectUrl,
+  listStickers, addSticker, addStickerFromUrl, removeSticker,
 } from '../../lib/stickerLibrary.js';
 
 const EMOJIS = [
@@ -20,9 +20,25 @@ export function StaffChatStickerPicker({ onPickEmoji, onSendBundled, onSendCusto
   const [mine, setMine] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // (2026-06-03 EOD+4) object-URL lifecycle for custom stickers. Previously the
+  // render called stickerObjectUrl(rec) INLINE in mine.map → URL.createObjectURL
+  // per render with no revoke → the blobs stayed alive for the page lifetime
+  // (a bounded leak that grew on every re-render of the custom tab). Build one
+  // URL per rec when `mine` changes + revoke the prior set on change/unmount.
+  const [mineUrls, setMineUrls] = useState({});
 
   const reload = () => listStickers().then(setMine).catch(() => setMine([]));
   useEffect(() => { if (tab === 'custom') reload(); }, [tab]);
+  useEffect(() => {
+    const urls = {};
+    for (const rec of mine) {
+      if (rec && rec.blob) urls[rec.id] = URL.createObjectURL(rec.blob);
+    }
+    setMineUrls(urls);
+    return () => {
+      for (const u of Object.values(urls)) { try { URL.revokeObjectURL(u); } catch { /* ignore */ } }
+    };
+  }, [mine]);
 
   async function onFile(e) {
     const f = e.target.files && e.target.files[0];
@@ -104,7 +120,7 @@ export function StaffChatStickerPicker({ onPickEmoji, onSendBundled, onSendCusto
                   data-testid="sticker-custom"
                   onClick={() => { onSendCustom && onSendCustom(rec); onClose && onClose(); }}
                 >
-                  <img src={stickerObjectUrl(rec)} alt="" className="w-12 h-12 object-contain" />
+                  <img src={mineUrls[rec.id] || ''} alt="" className="w-12 h-12 object-contain" />
                 </button>
                 <button
                   type="button"
