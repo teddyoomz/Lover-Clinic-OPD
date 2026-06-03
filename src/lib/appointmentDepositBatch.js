@@ -49,7 +49,7 @@ import { resolveSelectedBranchId } from './branchSelection.js';
 // Pure key builders (no Firestore) shared with backendClient.createBackendAppointment
 // so deposit-booking appointments reserve the SAME be_appointment_slots docs as
 // regular bookings → both flows mutually exclusive (no double-booking).
-import { buildAppointmentSlotKeys } from './appointmentSlotKeys.js';
+import { buildAppointmentGuardKeys } from './appointmentSlotKeys.js';
 
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 const depositDoc = (id) => doc(db, ...basePath(), 'be_deposits', String(id));
@@ -93,8 +93,9 @@ function _resolveBranchIdForWrite(data) {
  * appointment has no doctor or no parseable time — same as createBackendAppointment's
  * legacy/open-ended path. Returns the reserved slot keys (for forensic logging).
  */
-async function _reserveAppointmentSlotsInTx(tx, { date, doctorId, startTime, endTime, appointmentId }) {
-  const slotKeys = buildAppointmentSlotKeys({ date, doctorId, startTime, endTime });
+async function _reserveAppointmentSlotsInTx(tx, { date, doctorId, roomId, startTime, endTime, appointmentId }) {
+  // appointment-loop R2 — guard BOTH doctor + room namespaces (was doctor-only).
+  const slotKeys = buildAppointmentGuardKeys({ date, doctorId, roomId, startTime, endTime });
   if (slotKeys.length === 0) return [];
   const slotRefs = slotKeys.map((k) => appointmentSlotDoc(k));
   const snaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
@@ -138,8 +139,8 @@ async function _appointmentSlotKeysForRelease(appointmentId) {
     const snap = await getDoc(appointmentDoc(appointmentId));
     if (!snap.exists()) return [];
     const a = snap.data() || {};
-    return buildAppointmentSlotKeys({
-      date: a.date, doctorId: a.doctorId, startTime: a.startTime, endTime: a.endTime,
+    return buildAppointmentGuardKeys({
+      date: a.date, doctorId: a.doctorId, roomId: a.roomId, startTime: a.startTime, endTime: a.endTime,
     });
   } catch {
     return [];
@@ -381,7 +382,7 @@ export async function createDepositBookingPair({
   // (DepositPanel.handleSave / confirmCreateDeposit) as a friendly Thai message.
   await runTransaction(db, async (tx) => {
     await _reserveAppointmentSlotsInTx(tx, {
-      date: apptPayload.date, doctorId: apptPayload.doctorId,
+      date: apptPayload.date, doctorId: apptPayload.doctorId, roomId: apptPayload.roomId,
       startTime: apptPayload.startTime, endTime: apptPayload.endTime,
       appointmentId,
     });
@@ -691,7 +692,7 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
       throw new Error(`createAppointmentForExistingDeposit: deposit ${depositId} not found`);
     }
     await _reserveAppointmentSlotsInTx(tx, {
-      date: newApptPayload.date, doctorId: newApptPayload.doctorId,
+      date: newApptPayload.date, doctorId: newApptPayload.doctorId, roomId: newApptPayload.roomId,
       startTime: newApptPayload.startTime, endTime: newApptPayload.endTime,
       appointmentId,
     });

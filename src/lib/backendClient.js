@@ -20,7 +20,7 @@ import { decideApptStatusServiceSync } from './appointmentDisplay.js';
 // AP1/AP1-bis slot-key builders extracted (2026-06-03, appointment-loop R1) so
 // appointmentDepositBatch.js can reserve the SAME atomic double-booking slots
 // without importing this module. Re-exported below for backward-compat.
-import { SLOT_INTERVAL_MIN, buildAppointmentSlotKey, buildAppointmentSlotKeys } from './appointmentSlotKeys.js';
+import { SLOT_INTERVAL_MIN, buildAppointmentSlotKey, buildAppointmentSlotKeys, buildAppointmentRoomSlotKeys, buildAppointmentGuardKeys } from './appointmentSlotKeys.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
 // in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson). Same
@@ -2007,7 +2007,7 @@ const appointmentSlotDoc = (slotId) => doc(db, ...basePath(), 'be_appointment_sl
 // appointment-loop R1) so appointmentDepositBatch.js can reserve the SAME slots.
 // Imported at top; re-exported here for backward-compat with existing importers
 // (tests, scripts, internal callers below).
-export { SLOT_INTERVAL_MIN, buildAppointmentSlotKey, buildAppointmentSlotKeys };
+export { SLOT_INTERVAL_MIN, buildAppointmentSlotKey, buildAppointmentSlotKeys, buildAppointmentRoomSlotKeys, buildAppointmentGuardKeys };
 
 /** V128 — resolve a LINKED customer's phone for denorm on the appointment doc.
  *  AppointmentFormModal sends customerName/HN + customerPhoneTemp (pick-later)
@@ -2159,11 +2159,15 @@ export async function createBackendAppointment(data) {
   //
   // Falls back to plain setDoc when slot keys cannot be built (legacy
   // imports / open-ended appointments without time fields).
+  // appointment-loop R2 (2026-06-03) — guard BOTH the doctor AND the room slot
+  // namespaces (was doctor-only → two different doctors could double-book the
+  // same physical room; reproduced on real prod).
   const slotKeys = data?.skipServerCollisionCheck
     ? []
-    : buildAppointmentSlotKeys({
+    : buildAppointmentGuardKeys({
         date: targetDate,
         doctorId: targetDoctorId,
+        roomId: data?.roomId || '',
         startTime: targetStart,
         endTime: targetEnd,
       });
@@ -2230,11 +2234,13 @@ export async function createBackendAppointment(data) {
 async function _releaseAppointmentSlot(apptData) {
   const date = normalizeApptDate(apptData?.date);
   const doctorId = String(apptData?.doctorId || apptData?.doctor?.id || '').trim();
+  const roomId = String(apptData?.roomId || '').trim();
   const startTime = String(apptData?.startTime || '').trim();
   const endTime = String(apptData?.endTime || apptData?.startTime || '').trim();
 
-  // AP1-bis: prefer multi-slot release (V15 #14+ data).
-  const slotKeys = buildAppointmentSlotKeys({ date, doctorId, startTime, endTime });
+  // AP1-bis: prefer multi-slot release (V15 #14+ data). appointment-loop R2 —
+  // release the ROOM slots too (createBackendAppointment now reserves them).
+  const slotKeys = buildAppointmentGuardKeys({ date, doctorId, roomId, startTime, endTime });
 
   if (slotKeys.length > 0) {
     try {
@@ -2330,21 +2336,30 @@ export async function updateBackendAppointment(appointmentId, data) {
     const merged = { ...oldData, ...data };
     const oldDate = normalizeApptDate(oldData.date);
     const oldDoctorId = String(oldData.doctorId || oldData.doctor?.id || '').trim();
+    const oldRoomId = String(oldData.roomId || '').trim();
     const oldStart = String(oldData.startTime || '').trim();
     const oldEnd = String(oldData.endTime || oldData.startTime || '').trim();
     const newDate = normalizeApptDate(merged.date);
     const newDoctorId = String(merged.doctorId || merged.doctor?.id || '').trim();
+    const newRoomId = String(merged.roomId || '').trim();
     const newStart = String(merged.startTime || '').trim();
     const newEnd = String(merged.endTime || merged.startTime || '').trim();
 
-    const oldKeys = buildAppointmentSlotKeys({
-      date: oldDate, doctorId: oldDoctorId, startTime: oldStart, endTime: oldEnd,
+    // appointment-loop R2 — guard keys span BOTH doctor + room namespaces.
+    const oldKeys = buildAppointmentGuardKeys({
+      date: oldDate, doctorId: oldDoctorId, roomId: oldRoomId, startTime: oldStart, endTime: oldEnd,
     });
-    const newKeys = buildAppointmentSlotKeys({
-      date: newDate, doctorId: newDoctorId, startTime: newStart, endTime: newEnd,
+    const newKeys = buildAppointmentGuardKeys({
+      date: newDate, doctorId: newDoctorId, roomId: newRoomId, startTime: newStart, endTime: newEnd,
     });
 
     const becameCancelled = data?.status === 'cancelled' && oldData.status !== 'cancelled';
+    // appointment-loop R2 (C) — un-cancel (cancelled → any non-cancelled status)
+    // must RE-RESERVE the slots the cancel released, else the reactivated appt
+    // holds NO slot doc → its time is unguarded → double-bookable (reproduced on
+    // real prod: scripts/diag-appointment-room-uncancel-probe.mjs C.2).
+    const becameUncancelled = oldData.status === 'cancelled'
+      && typeof data?.status === 'string' && data.status && data.status !== 'cancelled';
     // Compare arrays as sorted JSON to detect ANY change (covers different
     // length OR same length different values OR same values different order).
     const oldKeySig = [...oldKeys].sort().join('|');
@@ -2384,6 +2399,23 @@ export async function updateBackendAppointment(appointmentId, data) {
         }
         await reserveBatch.commit();
       } catch { /* noop — slots will heal on next create at this slot */ }
+    } else if (becameUncancelled && newKeys.length > 0) {
+      // appointment-loop R2 (C) — RE-RESERVE the slots the cancel released so the
+      // reactivated appointment is guarded again. Best-effort (mirrors the
+      // timeChanged reserve); a slot taken during the cancelled window is still
+      // caught by the next booking's create-time guard + soft scan.
+      try {
+        const reBatch = writeBatch(db);
+        for (const key of newKeys) {
+          reBatch.set(appointmentSlotDoc(key), {
+            slotId: key, appointmentId,
+            date: newDate, doctorId: newDoctorId,
+            startTime: newStart, endTime: newEnd,
+            cancelled: false, takenAt: now,
+          });
+        }
+        await reBatch.commit();
+      } catch { /* best-effort */ }
     }
   }
 

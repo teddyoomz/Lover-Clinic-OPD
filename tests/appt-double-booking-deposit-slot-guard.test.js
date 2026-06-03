@@ -22,7 +22,7 @@
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { buildAppointmentSlotKeys, buildAppointmentSlotKey, SLOT_INTERVAL_MIN } from '../src/lib/appointmentSlotKeys.js';
+import { buildAppointmentSlotKeys, buildAppointmentSlotKey, buildAppointmentRoomSlotKeys, buildAppointmentGuardKeys, SLOT_INTERVAL_MIN } from '../src/lib/appointmentSlotKeys.js';
 
 const read = (p) => readFileSync(path.resolve(process.cwd(), p), 'utf8');
 const SLOTKEYS = read('src/lib/appointmentSlotKeys.js');
@@ -80,17 +80,17 @@ describe('appointment-loop R1 — shared slot-key module (extraction)', () => {
 });
 
 describe('appointment-loop R1 — deposit-booking writers reserve slots atomically', () => {
-  test('R1.6 appointmentDepositBatch imports the shared keys + runTransaction + helpers', () => {
-    expect(DEPOSIT).toMatch(/import \{ buildAppointmentSlotKeys \} from ['"]\.\/appointmentSlotKeys\.js['"]/);
+  test('R1.6 appointmentDepositBatch imports the shared guard keys + runTransaction + helpers', () => {
+    expect(DEPOSIT).toMatch(/import \{ buildAppointmentGuardKeys \} from ['"]\.\/appointmentSlotKeys\.js['"]/);
     expect(DEPOSIT).toMatch(/runTransaction/);
     expect(DEPOSIT).toMatch(/const appointmentSlotDoc =/);
     expect(DEPOSIT).toMatch(/async function _reserveAppointmentSlotsInTx/);
     expect(DEPOSIT).toMatch(/async function _appointmentSlotKeysForRelease/);
   });
 
-  test('R1.7 the reservation helper throws AP1_COLLISION + reserves every interval slot', () => {
+  test('R1.7 the reservation helper throws AP1_COLLISION + reserves every guard slot', () => {
     const body = span(DEPOSIT, '_reserveAppointmentSlotsInTx', 1500);
-    expect(body).toMatch(/buildAppointmentSlotKeys/);
+    expect(body).toMatch(/buildAppointmentGuardKeys/);   // R2: doctor + room namespaces
     expect(body).toMatch(/tx\.get/);
     expect(body).toMatch(/err\.code = ['"]AP1_COLLISION['"]/);
     expect(body).toMatch(/tx\.set\(slotRefs/);
@@ -153,5 +153,55 @@ describe('appointment-loop R1 — class-of-bug classifier (all appointment-creat
     expect(body).toMatch(/batch\.set\(depositDoc\(depositId\)/);
     expect(body).toMatch(/batch\.update\(apptRef/);
     expect(body).not.toMatch(/_reserveAppointmentSlotsInTx/);
+  });
+});
+
+// ─── R2 — room dimension (B) + un-cancel re-reserve (C) ──────────────────────
+// Both reproduced on REAL prod (scripts/diag-appointment-room-uncancel-probe.mjs:
+// B → 2 doctors same room+time both succeeded; C → un-cancel did NOT re-reserve).
+describe('appointment-loop R2 — room slot namespace (B)', () => {
+  test('R2.1 buildAppointmentRoomSlotKeys emits ROOM__-prefixed keys per interval', () => {
+    expect(buildAppointmentRoomSlotKeys({ date: '2026-05-10', roomId: 'R1', startTime: '10:00', endTime: '11:00' }))
+      .toEqual(['ROOM__2026-05-10_R1_10:00', 'ROOM__2026-05-10_R1_10:15', 'ROOM__2026-05-10_R1_10:30', 'ROOM__2026-05-10_R1_10:45']);
+    expect(buildAppointmentRoomSlotKeys({ date: '2026-05-10', startTime: '10:00' })).toEqual([]); // no room → no keys
+  });
+
+  test('R2.2 buildAppointmentGuardKeys = doctor keys + room keys; a room key can NEVER equal a doctor key', () => {
+    const keys = buildAppointmentGuardKeys({ date: '2026-05-10', doctorId: 'D1', roomId: 'R1', startTime: '10:00', endTime: '10:15' });
+    expect(keys).toContain('2026-05-10_D1_10:00');          // doctor
+    expect(keys).toContain('ROOM__2026-05-10_R1_10:00');    // room
+    // doctor keys start with the date; room keys start with ROOM__ → disjoint namespaces
+    const docKeys = keys.filter((k) => !k.startsWith('ROOM__'));
+    const roomKeys = keys.filter((k) => k.startsWith('ROOM__'));
+    expect(docKeys.some((k) => roomKeys.includes(k))).toBe(false);
+  });
+
+  test('R2.3 createBackendAppointment guards the room (uses buildAppointmentGuardKeys with roomId)', () => {
+    const body = fnExport(BACKEND, 'createBackendAppointment');
+    expect(body).toMatch(/buildAppointmentGuardKeys\(\{/);
+    expect(body).toMatch(/roomId: data\?\.roomId/);
+  });
+
+  test('R2.4 deposit reserve helper accepts roomId + both create callers forward it', () => {
+    const helper = span(DEPOSIT, 'async function _reserveAppointmentSlotsInTx', 400);
+    expect(helper).toMatch(/roomId/);
+    expect(helper).toMatch(/buildAppointmentGuardKeys/);
+    expect(fnExport(DEPOSIT, 'createDepositBookingPair')).toMatch(/roomId: apptPayload\.roomId/);
+    expect(fnExport(DEPOSIT, 'createAppointmentForExistingDeposit')).toMatch(/roomId: newApptPayload\.roomId/);
+  });
+
+  test('R2.5 release helpers use buildAppointmentGuardKeys (release the room slots too)', () => {
+    expect(span(DEPOSIT, 'async function _appointmentSlotKeysForRelease', 700)).toMatch(/buildAppointmentGuardKeys/);
+    expect(span(BACKEND, 'async function _releaseAppointmentSlot', 900)).toMatch(/buildAppointmentGuardKeys/);
+  });
+});
+
+describe('appointment-loop R2 — un-cancel re-reserves the slot (C)', () => {
+  test('R2.6 updateBackendAppointment re-reserves slots on cancelled→non-cancelled', () => {
+    const body = fnExport(BACKEND, 'updateBackendAppointment');
+    expect(body).toMatch(/const becameUncancelled = oldData\.status === ['"]cancelled['"]/);
+    expect(body).toMatch(/else if \(becameUncancelled && newKeys\.length > 0\)/);
+    // the re-reserve writes the new slot docs
+    expect(body).toMatch(/reBatch\.set\(appointmentSlotDoc\(key\)/);
   });
 });

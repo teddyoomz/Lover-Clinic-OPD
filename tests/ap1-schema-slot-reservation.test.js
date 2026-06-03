@@ -327,10 +327,12 @@ describe('A6 source-grep — AP1-bis multi-slot wiring', () => {
     expect(read('src/lib/appointmentSlotKeys.js')).toMatch(/export function buildAppointmentSlotKeys\b/);
   });
 
-  test('A6.3 createBackendAppointment uses buildAppointmentSlotKeys (plural)', () => {
-    // Inside createBackendAppointment body, the slot-keys variable comes from
-    // the plural builder (multi-slot AP1-bis).
-    expect(SRC).toMatch(/const slotKeys = data\?\.skipServerCollisionCheck[\s\S]*?: buildAppointmentSlotKeys\(/);
+  test('A6.3 createBackendAppointment uses buildAppointmentGuardKeys (doctor + room — appointment-loop R2)', () => {
+    // appointment-loop R2 (2026-06-03) — was buildAppointmentSlotKeys (doctor-only);
+    // now buildAppointmentGuardKeys also guards the ROOM (two doctors could
+    // double-book the same room; reproduced on real prod).
+    expect(SRC).toMatch(/const slotKeys = data\?\.skipServerCollisionCheck[\s\S]*?: buildAppointmentGuardKeys\(/);
+    expect(SRC).toMatch(/roomId: data\?\.roomId/);
   });
 
   test('A6.4 createBackendAppointment maps slotKeys → slotRefs and reads via Promise.all', () => {
@@ -338,14 +340,14 @@ describe('A6 source-grep — AP1-bis multi-slot wiring', () => {
     expect(SRC).toMatch(/await Promise\.all\(slotRefs\.map\(\(ref\) => tx\.get\(ref\)\)\)/);
   });
 
-  test('A6.5 _releaseAppointmentSlot uses buildAppointmentSlotKeys + writeBatch', () => {
-    expect(SRC).toMatch(/async function _releaseAppointmentSlot[\s\S]*?const slotKeys = buildAppointmentSlotKeys\(/);
+  test('A6.5 _releaseAppointmentSlot uses buildAppointmentGuardKeys + writeBatch (releases room slots too — R2)', () => {
+    expect(SRC).toMatch(/async function _releaseAppointmentSlot[\s\S]*?const slotKeys = buildAppointmentGuardKeys\(/);
     expect(SRC).toMatch(/async function _releaseAppointmentSlot[\s\S]*?writeBatch\(db\)/);
   });
 
-  test('A6.6 updateBackendAppointment uses buildAppointmentSlotKeys for both old + new', () => {
-    expect(SRC).toMatch(/const oldKeys = buildAppointmentSlotKeys\(/);
-    expect(SRC).toMatch(/const newKeys = buildAppointmentSlotKeys\(/);
+  test('A6.6 updateBackendAppointment uses buildAppointmentGuardKeys for both old + new (doctor + room — R2)', () => {
+    expect(SRC).toMatch(/const oldKeys = buildAppointmentGuardKeys\(/);
+    expect(SRC).toMatch(/const newKeys = buildAppointmentGuardKeys\(/);
   });
 
   test('A6.7 updateBackendAppointment slot rotation uses writeBatch (atomic within slot collection)', () => {

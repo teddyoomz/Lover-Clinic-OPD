@@ -44,6 +44,11 @@ scan complements it for the sequential case.
 `src/lib/appointmentDepositBatch.js`) MUST release the reserved slot docs via
 `_appointmentSlotKeysForRelease` + `batch.delete(appointmentSlotDoc(k))` —
 otherwise the AP9 reservation orphans the slot + blocks the time forever.
+**Check (appointment-loop R2, 2026-06-03)**: UN-cancel (cancelled→non-cancelled
+via `updateBackendAppointment`) MUST RE-RESERVE the slots the cancel released
+(`becameUncancelled` branch) — else the reactivated appt holds NO slot doc →
+its time is double-bookable. Reproduced on real prod
+(`scripts/diag-appointment-room-uncancel-probe.mjs` C).
 
 ### AP9 — EVERY appointment-create path reserves slots via the AP1-bis guard (appointment-loop R1, 2026-06-03)
 **Why**: the atomic double-booking guard is only as complete as its LEAST-guarded
@@ -58,6 +63,13 @@ bookings same doctor+slot → appts=2 deposits=2 collisions=0).
 doctor+time MUST reserve its slots in the SAME `be_appointment_slots` namespace
 inside a `runTransaction` (via `_reserveAppointmentSlotsInTx` / the
 `createBackendAppointment` tx) so all create paths are mutually exclusive.
+**appointment-loop R2 (2026-06-03)** — the guard keys come from
+`buildAppointmentGuardKeys` = DOCTOR slots (`${date}_${doctorId}_${HHMM}`) PLUS
+ROOM slots (`ROOM__${date}_${roomId}_${HHMM}`, disjoint namespace) so a collision
+on EITHER the doctor OR the room aborts the write (two different doctors can no
+longer double-book the same physical room). Every reserve/release site
+(create + deposit writers + `_releaseAppointmentSlot` + update rotation/un-cancel)
+uses `buildAppointmentGuardKeys` — NOT the doctor-only `buildAppointmentSlotKeys`.
 **Grep**:
 ```
 # every be_appointments writer that is NOT inside a slot-reserving tx:

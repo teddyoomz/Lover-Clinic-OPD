@@ -106,3 +106,52 @@ export function buildAppointmentSlotKeys(input, intervalMin = SLOT_INTERVAL_MIN)
   }
   return keys;
 }
+
+/**
+ * appointment-loop R2 (2026-06-03) — ROOM slot keys (one per 15-min interval).
+ * Keyed on the EXAM ROOM, with a `ROOM__` prefix so a room key can NEVER
+ * collide with a doctor key (which always starts with the date YYYY-MM-DD).
+ * Lets two DIFFERENT doctors be prevented from booking the SAME physical room
+ * at the same time — the atomic analogue of the soft `sameRoom` UI check.
+ * Reproduced on REAL prod (scripts/diag-appointment-room-uncancel-probe.mjs B:
+ * 2 doctors same room+time → both succeeded). Returns [] when no roomId (an
+ * appointment with no room is simply not room-guarded).
+ */
+export function buildAppointmentRoomSlotKeys(input, intervalMin = SLOT_INTERVAL_MIN) {
+  const { date, roomId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
+  const d = String(date || '').trim();
+  const room = String(roomId || '').trim();
+  if (!d || !room) return [];
+  const start = _parseHHMM(startTime);
+  if (start === null) return [];
+  const end = _parseHHMM(endTime);
+  const interval = Number.isFinite(intervalMin) && intervalMin > 0 ? Math.floor(intervalMin) : SLOT_INTERVAL_MIN;
+  const safeRoom = room.replace(/[\/.]/g, '-');
+  if (end === null || end <= start) {
+    const floorStart = Math.floor(start / interval) * interval;
+    return [`ROOM__${d}_${safeRoom}_${_formatHHMM(floorStart)}`];
+  }
+  const floorStart = Math.floor(start / interval) * interval;
+  const ceilEnd = Math.ceil(end / interval) * interval;
+  const keys = [];
+  for (let m = floorStart; m < ceilEnd; m += interval) {
+    keys.push(`ROOM__${d}_${safeRoom}_${_formatHHMM(m)}`);
+  }
+  return keys;
+}
+
+/**
+ * appointment-loop R2 (2026-06-03) — the COMPLETE set of double-booking guard
+ * keys an appointment occupies: the DOCTOR interval slots PLUS the ROOM interval
+ * slots. EVERY reserve/release site (createBackendAppointment, the deposit-pair
+ * writers, _releaseAppointmentSlot, updateBackendAppointment rotation/un-cancel)
+ * uses THIS so a collision on EITHER the doctor OR the room aborts the write.
+ * A missing doctorId OR roomId simply omits that dimension's keys.
+ */
+export function buildAppointmentGuardKeys(input, intervalMin = SLOT_INTERVAL_MIN) {
+  const { date, doctorId, roomId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
+  return [
+    ...buildAppointmentSlotKeys({ date, doctorId, startTime, endTime }, intervalMin),
+    ...buildAppointmentRoomSlotKeys({ date, roomId, startTime, endTime }, intervalMin),
+  ];
+}
