@@ -16,6 +16,80 @@
 
 ---
 
+### Session 2026-05-27 EOD+12 — Chart-edit flash FIXED (createPortal) + treatment-image ดูรูปใหญ่ button + light-theme button fix (LOCAL, committed, not pushed/deployed)
+
+- **State**: master HEAD = EOD docs commit (feature `96eb089d`); prod UNCHANGED `8f6b7ced`. Full suite **14971/0** (677 files), build clean ×2. NO rules/storage/data/cron → frontend-only.
+- **`/systematic-debugging`** (user report + 3 screenshots): กดแก้ไข Chart in TFP → editor flashed in-box (image1) then full-screen (image2), "เหมือนมีการซ้อนกัน". Root cause = `ChartCanvas` `fixed inset-0` trapped by a TRANSIENT transformed ancestor in TFP (exhaustive static read = NO persistent transform → transient → flash). Same class as AV117 (5 lightboxes already portaled for exactly this); ChartCanvas (editor) + the 2 chart modals were never portaled.
+- **Fix Task 1**: `createPortal(…, document.body)` on ChartCanvas + ChartTemplateSelector + PcPairingModal (Rule P siblings) → escapes all ancestor containing-blocks → full-screen frame 1, no flash. NEW **AV143** (editor/modal overlays; companion to AV117 viewers).
+- **Fix Task 2**: NEW shared portaled **ImageLightbox.jsx** (extracted from ChartSection.ChartLightbox, Rule of 3) + `Maximize2` "ดูรูปใหญ่" on every treatment + lab image.
+- **Light-theme bug** (user 2nd report + screenshot): buttons `bg-black/70 text-white`→`bg-white/90`+gray/red. Cause = `index.css:404` `[data-theme=light] .text-white{color:var(--tx-heading)!important}` (dark) — white-restore exceptions cover colored bgs (bg-red/gray/neutral/…) but NOT `bg-black` → the white icon rendered dark → invisible on the dark button. New scheme mirrors the chart's view-large button.
+- **Tier 2 (Rule P)**: AV143 + `tests/v123-chart-overlay-portal.test.js` (13: SG/CON/AV/G); AV117 + `v117-lightbox-portal.test.js` retargeted to ImageLightbox; `pc-pairing-rtl` PP4 portal fixup (container→document query); v83 AV78 inline-marker on ImageLightbox.
+- **Verify (Rule Q-honest)**: build clean ×2 · full suite 14971/0 · root cause + fix **CSS-proven in real browser, light theme** (temp probe via preview_eval, removed inline: OLD icon `rgb(15,23,42)` dark-on-dark = invisible; NEW gray-on-white = visible; ref `bg-red-500 text-white`→white confirms the exception excludes bg-black). **GAP (disclosed)**: live in-app TFP-edit (open editor → no flash; hover treatment thumb light theme → white button visible + opens lightbox) NOT driven by me — login/data + the preview renderer wedged by my own reload; user hands-on. Mechanism AV117-proven + render RTL-correct + chart-button precedent.
+- **Commits**: `96eb089d` feature (10 files +292/-70) + EOD docs. NOT pushed, NOT deployed (V18). Excluded from commits: CLAUDE.md + rules/01 (user's pre-existing Rule S edits).
+- Detail: checkpoint `.agents/sessions/2026-05-27-chart-overlay-portal-flash.md`.
+
+### Session 2026-05-27 EOD+11 — Appointment page LIVE cross-device + CC field row-align (LOCAL, committed, not pushed)
+
+**Shipped (committed local, NOT pushed/deployed)**: master `0c702091` (2 commits above EOD+10 `4b8e3123`); prod `8f6b7ced` unchanged.
+- **CC row-align** (`7857a2dd`): TFP left col `space-y-4`→`flex flex-col gap-4` + teal save `mt-auto` → vitals/doctor save buttons land same row. CC `rows` bump = NO-OP (flex-1); real cause = block-vs-flex trailing-`mb-3` ~12px (real-browser measured). Cosmetic.
+- **Live cross-device** (`0c702091`): appointment-page card-list (OPD stepper / appt status / deposit-sale chips) now real-time cross-device + all-day. NEW `listenToTreatmentsByDateRange` + `listenToAllDeposits` (backendClient) + scopedDataLayer re-exports; AppointmentHubView subscribes 3 onSnapshot triggers → `liveRefreshTick` (skip-first) → existing `loadAll({silent})` (extends the proven `appointmentDataVersion` pattern). + visibility/online resume + day-rollover guard. NO logic/mutation/render touched.
+- **V66 trap caught pre-ship**: branch-scoped sales = `where(saleDate>=)+where(branchId)` = composite index that does NOT exist → FAIL_PRECONDITION in prod (admin-SDK can't see it — the V66 lesson) → fixed to sales `allBranches` saleDate-only (single-field); treatments whole-collection + deposits single-field → all index-free.
+
+**Verify**: full suite 14958/0 (ran 2×) · build clean · **L2 18/18 real-prod onSnapshot** (`scripts/e2e-appointment-live-cross-device.mjs`: appt create/confirm/edit/cancel + treatment vitals→doctor + cross-branch + cancelled/out-of-window filtered + deposit branch-isolation + sale) · **L1 real-browser pixel demo** (ซักประวัติ✓19:27 + แพทย์✓19:28 lit LIVE on 2 windows, no refresh; cleaned up 0 orphans).
+**Tests**: +`appointment-live-cross-device.test.js` (12 source-grep + flow-sim) + 6 RTL partial-mock fixes (V11-class: mock missing new exports).
+**Flow**: /systematic-debugging (verify current = BROKEN cross-device OPD; appt was already live) → brainstorming (Q1=A listener-trigger, Q2=A treatments allBranches) → writing-plans HTML → executing-plans inline → V66 fix → L2 → L1 pixel demo.
+**Outstanding (user-triggered)**: push master (2 commits) + deploy vercel-only (await explicit word, V18); 2 pre-existing Rule S doc edits (CLAUDE.md, rules/01) uncommitted.
+Detail: checkpoint `.agents/sessions/2026-05-27-appt-live-cross-device.md`.
+
+### Session 2026-05-27 EOD+9 — Deposit-without-appointment + Finance deposit modernize (LOCAL)
+brainstorm→spec.html→plan.html→inline execution (subagent-driven attempted; switched to inline per user + a 1M-context credits error). **Part 1** AppointmentFormModal `ไม่นัดหมาย` toggle → deposit-only doc (hides date/time/หมอ/ห้อง/recurring + skips appt validations; advisor→100% seller; purpose=appointmentTo; +สร้างนัด later works). **Part 2** Finance DepositPanel `เลือกลูกค้าภายหลัง` + `มัดจำสำหรับ` (VisitPurposePicker new `label` prop) + table `|| dep.purpose`; all money fields kept. be_deposits +3 fields (purpose/customerNameTemp/customerPhoneTemp); createDeposit stamps + recalc-guard on empty customerId. **Verify**: full suite 14929/0 · build clean · Rule Q **L2 real-prod e2e 21/0** · flow-simulate + source-grep + VisitPurposePicker RTL. **L1 = USER** (modals not RTL-mounted in repo; Rule Q V66). 10 commits `85c5d579`..`ff9a775d` on **master LOCAL** (10+ ahead of origin `9209ec70`, NOT pushed); prod `0805da87` UNCHANGED. NO rules/data/cron → frontend+serverless deploy only. 7 V21 source-grep fixups; 2 pre-existing flakes (Phase 17.1 + genShortId, probabilistic) pass on clean run. Decisions: Q1=modernize-in-place, Q2=port-all, advisor→seller (no new field), gating=conditional-render ("อิงของเก่า"). Detail: checkpoint `.agents/sessions/2026-05-27-deposit-no-appointment.md`.
+
+### Session 2026-05-27 — V122 backup-subsystem fix DEPLOYED + L2-verified + create-queue button removal + EOD+8 deploy
+
+master `954420d6` (pushed); prod LIVE (`vercel --prod` → lover-clinic-app.vercel.app). Full suite **14892/0**. NO rules/data/cron touched → frontend+serverless deploy only (no Probe-Deploy-Probe).
+
+`/systematic-debugging` on business-critical report: Whole-System V81 backups silently `NO_MANIFEST` since 05-22. Confirmed root cause = ~1000 SEQUENTIAL cross-region round-trips > Vercel 300s cap (real HTTP 504 @300.7s + 20h-stale cron lock) + 28/65 collections silently omitted by hardcoded scope. Fix: `mapWithConcurrency` bounded-parallel I/O (~20×) + dynamic `listCollections()` enumeration across backup + restore + whole-fleet + branch `maxDuration` 60→300; fixed latent orphan-subcoll wipe-order bug. AV141 + AV142. **L2-VERIFIED LIVE**: deployed endpoint → 200 in 38.1s (was 504), complete manifest 4783 docs/0 failed. Real-prod e2e 10/0. Rule Q-honest: 2 "flakes" were real V21 regressions in whole-fleet source-greps — fixed (5 V21 fixups). Also: removed `+สร้างคิวใหม่` button (modal KEPT dormant) + EOD+8 UI shipped same deploy.
+
+Open (optional): clean 5 pre-fix NO_MANIFEST folders; stale QR placeholder AdminDashboard:7541; 2 pre-existing Rule S edits (CLAUDE.md, rules/01) uncommitted. USER L1 on prod. Detail: `.agents/sessions/2026-05-27-backup-v122-deploy.md` + `v-log-archive.md` V122.
+
+### Session 2026-05-26 EOD+8 — 13 UI/UX fixes (3 /systematic-debugging batches) DONE + TESTED, UNCOMMITTED
+
+master `00e4b3a6` (unchanged — EOD+8 work uncommitted); prod `7e2a5bd8` LIVE. 15 files in working tree (9 src + 5 test + AV140), NOT committed (iron-clad: await user "commit").
+
+**B1 (6 + AV140)** — `PatientForm.jsx` success-text trim + TH/EN+moon toggle contrast (inline `color`, both themes — VERIFIED live via computed styles) · `OpdLifecycleRow.jsx` dashed amber frame removed · `treatmentDisplayResolvers.js` getStepLabels doctor-slot else 'ข้าม'→'แพทย์' · `AppointmentHubRowCard.jsx`+`index.css` filled-pending (state-D) card purple breathing+shadow (reduced-motion safe) · `AppointmentHubView.jsx` cardFlowSubPillCounts adds 'opd-pending' bucket → purple tab bubble (NEW **AV140**: TabBar tab keys ⊆ cardFlowSubPillCounts).
+**B2 (QR)** — `SendCustomerLinkModal.jsx` QR fills mobile width (max-w-[240px] cap removed · gen 280→600px · modal max-h+overflow-y).
+**B3 (OPD review modal, 5 · option A)** — `PatientForm.jsx` admin edit bypasses isExpired(2h)+isArchived when `isSimulation` (public link KEEPS the 2h timeout + 30-min cleanup cron + cross-day delete AV131 UNCHANGED) · `AdminDashboard.jsx` removed "ซิงค์ข้อมูลใหม่" Sync btn + dead renderResyncButton · save "บันทึกลง OPD"→"บันทึกเข้าระบบ" · header "ประวัติผู้ป่วย OPD"→"บันทึกข้อมูลรับเข้า" · hid session ID.
+
+**Tests**: build clean · full suite 14869 pass / 0 deterministic fail · NEW `eod7-ui-fixes-batch.test.jsx` (19/0) + `eod7-opd-review-modal.test.js` (7/0) · V21 fixups `phase-28-resolvers` + `phase-23-0` B.5 + `v118` SG7.5.
+**Rule Q-honest WIN**: insisted on a re-run to pin the "1 fail" → DETERMINISTIC regression (Sync removal dropped a `__synthetic` gate count), NOT the flake I almost logged. Lesson: removing a JSX line → grep tests for ALL its tokens (`__synthetic`), not just the fn name.
+**Decisions**: OPD-edit = option A (bypass gates for admin only; do NOT rip the 2h-timeout/cron system — user-picked) · breathing purple to unify with the tab bubble · toggle inline-color (beats class override + no JIT) · no AV for cosmetic items (isolated).
+Detail/Resume: checkpoint `.agents/sessions/2026-05-26-eod8-ui-fixes.md`.
+
+### Session 2026-05-26 EOD+4 — Staff-chat enhancements SHIPPED + DEPLOYED
+
+`/session-start` → `brainstorming` (Visual Companion via AskUserQuestion previews — Rule S reaffirmed 2026-05-26: NEVER Chrome MCP to verify the companion at ask/plan) → spec → `writing-plans` → `subagent-driven` (pivoted inline; subagent died on a 1M-context billing wall, baseline-thrash documented). master/prod = `459a4ea3` LIVE.
+
+- **F1 day separators** — NEW `src/lib/staffChatDayGroups.js` (pure, Bangkok-TZ GMT+7 shift, dual-shape createdAt) + StaffChatMessageList pill dividers (วันนี้/เมื่อวาน/full พ.ศ.).
+- **F2 quote 13px** — StaffChatMessage quote + composer reply strip `text-[10px]→[13px]`.
+- **F3 unsend** — NEW `deleteStaffChatMessage(branchId,messageId)` (backendClient + scopedDataLayer) = Storage folder sweep + `deleteDoc`; own-only UI gate (deviceId) + AV78 confirm dialog; useStaffChat.deleteMessage; Widget thread.
+- **F4 emoji+stickers** — NEW StaffChatStickerPicker (3 tabs); bundled Fluent-Emoji MIT 20 SVGs `/public/stickers/fluent/` + manifest (src/lib) sent by ID (0 Firebase); custom `stickerLibrary.js` IndexedDB → temp Storage on send (30-day retention); `buildMessageDoc` sticker field (undefined-safe); sticker render in StaffChatMessage.
+- **Rules (DEPLOYED, Probe-Deploy-Probe #15 PASS)**: firestore `be_staff_chat_messages` sticker-only create clause + `allow delete: if isClinicStaff()`; storage `staff-chat-attachments` clinic-staff delete.
+- **AV134** + 33 tests (unit 15 + flow-simulate 10 + RTL 8) + 2 V21 fixups (storage.rules delete contract in staff-chat-any-file + staff-chat-multi-image).
+- **Lessons**: subagent 1M-context billing wall → inline on this baseline (V81/Tablet-Chart pattern); curl/grep choked on the 8 MB single-line GitHub tree → node fetch+JSON.parse; Fluent folder names ≠ CLDR (keyword-match + skin-tone Default path).
+- **This deploy shipped EVERYTHING since prod 65ab6467** (staff-chat + 4 carryover stacks) — all now LIVE; user L1 pending.
+- Detail: checkpoint `.agents/sessions/2026-05-26-staff-chat-enhancements.md`.
+
+### Session 2026-05-26 EOD+3 — /systematic-debugging 3-fix batch SHIPPED (LOCAL)
+
+`/session-start` → `/systematic-debugging` (Phase 1 root-cause for all 3 via code, no guessing). master = `e07451fb`; prod UNCHANGED `65ab6467` (await "deploy", V18). Full vitest **14731/0** · build clean 2.91s · NO rules/index → no Probe-Deploy-Probe.
+
+- **Issue 1** — Finance "ไปที่นัด" opens the appt's DATE (was today). Late-prop today-lock: default `activeTab='appointment-all'` mounts AppointmentCalendarView before the deep-link useEffect set `initialApptDate` → `useState(()=>)` locked to today. Fix: synchronous `?date=` derive in the BackendDashboard useState initializer + `[initialSelectedDate]` prop-sync effect.
+- **Issue 2** — create-appt default start = branch open hours (`getOpenHoursForDate`), was hardcoded '10:00'. Initializer + re-apply effect (keyed on date+cs, not startTime). **Rule P siblings**: `AppointmentCalendarView.openCreate` (`time||''`) + `DepositPanel` deposit-appt sub-form.
+- **Issue 3** — Frontend นัดหมาย cancel HARD-DELETES (`deleteBackendAppointment`, mirrors Backend) not `status:'cancelled'`; V125 session-archive cascade preserved (`appt-deleted`).
+- **AV133** + NEW `tests/finance-goto-default-time-cancel-delete.test.js` (I2 = REAL getOpenHoursForDate, L2) + 3 V21 fixups (v125 SG-A3 · phase-19-0 C2.1 · phase-24-0 VOC.B.1).
+- **Rule Q-honest**: logic L2 + source-grep + full suite; real-browser render/delete round-trip = USER L1 post-deploy (auth-gated, workstyle "ไม่ self-test UI") — disclosed.
+- Detail: `.agents/sessions/2026-05-26-finance-goto-default-time-cancel-delete.md`.
+
 ### Session 2026-05-26 EOD+2 — Frontend 4-tab removal + deposit-aware cancel dialog SHIPPED (LOCAL)
 
 Full `/session-start` → `brainstorming` (Visual Companion via AskUserQuestion previews) → spec → `writing-plans` → `executing-plans` (T1–T11, Rule K). master = `e84d2538`; prod UNCHANGED `65ab6467` (await "deploy", V18).
