@@ -143,6 +143,12 @@ export function useStaffChat() {
     }
     setLoading(true);
     setError(null);  // V73 L1 fix — clear prior-branch error on resubscribe
+    // (2026-06-03 EOD+4, H2) — the staff chat is PER-BRANCH. `replyingTo` is a
+    // snapshot of a message in the PREVIOUS branch; carrying it into the new
+    // branch would dangle (its target id isn't in this branch) + let a reply be
+    // filed against the wrong audience. Clear it whenever the branch changes.
+    // (No-op on the first mount: replyingTo is already null.)
+    setReplyingTo(null);
     // V82 (2026-05-17) — Reset per-mount sound-dedup set on every
     // resubscribe. Pre-V82 the in-memory dedup ref accumulated forever
     // across the hook lifetime; V82 narrows scope to a single listener

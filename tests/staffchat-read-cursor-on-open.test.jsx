@@ -98,7 +98,10 @@ describe('SG — source-grep regression locks', () => {
     expect(listSrc).toMatch(/function StaffChatMessageList\(\{[^}]*\bvisible\b/);
   });
   it('SG2 a visible-transition effect scrolls to bottom + marks read (deps [visible])', () => {
-    expect(listSrc).toMatch(/if\s*\(!visible\)\s*return undefined;\s*\n\s*scrollContainerToBottom/);
+    // (2026-06-03 EOD+4 V21-fixup, H11) — the !visible branch now also pauses
+    // inline media before returning; the visible (open) path still scrolls to
+    // bottom + marks read immediately after that branch.
+    expect(listSrc).toMatch(/if\s*\(!visible\)\s*\{[\s\S]*?return undefined;\s*\n\s*\}\s*\n\s*scrollContainerToBottom\(listRef\.current\);/);
     expect(listSrc).toMatch(/onScrolledToBottomRef\.current\?\.\(\)/);
     expect(listSrc).toMatch(/\}, \[visible\]\);/);
   });

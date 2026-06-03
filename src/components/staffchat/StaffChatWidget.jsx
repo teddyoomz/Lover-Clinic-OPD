@@ -89,7 +89,17 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
           unreadCount={chat.unreadCount}
           visible={!chat.minimized}
         />
+        {/* (2026-06-03 EOD+4, H2) — the staff chat is PER-BRANCH; the draft
+            (text + staged files) belongs to the branch it was composed for.
+            The Widget stays mounted across a BranchSelector switch (only
+            selectedBranchId changes), so WITHOUT a branch key the always-mounted
+            composer would carry a branch-A draft into branch B and let it be
+            SENT to the wrong audience. Keying by selectedBranchId remounts the
+            composer on a branch change → text/files reset + object-URLs revoked
+            (unmount cleanup). Draft still survives minimize→reopen WITHIN a
+            branch (hide-don't-unmount; the panel stays mounted, key unchanged). */}
         <StaffChatComposer
+          key={selectedBranchId}
           onSend={chat.send}
           recentMentionCandidates={chat.recentMentionCandidates}
           replyingTo={chat.replyingTo}

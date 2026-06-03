@@ -35,6 +35,11 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   // (2026-06-01) true when the bottom sentinel is in view. Default true so the
   // button is hidden on first mount (the auto-scroll effect pins to the bottom).
   const [isAtBottom, setIsAtBottom] = useState(true);
+  // (2026-06-03 EOD+4, H4) — ref mirror of isAtBottom, read SYNCHRONOUSLY by the
+  // [lastMessageId] auto-scroll effect to decide whether a new message should
+  // follow-to-bottom. Default true so the very first messages + the V140 cap-fix
+  // path still scroll before any observer signal. The observer keeps it current.
+  const isAtBottomRef = useRef(true);
 
   // (2026-06-02, AV174) Click-a-reply-quote → scroll to the original message +
   // bounce it. nodeRefs maps message-id → its DOM node (registered by each
@@ -65,12 +70,18 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   // listener caps at 50, so messages.length stops changing past the cap).
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
 
-  // (2026-06-01) Auto-scroll to the TRUE bottom on open + on every new last
-  // message. Instant container scroll (immediate + one rAF to catch a 1-frame-late
-  // layout) — replaces the undershoot-prone smooth scrollIntoView. Still keyed on
-  // [lastMessageId] so a same-snapshot re-fire never yanks a user who scrolled up
-  // (V140 contract preserved).
+  // (2026-06-01) Auto-scroll to the TRUE bottom on a new last message. Instant
+  // container scroll (immediate + one rAF to catch a 1-frame-late layout) —
+  // replaces the undershoot-prone smooth scrollIntoView. Keyed on [lastMessageId]
+  // so a same-snapshot re-fire never re-scrolls (V140 contract preserved).
+  // (2026-06-03 EOD+4, H4) — gated on isAtBottomRef: follow-to-bottom ONLY when
+  // the user was already at the bottom. If they've scrolled UP to read history, a
+  // new message must NOT yank them down — leave their position so the jump-to-
+  // latest button's unread badge works (LINE/Slack standard; user decision
+  // 2026-06-03). The [visible] OPEN effect below stays unconditional (opening the
+  // panel always lands at the bottom regardless of the pre-minimize position).
   useEffect(() => {
+    if (!isAtBottomRef.current) return undefined;
     scrollContainerToBottom(listRef.current);
     if (typeof requestAnimationFrame !== 'function') return undefined;
     const id = requestAnimationFrame(() => scrollContainerToBottom(listRef.current));
@@ -90,8 +101,27 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
   const onScrolledToBottomRef = useRef(onScrolledToBottom);
   useEffect(() => { onScrolledToBottomRef.current = onScrolledToBottom; }, [onScrolledToBottom]);
   useEffect(() => {
-    if (!visible) return undefined;
+    if (!visible) {
+      // (2026-06-03 EOD+4, H11) — hide-don't-unmount keeps this list MOUNTED
+      // (display:none) on minimize, which does NOT pause a playing inline
+      // <video>/<audio> in a message bubble → a voice message / video would keep
+      // playing audibly with no visible controls after the user minimizes the
+      // chat. Pre-change a minimize unmounted the list and stopped playback;
+      // restore that by pausing any inline media on the hidden transition.
+      try {
+        listRef.current?.querySelectorAll('video, audio').forEach((m) => {
+          try { m.pause(); } catch { /* media detached / not ready */ }
+        });
+      } catch { /* querySelectorAll guard (empty-state has no listRef) */ }
+      return undefined;
+    }
     scrollContainerToBottom(listRef.current);
+    // (2026-06-03 EOD+4, H4) — opening always lands at the bottom, so we ARE at
+    // the bottom now. Reflect it synchronously (don't wait for the async observer)
+    // so a new message arriving in the open→observer-fire window still follows
+    // (the [lastMessageId] effect reads isAtBottomRef.current). The observer
+    // confirms it on its next tick.
+    isAtBottomRef.current = true;
     try { onScrolledToBottomRef.current?.(); } catch { /* cursor write must not crash the list */ }
     if (typeof requestAnimationFrame !== 'function') return undefined;
     const id = requestAnimationFrame(() => scrollContainerToBottom(listRef.current));
@@ -118,6 +148,9 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
       (entries) => {
         for (const entry of entries) {
           setIsAtBottom(entry.isIntersecting);
+          // (2026-06-03 EOD+4, H4) — keep the ref in lock-step so the new-message
+          // auto-scroll effect reads the latest at-bottom state synchronously.
+          isAtBottomRef.current = entry.isIntersecting;
           if (entry.isIntersecting && typeof onScrolledToBottom === 'function') {
             try {
               onScrolledToBottom();
