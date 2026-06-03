@@ -2822,6 +2822,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // doc still exists (admin can retry from the queue UI later). Stamps
       // linkedDepositId / linkedAppointmentId on the session doc for
       // forensic traceability.
+      // appointment-loop R1 (2026-06-03) — createDepositBookingPair now throws
+      // AP1_COLLISION (atomic double-booking guard); capture it so the kiosk
+      // shows a "pick another time" warning instead of a false success toast.
+      let pairBookingCollision = false;
       try {
         const amt = parseFloat(depositFormData.paymentAmount) || 0;
         if (amt > 0) {
@@ -2968,6 +2972,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           }
         }
       } catch (pairErr) {
+        pairBookingCollision = pairErr?.code === 'AP1_COLLISION';
         console.warn('[confirmCreateDeposit] pair-helper write failed (kiosk session still saved):', pairErr);
         // Stamp failure for diagnostics; admin can retry later via backend
         try {
@@ -2979,7 +2984,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
 
       setSelectedQR(sessionId);
-      showToast('สร้างคิวลูกค้าจองมัดจำสำเร็จ!');
+      // appointment-loop R1 — don't claim success when the appointment collided
+      // (double-booking guard fired). The kiosk session + deposit-sync-failed
+      // stamp are kept; admin re-picks a time + retries from the queue.
+      showToast(pairBookingCollision
+        ? 'ช่วงเวลานี้มีนัดของแพทย์ท่านนี้อยู่แล้ว — สร้างคิวลูกค้าไว้แล้ว แต่ยังไม่ได้จองนัด กรุณาแก้เวลาแล้วลองใหม่'
+        : 'สร้างคิวลูกค้าจองมัดจำสำเร็จ!', pairBookingCollision ? 6000 : undefined);
       setAdminMode('deposit', true);
     } catch (e) { console.error('createDeposit:', e); }
     setIsGenerating(false);

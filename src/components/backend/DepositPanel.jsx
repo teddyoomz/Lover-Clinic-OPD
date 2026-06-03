@@ -536,7 +536,13 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       setSuccess(true);
       setTimeout(() => { setFormOpen(false); setSuccess(false); loadList(); }, 700);
     } catch (err) {
-      setError(err.message || 'บันทึกไม่สำเร็จ');
+      // appointment-loop R1 (2026-06-03) — createDepositBookingPair now throws
+      // AP1_COLLISION (atomic double-booking guard). Surface a friendly Thai
+      // message instead of the raw slot-key code. (Atomic collision sets
+      // err.slotKey, not err.collision, so no time range to interpolate.)
+      setError(err?.code === 'AP1_COLLISION'
+        ? 'ช่วงเวลานี้มีนัดของแพทย์ท่านนี้อยู่แล้ว กรุณาเลือกเวลาอื่น'
+        : (err.message || 'บันทึกไม่สำเร็จ'));
     } finally { setSaving(false); }
   };
 

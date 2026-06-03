@@ -97,8 +97,13 @@ describe('A2 source-grep — backendClient.js wires the runTransaction slot patt
     expect(SRC).toMatch(/const appointmentSlotDoc = \(slotId\)/);
   });
 
-  test('A2.2 buildAppointmentSlotKey is exported', () => {
-    expect(SRC).toMatch(/export function buildAppointmentSlotKey/);
+  test('A2.2 buildAppointmentSlotKey is re-exported (moved to appointmentSlotKeys — appointment-loop R1)', () => {
+    // appointment-loop R1 (2026-06-03) — the pure slot-key builders moved to
+    // src/lib/appointmentSlotKeys.js so appointmentDepositBatch can reserve the
+    // SAME be_appointment_slots docs (deposit bookings were bypassing the
+    // AP1-bis guard). backendClient re-exports them for backward-compat.
+    expect(SRC).toMatch(/export \{[^}]*buildAppointmentSlotKey[^}]*\}/);
+    expect(read('src/lib/appointmentSlotKeys.js')).toMatch(/export function buildAppointmentSlotKey\b/);
   });
 
   test('A2.3 createBackendAppointment uses runTransaction with slot guard (AP1-bis multi-slot)', () => {
@@ -312,12 +317,14 @@ describe('A5 buildAppointmentSlotKeys (AP1-bis range-overlap fix)', () => {
 describe('A6 source-grep — AP1-bis multi-slot wiring', () => {
   const SRC = read('src/lib/backendClient.js');
 
-  test('A6.1 SLOT_INTERVAL_MIN constant declared', () => {
-    expect(SRC).toMatch(/export const SLOT_INTERVAL_MIN = 15/);
+  test('A6.1 SLOT_INTERVAL_MIN constant re-exported (canonical in appointmentSlotKeys — appointment-loop R1)', () => {
+    expect(SRC).toMatch(/export \{[^}]*SLOT_INTERVAL_MIN[^}]*\}/);
+    expect(read('src/lib/appointmentSlotKeys.js')).toMatch(/export const SLOT_INTERVAL_MIN = 15/);
   });
 
-  test('A6.2 buildAppointmentSlotKeys (plural) is exported', () => {
-    expect(SRC).toMatch(/export function buildAppointmentSlotKeys/);
+  test('A6.2 buildAppointmentSlotKeys (plural) re-exported (canonical in appointmentSlotKeys — appointment-loop R1)', () => {
+    expect(SRC).toMatch(/export \{[^}]*buildAppointmentSlotKeys[^}]*\}/);
+    expect(read('src/lib/appointmentSlotKeys.js')).toMatch(/export function buildAppointmentSlotKeys\b/);
   });
 
   test('A6.3 createBackendAppointment uses buildAppointmentSlotKeys (plural)', () => {

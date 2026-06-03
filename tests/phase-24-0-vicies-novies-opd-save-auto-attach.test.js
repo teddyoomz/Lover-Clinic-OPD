@@ -275,8 +275,12 @@ describe('Phase 24.0-vicies-novies — payload builders carry linkedOpdSessionId
   });
 
   it('VN.D.6 — createDepositBookingPair forwards linkedOpdSessionId to BOTH builders', () => {
+    // appointment-loop R1 (2026-06-03) — end boundary changed from
+    // `await batch.commit()` → `await runTransaction` (the pair write is now a
+    // runTransaction with the AP1-bis slot guard; the payloads — where
+    // linkedOpdSessionId is forwarded — are still built BEFORE the tx).
     const block = PAIR_HELPER.match(
-      /export\s+async\s+function\s+createDepositBookingPair[\s\S]{0,4000}?await\s+batch\.commit\(\)/,
+      /export\s+async\s+function\s+createDepositBookingPair[\s\S]{0,4000}?await\s+runTransaction/,
     );
     expect(block).toBeTruthy();
     // Forwarded twice (once to deposit builder, once to appointment builder).

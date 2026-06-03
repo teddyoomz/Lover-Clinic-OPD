@@ -37,6 +37,7 @@ import {
   doc,
   getDoc,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   query,
   where,
@@ -44,10 +45,18 @@ import {
   collection,
 } from 'firebase/firestore';
 import { resolveSelectedBranchId } from './branchSelection.js';
+// appointment-loop R1 (2026-06-03) — AP1-bis atomic double-booking slot guard.
+// Pure key builders (no Firestore) shared with backendClient.createBackendAppointment
+// so deposit-booking appointments reserve the SAME be_appointment_slots docs as
+// regular bookings → both flows mutually exclusive (no double-booking).
+import { buildAppointmentSlotKeys } from './appointmentSlotKeys.js';
 
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 const depositDoc = (id) => doc(db, ...basePath(), 'be_deposits', String(id));
 const appointmentDoc = (id) => doc(db, ...basePath(), 'be_appointments', String(id));
+// appointment-loop R1 (2026-06-03) — AP1-bis slot doc (mirror backendClient's
+// appointmentSlotDoc; same be_appointment_slots collection + key format).
+const appointmentSlotDoc = (slotId) => doc(db, ...basePath(), 'be_appointment_slots', String(slotId));
 // Phase 24.0-vicies-novies (2026-05-07) — opd_sessions doc + collection refs
 // for the Backend pickLater "ส่งลิ้งค์ลูกค้า" provisioning flow.
 const opdSessionDoc = (id) => doc(db, ...basePath(), 'opd_sessions', String(id));
@@ -65,6 +74,76 @@ function _resolveBranchIdForWrite(data) {
     return data.branchId;
   }
   return resolveSelectedBranchId() || null;
+}
+
+/**
+ * appointment-loop R1 (2026-06-03) — reserve the be_appointment_slots docs for a
+ * deposit-booking appointment INSIDE a Firestore transaction. Mirrors
+ * backendClient.createBackendAppointment's AP1-bis atomic guard so a deposit
+ * booking and a regular booking share ONE slot namespace and can never
+ * double-book the same doctor+time.
+ *
+ * Firestore tx rule: ALL reads before ALL writes. So the CALLER must do every
+ * `tx.get` it needs (e.g. the deposit doc) BEFORE calling this helper, and every
+ * `tx.set`/`tx.update` it needs AFTER — this helper does its slot tx.get's then
+ * its slot tx.set's, with nothing read after a write.
+ *
+ * Throws Error{code:'AP1_COLLISION'} when any interval slot is already taken by
+ * a non-cancelled appointment. Falls back to a NO-OP (reserves nothing) when the
+ * appointment has no doctor or no parseable time — same as createBackendAppointment's
+ * legacy/open-ended path. Returns the reserved slot keys (for forensic logging).
+ */
+async function _reserveAppointmentSlotsInTx(tx, { date, doctorId, startTime, endTime, appointmentId }) {
+  const slotKeys = buildAppointmentSlotKeys({ date, doctorId, startTime, endTime });
+  if (slotKeys.length === 0) return [];
+  const slotRefs = slotKeys.map((k) => appointmentSlotDoc(k));
+  const snaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+  for (let i = 0; i < snaps.length; i++) {
+    const snap = snaps[i];
+    if (!snap.exists()) continue;
+    const sd = snap.data() || {};
+    if (sd.cancelled) continue;
+    const err = new Error(
+      `AP1_COLLISION: slot ${slotKeys[i]} already taken by ${sd.appointmentId || '(unknown)'}`,
+    );
+    err.code = 'AP1_COLLISION';
+    err.slotKey = slotKeys[i];
+    err.atomic = true;
+    throw err;
+  }
+  const now = new Date().toISOString();
+  for (let i = 0; i < slotRefs.length; i++) {
+    tx.set(slotRefs[i], {
+      slotId: slotKeys[i], appointmentId,
+      date: String(date || ''), doctorId: String(doctorId || ''),
+      startTime: String(startTime || ''), endTime: String(endTime || startTime || ''),
+      cancelled: false, takenAt: now,
+    });
+  }
+  return slotKeys;
+}
+
+/**
+ * appointment-loop R1 (2026-06-03) — best-effort RELEASE of the slot docs an
+ * appointment occupied, so cancelling / deleting a deposit-booking pair frees
+ * the time for re-booking (else the slots orphan + block forever — the very
+ * cascade the AP1-bis create guard introduces). Reads the appointment doc for
+ * its CURRENT time fields (the deposit's embedded `appointment` copy can be stale
+ * after an edit). Returns the keys to be added to the caller's existing batch.
+ * Never throws — a slot is a guard, not a financial record.
+ */
+async function _appointmentSlotKeysForRelease(appointmentId) {
+  if (!appointmentId) return [];
+  try {
+    const snap = await getDoc(appointmentDoc(appointmentId));
+    if (!snap.exists()) return [];
+    const a = snap.data() || {};
+    return buildAppointmentSlotKeys({
+      date: a.date, doctorId: a.doctorId, startTime: a.startTime, endTime: a.endTime,
+    });
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -290,11 +369,26 @@ export async function createDepositBookingPair({
     branchId: resolvedBranchId,
     linkedOpdSessionId,
   });
-  const batch = writeBatch(db);
-  batch.set(depositDoc(depositId), depositPayload);
-  batch.set(appointmentDoc(appointmentId), apptPayload);
-  await batch.commit();
-  // Customer balance recalc is intentionally NOT inside the batch (it's a
+  // appointment-loop R1 (2026-06-03) — atomic: reserve the AP1-bis double-booking
+  // slots + write BOTH docs in ONE runTransaction. Pre-fix this was a writeBatch
+  // with NO slot reservation, so the deposit-booking flow bypassed the
+  // createBackendAppointment AP1-bis guard → two concurrent deposit bookings (or
+  // a deposit booking vs a regular booking) double-booked the same doctor+slot.
+  // Reproduced on REAL prod (scripts/e2e-appointment-double-booking-concurrency.mjs
+  // D1: appts=2 deposits=2 collisions=0). runTransaction keeps the deposit +
+  // appointment atomic (both land or neither) AND adds the collision guard.
+  // Throws Error{code:'AP1_COLLISION'} on conflict — surfaced by callers
+  // (DepositPanel.handleSave / confirmCreateDeposit) as a friendly Thai message.
+  await runTransaction(db, async (tx) => {
+    await _reserveAppointmentSlotsInTx(tx, {
+      date: apptPayload.date, doctorId: apptPayload.doctorId,
+      startTime: apptPayload.startTime, endTime: apptPayload.endTime,
+      appointmentId,
+    });
+    tx.set(depositDoc(depositId), depositPayload);
+    tx.set(appointmentDoc(appointmentId), apptPayload);
+  });
+  // Customer balance recalc is intentionally NOT inside the tx (it's a
   // read-then-write workflow that lives in customer doc). Caller (DepositPanel)
   // can recalc post-commit via the existing recalcCustomerDepositBalance
   // helper from backendClient. Decoupling preserves writeBatch atomicity for
@@ -334,6 +428,10 @@ export async function cancelDepositBookingPair(depositId, {
     );
   }
   const now = new Date().toISOString();
+  // appointment-loop R1 (2026-06-03) — release the AP1-bis slot docs the appt
+  // held so the time is bookable again (deposit appts now reserve slots at
+  // create; not releasing them = orphan slots that block the time forever).
+  const slotKeys = await _appointmentSlotKeysForRelease(appointmentId);
   const batch = writeBatch(db);
   batch.update(depositRef, {
     status: 'cancelled',
@@ -352,6 +450,7 @@ export async function cancelDepositBookingPair(depositId, {
       updatedAt: now,
     });
   }
+  for (const k of slotKeys) batch.delete(appointmentSlotDoc(k));
   await batch.commit();
   return {
     pairCancelled: !!appointmentId,
@@ -581,10 +680,24 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
     updatedAt: now,
   };
 
-  const batch = writeBatch(db);
-  batch.set(appointmentDoc(appointmentId), newApptPayload);
-  batch.update(depRef, depUpdate);
-  await batch.commit();
+  // appointment-loop R1 (2026-06-03) — atomic: reserve AP1-bis slots + write the
+  // new appointment + link the deposit in ONE runTransaction (was a writeBatch
+  // with NO slot reservation → unguarded double-booking). tx.get(depRef) re-checks
+  // existence in-tx (catches a concurrent deposit delete). All reads (deposit +
+  // slots) precede all writes. Throws AP1_COLLISION on a slot conflict.
+  await runTransaction(db, async (tx) => {
+    const freshDep = await tx.get(depRef);
+    if (!freshDep.exists()) {
+      throw new Error(`createAppointmentForExistingDeposit: deposit ${depositId} not found`);
+    }
+    await _reserveAppointmentSlotsInTx(tx, {
+      date: newApptPayload.date, doctorId: newApptPayload.doctorId,
+      startTime: newApptPayload.startTime, endTime: newApptPayload.endTime,
+      appointmentId,
+    });
+    tx.set(appointmentDoc(appointmentId), newApptPayload);
+    tx.update(depRef, depUpdate);
+  });
   return { depositId, appointmentId };
 }
 
@@ -733,9 +846,14 @@ export async function deleteDepositBookingPair(depositId) {
       'มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถลบได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน',
     );
   }
+  // appointment-loop R1 (2026-06-03) — release the AP1-bis slot docs too (deposit
+  // appts now reserve slots at create; a bare delete would orphan them → the
+  // doctor's time stays blocked forever).
+  const slotKeys = await _appointmentSlotKeysForRelease(appointmentId);
   const batch = writeBatch(db);
   batch.delete(depRef);
   if (appointmentId) batch.delete(appointmentDoc(appointmentId));
+  for (const k of slotKeys) batch.delete(appointmentSlotDoc(k));
   await batch.commit();
   return {
     depositId,

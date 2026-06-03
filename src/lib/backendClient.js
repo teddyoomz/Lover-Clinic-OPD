@@ -17,6 +17,10 @@ import { planLotCleanup } from './stockLotCleanupCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
 import { roundTHB } from './financeUtils.js'; // V156 — defensive money rounding at the write boundary (closes M12 caveat)
 import { decideApptStatusServiceSync } from './appointmentDisplay.js';
+// AP1/AP1-bis slot-key builders extracted (2026-06-03, appointment-loop R1) so
+// appointmentDepositBatch.js can reserve the SAME atomic double-booking slots
+// without importing this module. Re-exported below for backward-compat.
+import { SLOT_INTERVAL_MIN, buildAppointmentSlotKey, buildAppointmentSlotKeys } from './appointmentSlotKeys.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
 // in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson). Same
@@ -1999,95 +2003,11 @@ const appointmentDoc = (id) => doc(db, ...basePath(), 'be_appointments', String(
 const appointmentSlotsCol = () => collection(db, ...basePath(), 'be_appointment_slots');
 const appointmentSlotDoc = (slotId) => doc(db, ...basePath(), 'be_appointment_slots', String(slotId));
 
-/**
- * Default slot interval for AP1-bis multi-slot reservation. 15 minutes
- * matches ProClinic + clinic-typical scheduling granularity. Tunable by
- * caller for tests but every production write uses 15.
- */
-export const SLOT_INTERVAL_MIN = 15;
-
-function _parseHHMM(s) {
-  const m = String(s || '').match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(min) || h < 0 || h > 23 || min < 0 || min > 59) return null;
-  return h * 60 + min;
-}
-
-function _formatHHMM(totalMin) {
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-/**
- * AP1 (legacy single-slot) — exact-key slot id. KEPT for backward-compat
- * with V15 #12/#13 production data. New code uses buildAppointmentSlotKeys
- * (plural, multi-slot — see AP1-bis below).
- *
- * Format: `${date}_${doctorId}_${startTime}_${endTime}`. Empty / missing
- * inputs return ''.
- */
-export function buildAppointmentSlotKey(input) {
-  const { date, doctorId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
-  const d = String(date || '').trim();
-  const doc = String(doctorId || '').trim();
-  const s = String(startTime || '').trim();
-  const e = String(endTime || startTime || '').trim();
-  if (!d || !doc || !s) return '';
-  const safeDoc = doc.replace(/[\/.]/g, '-');
-  return `${d}_${safeDoc}_${s}_${e || s}`;
-}
-
-/**
- * AP1-bis (2026-05-04): build the ARRAY of 15-min interval slot keys an
- * appointment occupies. Catches RANGE-OVERLAP collisions the legacy
- * single-key approach missed (e.g. 09:00-10:00 vs 09:30-10:30 — both
- * reserve slot 09:30 → atomic tx.get sees the conflict).
- *
- * Bucketing semantics:
- *   - startTime is FLOORED to the nearest interval boundary (09:10 → 09:00)
- *   - endTime is CEILINGED   (09:25 → 09:30)
- *   - emit `${date}_${doctorId}_${HH:MM}` for every interval start in
- *     [floor(start), ceil(end))
- *
- * Edge cases:
- *   - endTime missing OR ≤ startTime: emits ONE slot at floor(start)
- *   - startTime invalid (non-HH:MM): returns []
- *   - missing date/doctorId: returns []
- *
- * Returns plain string[] (sorted by time, deduped). Caller maps each to
- * `appointmentSlotDoc(key)` for tx.get / tx.set.
- *
- * Tunable interval (default 15) for tests; production callers use the
- * default. Intervals 1, 5, 10, 15, 30, 60 supported.
- */
-export function buildAppointmentSlotKeys(input, intervalMin = SLOT_INTERVAL_MIN) {
-  const { date, doctorId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
-  const d = String(date || '').trim();
-  const doc = String(doctorId || '').trim();
-  if (!d || !doc) return [];
-  const start = _parseHHMM(startTime);
-  if (start === null) return [];
-  const end = _parseHHMM(endTime);
-  const interval = Number.isFinite(intervalMin) && intervalMin > 0 ? Math.floor(intervalMin) : SLOT_INTERVAL_MIN;
-  const safeDoc = doc.replace(/[\/.]/g, '-');
-
-  // Single-point or end<=start: emit ONE slot at floor(start).
-  if (end === null || end <= start) {
-    const floorStart = Math.floor(start / interval) * interval;
-    return [`${d}_${safeDoc}_${_formatHHMM(floorStart)}`];
-  }
-
-  const floorStart = Math.floor(start / interval) * interval;
-  const ceilEnd = Math.ceil(end / interval) * interval;
-  const keys = [];
-  for (let m = floorStart; m < ceilEnd; m += interval) {
-    keys.push(`${d}_${safeDoc}_${_formatHHMM(m)}`);
-  }
-  return keys;
-}
+// AP1/AP1-bis slot-key builders moved to ./appointmentSlotKeys.js (2026-06-03,
+// appointment-loop R1) so appointmentDepositBatch.js can reserve the SAME slots.
+// Imported at top; re-exported here for backward-compat with existing importers
+// (tests, scripts, internal callers below).
+export { SLOT_INTERVAL_MIN, buildAppointmentSlotKey, buildAppointmentSlotKeys };
 
 /** V128 — resolve a LINKED customer's phone for denorm on the appointment doc.
  *  AppointmentFormModal sends customerName/HN + customerPhoneTemp (pick-later)

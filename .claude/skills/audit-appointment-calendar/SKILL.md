@@ -9,11 +9,16 @@ allowed-tools: "Read, Grep, Glob"
 
 ## Invariants (AP1–AP8)
 
-### AP1 — Time-slot conflict detection
+### AP1 — Time-slot conflict detection (AP1-bis atomic multi-slot guard)
 **Why**: two writes to same doctor+slot in parallel → double-booking.
-**Where**: `src/components/backend/AppointmentTab.jsx` handleSave + `createBackendAppointment`
-**Known gap**: scan finding #6 — NO overlap check in handleSave. Bug confirmed.
-**Fix hint**: pre-write query `be_appointments` for `(roomId/doctorId, overlapping time)`; ideally inside `runTransaction` for race safety.
+**Where**: `createBackendAppointment` (`src/lib/backendClient.js`).
+**Status**: IMPLEMENTED — AP1-bis reserves one `be_appointment_slots` doc per
+15-min interval inside a `runTransaction` (`buildAppointmentSlotKeys` from
+`src/lib/appointmentSlotKeys.js`); range overlaps collide on a shared interval →
+`AP1_COLLISION`, Firestore OCC retries. A soft pre-write `getAppointmentsByDate`
+scan complements it for the sequential case.
+**Check**: every appointment-CREATE path reserves slots via this guard — NOT just
+`createBackendAppointment`. See **AP9**.
 
 ### AP2 — Resource overlap (room + equipment)
 **Check**: same patterns as AP1 for rooms and medical instruments.
@@ -34,6 +39,38 @@ allowed-tools: "Read, Grep, Glob"
 
 ### AP7 — Cancel releases slot atomically
 **Why**: cancel without status change = ghost reserved slot.
+**Check (appointment-loop R1, 2026-06-03)**: deposit-booking cancel/delete
+(`cancelDepositBookingPair` / `deleteDepositBookingPair` in
+`src/lib/appointmentDepositBatch.js`) MUST release the reserved slot docs via
+`_appointmentSlotKeysForRelease` + `batch.delete(appointmentSlotDoc(k))` —
+otherwise the AP9 reservation orphans the slot + blocks the time forever.
+
+### AP9 — EVERY appointment-create path reserves slots via the AP1-bis guard (appointment-loop R1, 2026-06-03)
+**Why**: the atomic double-booking guard is only as complete as its LEAST-guarded
+writer. Pre-R1, `createBackendAppointment` reserved slots but the DEPOSIT-booking
+writers (`createDepositBookingPair`, `createAppointmentForExistingDeposit` in
+`appointmentDepositBatch.js`) did a plain `writeBatch.set(appt)` with NO slot
+reservation → the money-backed booking flow had ZERO atomic double-booking
+protection and the two flows were mutually blind. Reproduced on REAL prod
+(`scripts/e2e-appointment-double-booking-concurrency.mjs` D1: 2 concurrent deposit
+bookings same doctor+slot → appts=2 deposits=2 collisions=0).
+**Invariant**: every function that WRITES a new `be_appointments` doc with a
+doctor+time MUST reserve its slots in the SAME `be_appointment_slots` namespace
+inside a `runTransaction` (via `_reserveAppointmentSlotsInTx` / the
+`createBackendAppointment` tx) so all create paths are mutually exclusive.
+**Grep**:
+```
+# every be_appointments writer that is NOT inside a slot-reserving tx:
+grep -nE "batch\.set\(appointmentDoc|tx\.set\(appointmentDoc" src/lib/appointmentDepositBatch.js src/lib/backendClient.js
+```
+Each `*.set(appointmentDoc(...))` of a NEW appt with a doctor+time must be preceded
+by `_reserveAppointmentSlotsInTx` (deposit module) or the AP1-bis slot tx (backendClient).
+**Sanctioned exceptions**: `createDepositForExistingAppointment` (links a deposit
+to an ALREADY-created appt → its slots were reserved at its own create; reserves
+no NEW slot) + `buildAppointmentPairPayload`/legacy/`skipServerCollisionCheck`
+imports (open-ended, no parseable doctor+time → no keys → no guard, same as
+`createBackendAppointment`'s legacy fallback).
+**Regression lock**: `tests/appt-double-booking-deposit-slot-guard.test.js` (R1.6–R1.14).
 
 ### AP8 — FCM reminder doesn't re-fire on snapshot 2x
 **Why**: CLAUDE.md rule 1 — serverTimestamp causes 2 snapshot calls.

@@ -95,12 +95,16 @@ describe('Phase 24.0-noniesdecies — createAppointmentForExistingDeposit helper
     expect(helperBlock).toMatch(/appointmentType:\s*['"]deposit-booking['"]/);
   });
 
-  it('NDF.A.6 — atomic writeBatch (be_appointments set + be_deposits update)', () => {
+  it('NDF.A.6 — atomic runTransaction reserves AP1-bis slots + writes appt + updates deposit (appointment-loop R1)', () => {
     const helperBlock = extractHelper();
-    expect(helperBlock).toMatch(/writeBatch\(db\)/);
-    expect(helperBlock).toMatch(/batch\.set\(appointmentDoc\(appointmentId\)/);
-    expect(helperBlock).toMatch(/batch\.update\(depRef/);
-    expect(helperBlock).toMatch(/await\s+batch\.commit\(\)/);
+    // appointment-loop R1 (2026-06-03) — was a plain writeBatch with NO slot
+    // reservation → createAppointmentForExistingDeposit could double-book a
+    // held slot. Now a runTransaction reserves the AP1-bis slots + writes the
+    // appointment + links the deposit atomically (proven on real prod e2e D4).
+    expect(helperBlock).toMatch(/runTransaction\(db, async \(tx\) =>/);
+    expect(helperBlock).toMatch(/_reserveAppointmentSlotsInTx\(tx/);
+    expect(helperBlock).toMatch(/tx\.set\(appointmentDoc\(appointmentId\), newApptPayload\)/);
+    expect(helperBlock).toMatch(/tx\.update\(depRef/);
   });
 
   it('NDF.A.7 — deposit update sets hasAppointment=true + linkedAppointmentId + embedded appointment.* fields', () => {

@@ -21,7 +21,17 @@ vi.mock('firebase/firestore', () => ({
   writeBatch: vi.fn(() => ({
     set: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
     commit: vi.fn(async () => undefined),
+  })),
+  // appointment-loop R1 (2026-06-03) — createDepositBookingPair /
+  // createAppointmentForExistingDeposit now reserve AP1-bis slots inside a
+  // runTransaction (was a plain writeBatch with NO slot guard → double-booking).
+  // Default tx: no slot is taken (get→!exists) so the happy path commits.
+  runTransaction: vi.fn(async (_db, cb) => cb({
+    get: vi.fn(async () => ({ exists: () => false, data: () => ({}) })),
+    set: vi.fn(),
+    update: vi.fn(),
   })),
   serverTimestamp: () => ({ __serverTimestamp: true }),
 }));
@@ -148,31 +158,52 @@ describe('Phase 21.0 — P1 pure helpers', () => {
     ).rejects.toThrow(/date.*startTime|startTime.*date/i);
   });
 
-  test('P1.10 createDepositBookingPair calls writeBatch with both docs', async () => {
-    const { writeBatch } = await import('firebase/firestore');
-    writeBatch.mockClear();
-    const setMock = vi.fn();
-    const commitMock = vi.fn(async () => undefined);
-    writeBatch.mockReturnValue({
-      set: setMock,
-      update: vi.fn(),
-      commit: commitMock,
-    });
+  test('P1.10 createDepositBookingPair reserves AP1-bis slots + writes both docs atomically (appointment-loop R1)', async () => {
+    // appointment-loop R1 (2026-06-03) — was a plain writeBatch with NO slot
+    // reservation → the deposit-booking flow BYPASSED the AP1-bis double-booking
+    // guard (reproduced on real prod: 2 concurrent deposit bookings same
+    // doctor+slot → appts=2 deposits=2 collisions=0). Now ONE runTransaction
+    // reserves a be_appointment_slots doc per 15-min interval + writes the
+    // deposit + appointment atomically. 10:00-11:00 → 4 interval slots; with the
+    // deposit + appointment doc that's 6 tx.set + 4 slot tx.get.
+    const { runTransaction } = await import('firebase/firestore');
+    runTransaction.mockClear();
+    const txGet = vi.fn(async () => ({ exists: () => false, data: () => ({}) }));
+    const txSet = vi.fn();
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb({ get: txGet, set: txSet, update: vi.fn() }));
     const result = await helper.createDepositBookingPair({
       depositData: {
         customerId: 'C1',
         hasAppointment: true,
-        appointment: { date: '2026-05-10', startTime: '10:00' },
+        appointment: { date: '2026-05-10', startTime: '10:00', endTime: '11:00', doctorId: 'DOC-1' },
       },
       branchId: 'BR-test',
     });
-    expect(writeBatch).toHaveBeenCalledTimes(1);
-    expect(setMock).toHaveBeenCalledTimes(2);  // 1 deposit + 1 appointment
-    expect(commitMock).toHaveBeenCalledTimes(1);
-    expect(result).toHaveProperty('depositId');
-    expect(result).toHaveProperty('appointmentId');
+    expect(runTransaction).toHaveBeenCalledTimes(1);
+    expect(txGet).toHaveBeenCalledTimes(4);            // 4 interval slot reads (10:00/10:15/10:30/10:45)
+    expect(txSet).toHaveBeenCalledTimes(6);            // 4 slots + 1 deposit + 1 appointment
     expect(result.depositId).toMatch(/^DEP-/);
     expect(result.appointmentId).toMatch(/^BA-/);
+  });
+
+  test('P1.10-bis createDepositBookingPair throws AP1_COLLISION when an interval slot is already taken', async () => {
+    // appointment-loop R1 — the atomic guard: if any reserved interval slot
+    // already belongs to a non-cancelled appointment, the whole pair write
+    // aborts (no deposit, no appointment) with code AP1_COLLISION.
+    const { runTransaction } = await import('firebase/firestore');
+    runTransaction.mockImplementationOnce(async (_db, cb) => cb({
+      get: vi.fn(async () => ({ exists: () => true, data: () => ({ appointmentId: 'BA-existing', cancelled: false }) })),
+      set: vi.fn(),
+      update: vi.fn(),
+    }));
+    await expect(helper.createDepositBookingPair({
+      depositData: {
+        customerId: 'C1',
+        hasAppointment: true,
+        appointment: { date: '2026-05-10', startTime: '10:00', endTime: '11:00', doctorId: 'DOC-1' },
+      },
+      branchId: 'BR-test',
+    })).rejects.toMatchObject({ code: 'AP1_COLLISION' });
   });
 
   test('P1.11 cancelDepositBookingPair returns pairCancelled=false when no link', async () => {
