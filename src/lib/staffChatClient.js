@@ -162,14 +162,46 @@ export async function sendStaffChatMessage(payload) {
 
 // V73 Feature B (2026-05-16) — Extract @mentions from text.
 // Returns array of unique display-name candidates (max 5) without the '@' prefix.
-export function extractMentions(text) {
+//
+// (2026-06-03 EOD+4) — candidate-aware. A displayName can contain SPACES (the
+// NamePicker allows any 2-50 char name; Thai names commonly do, e.g. "พี่ บี",
+// "นางสาว แพรพร"), and the dropdown inserts the FULL name → "@พี่ บี". The old
+// /@([^\s@]+)/ stopped at the first space → captured only "พี่" → the recipient
+// match `mentions.includes("พี่ บี")` failed → the distinct mention sound +
+// full @-highlight never fired for spaced names. Fix: when the recent-candidate
+// list is passed, match the LONGEST candidate name that follows each '@' (handles
+// spaces); fall back to the single non-space token otherwise (single-word names
+// not in the list + backward-compat when no candidates are supplied).
+export function extractMentions(text, candidates) {
   if (typeof text !== 'string' || !text) return [];
-  const matches = text.match(/@([^\s@]+)/g) || [];
+  const cand = Array.isArray(candidates)
+    ? candidates.filter((c) => typeof c === 'string' && c)
+    : [];
+  // Longest-first so "พี่ บี" wins over "พี่" at the same '@'.
+  const sorted = cand.length ? [...cand].sort((a, b) => b.length - a.length) : [];
   const unique = [];
-  for (const m of matches) {
-    const name = m.slice(1);  // strip leading @
-    if (name && !unique.includes(name)) unique.push(name);
-    if (unique.length >= 5) break;
+  let i = 0;
+  while (i < text.length && unique.length < 5) {
+    if (text[i] === '@') {
+      const after = text.slice(i + 1);
+      // 1. longest known candidate name that follows (handles spaces)
+      let matched = null;
+      for (const name of sorted) {
+        if (after.startsWith(name)) { matched = name; break; }
+      }
+      // 2. fallback: single non-space token (original behavior — single-word names
+      //    not in the recent list, + identical output when no candidates passed)
+      if (!matched) {
+        const m = after.match(/^[^\s@]+/);
+        if (m) matched = m[0];
+      }
+      if (matched) {
+        if (!unique.includes(matched)) unique.push(matched);
+        i += 1 + matched.length;
+        continue;
+      }
+    }
+    i++;
   }
   return unique;
 }

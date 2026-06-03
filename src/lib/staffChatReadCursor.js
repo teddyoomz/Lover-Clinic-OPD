@@ -250,5 +250,20 @@ export function isMessageUnread(message, cursor, selfDeviceId) {
     && message.deviceId === selfDeviceId) {
     return false;
   }
-  return msgMs > cursorMs;
+  if (msgMs > cursorMs) return true;
+  if (msgMs < cursorMs) return false;
+  // (2026-06-03 EOD+4) — same-millisecond tie. createdAt-ms alone is ambiguous
+  // when two messages share the exact same serverTimestamp ms (one read, one
+  // not). Tiebreak by message.id: the listener queries orderBy('createdAt','desc')
+  // then .reverse(), so same-ms docs are message.id-ASCENDING in the displayed
+  // array (doc id === message.id — addStaffChatMessage setDoc by id). A same-ms
+  // message whose id sorts AFTER the last-read id is therefore "below" the cursor
+  // → unread. An empty lastReadId is the first-load seed ("everything up to seedMs
+  // is read") → same-ms is read (keeps the backlog silent). Worst case (if a
+  // future query changes the tie order) is a rare false-UNREAD, which is the safe
+  // failure mode — the user clears it by scrolling to bottom — vs the prior
+  // silently-MISSED message.
+  const lastReadId = typeof cursor.lastReadId === 'string' ? cursor.lastReadId : '';
+  if (!lastReadId) return false;
+  return String(message.id || '') > lastReadId;
 }

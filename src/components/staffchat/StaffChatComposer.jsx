@@ -180,7 +180,10 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
   const submit = async () => {
     if (!canSend) return;
     const extras = {};
-    const mentions = extractMentions(trimmed);
+    // (2026-06-03 EOD+4) — pass the recent-candidate list so a picked displayName
+    // WITH SPACES (e.g. "@พี่ บี") is captured WHOLE; the recipient's mention match
+    // needs the full name (extractMentions falls back to a single token otherwise).
+    const mentions = extractMentions(trimmed, recentMentionCandidates);
     if (mentions.length > 0) extras.mentions = mentions;
     if (replyingTo) extras.replyTo = replyingTo;
 
