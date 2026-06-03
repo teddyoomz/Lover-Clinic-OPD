@@ -28,7 +28,7 @@ export function scrollContainerToBottom(el) {
   if (el) el.scrollTop = el.scrollHeight;
 }
 
-export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete, onScrolledToBottom, unreadCount = 0 }) {
+export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete, onScrolledToBottom, unreadCount = 0, visible = true }) {
   const endRef = useRef(null);
   const bottomSentinelRef = useRef(null);
   const listRef = useRef(null);
@@ -77,11 +77,40 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
     return () => cancelAnimationFrame(id);
   }, [lastMessageId]);
 
+  // (2026-06-03) — hide-don't-unmount fix. The panel now stays MOUNTED (hidden via
+  // display:none) on minimize, so "opening" the chat is a VISIBILITY transition,
+  // NOT a remount. The [lastMessageId] auto-scroll above ran while hidden
+  // (scrollHeight 0 → no-op) and never re-fired on open → the chat opened scrolled
+  // to the TOP and the read cursor never advanced (the bottom sentinel never
+  // intersected). Restore BOTH on the hidden→visible transition: scroll to the
+  // true bottom AND mark-read directly (advance the cursor) — robust, not reliant
+  // on the IntersectionObserver firing after a display toggle. Mirrors the
+  // pre-change open=mount behavior. onScrolledToBottom is read via a ref so this
+  // effect fires ONLY on `visible` change (not on every new message).
+  const onScrolledToBottomRef = useRef(onScrolledToBottom);
+  useEffect(() => { onScrolledToBottomRef.current = onScrolledToBottom; }, [onScrolledToBottom]);
+  useEffect(() => {
+    if (!visible) return undefined;
+    scrollContainerToBottom(listRef.current);
+    try { onScrolledToBottomRef.current?.(); } catch { /* cursor write must not crash the list */ }
+    if (typeof requestAnimationFrame !== 'function') return undefined;
+    const id = requestAnimationFrame(() => scrollContainerToBottom(listRef.current));
+    return () => cancelAnimationFrame(id);
+  }, [visible]);
+
   // V82 observer — fires onScrolledToBottom on intersect (read cursor).
   // (2026-06-01) ALSO drives isAtBottom both directions for the jump button.
   // Guard relaxed (no longer early-returns when onScrolledToBottom is absent) so
   // the boolean tracks regardless; onScrolledToBottom still fires ONLY on intersect.
   useEffect(() => {
+    // (2026-06-03) — only observe while VISIBLE, and re-create on each
+    // visible-transition. An IntersectionObserver created while the panel is
+    // display:none gets STUCK: the sentinel has no layout box, so it never
+    // reports isIntersecting once the panel later shows (confirmed in a real
+    // browser — scrolling to the true bottom while the stale observer was live
+    // did NOT fire, so the jump button + cursor advance never happened). Gating
+    // on `visible` + adding it to deps gives a fresh observer on a laid-out node.
+    if (!visible) return undefined;
     if (typeof IntersectionObserver === 'undefined') return undefined;
     const node = bottomSentinelRef.current;
     if (!node) return undefined;
@@ -104,7 +133,7 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onDelete,
     return () => {
       obs.disconnect();
     };
-  }, [onScrolledToBottom, lastMessageId]);
+  }, [onScrolledToBottom, lastMessageId, visible]);
 
   const scrollToLatest = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });

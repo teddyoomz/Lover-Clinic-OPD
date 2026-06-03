@@ -87,6 +87,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
           onDelete={chat.deleteMessage}
           onScrolledToBottom={chat.markScrolledToBottom}
           unreadCount={chat.unreadCount}
+          visible={!chat.minimized}
         />
         <StaffChatComposer
           onSend={chat.send}
