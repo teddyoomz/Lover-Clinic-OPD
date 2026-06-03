@@ -1,31 +1,32 @@
 ---
-updated_at: "2026-06-03 EOD+1 — V159 SHIPPED (stock order line-item search + per-batch expiry edit). Local, NOT deployed."
-status: "V159 done + verified (full vitest 15992/0 · build clean · real-prod Rule Q L2 e2e 28/0). NOT deployed — await 'deploy' (V18). Client-SDK only (no firestore.rules) → vercel-only when authorized."
+updated_at: "2026-06-03 EOD+2 — category dropdown + systematic-debugging stock loop (B1/B2/B3/B5) SHIPPED + DEPLOYED + L1-verified."
+status: "Loop converged (R1 B1+B2 · R2 clean · R3 B5 · R4 clean) + DEPLOYED. Verified: full vitest 15992→16049/0 · build clean · real-prod Rule Q L2 e2e 34/0 · live-app L1 all 4 features green · 3 Rule R diags 0-anomaly."
 branch: "master"
-last_commit: "39c603b6 (V159 audit S36) — 8 commits f690cfed..39c603b6"
-tests: "Full vitest 15992/0 (this session) · build clean · real-prod Rule Q L2 e2e-v159 28/0. Not re-run at EOD."
+last_commit: "62593b2c (Rule R order-search real-shape diag) — 9 commits 2e96a847..62593b2c this session"
+tests: "Full vitest 16049/0 (this session) · build clean · real-prod e2e-v159 34/0. NOT re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "91bb3349 (V158) LIVE — V159 NOT deployed yet."
-firestore_rules_version: "UNCHANGED (V159 = no rules change → no Probe-Deploy-Probe)."
+production_commit: "62593b2c — DEPLOYED this session (ships V158→V159 + dropdown + B1/B2/B3/B5). prod == master, LIVE."
+firestore_rules_version: "UNCHANGED (all changes client-SDK → no Probe-Deploy-Probe; vercel-only deploy)."
 ---
 
-# Active — 2026-06-03 EOD+1 — V159 SHIPPED (search + per-batch expiry edit)
+# Active — 2026-06-03 EOD+2 — category dropdown + stock bug-loop + deploy
 
 ## State
-- master `39c603b6`; prod `91bb3349` (V158) LIVE. V159 = 8 commits ahead, NOT deployed.
-- V159 (2 features) done + verified; no firestore.rules change → vercel-only deploy when authorized.
-- Honest Rule Q scope: L2 (real client SDK on real prod) + full vitest + build = green. L1 (real browser: open ปรับ → edit date → save → see update) = user hands-on per workstyle. Form wiring = source-grep+build verified; the fn is L2-verified end-to-end.
+- master `62593b2c`; prod `62593b2c` LIVE (deployed this session — prod caught up from V158).
+- Working tree clean. No firestore.rules change.
+- systematic-debugging loop CONVERGED (round 4 clean) → deployed per user "พอหมดลูปค่อย deploy".
 
-## What this session shipped (detail → checkpoint 2026-06-03-v159-stock-search-expiry.md)
-- **F1 search** — `OrderPanel` + `CentralStockOrderPanel` match line-item `productName` (was vendor/orderId only); matched item surfaced first via `formatOrderItemsSummary` `matchQuery` (backward-compat preserved).
-- **F2 expiry** — NEW `updateStockBatchExpiry` (1 runTransaction: batch.expiresAt + forensic trail + `be_stock_adjustments` type=`expiry` (movementId null) + source order-line sync by locationType; NO movement → conservation; status untouched (EXPIRED derived); Rule O live-resolve).
-- **F2 UI** — editable `DateField` in the existing `AdjustCreateForm` (dual-path submit: qty / expiry / both; covers ยอดคงเหลือ + ปรับสต็อค + central via the shared form, NO new buttons); `type=expiry` rendered in the adjust list + `AdjustDetailModal`.
-- audit-stock-flow **S36** (35→36). +22 vitest (unit + source-grep + flow-simulate) + real-prod e2e `scripts/e2e-v159-stock-search-and-expiry.mjs` 28/0.
-- Subagent dispatch blocked by 1M-context credit gate → executed INLINE (TDD per task, 8 commits).
+## What this session shipped (detail → checkpoint 2026-06-03-stock-expiry-bugloop-deploy.md)
+- **Category dropdown** (`/brainstorming`→spec×2-rev→plan→TDD): ProductFormModal หมวดหมู่ datalist = distinct `categoryName` from be_products ONLY (no master, plain options, type-new); removed dead `listProductGroups`/`groups`. 1 file → products/stock/central tabs.
+- **B1** (conservation): dual-path adjust ran qty before expiry as 2 awaits → transient fail + retry DOUBLE-applied qty. Fix: reorder expiry-FIRST/qty-LAST + in-tx idempotency guard in `updateStockBatchExpiry`.
+- **B2** (central sync no-op): central items key `centralOrderProductId`, sync matched only `orderProductId` → match BOTH tier keys.
+- **B3+B5** (date display): stock expiry/importedDate raw ISO → `fmtSlashDate` (NEW, TZ-safe, canonical dateFormat.js) → dd/mm/yyyy across 8 components (display-only; DB stays ISO).
+- **Refuted with REAL data** (no fabricated bugs): C1 category field-name · C5 DateField format · C6 balance refresh · C7 order→batch sync · C8 type/status select.
+- **L1 live-app verified** (Chrome MCP): dd/mm/yyyy dates (zoomed) · 35 plain category options · expiry-edit form · "Lidocain" search→1 match.
 
 ## Next action
-- IDLE / await direction. If "deploy" → `vercel --prod` only (no rules change → no Probe-Deploy-Probe). Optional: add V159 V-log entry to `.claude/rules/00-session-start.md` §2.
+- IDLE / await direction. No firestore.rules pending. Deploy already done.
 
 ## Outstanding user-triggered actions
-- Deploy V159 (vercel-only) when authorized (V18).
-- Carryover (non-loop, low-pri): dropdown หมวดหมู่ task · Neuramis merge + junk test-course "หฟแฟ" · optional cross-collection partial-failure reconciliation report (V157 follow-on) · SESSION_HANDOFF head trim <150 KB.
+- Optional Rule P closure: `audit-stock-flow` S37 (dual-path order + tier-key sync + idempotency) + a 00-session-start §2 V-log entry for B1/B2 (regression tests `v159-fix-expiry-hardening` already lock behavior).
+- Low-pri carryover: be_products data cleanup (V145 — 36 junk docs, dry-run done) · Neuramis merge + junk course "หฟแฟ" · cross-collection reconciliation report (V157 follow-on) · SESSION_HANDOFF head trim <150 KB.

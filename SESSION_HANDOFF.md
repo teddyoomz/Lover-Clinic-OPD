@@ -137,6 +137,20 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **Deploy**: ✅ **DONE this session** (V15 combined, user-authorized "ผ่านหมดจริงๆค่อย deploy") — `vercel --prod` (aliased) **+** `firebase deploy --only storage` (**P-D-P #13**: anon 403 pre+post; rules compiled + released). **Object-level re-edit unlocked LIVE** (PC + tablet). Remaining: on-device L1 by user. [⚠ firebase CLI 15.x: `--only storage`, NOT `storage:rules`.]
 - **Findings (flagged)**: object-level re-edit is **live-gated on the storage deploy** (client json upload denied until then → fabricJson null → raster fallback, which works). Pre-existing limit: a single chart PNG dataUrl > ~1MB risks the Firestore doc cap — Storage-ref is the architectural follow-up (decide separately; the new size guard prevents the fabricJson from compounding it).
 
+### Session 2026-06-03 EOD+2 — category dropdown + systematic-debugging stock loop (B1/B2/B3/B5) SHIPPED + DEPLOYED + L1-verified
+
+master/prod `62593b2c` LIVE (deployed this session — prod caught up from V158). Full vitest **16049/0** · build clean · real-prod Rule Q L2 e2e **34/0** · **live-app L1 all 4 features** (Chrome MCP). No firestore.rules change → vercel-only deploy.
+
+**Category dropdown** (`/brainstorming`→spec×2-rev→plan→TDD): ProductFormModal หมวดหมู่ datalist = distinct `categoryName` from be_products ONLY (no master, plain options, type-new; dead `listProductGroups`/`groups` removed). 1 file → products/stock/central tabs.
+
+**systematic-debugging loop** (user "หมดบั๊คจริงๆ 100%", 4 rounds → converged → deploy):
+- **B1** (conservation): dual-path adjust ran qty before expiry as 2 awaits → transient fail + retry DOUBLE-applied qty. Fix: reorder expiry-FIRST/qty-LAST + in-tx idempotency guard in `updateStockBatchExpiry`.
+- **B2** (central sync no-op): central items key `centralOrderProductId`; sync matched only `orderProductId` → match BOTH tier keys.
+- **B3+B5** (date display): stock expiry/importedDate raw ISO → `fmtSlashDate` (NEW, TZ-safe, canonical dateFormat.js) → dd/mm/yyyy × 8 components (display-only; DB stays ISO; slash not dash per AskUserQuestion).
+- **Refuted by REAL prod data**: C1 (605/612 use categoryName) · C5 DateField · C6 balance · C7 order→batch sync (updateStockOrder cascades) · C8 type/status select (0 off-list).
+
+Verified: e2e P9 (idempotency guard) + P11 (central sync — fails pre-fix) + 3 Rule R diags 0-anomaly + L1 (dd/mm/yyyy zoomed · 35 plain category options · expiry form · "Lidocain"→1 match). Detail → checkpoint `2026-06-03-stock-expiry-bugloop-deploy.md`. Outstanding (optional): audit-stock-flow S37 + 00-session-start §2 V-log for B1/B2 (regression tests `v159-fix-expiry-hardening` already lock).
+
 ### Session 2026-06-03 EOD+1 — V159 stock order line-item search + per-batch expiry edit (SHIPPED, local, NOT deployed)
 `/brainstorming`→spec→`writing-plans`→inline TDD (8 commits `f690cfed..39c603b6`; subagent dispatch hit a 1M-context credit gate → executed inline). Two features, **no firestore.rules change** → vercel-only deploy when authorized.
 - **F1 search**: `OrderPanel` + `CentralStockOrderPanel` filter now matches line-item `productName` (was vendor/orderId only); `formatOrderItemsSummary` gained a `matchQuery` opt that surfaces the matched item first (backward-compat preserved — no matchQuery = byte-identical).
