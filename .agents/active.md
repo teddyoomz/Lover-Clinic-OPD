@@ -1,30 +1,29 @@
 ---
-updated_at: "2026-06-03 EOD+5 — V161 Outstanding CLEARED (S1+S2 verified · Neuramis merge + junk course APPLIED on prod · handoff trim) + import-order creator display fix SHIPPED (local)."
-status: "All V161 Outstanding closed. New order-creator fix committed local (NOT deployed). Full vitest 16142/0 · build clean. Branch table+modal L1-verified on real authed app."
+updated_at: "2026-06-04 EOD — Appointment-system looping bug-hunt CONVERGED (12 rounds) + DEPLOYED. No-regression verified 3 layers."
+status: "Appointment Core hardened R5-R11 (~12 real bugs fixed, all L2 on real prod) → fresh hunt finds nothing → converged. DEPLOYED to Vercel prod. Full vitest 16219/0."
 branch: "master"
-last_commit: "491770f4 (fix: import-order creator display). This session: a586d073 (officeToPdf L2 e2e fix) · 3d4ff611 (Neuramis merge+junk course, Rule M applied prod) · 0c043010 (handoff trim) · 491770f4 (order creator)."
-tests: "Full vitest 16142/0 (ran this session, exit 0 — 3 prior flakes passed this run). Build clean. NOT re-run at EOD."
+last_commit: "0e80af8d (test: happy-path regression e2e). Loop: d241ac69 R5 · 021974b9 R6 · e32646cf R7 · 1e9d85b1 R8 · cf63e0ba R9 · 3e50e0c8 R10 · e2ca97b7 R11."
+tests: "Full vitest 16219/0 (ran this session, exit 0). Happy-path e2e 29/0 + behavior/RTL 122/0 + 7 round e2e all on REAL prod. Build clean. NOT re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "Vercel prod = bff0bde6 (UNCHANGED this session — 4 commits ahead, NOT deployed). officeToPdf Cloud Run = rev 00008-d2p (S2 deployed last session, L2-verified this session)."
-firestore_rules_version: "UNCHANGED. No firestore.rules change this session."
+production_commit: "Vercel prod = 0e80af8d (DEPLOYED this session — brought prod bff0bde6 → 0e80af8d: the 4 prior undeployed commits + R5-R11 + happy-path). Aliased + live."
+firestore_rules_version: "UNCHANGED. No firestore.rules/storage.rules change across R5-R11 → no Probe-Deploy-Probe."
 ---
 
-# Active — 2026-06-03 EOD+5 — V161 Outstanding cleared + order-creator display fix
+# Active — 2026-06-04 EOD — Appointment looping bug-hunt converged + deployed
 
 ## State
-- master `491770f4`; prod Vercel `bff0bde6` (4 commits ahead, NOT deployed). Working tree clean.
-- officeToPdf Cloud Run rev `00008-d2p` live (S2/AV187 retry L2-verified on real prod, e2e 9/0).
-- No firestore.rules change → no Probe-Deploy-Probe.
+- master `0e80af8d` = Vercel prod `0e80af8d` (DEPLOYED, aliased, live). Working tree clean.
+- 12-round adversarial loop CONVERGED: final fresh hunt (R12) + 2 independent R11 hunts + Rule-P class-check all confirm the appointment Core is bulletproof at the money/double-book/double-charge/corruption bar.
+- No firestore.rules change → vercel-only deploy, no Probe-Deploy-Probe.
 
-## What this session shipped (detail → checkpoint 2026-06-03-order-creator-and-outstanding.md)
-- **Cleared all V161 Outstanding**: S2 officeToPdf (e2e 9/0; fixed 3 latent script bugs — dotenv import, PROJECT_ID fallback, TDZ guard); S1 retention pagination (real-prod dry-run clean, 0 orphans); SESSION_HANDOFF trim 198.5→184KB; **Neuramis merge** `38764←9B1DEFF7` (20 CC preserved; course/batch/movement/order repointed; dup deleted) + **junk course "หฟแฟ" deleted** — Rule M two-phase APPLIED on prod (audit `…f5c9fd53`), idempotent, post-apply verified.
-- **NEW fix (order-creator display, V47-class)**: import-order surfaces never rendered `createdBy.userName` (29/29 orders have it). Added ผู้ทำรายการ to branch table+modal + central table; **fixed central modal latent bug** (read `order.user` → always '-', now `createdBy`). adjust/transfer correctly read `user` (untouched). L1-verified branch table ("วัน" ×20) + modal ("วัน") on real authed app. `tests/order-creator-display.test.js` 12/0.
+## What this session shipped (detail → checkpoint 2026-06-04-appointment-loop-converged.md)
+- **~12 real purpose-breaking bugs fixed (R5-R11), each L2-verified on REAL prod + RED→GREEN**: R5 un-cancel/edit slot HIJACK · R6 deposit-booking reminder never fired + non-atomic deposit cancel/delete (Rule T money) + treatment-delete brick + cron isolation · R7 doctor-clear orphan + edit cross-branch relocate + refund→slot-leak + reschedule reminder-suppress · R8 orphan-slot over-block (parent-status guard) + cancelled badge · R9 restore-rebuild slot guard + AP1 message + roomName→roomId · R10 treatment-link customer join-validation + concurrent-edit phantom-slot reconcile · R11 LINE-confirm resurrects cancelled appt.
+- **No-regression proof (Rule A)**: happy-path e2e 29/0 (prod) + existing behavior/RTL/flow-simulate 122/0 + full vitest 16219/0. Every normal flow (create/edit/cancel/un-cancel/delete/deposit-lifecycle/reminder) unchanged; guards catch only bug scenarios.
+- Artifacts: 8 new `scripts/e2e-appt-r{5..10}-*.mjs` + happy-path e2e + 7 new `tests/appt-r{5..11}-*.test.js` + AVxx invariants + V21 fixups.
 
 ## Next action
-- IDLE / await direction. User cleared the verification deep-dive ("กุตรวจให้หมดแล้ว พอ").
-- **Big queued task (user interrupted twice this session)**: appointment-system audit loop — V161-style looping adversarial bug-hunt over the appointment Core + cross-system wiring (TFP/sales/deposits/stock/calendar/customers), fix → re-hunt → until clean. Say "go" to start (recommend fresh session for full context).
+- IDLE / await direction. Loop converged + deployed + no-regression confirmed.
 
 ## Outstanding user-triggered actions
-- **Deploy**: 4 commits ahead of Vercel prod (`a586d073..491770f4`) — `vercel --prod` when authorized (all frontend/scripts, no rules → no Probe-Deploy-Probe).
-- Dismissed by user this session: audit-stock-flow S37, cross-collection reconciliation report, V-log B1/B2 ("ไม่ทำ/ไม่สำคัญ").
-- L1 hands-on of staff-chat (V161) on prod (user's, optional).
+- **Deferred (sub-bar, documented, NOT bugs)**: C2 note-edit stale-status resurrection (needs 2nd race; soft-scan backstop), B2 restore-dangling link for out-of-window deleted treatment (rare partial-backup), hub future-tab cross-month real-time staleness (self-reconciles), recurring-multiplier date math (correct for TH admins). Pick up only if asked.
+- L1 hands-on on prod (user's, optional): create/edit/cancel a real appointment; tap LINE "ยืนยันนัด".
