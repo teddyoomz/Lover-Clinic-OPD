@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>หมวดหมู่ Datalist (product-harvest only) Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .modal-dark { background: #0d0d0f; border: 1px solid #2a2a2e; border-radius: 14px; padding: 1.2em 1.4em; max-width: 640px; color: #ededed; }
+    .modal-dark .m-title { color: #ef4444; font-weight: 800; font-size: 1.15em; margin: 0 0 0.9em; }
+    .fld label { display: block; font-size: 0.64em; text-transform: uppercase; letter-spacing: 0.06em; color: #8a8a90; font-weight: 700; margin-bottom: 0.3em; }
+    .fld .inp { background: #1a1a1d; border: 1px solid #ef4444; border-radius: 9px; padding: 0.55em 0.8em; font-size: 0.9em; color: #ededed; position: relative; }
+    .fld .inp .chev { position: absolute; right: 0.7em; top: 50%; transform: translateY(-50%); color: #8a8a90; }
+    .dd { background: #161618; border: 1px solid #2e2e33; border-radius: 9px; margin-top: 4px; }
+    .dd .opt { padding: 0.45em 0.85em; font-size: 0.86em; border-bottom: 1px solid #232328; }
+    .dd .opt:last-child { border-bottom: none; }
+    .dd .opt.sel { background: #2a1416; }
+    .flow { display: flex; align-items: stretch; gap: 0.5em; flex-wrap: wrap; }
+    .flow .box { background: #fff; border: 2px solid var(--accent); border-radius: 8px; padding: 0.55em 0.85em; font-size: 0.82em; flex: 1; min-width: 130px; }
+    .flow .box.reuse { border-style: dashed; border-color: #15803d; }
+    .flow .box .n { display:inline-block; background: var(--accent); color:#fff; border-radius: 50%; width: 1.5em; height: 1.5em; text-align:center; line-height:1.5em; font-size:0.78em; font-weight:700; margin-right:0.35em; }
+    .flow .sep { align-self:center; font-size: 1.3em; color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<h1>หมวดหมู่ Datalist (product-harvest only) Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use HTML checkboxes for tracking. <strong>Spec:</strong> docs/superpowers/specs/2026-06-03-product-category-datalist-design.html
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ช่อง "หมวดหมู่" ในโมดัลเพิ่ม/แก้ไขสินค้า แสดง dropdown ของหมวดหมู่ที่มีอยู่จริงบนสินค้า (distinct <code>categoryName</code> จาก <code>be_products</code>) เท่านั้น — ไม่มี master, พิมพ์หมวดใหม่ได้.</p>
+  <p><strong>Architecture:</strong> เปลี่ยนเฉพาะ <code>src/components/backend/ProductFormModal.jsx</code> (โมดัลใช้ร่วม 3 แท็บ: products / stock / central-stock). harvest <code>categoryName</code> จากสินค้าที่ <em>โหลดอยู่แล้ว</em> (<code>listProducts()</code> ที่ effect เรียกอยู่แล้วเพื่อ harvest หน่วย) — zero new read. ลบ <code>listProductGroups</code>/<code>groups</code> (dead code). หน่วยไม่แตะ.</p>
+  <p><strong>Tech Stack:</strong> React 19 (useState/useEffect/useMemo) · native <code>&lt;input list&gt;</code> + <code>&lt;datalist&gt;</code> · Vitest 4 + @testing-library/react.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">AFTER — field หมวดหมู่ open (product categories only, no master, no tag, plain options)</div>
+  <div class="modal-dark">
+    <p class="m-title">แก้ไขสินค้า</p>
+    <div class="fld" style="max-width:340px">
+      <label>หมวดหมู่</label>
+      <div class="inp">อุปกรณ์ทั่วไป<span class="chev">▾</span></div>
+      <div class="dd" data-testid="product-group-datalist">
+        <div class="opt sel">อุปกรณ์ทั่วไป</div>
+        <div class="opt">Filler</div>
+        <div class="opt">เลเซอร์</div>
+        <div class="opt">ยาชา</div>
+        <div class="opt">สิ้นเปลือง</div>
+      </div>
+    </div>
+    <p style="font-size:0.76em;color:#7a7a82;margin:0.9em 0 0">distinct <code>categoryName</code> จาก be_products · dedup · Thai-sort · พิมพ์ใหม่ได้ · ไม่มี be_product_groups</p>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Data-flow: mount → harvest → memo → datalist render (no new read; listProductGroups removed)</div>
+  <div class="flow">
+    <div class="box"><span class="n">1</span>mount — <code>useEffect</code> <code>Promise.all([listProductUnitGroups, listProducts])</code></div>
+    <div class="sep">→</div>
+    <div class="box reuse"><span class="n">2</span>harvest distinct <code>categoryName</code> from <code>p</code> (already-fetched) → <code>productCategories</code> (trim · dedup · Thai-sort)</div>
+    <div class="sep">→</div>
+    <div class="box"><span class="n">3</span><code>categoryDatalistOptions</code> useMemo → <code>{key,value}</code></div>
+    <div class="sep">→</div>
+    <div class="box"><span class="n">4</span>render plain <code>&lt;option value&gt;</code> in <code>#product-group-list</code></div>
+    <div class="sep">→</div>
+    <div class="box"><span class="n">5</span>pick existing / type new → <code>form.categoryName</code> → save (unchanged)</div>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:0.9em">
+  <tr style="background:#f0f4f8"><th align="left">File</th><th align="left">Action</th><th align="left">Responsibility</th></tr>
+  <tr><td><code>src/components/backend/ProductFormModal.jsx</code></td><td>Modify</td><td>Remove master (listProductGroups/groups); add productCategories harvest + categoryDatalistOptions memo; render plain options in #product-group-list.</td></tr>
+  <tr><td><code>tests/product-category-datalist.test.jsx</code></td><td>Create</td><td>Group A pure-mirror algorithm · Group B source-grep regression · Group C RTL render-wiring.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Write the test bank (TDD red)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/product-category-datalist.test.jsx</code></li>
+    <li>Reference (read, do not edit): <code>tests/phase15.5-item2-product-unit-dropdown.test.js</code> (the หน่วย pattern this mirrors)</li>
+  </ul>
+
+  <div class="step">
+    <input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the full test file</strong></label>
+  </div>
+  <p>Create <code>tests/product-category-datalist.test.jsx</code> with exactly this content:</p>
+<pre><code class="language-jsx">// หมวดหมู่ datalist enrichment — product-harvest ONLY (no master be_product_groups).
+// User directive (2026-06-03): dropdown หมวดหมู่ = หมวดที่มีอยู่จริงบนสินค้าเท่านั้น,
+// ไม่มี master, ไม่มี tag, พิมพ์ใหม่ได้. Mirrors the หน่วย harvest (phase15.5-item2)
+// but product-only (หน่วย keeps master+product; category drops master entirely).
+//
+// Groups:
+//   A — pure mirror: categoryDatalistOptions algorithm (dedup → {key,value})
+//   B — source-grep regression (modal harvests categoryName, renders memo, NO master)
+//   C — RTL: mount modal w/ mocked products → datalist shows harvested categories
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { render, screen, waitFor } from '@testing-library/react';
+
+const FORM_PATH = join(process.cwd(), 'src', 'components', 'backend', 'ProductFormModal.jsx');
+const FORM_SRC = readFileSync(FORM_PATH, 'utf-8');
+
+// Pure mirror of the modal's categoryDatalistOptions useMemo (product-only, no master).
+function buildCategoryDatalistOptions(productCategoryNames) {
+  const seen = new Set();
+  const out = [];
+  for (const name of (productCategoryNames || [])) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({ key: `product-${name}`, value: name });
+  }
+  return out;
+}
+
+// ════════ A — pure algorithm ════════
+describe('หมวดหมู่ datalist — A pure algorithm', () => {
+  it('A1 maps names to {key,value} (product-only, no source field)', () => {
+    const out = buildCategoryDatalistOptions(['อุปกรณ์ทั่วไป', 'Filler']);
+    expect(out).toEqual([
+      { key: 'product-อุปกรณ์ทั่วไป', value: 'อุปกรณ์ทั่วไป' },
+      { key: 'product-Filler', value: 'Filler' },
+    ]);
+    expect(out.every(o => !('source' in o))).toBe(true);
+  });
+  it('A2 dedupes repeated names', () => {
+    expect(buildCategoryDatalistOptions(['ยาชา', 'ยาชา', 'เลเซอร์']).map(o => o.value))
+      .toEqual(['ยาชา', 'เลเซอร์']);
+  });
+  it('A3 skips empty / null / undefined', () => {
+    expect(buildCategoryDatalistOptions(['', null, undefined, 'x']).map(o => o.value)).toEqual(['x']);
+  });
+  it('A4 empty / null input returns empty', () => {
+    expect(buildCategoryDatalistOptions([])).toEqual([]);
+    expect(buildCategoryDatalistOptions(null)).toEqual([]);
+  });
+  it('A5 keys are unique (React-friendly)', () => {
+    const keys = buildCategoryDatalistOptions(['ยาชา', 'เลเซอร์']).map(o => o.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+  it('A6 preserves caller order (caller pre-sorts Thai-locale)', () => {
+    expect(buildCategoryDatalistOptions(['Filler', 'ยาชา', 'เลเซอร์']).map(o => o.value))
+      .toEqual(['Filler', 'ยาชา', 'เลเซอร์']);
+  });
+});
+
+// ════════ B — source-grep regression ════════
+describe('หมวดหมู่ datalist — B source-grep regression', () => {
+  it('B1 productCategories state harvested from existing products', () => {
+    expect(FORM_SRC).toMatch(/productCategories/);
+    expect(FORM_SRC).toMatch(/setProductCategories/);
+    expect(FORM_SRC).toMatch(/categoryName/);
+  });
+  it('B2 categoryDatalistOptions useMemo keyed on [productCategories]', () => {
+    expect(FORM_SRC).toMatch(/categoryDatalistOptions\s*=\s*useMemo[\s\S]*?\}\,\s*\[productCategories\]\s*\)/);
+  });
+  it('B3 #product-group-list datalist renders categoryDatalistOptions.map (plain option, no data-source)', () => {
+    const dl = FORM_SRC.match(/&lt;datalist id="product-group-list"[\s\S]*?&lt;\/datalist&gt;/);
+    expect(dl).toBeTruthy();
+    expect(dl[0]).toMatch(/categoryDatalistOptions\.map/);
+    expect(dl[0]).not.toMatch(/data-source/);          // category options are PLAIN (no tag)
+    expect(dl[0]).not.toMatch(/groups\.map/);           // anti-regression: no master render
+  });
+  it('B4 product-group-datalist testid present', () => {
+    expect(FORM_SRC).toMatch(/data-testid=["']product-group-datalist["']/);
+  });
+  it('B5 master fully removed — no listProductGroups import / call, no groups state', () => {
+    expect(FORM_SRC).not.toMatch(/listProductGroups/);
+    expect(FORM_SRC).not.toMatch(/\bsetGroups\b/);
+    expect(FORM_SRC).not.toMatch(/useState\(\[\]\);\s*\/\/.*groups|\bconst \[groups\b/);
+  });
+  it('B6 harvest dedups via Set + trim + Thai-locale sort', () => {
+    expect(FORM_SRC).toMatch(/new Set\(\)/);
+    expect(FORM_SRC).toMatch(/trim\(\)/);
+    expect(FORM_SRC).toMatch(/localeCompare\(b,\s*['"]th['"]\)/);
+  });
+  it('B7 หน่วย untouched — unit datalist + listProductUnitGroups still present', () => {
+    expect(FORM_SRC).toMatch(/unitDatalistOptions/);
+    expect(FORM_SRC).toMatch(/listProductUnitGroups/);
+    expect(FORM_SRC).toMatch(/data-testid=["']product-unit-datalist["']/);
+  });
+});
+
+// ════════ C — RTL render + wiring ════════
+vi.mock('../src/lib/scopedDataLayer.js', () => ({
+  saveProduct: vi.fn().mockResolvedValue(undefined),
+  listProductUnitGroups: vi.fn().mockResolvedValue([]),
+  listProducts: vi.fn().mockResolvedValue([
+    { mainUnitName: 'ขวด', categoryName: 'อุปกรณ์ทั่วไป' },
+    { mainUnitName: 'amp.', categoryName: 'ยาชา' },
+    { categoryName: 'อุปกรณ์ทั่วไป' },   // duplicate category
+    { categoryName: '  เลเซอร์  ' },      // needs trim
+    { categoryName: '' },                  // skip empty
+    { categoryName: 'Filler' },
+  ]),
+}));
+vi.mock('../src/components/backend/MarketingFormShell.jsx', () => ({
+  default: ({ children }) => &lt;div&gt;{children}&lt;/div&gt;,
+}));
+vi.mock('../src/lib/marketingUiUtils.js', () => ({ scrollToField: vi.fn() }));
+
+import ProductFormModal from '../src/components/backend/ProductFormModal.jsx';
+
+describe('หมวดหมู่ datalist — C RTL render', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  // The &lt;datalist&gt; element renders synchronously (empty); options populate
+  // AFTER the async load effect resolves → must waitFor options before asserting.
+  async function waitDatalistValues() {
+    const dl = await screen.findByTestId('product-group-datalist');
+    await waitFor(() => expect(dl.querySelectorAll('option').length).toBeGreaterThan(0));
+    return [...dl.querySelectorAll('option')].map(o => o.value);
+  }
+
+  it('C1 datalist lists harvested product categories (trimmed, deduped, no empty)', async () => {
+    render(&lt;ProductFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} /&gt;);
+    const vals = await waitDatalistValues();
+    expect(vals).toContain('อุปกรณ์ทั่วไป');
+    expect(vals).toContain('ยาชา');
+    expect(vals).toContain('Filler');
+    expect(vals).toContain('เลเซอร์');                 // trimmed from '  เลเซอร์  '
+    expect(vals.filter(v => v === 'อุปกรณ์ทั่วไป')).toHaveLength(1); // deduped
+    expect(vals).not.toContain('');                     // empty skipped
+  });
+
+  it('C2 options are Thai-locale sorted', async () => {
+    render(&lt;ProductFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} /&gt;);
+    const vals = await waitDatalistValues();
+    const sorted = [...vals].sort((a, b) => a.localeCompare(b, 'th'));
+    expect(vals).toEqual(sorted);
+  });
+
+  it('C3 datalist options are PLAIN (no data-source attribute / tag)', async () => {
+    render(&lt;ProductFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} /&gt;);
+    const dl = await screen.findByTestId('product-group-datalist');
+    await waitFor(() => expect(dl.querySelectorAll('option').length).toBeGreaterThan(0));
+    const opts = [...dl.querySelectorAll('option')];
+    expect(opts.every(o => !o.hasAttribute('data-source'))).toBe(true);
+  });
+});</code></pre>
+  <blockquote>Note: in the actual <code>.jsx</code> file, write real JSX (<code>&lt;div&gt;</code>, <code>&lt;ProductFormModal ... /&gt;</code>) — the entities above are only HTML-escaped for this plan document.</blockquote>
+
+  <div class="step">
+    <input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run the test file — confirm RED on B + C, GREEN on A</strong></label>
+  </div>
+  <p>Run: <code>npx vitest run tests/product-category-datalist.test.jsx</code></p>
+  <p>Expected: Group A passes (pure mirror). Group B fails (modal has no <code>productCategories</code>/<code>categoryDatalistOptions</code>, still imports <code>listProductGroups</code>, datalist renders <code>groups.map</code>). Group C fails (datalist not populated from harvest). This RED confirms the test actually exercises the change. <strong>Do NOT commit yet</strong> (red test on master breaks the suite).</p>
+</div>
+
+<div class="task">
+  <h3>Task 2: Implement in ProductFormModal.jsx (TDD green) + commit</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/ProductFormModal.jsx</code> (import line 9; state 21; effect 28-54; new memo after 78; datalist 163-165)</li>
+    <li>Test: <code>tests/product-category-datalist.test.jsx</code></li>
+  </ul>
+
+  <div class="step">
+    <input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Remove master from the import (line 9)</strong></label>
+  </div>
+  <p>Change:</p>
+<pre><code class="language-jsx">import { saveProduct, listProductGroups, listProductUnitGroups, listProducts } from '../../lib/scopedDataLayer.js';</code></pre>
+  <p>to (drop <code>listProductGroups</code>):</p>
+<pre><code class="language-jsx">import { saveProduct, listProductUnitGroups, listProducts } from '../../lib/scopedDataLayer.js';</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Swap the groups state for productCategories (line 21)</strong></label>
+  </div>
+  <p>Change:</p>
+<pre><code class="language-jsx">  const [groups, setGroups] = useState([]);
+  const [units, setUnits] = useState([]);</code></pre>
+  <p>to:</p>
+<pre><code class="language-jsx">  const [units, setUnits] = useState([]);
+  // 2026-06-03 — distinct categoryName harvested from existing be_products (no master).
+  const [productCategories, setProductCategories] = useState([]);</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Drop listProductGroups from the load effect + harvest categories (lines 28-54)</strong></label>
+  </div>
+  <p>Replace the whole <code>useEffect(() => { ... }, []);</code> block (lines 28-54) with:</p>
+<pre><code class="language-jsx">  useEffect(() => {
+    (async () => {
+      try {
+        const [u, p] = await Promise.all([
+          listProductUnitGroups(),
+          listProducts().catch(() => []), // non-fatal — datalists degrade gracefully
+        ]);
+        setUnits(u);
+        const arr = Array.isArray(p) ? p : [];
+        // Extract unique non-empty mainUnitName values from existing products
+        const seenU = new Set();
+        const productUnitOpts = [];
+        for (const prod of arr) {
+          const v = typeof prod?.mainUnitName === 'string' ? prod.mainUnitName.trim() : '';
+          if (!v || seenU.has(v)) continue;
+          seenU.add(v);
+          productUnitOpts.push(v);
+        }
+        productUnitOpts.sort((a, b) => a.localeCompare(b, 'th'));
+        setProductUnits(productUnitOpts);
+        // 2026-06-03 — same harvest for หมวดหมู่ (distinct categoryName, no master)
+        const seenC = new Set();
+        const productCategoryOpts = [];
+        for (const prod of arr) {
+          const c = typeof prod?.categoryName === 'string' ? prod.categoryName.trim() : '';
+          if (!c || seenC.has(c)) continue;
+          seenC.add(c);
+          productCategoryOpts.push(c);
+        }
+        productCategoryOpts.sort((a, b) => a.localeCompare(b, 'th'));
+        setProductCategories(productCategoryOpts);
+      } catch (e) {
+        setError(e.message || 'โหลดข้อมูลอ้างอิงล้มเหลว');
+      }
+    })();
+  }, []);</code></pre>
+  <blockquote>This removes <code>listProductGroups()</code>, <code>setGroups(g)</code>, and the old <code>const u</code> shadowing; <code>productUnits</code> harvest is preserved verbatim (หน่วย unchanged) and the category harvest reuses the same <code>arr</code> — zero extra read.</blockquote>
+
+  <div class="step">
+    <input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Add the categoryDatalistOptions memo (right after unitDatalistOptions, ~line 78)</strong></label>
+  </div>
+  <p>Insert immediately after the closing <code>}, [units, productUnits]);</code> of <code>unitDatalistOptions</code>:</p>
+<pre><code class="language-jsx">  // 2026-06-03 — category datalist options: product-harvested ONLY (no master
+  // be_product_groups). Plain {key,value} → rendered as plain &lt;option value&gt;.
+  const categoryDatalistOptions = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const name of productCategories) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ key: `product-${name}`, value: name });
+    }
+    return out;
+  }, [productCategories]);</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Render plain options in the #product-group-list datalist (lines 163-165)</strong></label>
+  </div>
+  <p>Change:</p>
+<pre><code class="language-jsx">          &lt;datalist id="product-group-list"&gt;
+            {groups.map(g =&gt; &lt;option key={g.groupId || g.id} value={g.name} /&gt;)}
+          &lt;/datalist&gt;</code></pre>
+  <p>to:</p>
+<pre><code class="language-jsx">          &lt;datalist id="product-group-list" data-testid="product-group-datalist"&gt;
+            {categoryDatalistOptions.map((opt) =&gt; (
+              &lt;option key={opt.key} value={opt.value} /&gt;
+            ))}
+          &lt;/datalist&gt;</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Run the test file — confirm ALL GREEN</strong></label>
+  </div>
+  <p>Run: <code>npx vitest run tests/product-category-datalist.test.jsx</code></p>
+  <p>Expected: PASS — all of A, B, C green (16 tests).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 7: Build clean</strong></label>
+  </div>
+  <p>Run: <code>npm run build</code></p>
+  <p>Expected: clean (catches the dropped <code>listProductGroups</code>/<code>groups</code> reference if any was missed — Rule V11 build-over-tests).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t2s8"> <label for="t2s8"><strong>Step 8: Commit (test + impl together — green)</strong></label>
+  </div>
+<pre><code class="language-bash">git add src/components/backend/ProductFormModal.jsx tests/product-category-datalist.test.jsx
+git commit -m "feat(product): หมวดหมู่ datalist = product-harvest only (drop master); plain options, type-new; covers stock/product/central-stock"
+git push origin master</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Regression sweep + verification</h3>
+  <p><strong>Files:</strong> none (verification only)</p>
+
+  <div class="step">
+    <input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Run the modal-touching test files (หน่วย no-regression + catalog tabs + flags)</strong></label>
+  </div>
+<pre><code class="language-bash">npx vitest run tests/phase15.5-item2-product-unit-dropdown.test.js \
+  tests/extended/phase12-catalog-tabs.test.jsx \
+  tests/v43-skip-stock-deduction.test.js \
+  tests/phase16.3-negative-stock-flag.test.js \
+  tests/extended/required-asterisk.test.jsx \
+  tests/product-category-datalist.test.jsx</code></pre>
+  <p>Expected: all PASS. Especially <code>phase15.5-item2</code> (proves หน่วย datalist untouched) — if any of its B-group source-grep guards reference <code>groups</code>, investigate (they should not; unit guards reference <code>units</code>/<code>productUnits</code>).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Full suite (shared component → batch-end full run, Rule N edge "prefer full when uncertain")</strong></label>
+  </div>
+  <p>Run: <code>npm test -- --run</code></p>
+  <p>Expected: 15992 + 16 new = 16008 / 0 fail (no V21 lock-in — the only pre-existing test referencing the category datalist render was none; <code>phase15.5-item2</code> targets the unit datalist only). If any RED surfaces, it is a real regression — fix before claiming done (Rule P).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Honest Rule Q scope note (no overclaim)</strong></label>
+  </div>
+  <p>Verified: pure algorithm (A) + source-grep regression (B) + RTL render-wiring against mocked products (C) + build + full suite. This is <strong>pure client UI over already-fetched data</strong> — no new Firestore query / index / rule, so no L2 Firestore-query verification is needed beyond the existing <code>listProducts()</code> path (the same one หน่วย already uses on real prod). L1 "open แก้ไขสินค้า on tab=stock/products → click หมวดหมู่ → see a real existing category (e.g. อุปกรณ์ทั่วไป), none from master" = user hands-on per workstyle, OR an optional quick live-browser check (Rule S). State this scope explicitly when reporting done.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Report — NO deploy without explicit "deploy" (V18)</strong></label>
+  </div>
+  <p>Report status: local + committed + pushed; NOT deployed. This is frontend-only (no firestore.rules) → if user authorizes "deploy" it is <code>vercel --prod</code> only (no Probe-Deploy-Probe). It can also ride the existing V159 undeployed batch.</p>
+</div>
+
+</body>
+</html>
