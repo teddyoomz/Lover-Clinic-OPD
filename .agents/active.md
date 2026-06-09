@@ -2,7 +2,7 @@
 updated_at: "2026-06-09 EOD+1 — V162: TFP buy critical-path — qty-multiply divergence + per-purchase rowId/remove collision (course+promo). Committed + pushed, NOT deployed."
 status: "Both user-reported buy/sale bugs root-caused on the served code + fixed class-wide (Rule P) + regression-tested + real-browser L1 verified. master ahead of prod; awaiting explicit 'deploy' (frontend-only, vercel-only)."
 branch: "master"
-last_commit: "V162 (fix: TFP buy qty-multiply + per-purchase purchaseUid for rowId/courseId/grouping/remove — course+promo)."
+last_commit: "2d13c980 — V162 (fix: TFP buy qty-multiply + per-purchase purchaseUid for rowId/courseId/grouping/remove — course+promo)."
 tests: "default vitest 16300/0 (16277 + 23 new bank) + build clean + extended treatmentBuyHelpers 54/54 + 8 affected runnable 217/217 + Rule Q L1 real-browser served-module (display ×3 + displayEqualsPersist + distinct rowIds + checkbox-independent + targeted remove). NOT re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "Vercel prod = e56d2ac7. master ahead (b8351546 4-fix + 10e2c266 docs + V162). frontend-only, no firestore.rules → vercel-only, no Probe-Deploy-Probe."
