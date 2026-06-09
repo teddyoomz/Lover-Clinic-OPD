@@ -2,7 +2,7 @@
 updated_at: "2026-06-09 EOD+2 — deposit-in-reports: มัดจำ now counted in reports-payment (ยอดขาย/มัดจำ/ยอดรวม + receipt drill-down) + reports-sale 'มัดจำที่รับเข้า' section + 'มัดจำคงเหลือในระบบ' chip + deposit deep-link. Committed+pushed, NOT deployed."
 status: "SHIPPED to master (ahead of prod). Rule Q L2 (real prod) + L1 (real browser, real Firestore) both VERIFIED. Awaiting explicit 'deploy' (frontend-only, vercel-only, no rules)."
 branch: "master"
-last_commit: "41024418 — deposit-in-reports verify (source-grep + Rule I + AV191 + Rule Q L2 diag). On c90fbf09 (UI+nav) on fbf9a0fa (core)."
+last_commit: "68fefb77 — reports-sale deposit rows COLUMN-ALIGNED into the 18 real columns (teal identity, was ugly band). On 20776c40 (interleave+TDZ fix) on 41024418 (verify) on c90fbf09 (UI) on fbf9a0fa (core)."
 tests: "full vitest 16326/0 (16300 + 26 new: deposit-in-reports 16 + flow-simulate 10) + build clean + Rule Q L2 real-prod diag (double-count-guard 0, reconcile diff 0, ฿19,000 deposit now visible) + Rule Q L1 real-browser (new columns match diag, drill-down sale→detail, sale chip+section, deposit deep-link)."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "Vercel prod = e56d2ac7. master ahead: V162 (2d13c980) + deposit-in-reports (fbf9a0fa+c90fbf09+41024418). frontend-only, no firestore.rules → vercel-only, no Probe-Deploy-Probe."
