@@ -1,29 +1,29 @@
 ---
-updated_at: "2026-06-09 EOD+2 — deposit-in-reports: มัดจำ now counted in reports-payment (ยอดขาย/มัดจำ/ยอดรวม + receipt drill-down) + reports-sale 'มัดจำที่รับเข้า' section + 'มัดจำคงเหลือในระบบ' chip + deposit deep-link. Committed+pushed, NOT deployed."
-status: "SHIPPED to master (ahead of prod). Rule Q L2 (real prod) + L1 (real browser, real Firestore) both VERIFIED. Awaiting explicit 'deploy' (frontend-only, vercel-only, no rules)."
+updated_at: "2026-06-09 EOD+3 — deposit-in-reports SHIPPED + DEPLOYED LIVE: reports-payment ยอดขาย/มัดจำ/ยอดรวม + receipt drill-down · reports-sale deposit rows column-aligned (teal) + มัดจำคงเหลือ chip · deposit deep-link."
+status: "DEPLOYED to prod (vercel --prod, aliased lover-clinic-app.vercel.app). This deploy also caught up V162 + the 4-fix (were ahead of prod e56d2ac7). Rule Q L1 (real browser, real Firestore) + L2 (real-prod diag) verified."
 branch: "master"
-last_commit: "68fefb77 — reports-sale deposit rows COLUMN-ALIGNED into the 18 real columns (teal identity, was ugly band). On 20776c40 (interleave+TDZ fix) on 41024418 (verify) on c90fbf09 (UI) on fbf9a0fa (core)."
-tests: "full vitest 16326/0 (16300 + 26 new: deposit-in-reports 16 + flow-simulate 10) + build clean + Rule Q L2 real-prod diag (double-count-guard 0, reconcile diff 0, ฿19,000 deposit now visible) + Rule Q L1 real-browser (new columns match diag, drill-down sale→detail, sale chip+section, deposit deep-link)."
+last_commit: "999fae66 — docs(agents) EOD+3 (column-aligned deposit rows). Feature: fbf9a0fa core → c90fbf09 UI → 41024418 verify → 20776c40 interleave+TDZ fix → 68fefb77 column-aligned."
+tests: "full vitest 16326/0 EXCEPT 2 pre-existing env-flakes (bsa-task7 execSync git-grep + v85-glow cmd.exe grep — pass isolated 96/0, NOT this work). touched-area 330/0. build clean. NOT re-run at EOD."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "Vercel prod = e56d2ac7. master ahead: V162 (2d13c980) + deposit-in-reports (fbf9a0fa+c90fbf09+41024418). frontend-only, no firestore.rules → vercel-only, no Probe-Deploy-Probe."
+production_commit: "frontend = 999fae66 LIVE (V162 + 4-fix + deposit-in-reports). firestore.rules UNCHANGED → vercel-only, no Probe-Deploy-Probe."
 firestore_rules_version: "UNCHANGED."
 ---
 
-# Active — 2026-06-09 EOD+2 — deposit-in-reports (reports-payment + reports-sale)
+# Active — 2026-06-09 EOD+3 — deposit-in-reports (DEPLOYED)
 
 ## State
-- master ahead of prod `e56d2ac7`. Tree clean after 3 commits. NOT deployed.
-- User: reports-payment ต้องนับมัดจำที่รับเข้า (เงินบัญชีจริง) — มัดจำเดิมไม่โผล่ที่ไหนเลย.
+- prod = master HEAD `999fae66` LIVE. Tree clean. Deposit money now counted in reports (was invisible).
+- Feature spanned 3 user asks (count deposits → "ใส่ตารางเดียว" → "ทำให้เนียน"); all shipped + deployed.
 
-## What this session shipped (spec/plan: docs/superpowers/{specs,plans}/2026-06-09-deposit-in-reports*)
-- **reports-payment**: per-channel `ยอดขาย / มัดจำ / ยอดรวม / ใบเสร็จ(กดได้) / %` + refund footnote. เลขใบเสร็จ → PaymentDocsModal (ใบขาย+ใบมัดจำ) → ใบขาย opens SaleDetailModal / ใบมัดจำ → deep-link.
-- **reports-sale**: ชิป "มัดจำคงเหลือในระบบ" (Σ remaining active/partial, V154) + section "มัดจำที่รับเข้า" (NOT summed into footer) → each row deep-links.
-- **No double-count** (proven real prod): SaleTab deducts deposit BEFORE channels → sale channels never carry มัดจำ. มัดจำ counted from be_deposits paymentChannel/paymentDate.
-- New: `loadDepositsByDateRange`, `depositReportUtils`, `DepositReceiptRow`, `PaymentDocsModal`; aggregator rewrite (`aggregatePaymentSummary(sales,deposits,filters)` + `getMethodDocuments` + `refundsInPeriod`); deep-link (`?...&deposit=DEP-x` → BackendDashboard → FinanceTab → DepositPanel DetailModal). AV191 + 26 tests + Rule Q L2 diag.
+## What this session shipped (checkpoint: .agents/sessions/2026-06-09-deposit-in-reports.md)
+- **reports-payment**: per-channel `ยอดขาย | มัดจำ | ยอดรวม | ใบเสร็จ(กดได้) | %` + refund footnote. กดเลขใบเสร็จ → PaymentDocsModal (ใบขาย+ใบมัดจำ) → ใบขายเปิด SaleDetailModal / ใบมัดจำเด้งหน้ามัดจำ. **No double-count proven on real prod** (sale channels never carry มัดจำ; ฿19,000 deposit now visible, was ฿0).
+- **reports-sale**: ชิป "มัดจำคงเหลือในระบบ" (Σ remaining active/partial, V154) + deposit rows **column-aligned into the 18 real columns** (teal `bg-teal-900/10` + badge "มัดจำรับเข้า", ยอดที่ชำระ=amount, full details, —=N/A), interleaved by date, **NOT summed into the sale footer**. Mobile = teal card.
+- **deposit deep-link**: `?...&deposit=DEP-x` → BackendDashboard → FinanceTab → DepositPanel opens existing DetailModal.
+- New: `loadDepositsByDateRange` · `depositReportUtils` · `paymentSummaryAggregator` rewrite (+`getMethodDocuments`/`refundsInPeriod`) · `DepositReceiptRow` · `PaymentDocsModal` · `renderDepositCell`. AV191 + Rule Q L2 diag `scripts/diag-deposit-in-reports.mjs`.
+- **TDZ crash caught by Rule Q L1** (not build): `mergedRows` used `out.rows` before `out`'s useMemo (const TDZ) → blank tab. Fixed (moved after `out`) + SG3 ordering guard.
 
 ## Next action
-- IDLE / await direction. If "deploy" → `vercel --prod` (frontend-only, no rules → no Probe-Deploy-Probe).
+- IDLE / await direction.
 
 ## Outstanding user-triggered actions
-- **deploy** (vercel-only) to ship. L1 already verified (real browser) — post-deploy is optional re-confirm.
-- **Pre-existing (flagged, NOT this work)**: `npm run test:extended` 283/4699 fail = V50-deleted tabs still imported by 46 stale RTL tests. Opt-in suite, not the tracked baseline.
+- **Pre-existing (NOT this work)**: `npm run test:extended` 283 fail = V50-deleted tabs imported by 46 stale RTL tests (opt-in suite; task spawned). · 2 full-suite env-flakes (bsa-task7 / v85-glow) pass isolated.
