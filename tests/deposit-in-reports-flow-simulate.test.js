@@ -35,10 +35,20 @@ describe('SG · source-grep contract locks', () => {
     expect(paymentTab).toMatch(/<SaleDetailModal/);
     expect(paymentTab).toMatch(/out\.refundsTotal > 0/);
   });
-  it('SG3 SaleReportTab: received section + remaining, NOT summed into sale footer', () => {
+  it('SG3 SaleReportTab: deposits INTERLEAVED into the one table by date (not a separate list), NOT summed into footer', () => {
     expect(saleTab).toMatch(/loadDepositsByDateRange\(\{ from, to, branchId: selectedBranchId \}\)/);
     expect(saleTab).toMatch(/getAllDeposits\(\{ branchId: selectedBranchId \}\)/);
-    expect(saleTab).toMatch(/<DepositReceivedSection/);
+    // EOD+2 (user "เอาใส่ตารางเดียวกัน"): merged by date + interleaved rows + chip kept
+    expect(saleTab).toMatch(/mergeRowsAndDeposits\(out\.rows, depositReceived\)/);
+    expect(saleTab).toMatch(/items=\{mergedRows\}/);
+    // TDZ guard (EOD+2 crash): `const mergedRows` references out.rows, so it MUST
+    // be declared AFTER `const out = useMemo` (const is not hoisted → ReferenceError).
+    expect(saleTab.indexOf('const mergedRows = useMemo')).toBeGreaterThan(saleTab.indexOf('const out = useMemo'));
+    expect(saleTab).toMatch(/data-testid=\{`sale-report-deposit-row-\$\{id\}`\}/);
+    expect(saleTab).toMatch(/data-testid="deposit-remaining-chip"/);
+    // the OLD space-eating full-width list must be GONE (the reported bug)
+    expect(saleTab).not.toMatch(/data-testid="deposit-received-list"/);
+    expect(saleTab).not.toMatch(/DepositReceivedSection/);
     // the sale aggregate call must NOT receive any deposit data (separation)
     const aggCall = saleTab.slice(saleTab.indexOf('aggregateSaleReport(allSales, {'), saleTab.indexOf('aggregateSaleReport(allSales, {') + 400);
     expect(aggCall).not.toMatch(/deposit/i);

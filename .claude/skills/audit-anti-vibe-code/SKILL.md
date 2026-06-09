@@ -533,7 +533,7 @@ Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky
 - `SaleReportTab` adding `depositReceived`/`depositReceivedSum`/`remaining` into `out.totals`, the footer, or any sale-paid sum
 **Canonical pattern**:
 1. `paymentSummaryAggregator.aggregatePaymentSummary(sales, deposits, filters)` — salesAmount from `channelsOf` (sale channels), depositAmount from `depositsReceivedInRange` (be_deposits); never cross the two.
-2. reports-sale: `DepositReceivedSection` is rendered separately; `aggregateSaleReport.totals` is untouched.
+2. reports-sale: deposit rows are INTERLEAVED into the sale table/card list by date (`mergeRowsAndDeposits`, teal rows) — they are INFORMATIONAL and MUST NOT be summed into `aggregateSaleReport.totals` / the footer (out.totals stays the sale aggregate). (EOD+2 2026-06-09 — replaced the old separate full-width list that ate the viewport.)
 3. "มัดจำคงเหลือในระบบ" = `sumSystemRemainingDeposits` (active/partial `remainingAmount`, V154), informational only.
 **Verification**: `scripts/diag-deposit-in-reports.mjs` (Rule Q L2 real prod — double-count-guard 0 + reconcile) + `tests/deposit-in-reports.test.js` B1 (no-double-count) + B2 (reconcile) + `tests/deposit-in-reports-flow-simulate.test.js` (source-grep + Rule I).
 

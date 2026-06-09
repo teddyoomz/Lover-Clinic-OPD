@@ -9,13 +9,12 @@ import { Receipt, ChevronRight } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
-import DepositReceiptRow from './DepositReceiptRow.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
 import { loadSalesByDateRange, loadAllCustomersForReport, loadSaleInsuranceClaimsByDateRange, loadDepositsByDateRange } from '../../../lib/reportsLoaders.js';
 import { listAllSellers, getAllDeposits } from '../../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { aggregateClaimsBySaleId } from '../../../lib/saleInsuranceClaimValidation.js';
-import { depositsReceivedInRange, sumSystemRemainingDeposits } from '../../../lib/depositReportUtils.js';
+import { depositsReceivedInRange, sumSystemRemainingDeposits, buildDepositDeepLinkUrl } from '../../../lib/depositReportUtils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -142,6 +141,17 @@ export default function SaleReportTab({ clinicSettings, theme }) {
     []
   );
 
+  // 2026-06-09 EOD+2 — user: "เอาใส่ตารางเดียวกันไปเลยจบๆ". Interleave deposit
+  // rows INTO the sale table/list by date (was a separate section that ate the
+  // whole viewport when many deposits). Deposits stay EXCLUDED from the sale
+  // footer (out.totals is the sale aggregate only). MUST be declared AFTER
+  // `out` — referencing out.rows before its useMemo is a const TDZ ReferenceError
+  // that crashes the whole tab (build can't catch it; only a real mount does).
+  const mergedRows = useMemo(
+    () => mergeRowsAndDeposits(out.rows, depositReceived),
+    [out.rows, depositReceived]
+  );
+
   const handleRangeChange = useCallback(({ from: f, to: t, presetId: id }) => {
     setFrom(f); setTo(t); setPresetId(id);
   }, []);
@@ -190,11 +200,11 @@ export default function SaleReportTab({ clinicSettings, theme }) {
         />
       }
     >
-      <DepositReceivedSection deposits={depositReceived} receivedSum={depositReceivedSum} remaining={remainingDeposit} />
-      <SaleMobileList rows={out.rows} onOpenCustomer={handleOpenCustomer} onViewSale={handleViewSale} />
+      <DepositSummaryBar receivedCount={depositReceived.length} receivedSum={depositReceivedSum} remaining={remainingDeposit} />
+      <SaleMobileList items={mergedRows} onOpenCustomer={handleOpenCustomer} onViewSale={handleViewSale} />
       <SaleMobileFooter totals={out.totals} />
       <SaleReportTable
-        rows={out.rows}
+        items={mergedRows}
         totals={out.totals}
         columns={columns}
         onOpenCustomer={handleOpenCustomer}
@@ -268,10 +278,35 @@ const STATUS_BADGE = {
   unpaid: 'bg-rose-900/30    text-rose-300    border-rose-700/50',
 };
 
-function SaleMobileList({ rows, onOpenCustomer, onViewSale }) {
+function SaleMobileList({ items, onOpenCustomer, onViewSale }) {
   return (
     <div className="lg:hidden space-y-2" data-testid="sale-report-mobile-list">
-      {rows.map((r, i) => {
+      {items.map((item, i) => {
+        if (item.kind === 'deposit') {
+          const d = item.deposit; const id = d.depositId || d.id || '';
+          return (
+            <div
+              key={`dep-${id}-${i}`}
+              onClick={() => { if (id && typeof window !== 'undefined') window.open(buildDepositDeepLinkUrl(id), '_blank'); }}
+              className="rounded-xl border border-teal-800/50 bg-teal-900/10 p-3 shadow-sm hover:border-teal-600/60 transition-colors cursor-pointer"
+              data-testid={`mobile-deposit-${id}`}
+              title="มัดจำรับเข้า — เปิดหน้ามัดจำ"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/40 text-teal-300 border-teal-700/50 shrink-0">มัดจำรับเข้า</span>
+                <span className="text-[10px] font-mono text-teal-300/70 tabular-nums shrink-0">{fmtDateCE(d.paymentDate)}</span>
+                <span className="ml-auto font-black tabular-nums text-teal-300 shrink-0">{fmtMoney(Number(d.amount) || 0)} <span className="text-[9px] opacity-70">฿</span></span>
+              </div>
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                {d.customerHN && <span className="font-mono text-[10px] text-teal-200/50">{d.customerHN}</span>}
+                <span className="text-sm font-bold text-teal-100/90">{d.customerName || d.customerNameTemp || '-'}</span>
+                {d.paymentChannel && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/30 text-teal-300 border-teal-700/40">{d.paymentChannel}</span>}
+                <ChevronRight size={12} className="ml-auto text-teal-400" />
+              </div>
+            </div>
+          );
+        }
+        const r = item.sale;
         const statusClass = STATUS_BADGE[r.paymentStatus] || 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]';
         return (
           <div
@@ -419,7 +454,7 @@ function SaleMobileFooter({ totals }) {
   );
 }
 
-function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) {
+function SaleReportTable({ items, totals, columns, onOpenCustomer, onViewSale }) {
   // V131 — fill the available viewport height so the table is "พอดีจอ" on ALL
   // screen sizes (V130's fixed 70vh cap left a gap on tall screens + hid
   // rows). Measure the wrapper's top → maxHeight = innerHeight - top - margin
@@ -437,7 +472,7 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
     compute();
     window.addEventListener('resize', compute);
     return () => window.removeEventListener('resize', compute);
-  }, [rows.length]);
+  }, [items.length]);
 
   // Right-align currency columns; otherwise left/center contextual
   const isCurrency = (key) => [
@@ -471,48 +506,77 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr
-              key={`${r.saleId}-${i}`}
-              onClick={() => onViewSale?.(r.saleId)}
-              className={`border-t border-[var(--bd)] cursor-pointer transition-colors ${
-                r.isCancelled ? 'opacity-50 line-through hover:bg-red-900/10' : 'hover:bg-cyan-900/15'
-              }`}
-              data-testid={`row-${r.saleId}`}
-              data-cancelled={r.isCancelled ? 'true' : 'false'}
-              title="คลิกเพื่อดูรายละเอียดการขาย"
-            >
-              {columns.map(c => {
-                const raw = r[c.key];
-                const display = typeof c.format === 'function' ? c.format(raw, r) : raw;
-                if (isInteractive(c.key) && r.customerId) {
+          {items.map((item, i) => {
+            // 2026-06-09 EOD+2 — deposit rows interleaved by date (teal band,
+            // colSpan). Click → finance·deposit deep-link. NOT in the footer sums.
+            if (item.kind === 'deposit') {
+              const d = item.deposit; const id = d.depositId || d.id || '';
+              return (
+                <tr
+                  key={`dep-${id}-${i}`}
+                  onClick={() => { if (id && typeof window !== 'undefined') window.open(buildDepositDeepLinkUrl(id), '_blank'); }}
+                  className="border-t border-teal-800/40 bg-teal-900/10 hover:bg-teal-900/20 cursor-pointer transition-colors"
+                  data-testid={`sale-report-deposit-row-${id}`}
+                  title="มัดจำรับเข้า — เปิดหน้ามัดจำในแท็บใหม่"
+                >
+                  <td className="px-1.5 py-1" colSpan={columns.length}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/40 text-teal-300 border-teal-700/50 shrink-0">มัดจำรับเข้า</span>
+                      <span className="text-[10px] font-mono text-teal-300/70 tabular-nums shrink-0">{fmtDateCE(d.paymentDate)}</span>
+                      {d.customerHN && <span className="text-[10px] font-mono text-teal-200/50 shrink-0">{d.customerHN}</span>}
+                      <span className="text-teal-100/90 truncate min-w-0">{d.customerName || d.customerNameTemp || '-'}</span>
+                      {d.paymentChannel && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/30 text-teal-300 border-teal-700/40 shrink-0">{d.paymentChannel}</span>}
+                      <span className="ml-auto font-bold tabular-nums text-teal-300 shrink-0">{fmtMoney(Number(d.amount) || 0)}</span>
+                      <ChevronRight size={12} className="text-teal-400 shrink-0" />
+                    </div>
+                  </td>
+                </tr>
+              );
+            }
+            const r = item.sale;
+            return (
+              <tr
+                key={`${r.saleId}-${i}`}
+                onClick={() => onViewSale?.(r.saleId)}
+                className={`border-t border-[var(--bd)] cursor-pointer transition-colors ${
+                  r.isCancelled ? 'opacity-50 line-through hover:bg-red-900/10' : 'hover:bg-cyan-900/15'
+                }`}
+                data-testid={`row-${r.saleId}`}
+                data-cancelled={r.isCancelled ? 'true' : 'false'}
+                title="คลิกเพื่อดูรายละเอียดการขาย"
+              >
+                {columns.map(c => {
+                  const raw = r[c.key];
+                  const display = typeof c.format === 'function' ? c.format(raw, r) : raw;
+                  if (isInteractive(c.key) && r.customerId) {
+                    return (
+                      <td key={c.key} className="px-1.5 py-1 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(r.customerId); }}
+                          className="text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 transition-colors"
+                          data-testid={`customer-link-${r.saleId}-${c.key}`}
+                          title="เปิดข้อมูลลูกค้าในแท็บใหม่"
+                        >
+                          {display}
+                        </button>
+                      </td>
+                    );
+                  }
                   return (
-                    <td key={c.key} className="px-1.5 py-1 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(r.customerId); }}
-                        className="text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 transition-colors"
-                        data-testid={`customer-link-${r.saleId}-${c.key}`}
-                        title="เปิดข้อมูลลูกค้าในแท็บใหม่"
-                      >
-                        {display}
-                      </button>
+                    <td
+                      key={c.key}
+                      className={`px-1.5 py-1 whitespace-nowrap ${isCurrency(c.key) ? 'text-right tabular-nums' : ''}`}
+                    >
+                      {isTruncatable(c.key)
+                        ? <span className="block max-w-[180px] truncate" title={String(display ?? '')}>{display}</span>
+                        : display}
                     </td>
                   );
-                }
-                return (
-                  <td
-                    key={c.key}
-                    className={`px-1.5 py-1 whitespace-nowrap ${isCurrency(c.key) ? 'text-right tabular-nums' : ''}`}
-                  >
-                    {isTruncatable(c.key)
-                      ? <span className="block max-w-[180px] truncate" title={String(display ?? '')}>{display}</span>
-                      : display}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+                })}
+              </tr>
+            );
+          })}
         </tbody>
         {/* Footer total row — AR3: cancelled excluded, AR5: reconciles to row sums */}
         <tfoot className="bg-[var(--bg-hover)] font-bold text-[var(--tx-primary)] border-t-2 border-[var(--bd)] sticky bottom-0 z-[5]" data-testid="sale-report-footer">
@@ -536,33 +600,41 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
   );
 }
 
-// 2026-06-09 deposit-in-reports — informational only. The remaining-balance
-// chip (Σ remainingAmount of active/partial, V154) + the "มัดจำที่รับเข้า"
-// list (received in range, excl cancelled). NEVER summed into the sale footer
-// (per user: "ยอดไม่ต้องไปรวมกับอะไรเลย"). Each row → finance·deposit deep-link.
-function DepositReceivedSection({ deposits, receivedSum, remaining }) {
-  const count = Array.isArray(deposits) ? deposits.length : 0;
+// 2026-06-09 EOD+2 — pure: interleave sale rows + received deposits by date
+// (desc). Deposits become rows IN the sale table/list; NEVER summed into the
+// sale footer (out.totals stays the sale aggregate). User: "เอาใส่ตารางเดียวกัน".
+function mergeRowsAndDeposits(saleRows, deposits) {
+  const items = [];
+  for (const r of (Array.isArray(saleRows) ? saleRows : [])) {
+    items.push({ kind: 'sale', date: String(r?.saleDate || ''), sale: r });
+  }
+  for (const d of (Array.isArray(deposits) ? deposits : [])) {
+    items.push({ kind: 'deposit', date: String(d?.paymentDate || ''), deposit: d });
+  }
+  // Stable date-desc (V8 sort is stable → same-date sales keep order, then deposits).
+  items.sort((a, b) => b.date.localeCompare(a.date));
+  return items;
+}
+
+// 2026-06-09 EOD+2 — compact summary bar (replaces the old full-width list that
+// ate the viewport when many deposits). Chip = Σ remaining active/partial
+// (V154); one-line note = received-in-range total. The deposit ROWS themselves
+// are interleaved in the table/card list (teal), not listed here.
+function DepositSummaryBar({ receivedCount, receivedSum, remaining }) {
   return (
-    <div className="mb-3" data-testid="deposit-received-section">
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full border border-teal-700/50 bg-teal-900/20 text-teal-300 px-3 py-1 text-xs font-bold"
-          data-testid="deposit-remaining-chip"
-        >
-          มัดจำคงเหลือในระบบ <span className="text-[var(--tx-primary)] tabular-nums">{fmtMoney(remaining)}</span>
+    <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="deposit-summary-bar">
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full border border-teal-700/50 bg-teal-900/20 text-teal-300 px-3 py-1 text-xs font-bold"
+        data-testid="deposit-remaining-chip"
+      >
+        มัดจำคงเหลือในระบบ <span className="text-[var(--tx-primary)] tabular-nums">{fmtMoney(remaining)}</span>
+      </span>
+      {receivedCount > 0 && (
+        <span className="text-[11px] text-[var(--tx-muted)]">
+          💧 มัดจำที่รับเข้าในช่วงนี้ {receivedCount} รายการ ·{' '}
+          <span className="text-teal-400 font-bold tabular-nums">{fmtMoney(receivedSum)}</span>{' '}
+          <span className="opacity-70">(แถวสีเขียวในตาราง · ไม่รวมในยอดขาย)</span>
         </span>
-        {count > 0 && (
-          <span className="text-[11px] text-[var(--tx-muted)]">
-            💧 มัดจำที่รับเข้า {count} รายการ ·{' '}
-            <span className="text-teal-400 font-bold tabular-nums">{fmtMoney(receivedSum)}</span>{' '}
-            <span className="opacity-70">(ไม่รวมในยอดขายด้านล่าง)</span>
-          </span>
-        )}
-      </div>
-      {count > 0 && (
-        <div className="rounded-lg border border-teal-700/40 bg-teal-900/5 overflow-hidden" data-testid="deposit-received-list">
-          {deposits.map(d => <DepositReceiptRow key={d.depositId || d.id} deposit={d} />)}
-        </div>
       )}
     </div>
   );
