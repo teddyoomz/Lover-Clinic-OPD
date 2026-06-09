@@ -278,6 +278,44 @@ const STATUS_BADGE = {
   unpaid: 'bg-rose-900/30    text-rose-300    border-rose-700/50',
 };
 
+// 2026-06-09 EOD+3 — user: "ใช้ column ที่จำเป็นร่วมกัน ... คงอัตลักษณ์สีต่างชัด".
+// Deposit-received rows MAP into the real sale columns (column-aligned, not a
+// colSpan band) with a teal identity. Footer stays sale-only (out.totals).
+const DEP_STATUS_TH = { active: 'ใช้งาน', partial: 'ใช้บางส่วน', used: 'ใช้หมด', refunded: 'คืนแล้ว', cancelled: 'ยกเลิก', expired: 'หมดอายุ' };
+const DEP_BADGE = 'inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/40 text-teal-300 border-teal-700/50';
+
+function depSellerNames(d) {
+  const arr = Array.isArray(d?.sellers) ? d.sellers : [];
+  return arr.map(s => (s?.name || '').trim()).filter(Boolean).join(', ');
+}
+
+/** Cell content for a deposit-received row, by sale-column key (Q2: amount →
+ *  ยอดที่ชำระ/paidAmount). Teal text; non-applicable columns render a dash. */
+function renderDepositCell(d, key, onOpenCustomer) {
+  const teal = 'text-teal-300';
+  const dash = <span className="text-[var(--tx-muted)]">—</span>;
+  const id = d.depositId || d.id || '';
+  switch (key) {
+    case 'saleDate':     return <span className={teal}>{fmtDateCE(d.paymentDate)}</span>;
+    case 'saleId':       return <span className={`font-mono ${teal}`}>{id}</span>;
+    case 'customerHN':   return d.customerHN ? <span className={`font-mono ${teal}`}>{d.customerHN}</span> : dash;
+    case 'customerName': {
+      const name = d.customerName || d.customerNameTemp || '-';
+      return d.customerId
+        ? <button type="button" onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(d.customerId); }} className="text-teal-300 hover:text-teal-200 hover:underline underline-offset-2" title="เปิดข้อมูลลูกค้าในแท็บใหม่">{name}</button>
+        : <span className={teal}>{name}</span>;
+    }
+    case 'saleType':     return <span className={DEP_BADGE}>มัดจำรับเข้า</span>;
+    case 'itemsSummary': { const p = (d.purpose || '').trim(); return <span className={teal}>{p ? `รับมัดจำ · ${p}` : 'รับมัดจำ'}</span>; }
+    case 'sellersLabel': { const n = depSellerNames(d); return n ? <span className={teal}>{n}</span> : dash; }
+    case 'paidAmount':   return <span className="text-teal-300 font-bold tabular-nums">{fmtMoney(Number(d.amount) || 0)}</span>;
+    case 'paymentChannels': return d.paymentChannel ? <span className={teal}>{d.paymentChannel}</span> : dash;
+    case 'paymentStatusLabel': return <span className={DEP_BADGE}>{DEP_STATUS_TH[d.status] || d.status || '—'}</span>;
+    case 'createdBy':    { const n = depSellerNames(d) || (d.createdByName || '').trim(); return n ? <span className={teal}>{n}</span> : dash; }
+    default:             return dash; // netTotal / depositApplied / walletApplied / refundAmount / insuranceClaim / outstandingAmount / cancelledBy
+  }
+}
+
 function SaleMobileList({ items, onOpenCustomer, onViewSale }) {
   return (
     <div className="lg:hidden space-y-2" data-testid="sale-report-mobile-list">
@@ -301,6 +339,7 @@ function SaleMobileList({ items, onOpenCustomer, onViewSale }) {
                 {d.customerHN && <span className="font-mono text-[10px] text-teal-200/50">{d.customerHN}</span>}
                 <span className="text-sm font-bold text-teal-100/90">{d.customerName || d.customerNameTemp || '-'}</span>
                 {d.paymentChannel && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/30 text-teal-300 border-teal-700/40">{d.paymentChannel}</span>}
+                <span className={DEP_BADGE}>{DEP_STATUS_TH[d.status] || d.status || '—'}</span>
                 <ChevronRight size={12} className="ml-auto text-teal-400" />
               </div>
             </div>
@@ -519,17 +558,14 @@ function SaleReportTable({ items, totals, columns, onOpenCustomer, onViewSale })
                   data-testid={`sale-report-deposit-row-${id}`}
                   title="มัดจำรับเข้า — เปิดหน้ามัดจำในแท็บใหม่"
                 >
-                  <td className="px-1.5 py-1" colSpan={columns.length}>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/40 text-teal-300 border-teal-700/50 shrink-0">มัดจำรับเข้า</span>
-                      <span className="text-[10px] font-mono text-teal-300/70 tabular-nums shrink-0">{fmtDateCE(d.paymentDate)}</span>
-                      {d.customerHN && <span className="text-[10px] font-mono text-teal-200/50 shrink-0">{d.customerHN}</span>}
-                      <span className="text-teal-100/90 truncate min-w-0">{d.customerName || d.customerNameTemp || '-'}</span>
-                      {d.paymentChannel && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/30 text-teal-300 border-teal-700/40 shrink-0">{d.paymentChannel}</span>}
-                      <span className="ml-auto font-bold tabular-nums text-teal-300 shrink-0">{fmtMoney(Number(d.amount) || 0)}</span>
-                      <ChevronRight size={12} className="text-teal-400 shrink-0" />
-                    </div>
-                  </td>
+                  {columns.map(c => (
+                    <td
+                      key={c.key}
+                      className={`px-1.5 py-1 whitespace-nowrap ${isCurrency(c.key) ? 'text-right tabular-nums' : ''}`}
+                    >
+                      {renderDepositCell(d, c.key, onOpenCustomer)}
+                    </td>
+                  ))}
                 </tr>
               );
             }

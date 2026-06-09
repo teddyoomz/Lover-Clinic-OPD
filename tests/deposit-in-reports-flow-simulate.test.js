@@ -46,6 +46,10 @@ describe('SG · source-grep contract locks', () => {
     expect(saleTab.indexOf('const mergedRows = useMemo')).toBeGreaterThan(saleTab.indexOf('const out = useMemo'));
     expect(saleTab).toMatch(/data-testid=\{`sale-report-deposit-row-\$\{id\}`\}/);
     expect(saleTab).toMatch(/data-testid="deposit-remaining-chip"/);
+    // EOD+3 (user "ใช้ column ร่วมกัน ... เนียน"): deposit row is column-mapped
+    // via renderDepositCell (one <td> per real column), NOT a colSpan band.
+    expect(saleTab).toMatch(/renderDepositCell\(d, c\.key, onOpenCustomer\)/);
+    expect(saleTab).not.toMatch(/colSpan=\{columns\.length\}/);
     // the OLD space-eating full-width list must be GONE (the reported bug)
     expect(saleTab).not.toMatch(/data-testid="deposit-received-list"/);
     expect(saleTab).not.toMatch(/DepositReceivedSection/);
