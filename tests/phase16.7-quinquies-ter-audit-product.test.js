@@ -102,7 +102,9 @@ describe('AP.B — source-grep regression guards', () => {
   it('AP.B.6 — CourseHistoryTab suppresses qty line when product line shown', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('src/components/backend/CourseHistoryTab.jsx', 'utf-8');
-    expect(src).toMatch(/showQtyLine\s*=\s*\(qtyBefore[^)]*\)\s*&&\s*!showProductLine/);
+    // 2026-06-09 — for 'use' the qty line is still suppressed when a product
+    // line shows (!showProductLine); add/reduce ("แก้คงเหลือ") always show it.
+    expect(src).toMatch(/showQtyLine\s*=\s*\(qtyBefore[^)]*\)\s*&&\s*\([^)]*!showProductLine\)/);
   });
 
   it('AP.B.7 — buildChangeAuditEntry persists fromCourse.courseType via inferCourseType', async () => {

@@ -606,6 +606,7 @@ export const rebuildTreatmentSummary = (...args) => raw.rebuildTreatmentSummary(
 export const deductCourseItems = (...args) => raw.deductCourseItems(...args);
 export const reverseCourseDeduction = (...args) => raw.reverseCourseDeduction(...args);
 export const addCourseRemainingQty = (...args) => raw.addCourseRemainingQty(...args);
+export const adjustCourseRemainingQty = (...args) => raw.adjustCourseRemainingQty(...args);
 export const addPicksToResolvedGroup = (...args) => raw.addPicksToResolvedGroup(...args);
 export const resolvePickedCourseInCustomer = (...args) => raw.resolvePickedCourseInCustomer(...args);
 export const cancelCustomerCourse = (...args) => raw.cancelCustomerCourse(...args);

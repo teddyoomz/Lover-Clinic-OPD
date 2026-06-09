@@ -270,6 +270,7 @@ describe('V136.LOCK mirror gates are locked to real TreatmentFormPage source', (
     expect(TFP).toMatch(/onClick=\{canEditCourseUsageRetro \? \(\) => handleSubmit\('course'\) : handleSubmit\}\s*\n\s*disabled=\{saving\}/);
   });
   it('L8 deductCourseItems call passes treatmentId/staffId/staffName (no branchId — branch-agnostic)', () => {
-    expect(TFP).toMatch(/await deductCourseItems\(customerId, existingDeductions, \{\s*treatmentId: newTid,\s*staffId: doctorId \|\| '',\s*staffName: treatingDoctor\?\.name \|\| '',/);
+    // 2026-06-09 — staffName = the OPD editor (editorContext), not the doctor.
+    expect(TFP).toMatch(/await deductCourseItems\(customerId, existingDeductions, \{\s*treatmentId: newTid,[\s\S]*?staffId: editorContext\?\.uid \|\| doctorId \|\| '',\s*staffName: editorContext\?\.name \|\| treatingDoctor\?\.name \|\| '',/);
   });
 });

@@ -292,8 +292,10 @@ describe('V36.J — V36-bis course-history audit fix (deductCourseItems after cr
     // Site 1 (existingDeductions): treatmentId: newTid
     // Site 2 (purchasedDeductions): treatmentId: purchasedNewTid
     // Either is fine — both are derived from `result.treatmentId || treatmentId`.
-    const existingCall = TFP.match(/await deductCourseItems\(customerId, existingDeductions, \{[\s\S]{0,400}?\}\)/);
-    const purchasedCall = TFP.match(/await deductCourseItems\(customerId, purchasedDeductions, \{[\s\S]{0,400}?\}\)/);
+    // 2026-06-09 — limit raised 400→800: the deduct calls gained an editor-
+    // attribution comment block (staffName = editorContext, not the doctor).
+    const existingCall = TFP.match(/await deductCourseItems\(customerId, existingDeductions, \{[\s\S]{0,800}?\}\)/);
+    const purchasedCall = TFP.match(/await deductCourseItems\(customerId, purchasedDeductions, \{[\s\S]{0,800}?\}\)/);
     expect(existingCall).toBeTruthy();
     expect(purchasedCall).toBeTruthy();
     // Existing site uses newTid
@@ -306,7 +308,8 @@ describe('V36.J — V36-bis course-history audit fix (deductCourseItems after cr
     // Source-grep ALL deductCourseItems invocations in TFP.
     // Each one must be preceded (within 50 lines = ~3000 chars) by a
     // `result.treatmentId || treatmentId` resolution variable assignment.
-    const matches = [...TFP.matchAll(/await deductCourseItems\([\s\S]{0,500}?\}\)/g)];
+    // 2026-06-09 — limit raised 500→800 for the editor-attribution comment block.
+    const matches = [...TFP.matchAll(/await deductCourseItems\([\s\S]{0,800}?\}\)/g)];
     expect(matches.length).toBeGreaterThanOrEqual(2);
     for (const m of matches) {
       const start = Math.max(0, m.index - 3000);

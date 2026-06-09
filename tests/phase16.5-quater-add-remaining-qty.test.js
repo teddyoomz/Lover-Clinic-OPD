@@ -45,7 +45,9 @@ describe('Q2 addRemaining — anti-regression: this is the BUGGY function (do NO
 
 describe('Q3 backendClient.addCourseRemainingQty source-grep — locks the fix', () => {
   test('Q3.1 uses reverseQty, NOT addRemainingQty/addRemaining', () => {
-    const idx = CLIENT_SRC.indexOf('export async function addCourseRemainingQty');
+    // 2026-06-09 — the add-side math + audit moved to adjustCourseRemainingQty
+    // (unified add/reduce); addCourseRemainingQty is now a thin wrapper.
+    const idx = CLIENT_SRC.indexOf('export async function adjustCourseRemainingQty');
     expect(idx).toBeGreaterThan(-1);
     const slice = CLIENT_SRC.slice(idx, idx + 3000);
     expect(slice).toMatch(/reverseQty\(/);
@@ -55,10 +57,11 @@ describe('Q3 backendClient.addCourseRemainingQty source-grep — locks the fix',
   });
 
   test('Q3.2 emits be_course_changes audit (kind=add) for ประวัติการใช้คอร์ส tab', () => {
-    const idx = CLIENT_SRC.indexOf('export async function addCourseRemainingQty');
+    const idx = CLIENT_SRC.indexOf('export async function adjustCourseRemainingQty');
     const slice = CLIENT_SRC.slice(idx, idx + 3000);
     expect(slice).toMatch(/buildChangeAuditEntry/);
-    expect(slice).toMatch(/kind:\s*'add'/);
+    // 2026-06-09 — kind is now add|reduce ("แก้คงเหลือ").
+    expect(slice).toMatch(/kind:\s*isReduce\s*\?\s*'reduce'\s*:\s*'add'/);
     expect(slice).toMatch(/setDoc\(courseChangeDoc/);
     expect(slice).toMatch(/qtyDelta/);
     expect(slice).toMatch(/qtyBefore/);

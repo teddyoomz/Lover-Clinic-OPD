@@ -23,7 +23,7 @@ import { resolveCourseDeducted } from '../../lib/treatmentDisplayResolvers.js';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
   getCustomerSales, listenToCustomerSales,
-  addCourseRemainingQty, getCustomer, listenToCustomer,
+  addCourseRemainingQty, adjustCourseRemainingQty, getCustomer, listenToCustomer,
   // Phase 14.10-tris (2026-04-26) — be_* canonical for staff/products
   // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
   // V49 (2026-05-08) — listProducts → listProductsForPicker for the
@@ -492,7 +492,15 @@ export default function CustomerDetailView({
   };
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
-  const activeCourses = useMemo(() => allCourses.filter(c => {
+  // 2026-06-09 — carry the TRUE customer.courses index (rawIndex) so
+  // groupCustomerCoursesForDetailView sets entry.originalIndex to the real index
+  // the modals mutate (addCourseRemainingQty / exchange / share), NOT the
+  // filtered display position. Without this, a used-up sub-item filtered out
+  // here shifts every later index → the wrong course is topped up + the sale
+  // records the wrong product (Issue-4 root cause, LC-26000114).
+  const activeCourses = useMemo(() => allCourses
+    .map((course, rawIndex) => ({ course, rawIndex }))
+    .filter(({ course: c }) => {
     // V103 (2026-05-19 LATE+2) — terminal-status guard. Refunded
     // (status='คืนเงิน') and cancelled (status='ยกเลิก') entries are
     // preserved in customer.courses[] for audit-trail integrity
@@ -539,6 +547,20 @@ export default function CustomerDetailView({
     () => groupCustomerCoursesForDetailView(expiredCourses),
     [expiredCourses]
   );
+  // 2026-06-09 — treatmentId → OPD editor name (editedByName) for course-USE
+  // attribution in CourseHistoryTab (live-resolve: show the keyer/last editor,
+  // not the doctor). Built from the live treatments listener; falls back to the
+  // stored staffName when a treatment is missing (deleted/capped).
+  const treatmentEditorMap = useMemo(() => {
+    const m = new Map();
+    for (const t of (treatments || [])) {
+      if (!t) continue;
+      const id = String(t.treatmentId || t.id || '');
+      const name = String(t.editedByName || '').trim();
+      if (id && name) m.set(id, name);
+    }
+    return m;
+  }, [treatments]);
   const appointments = customer?.appointments || [];
   // Sort treatments newest-first. `rebuildTreatmentSummary` writes them in desc order
   // on every backend save, but customers cloned from ProClinic keep ProClinic's ordering
@@ -1216,7 +1238,7 @@ export default function CustomerDetailView({
                 </div>
               )}
               {courseTab === 'history' ? (
-                <CourseHistoryTab customerId={customerId} />
+                <CourseHistoryTab customerId={customerId} treatmentEditorMap={treatmentEditorMap} />
               ) : courseTab === 'purchases' ? (
                 /* Purchase History */
                 customerSales.length === 0 && !salesError ? (
@@ -1280,11 +1302,15 @@ export default function CustomerDetailView({
                               const unitPrice = Number(it.unitPrice || it.price) || 0;
                               return (
                                 <li key={j} className="flex items-center justify-between gap-2 text-[11px]">
-                                  <span className="flex items-center gap-1.5 min-w-0">
-                                    <span className={`text-[9px] uppercase tracking-wider shrink-0 ${typeColor[it.itemType] || typeColor.item}`}>
+                                  <span className="flex items-start gap-1.5 min-w-0">
+                                    <span className={`text-[9px] uppercase tracking-wider shrink-0 mt-0.5 ${typeColor[it.itemType] || typeColor.item}`}>
                                       {typeLabel[it.itemType]}
                                     </span>
-                                    <span className="text-[var(--tx-secondary)] truncate">{name}</span>
+                                    <span className="min-w-0">
+                                      <span className="block text-[var(--tx-secondary)] truncate">{name}</span>
+                                      {/* 2026-06-09 — bundle subline for เพิ่ม/ลดคงเหลือ items (Q3=A) */}
+                                      {it.parentCourseName && <span className="block text-[10px] text-[var(--tx-muted)] truncate">↳ {it.parentCourseName}</span>}
+                                    </span>
                                   </span>
                                   <span className="text-[var(--tx-muted)] font-mono tabular-nums shrink-0">
                                     {qty > 0 && `${qty}${unit ? ' ' + unit : ''}`}
@@ -1355,7 +1381,7 @@ export default function CustomerDetailView({
                           course={entry.course}
                           courseTab={courseTab}
                           allCourses={allCourses}
-                          onAddQty={() => { setAddQtyModal({ courseIndex: entry.originalIndex, courseName: entry.course.name }); setAddQtyValue(''); }}
+                          onAddQty={() => { setAddQtyModal({ courseIndex: entry.originalIndex, courseName: entry.course.name, product: entry.course.product }); setAddQtyValue(''); }}
                           onExchange={() => { setExchangeModal({ courseIndex: entry.originalIndex, course: entry.course }); }}
                           onShare={() => { setShareModal({ courseIndex: entry.originalIndex, course: entry.course }); }}
                         />
@@ -1386,6 +1412,7 @@ export default function CustomerDetailView({
             course={allCourses[addQtyModal.courseIndex]}
             courseIndex={addQtyModal.courseIndex}
             courseName={addQtyModal.courseName}
+            product={addQtyModal.product}
             customerId={customerId}
             customerName={name}
             onClose={() => setAddQtyModal(null)}
@@ -1550,8 +1577,13 @@ export default function CustomerDetailView({
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function AddQtyModal({ course, courseIndex, courseName, customerId, customerName, onClose, onDone }) {
-  const [addQty, setAddQty] = useState('');
+function AddQtyModal({ course, courseIndex, courseName, product, customerId, customerName, onClose, onDone }) {
+  // 2026-06-09 — "แก้คงเหลือ": add OR reduce a course's remaining sessions
+  // (Q1=A mode toggle). เพิ่ม caps at total; ลด floors at 0. Records staff +
+  // the SPECIFIC sub-product (Issues 2/3/4) and derives the sale name from the
+  // authoritative mutation result (not a stale UI snapshot).
+  const [mode, setMode] = useState('add'); // 'add' | 'reduce'
+  const [qty, setQty] = useState('');
   const [staff, setStaff] = useState([]);
   const [staffId, setStaffId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1563,21 +1595,47 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
   }, []);
 
   const selectedStaff = staff.find(s => String(s.id) === staffId);
+  const isReduce = mode === 'reduce';
+  const parsed = parseQtyString(course?.qty || '');
+  const beforeRemaining = Number(parsed.remaining) || 0;
+  const total = Number(parsed.total) || 0;
+  const unit = parsed.unit || '';
+  const amt = Math.max(0, Number(qty) || 0);
+  const afterRemaining = isReduce
+    ? Math.max(beforeRemaining - amt, 0)
+    : Math.min(beforeRemaining + amt, total);
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-add-qty" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
-          <h3 id="modal-title-add-qty" className="text-sm font-bold text-teal-400">เพิ่มคงเหลือ: {courseName}</h3>
+          {/* rule 04: teal heading text — never red on a course/customer name */}
+          <h3 id="modal-title-add-qty" className="text-sm font-bold text-teal-400">
+            แก้คงเหลือ: {courseName}{product ? <span className="text-[var(--tx-muted)] font-normal"> › {product}</span> : null}
+          </h3>
           <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-4">
+          <div className="flex gap-2">
+            <button type="button" data-testid="adjust-mode-add" onClick={() => setMode('add')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${mode === 'add' ? 'bg-teal-700 text-white border-teal-600' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]'}`}>＋ เพิ่ม</button>
+            <button type="button" data-testid="adjust-mode-reduce" onClick={() => setMode('reduce')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${mode === 'reduce' ? 'bg-rose-700 text-white border-rose-600' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]'}`}>－ ลด</button>
+          </div>
           <div>
-            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">จำนวนที่จะเพิ่ม</label>
-            <input type="number" min="1" value={addQty} onChange={e => setAddQty(e.target.value)}
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">{isReduce ? 'จำนวนที่จะลด' : 'จำนวนที่จะเพิ่ม'}</label>
+            <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="จำนวน" />
           </div>
+          {amt > 0 && (
+            <div className="text-xs bg-[var(--bg-hover)] rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap" data-testid="adjust-qty-preview">
+              <span className="text-[var(--tx-muted)]">คงเหลือ:</span>
+              <span className="font-mono font-bold text-[var(--tx-secondary)]">{beforeRemaining} / {total} {unit}</span>
+              <span className="text-[var(--tx-muted)]">→</span>
+              <span className={`font-mono font-bold ${isReduce ? 'text-rose-400' : 'text-teal-400'}`}>{afterRemaining} / {total} {unit}</span>
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">พนักงานผู้ดำเนินการ *</label>
             {loading ? <p className="text-xs text-[var(--tx-muted)]">กำลังโหลด...</p> : (
@@ -1592,28 +1650,35 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
         <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
           <button onClick={async () => {
-            if (!addQty || Number(addQty) <= 0) { alert('กรุณากรอกจำนวน'); return; }
+            if (!qty || Number(qty) <= 0) { alert('กรุณากรอกจำนวน'); return; }
             if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
             setSaving(true);
             try {
-              await addCourseRemainingQty(customerId, courseIndex, Number(addQty));
-              // Create sale record for audit
+              const res = await adjustCourseRemainingQty(customerId, courseIndex, isReduce ? -amt : amt, {
+                staffId, staffName: selectedStaff?.name || '', actor: selectedStaff?.name || '',
+              });
+              // Sale name from the AUTHORITATIVE mutated course — the specific
+              // sub-product, not the bundle (Issue 4) and never a stale snapshot.
+              const sign = isReduce ? '-' : '+';
+              const label = isReduce ? 'ลดคงเหลือ' : 'เพิ่มคงเหลือ';
+              const displayProduct = res?.productName || res?.courseName || courseName || product || '';
+              const bundle = res?.courseName || courseName || '';
               const { createBackendSale } = await import('../../lib/scopedDataLayer.js');
               await createBackendSale(JSON.parse(JSON.stringify({
                 customerId, customerName: customerName || '', customerHN: '',
                 saleDate: thaiTodayISO(),
-                saleNote: `เพิ่มคงเหลือ: ${courseName} +${addQty}`,
-                items: { promotions: [], courses: [{ name: `เพิ่มคงเหลือ: ${courseName} +${addQty}`, qty: '1', unitPrice: '0', itemType: 'addRemaining' }], products: [], medications: [] },
+                saleNote: `${label}: ${displayProduct} ${sign}${amt}${bundle ? ` (${bundle})` : ''}`,
+                items: { promotions: [], courses: [{ name: `${label}: ${displayProduct} ${sign}${amt}`, qty: '1', unitPrice: '0', itemType: isReduce ? 'reduceRemaining' : 'addRemaining', parentCourseName: bundle, productName: displayProduct }], products: [], medications: [] },
                 billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
                 payment: { status: 'paid', channels: [] },
                 sellers: [{ id: staffId, name: selectedStaff?.name || '', percent: '0', total: '0' }],
-                source: 'addRemaining',
+                source: isReduce ? 'reduceRemaining' : 'addRemaining',
               })));
               await onDone();
             } catch (e) { alert(e.message); }
             finally { setSaving(false); }
-          }} disabled={saving || !staffId} className="px-5 py-2 rounded-lg text-xs font-bold bg-teal-700 text-white hover:bg-teal-600 disabled:opacity-40 transition-all">
-            {saving ? 'กำลังบันทึก...' : 'ยืนยันเพิ่มคงเหลือ'}
+          }} disabled={saving || !staffId} className={`px-5 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-40 transition-all ${isReduce ? 'bg-rose-700 hover:bg-rose-600' : 'bg-teal-700 hover:bg-teal-600'}`}>
+            {saving ? 'กำลังบันทึก...' : `ยืนยัน${isReduce ? 'ลด' : 'เพิ่ม'} ${isReduce ? '-' : '+'}${amt || ''}`}
           </button>
         </div>
       </div>
@@ -2036,7 +2101,10 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
 function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, onShare }) {
   const parsed = parseQtyString(course.qty);
   const pct = parsed.total > 0 ? (parsed.remaining / parsed.total * 100) : 0;
-  const origIdx = allCourses.findIndex(c => c.name === course.name && c.product === course.product && c.qty === course.qty);
+  // 2026-06-09 — removed the dead `origIdx` fuzzy findIndex (name+product+qty):
+  // it was computed + passed to onAddQty/onExchange/onShare but the parent
+  // handlers ignored the arg and used entry.originalIndex (now the true
+  // customer.courses index). Fuzzy name-match was also ambiguous for dup rows.
   // Phase 12.2b follow-up (2026-04-24): fill-later (เหมาตามจริง) courses
   // display "เหมาตามจริง" in the qty column instead of the raw "1/1 U"
   // sentinel — the "1" is a placeholder for "one-shot use", not a real
@@ -2074,15 +2142,17 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, on
       </div>
       {courseTab === 'active' && (
         <div className="flex items-center gap-3">
-          <button onClick={() => onAddQty(origIdx)}
+          {/* 2026-06-09 — parent uses entry.originalIndex (true customer.courses
+              index); the arg is ignored. "แก้คงเหลือ" = add OR reduce. */}
+          <button onClick={() => onAddQty()}
             className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 transition-colors">
-            <Plus size={10} /> เพิ่มคงเหลือ
+            <Plus size={10} /> แก้คงเหลือ
           </button>
-          <button onClick={() => onExchange(origIdx)}
+          <button onClick={() => onExchange()}
             className="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1 transition-colors">
             <RefreshCw size={10} /> เปลี่ยนสินค้า
           </button>
-          <button onClick={() => onShare(origIdx)}
+          <button onClick={() => onShare()}
             className="text-[11px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 transition-colors">
             <Users size={10} /> แชร์คอร์ส
           </button>

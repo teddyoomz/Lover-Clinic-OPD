@@ -62,6 +62,13 @@ describe('Phase 15.7-quater Parity — self-created vs cloned customers', () => 
       //  - onSaved (line 541, our fix): `id || proClinicId`
       // We assert NO `getCustomer(viewingCustomer?.proClinicId)` (bare) remains.
       expect(src).not.toMatch(/getCustomer\(viewingCustomer\?\.proClinicId\)/);
+      // 2026-06-09 (AV189) — GAP CLOSE: PAR1.4 originally only checked the
+      // getCustomer(...) form, so the onDeleteTreatment handler's bare
+      // `const cid = viewingCustomer.proClinicId;` slipped past BOTH the
+      // Phase 15.7-quater fix AND this guard → stale treatmentCount badge for
+      // every LC-* customer (V66-class: a guard that didn't cover all forms).
+      // Extend to the `const|let <name> = viewingCustomer.proClinicId;` form.
+      expect(src).not.toMatch(/(?:const|let)\s+\w+\s*=\s*viewingCustomer\.proClinicId\s*;/);
     });
   });
 

@@ -35,7 +35,9 @@ describe('V148 — atomic course-mutation helper', () => {
     const fns = [
       'deductCourseItems',
       'reverseCourseDeduction',
-      'addCourseRemainingQty',
+      // 2026-06-09 — was 'addCourseRemainingQty' (now a thin wrapper delegating
+      // to adjustCourseRemainingQty, where the atomic RMW lives).
+      'adjustCourseRemainingQty',
       'assignCourseToCustomer',
       'resolvePickedCourseInCustomer',
       'addPicksToResolvedGroup',

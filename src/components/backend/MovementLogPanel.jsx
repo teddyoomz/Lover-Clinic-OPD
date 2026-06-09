@@ -4,7 +4,7 @@
 // 3|4=ปรับสต็อค, 6|7=รักษา, 8|10=ส่งออก, 9=รับเข้า, 12|13=เบิก.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-react';
+import { Loader2, Activity, Filter, Search, Plus, Minus, Package, User } from 'lucide-react';
 // Phase 14.10-tris (2026-04-26) — be_products canonical (was master_data mirror)
 // V49 (2026-05-08) — listProducts → listProductsForPicker for the dropdown
 // at line 216 which renders `{p.name}`. Canonical be_products has productName.
@@ -15,6 +15,9 @@ import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.js
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// 2026-06-09 — resolve a movement's customer (id → name) for the clickable
+// customer link on treatment/sale deductions.
+import { useCustomerMap } from '../../hooks/useCustomerMap.js';
 
 // Tailwind needs explicit class names in source for JIT — no dynamic `bg-${color}`.
 const BADGE_CLASSES = {
@@ -95,6 +98,9 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
   // warehouse's movements without changing the global BranchContext.
   const { branchId: ctxBranchId, branches } = useSelectedBranch();
   const BRANCH_ID = branchIdOverride || ctxBranchId;
+  // 2026-06-09 — customerId → name for the clickable customer link on
+  // treatment/sale deduction movements (live-resolve; survives deleted src doc).
+  const customerMap = useCustomerMap();
 
   // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration
   // script rewrites all legacy `branchId='main'` movements to real branch
@@ -339,6 +345,11 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
                   m.linkedAdjustId ? `Adj: ${m.linkedAdjustId}` :
                   m.linkedTransferId ? `Transfer: ${m.linkedTransferId}` :
                   m.linkedWithdrawalId ? `Withdraw: ${m.linkedWithdrawalId}` : '';
+                // 2026-06-09 — customer link for treatment/sale deductions.
+                // Movement stamps customerId; resolve the name LIVE (the linked
+                // treatment/sale may have been deleted — Rule O keeps the movement).
+                const custId = m.customerId ? String(m.customerId) : '';
+                const custName = custId ? (customerMap.get(custId) || '') : '';
                 const isReverse = !!m.reverseOf;
                 // Phase 15.4 post-deploy bug 2 v4 — counterparty label for cross-tier types
                 const cpId = COUNTERPARTY_TEMPLATES[m.type] ? getCounterpartyId(m) : null;
@@ -379,6 +390,20 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
                     </td>
                     <td className="px-3 py-2 text-[var(--tx-muted)] text-[11px]">
                       {link && <div className="font-mono">{link}</div>}
+                      {custId && (custName ? (
+                        <button
+                          type="button"
+                          data-testid="movement-customer-link"
+                          onClick={() => window.open(`${window.location.origin}?backend=1&customer=${encodeURIComponent(custId)}`, '_blank')}
+                          className="flex items-center gap-1 mt-0.5 text-sky-400 hover:text-sky-300 hover:underline font-medium"
+                          title="เปิดหน้าข้อมูลลูกค้า (แท็บใหม่)"
+                        >
+                          <User size={10} className="shrink-0" />
+                          <span className="truncate max-w-[170px]">{custName}</span>
+                        </button>
+                      ) : (
+                        <div className="mt-0.5 italic">ลูกค้า: {custId}</div>
+                      ))}
                       {m.note && <div className="italic">{m.note}</div>}
                     </td>
                   </tr>

@@ -24,13 +24,14 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Clock, Loader2, Plus, ArrowDownLeft, Repeat, Share2, X as XIcon, Receipt,
+  Clock, Loader2, Plus, Minus, ArrowDownLeft, Repeat, Share2, X as XIcon, Receipt,
 } from 'lucide-react';
 import { listenToCourseChanges } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 
 const KIND_META = {
   add:      { label: 'เพิ่มคงเหลือ', color: 'text-emerald-400', bg: 'bg-emerald-900/20', border: 'border-emerald-700/40', Icon: Plus },
+  reduce:   { label: 'ลดคงเหลือ',    color: 'text-rose-400',    bg: 'bg-rose-900/20',    border: 'border-rose-700/40',    Icon: Minus },
   use:      { label: 'ใช้คอร์ส',     color: 'text-sky-400',     bg: 'bg-sky-900/20',     border: 'border-sky-700/40',     Icon: ArrowDownLeft },
   exchange: { label: 'เปลี่ยนสินค้า', color: 'text-violet-400',  bg: 'bg-violet-900/20',  border: 'border-violet-700/40',  Icon: Repeat },
   share:    { label: 'แชร์คอร์ส',    color: 'text-purple-400',  bg: 'bg-purple-900/20',  border: 'border-purple-700/40',  Icon: Share2 },
@@ -60,7 +61,7 @@ function fmtDateTime(iso) {
   return `${dd}/${mm}/${yyyy} ${HH}:${MM}`;
 }
 
-function CourseHistoryRow({ entry }) {
+function CourseHistoryRow({ entry, treatmentEditorMap }) {
   const meta = KIND_META[entry.kind] || KIND_META.use;
   const { Icon } = meta;
   const fromName = entry.fromCourse?.name || '(ไม่ระบุคอร์ส)';
@@ -69,7 +70,17 @@ function CourseHistoryRow({ entry }) {
   const qtyDelta = entry.qtyDelta;
   const qtyBefore = entry.qtyBefore || '';
   const qtyAfter = entry.qtyAfter || '';
-  const staffLine = entry.staffName ? `โดย ${entry.staffName}` : (entry.actor ? `โดย ${entry.actor}` : '');
+  // 2026-06-09 — for course-USE ("ตัดคอร์สจากการรักษา"), show the OPD EDITOR (the
+  // person who keyed/last-edited the treatment), NOT the stored staffName which
+  // was historically the doctor. Live-resolve the treatment's current
+  // editedByName via treatmentEditorMap so existing entries fix too + re-edits
+  // track the latest editor (V113 live-resolve, no backfill). Falls back to the
+  // stored staffName/actor (e.g. when the treatment was deleted — Rule O).
+  const liveEditor = (entry.kind === 'use' && entry.linkedTreatmentId && treatmentEditorMap)
+    ? (treatmentEditorMap.get(String(entry.linkedTreatmentId)) || '')
+    : '';
+  const whoName = liveEditor || entry.staffName || entry.actor || '';
+  const staffLine = whoName ? `โดย ${whoName}` : '';
   const refundLine = (entry.kind === 'refund' && typeof entry.refundAmount === 'number')
     ? `คืนเงิน ${fmtMoney(entry.refundAmount)} บาท`
     : '';
@@ -86,7 +97,10 @@ function CourseHistoryRow({ entry }) {
   const productName = String(entry.productName || '').trim();
   const productQty = Number(entry.productQty) || 0;
   const productUnit = String(entry.productUnit || '').trim();
-  const showProductLine = entry.kind === 'use' && productName && productQty > 0;
+  // 2026-06-09 — also surface the product for add/reduce ("แก้คงเหลือ") so the
+  // course-history shows WHICH sub-item of a bundle was topped-up/reduced
+  // (Issue 2/3/4), e.g. "สินค้า: Shock wave +1".
+  const showProductLine = (entry.kind === 'use' || entry.kind === 'add' || entry.kind === 'reduce') && productName && productQty > 0;
   // When the product line is shown, the course-level qty tracker
   // ("1/1 U → 0/1 U (-1)") is internal accounting noise — the actual
   // consumption story is the product line (e.g. "Allergan 100 U  -75 U").
@@ -95,7 +109,9 @@ function CourseHistoryRow({ entry }) {
   // movement that confuses admins. Hide the qty line in this case.
   // For in-house treatments without a product (e.g. "ธาราบำบัด" 9/10 →
   // 8/10 ครั้ง), no productName is set → qty line is meaningful → shown.
-  const showQtyLine = (qtyBefore || qtyAfter) && !showProductLine;
+  // For add/reduce the before→after tracker IS the story → always show it; for
+  // 'use' it's hidden when a product line is shown (the product is the story).
+  const showQtyLine = (qtyBefore || qtyAfter) && (entry.kind === 'add' || entry.kind === 'reduce' || !showProductLine);
   // Phase 16.7-quinquies-ter — courseType badge.
   const courseType = String(entry.fromCourse?.courseType || '').trim();
   const courseTypeMeta = COURSE_TYPE_META[courseType] || null;
@@ -131,7 +147,7 @@ function CourseHistoryRow({ entry }) {
           {showProductLine && (
             <div data-testid={`course-history-product-${entry.changeId}`}>
               สินค้า: <span className="font-bold text-[var(--tx-secondary)]">{productName}</span>
-              <span className="ml-2 text-rose-400">-{productQty}{productUnit ? ` ${productUnit}` : ''}</span>
+              <span className={`ml-2 ${entry.kind === 'add' ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.kind === 'add' ? '+' : '-'}{productQty}{productUnit ? ` ${productUnit}` : ''}</span>
             </div>
           )}
           {showQtyLine && (
@@ -157,7 +173,7 @@ function CourseHistoryRow({ entry }) {
   );
 }
 
-export default function CourseHistoryTab({ customerId }) {
+export default function CourseHistoryTab({ customerId, treatmentEditorMap }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -213,7 +229,7 @@ export default function CourseHistoryTab({ customerId }) {
   return (
     <div data-testid="course-history-list">
       {entries.map((entry) => (
-        <CourseHistoryRow key={entry.changeId} entry={entry} />
+        <CourseHistoryRow key={entry.changeId} entry={entry} treatmentEditorMap={treatmentEditorMap} />
       ))}
     </div>
   );

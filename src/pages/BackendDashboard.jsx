@@ -494,7 +494,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               // to "การขาย" → cancel/delete which has its own full reversal
               // cascade including stock + deposit + wallet + points.
               if (!confirm('ต้องการลบประวัติการรักษานี้?\n\nระบบจะคืน "การใช้คอร์ส" กลับเข้าหาลูกค้า แต่จะไม่คืนสินค้ากลับสต็อค และไม่ยกเลิกใบเสร็จที่เกิดในการรักษานี้\n\nหากต้องการยกเลิกใบเสร็จและคืนสินค้ากลับสต็อค ให้ไปที่ "การขาย"')) return;
-              const cid = viewingCustomer.proClinicId;
+              // 2026-06-09 fix — V33/V50 class: ALL customers are self-created
+              // (LC-*) post-ProClinic-strip → proClinicId is undefined. Bare
+              // `viewingCustomer.proClinicId` made cid undefined → the delete
+              // removed the be_treatments doc but reverseCourseDeduction(cid),
+              // rebuildTreatmentSummary(cid) + getCustomer(cid) all ran against
+              // `undefined` → stale treatmentCount badge + course usage never
+              // returned. Mirror CustomerDetailView's `id || proClinicId` (V33 fix).
+              const cid = viewingCustomer.id || viewingCustomer.proClinicId;
               try {
                 const {
                   getTreatment, reverseCourseDeduction,

@@ -8,6 +8,8 @@ const SALE_SOURCE_TAGS = {
   exchange:     { label: 'เปลี่ยนสินค้า', dark: 'bg-sky-900/30 text-sky-400',          light: 'bg-sky-50 text-sky-700' },
   share:        { label: 'แชร์คอร์ส',     dark: 'bg-violet-900/30 text-violet-400',    light: 'bg-violet-50 text-violet-700' },
   addRemaining: { label: 'เพิ่มคงเหลือ',  dark: 'bg-emerald-900/30 text-emerald-400',  light: 'bg-emerald-50 text-emerald-700' },
+  // 2026-06-09 — "แก้คงเหลือ" reduce side.
+  reduceRemaining: { label: 'ลดคงเหลือ',  dark: 'bg-rose-900/30 text-rose-400',  light: 'bg-rose-50 text-rose-700' },
 };
 
 /**

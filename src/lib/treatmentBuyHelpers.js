@@ -801,7 +801,19 @@ export function groupCustomerCoursesForDetailView(rawCourses) {
   const out = [];
   const indexByKey = new Map();
   for (let i = 0; i < list.length; i++) {
-    const c = list[i];
+    // 2026-06-09 — accept a raw course OR a { course, rawIndex } wrapper so a
+    // caller can pass a FILTERED array (activeCourses) while preserving the TRUE
+    // customer.courses index. `originalIndex` MUST index customer.courses (the
+    // array addCourseRemainingQty / exchange / share actually mutate) — NOT the
+    // position in the filtered display array. A used-up sub-item filtered out of
+    // activeCourses otherwise shifts every later index → the wrong course gets
+    // topped up and the sale records the wrong product (Issue 4, LC-26000114:
+    // a 0/1 Shock-Wave entry was filtered → the add landed on it while the sale
+    // snapshot read "Nebido"). Raw arrays (expired/legacy/test) fall back to i.
+    const item = list[i];
+    const isWrapped = item && typeof item === 'object' && 'rawIndex' in item && 'course' in item;
+    const c = isWrapped ? item.course : item;
+    const originalIndex = isWrapped ? item.rawIndex : i;
     if (!c || typeof c !== 'object') continue;
     // Pick-at-treatment placeholders kept as their own group (each
     // placeholder represents a single not-yet-picked customer.courses[i]
@@ -821,7 +833,7 @@ export function groupCustomerCoursesForDetailView(rawCourses) {
         isRealQty: false,
         needsPickSelection: true,
         availableProducts: Array.isArray(c.availableProducts) ? c.availableProducts : [],
-        entries: [{ originalIndex: i, course: c }],
+        entries: [{ originalIndex, course: c }],
       });
       continue;
     }
@@ -872,7 +884,7 @@ export function groupCustomerCoursesForDetailView(rawCourses) {
       indexByKey.set(key, out.length);
       out.push(group);
     }
-    group.entries.push({ originalIndex: i, course: c });
+    group.entries.push({ originalIndex, course: c });
   }
   return out;
 }

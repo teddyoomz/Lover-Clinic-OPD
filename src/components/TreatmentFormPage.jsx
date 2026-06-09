@@ -2740,8 +2740,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           try {
             await deductCourseItems(customerId, existingDeductions, {
               treatmentId: newTid,
-              staffId: doctorId || '',
-              staffName: treatingDoctor?.name || '',
+              // 2026-06-09 — course-USE attribution ("ตัดคอร์สจากการรักษา โดย ...")
+              // = the OPD EDITOR (the person who keyed/last-edited the treatment),
+              // NOT the doctor. Staff usually key the deduction, not the doctor.
+              // editorContext is the same identity stamped as editedByName
+              // ("แก้ไขโดย: X"). Falls back to the doctor only when no editor.
+              staffId: editorContext?.uid || doctorId || '',
+              staffName: editorContext?.name || treatingDoctor?.name || '',
             });
           } catch (courseErr) {
             // Atomic-rollback contract: if course deduction throws (e.g.
@@ -3319,8 +3324,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             await deductCourseItems(customerId, purchasedDeductions, {
               preferNewest: true,
               treatmentId: purchasedNewTid,
-              staffId: doctorId || '',
-              staffName: treatingDoctor?.name || '',
+              // 2026-06-09 — course-USE attribution = the OPD editor, not the
+              // doctor (see existingDeductions site above).
+              staffId: editorContext?.uid || doctorId || '',
+              staffName: editorContext?.name || treatingDoctor?.name || '',
             });
           } catch (courseErr) {
             // V104 atomic-rollback contract: if purchased-course deduction

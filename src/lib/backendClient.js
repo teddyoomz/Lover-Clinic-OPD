@@ -1620,41 +1620,72 @@ export async function reverseCourseDeduction(customerId, deductions, opts = {}) 
  * @param {number} addQty
  * @param {object} [opts] — { actor, staffId, staffName, reason }
  */
-export async function addCourseRemainingQty(customerId, courseIndex, addQty, opts = {}) {
-  // V148 — atomic (concurrent add↔use lost-update guard).
+export async function adjustCourseRemainingQty(customerId, courseIndex, delta, opts = {}) {
+  // 2026-06-09 — unified add/reduce ("แก้คงเหลือ"). delta > 0 = เพิ่ม (capped at
+  // total, reverseQty math); delta < 0 = ลด (floored at 0, total unchanged).
+  // V148 — atomic (concurrent add/reduce ↔ use lost-update guard).
+  const amount = Math.abs(Number(delta) || 0);
+  const isReduce = (Number(delta) || 0) < 0;
   let before; let beforeQty = ''; let afterQtyStr = '';
   const courses = await _mutateCustomerCoursesAtomic(customerId, (courses) => {
     if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
     before = courses[courseIndex];
     beforeQty = String(before.qty || '');
-    afterQtyStr = reverseQty(beforeQty, addQty);
+    if (isReduce) {
+      const { remaining, total, unit } = parseQtyString(beforeQty);
+      afterQtyStr = formatQtyString(Math.max((Number(remaining) || 0) - amount, 0), total, unit);
+    } else {
+      afterQtyStr = reverseQty(beforeQty, amount); // add, capped at total
+    }
     courses[courseIndex] = { ...before, qty: afterQtyStr };
   });
 
-  // Phase 16.5-quater — emit be_course_changes audit entry (kind='add')
+  // Authoritative identity from the MUTATED course (not a frozen UI snapshot) —
+  // the sale + audit derive their product/name from here, fixing the Issue-4
+  // wrong-product display (a stale display index used to leak "Nebido").
+  const courseName = String(before?.name || '');
+  const productName = String(before?.product || '');
+  const unit = parseQtyString(beforeQty).unit || '';
+
+  // Emit be_course_changes audit (kind='add' | 'reduce') with staff + product.
   try {
     const { buildChangeAuditEntry } = await import('./courseExchange.js');
     const audit = buildChangeAuditEntry({
       customerId,
-      kind: 'add',
+      kind: isReduce ? 'reduce' : 'add',
       fromCourse: before,
       toCourse: null,
       refundAmount: null,
-      reason: opts.reason || `เพิ่มคงเหลือ +${addQty}`,
+      reason: opts.reason || `${isReduce ? 'ลดคงเหลือ' : 'เพิ่มคงเหลือ'} ${isReduce ? '-' : '+'}${amount}`,
       actor: opts.actor || '',
       staffId: opts.staffId || '',
       staffName: opts.staffName || '',
-      qtyDelta: Number(addQty) || 0,
+      qtyDelta: isReduce ? -amount : amount,
       qtyBefore: beforeQty,
       qtyAfter: afterQtyStr,
+      productName,            // the specific sub-product topped-up/reduced (Issue 2/4 detail)
+      productQty: amount,
+      productUnit: unit,
     });
     await setDoc(courseChangeDoc(audit.changeId), audit);
   } catch (e) {
     // Non-fatal: log but don't block the qty mutation
-    console.warn('[addCourseRemainingQty] audit emit failed:', e);
+    console.warn('[adjustCourseRemainingQty] audit emit failed:', e);
   }
 
-  return courses[courseIndex];
+  return {
+    course: courses[courseIndex],
+    courseName, productName, unit,
+    delta: isReduce ? -amount : amount,
+    qtyBefore: beforeQty, qtyAfter: afterQtyStr, isReduce,
+  };
+}
+
+// Backward-compat wrapper — existing callers/tests pass a positive addQty +
+// expect the mutated course back (pre-2026-06-09 shape).
+export async function addCourseRemainingQty(customerId, courseIndex, addQty, opts = {}) {
+  const res = await adjustCourseRemainingQty(customerId, courseIndex, Math.abs(Number(addQty) || 0), opts);
+  return res.course;
 }
 
 // V50 (2026-05-08) — Master Course CRUD (createMasterCourse / update / delete)
