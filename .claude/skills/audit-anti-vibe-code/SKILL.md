@@ -511,6 +511,20 @@ Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky
 - After `auth.updateUser({email|password|disabled, ...})`: `await auth.revokeRefreshTokens(uid);` — emails/passwords changed = sessions invalidated within 1h.
 - After `auth.setCustomUserClaims(uid, claims)` that REMOVES privilege (revokeAdmin, clearPermission, downgrade group): `await auth.revokeRefreshTokens(uid);`.
 
+### AV190 — Buy-this-visit purchase identity MUST carry a per-purchase uid + display qty MUST equal sale/persist qty (2026-06-09, V162)
+**Why**: The TFP buy panel keyed every per-purchase identity off the MASTER course id (`item.id`) — `rowId: purchased-${item.id}-row-${pid}` + `courseId: purchased-course-${item.id}-${now}` (the `now` was on courseId only, NOT rowId). Buying the SAME course twice produced COLLIDING product rowIds → `selectedCourseItems` (a Set of rowIds) ticked both checkboxes; `removePurchasedItem`'s `courseId.startsWith(purchased-course-${item.id}-)` removed BOTH purchases. SEPARATELY, `buildPurchasedCourseEntry`'s products branch displayed `String(p.qty || item.qty)` (un-multiplied) while the sale charged `unitPrice × buyQty` and `resolvePurchasedCourseForAssign` persisted `p.qty × pQty` → "ซื้อ 3 ขึ้นคอร์สเดียว แต่คิดตัง 3". Same collision class in the promo path (`promo-${item.id}-row-${c.id}-${pid}` + `buildCustomerPromotionGroups` keyed by `promotionId`). User (verbatim): "จุดซื้อขายของ แม่งไม่น่าให้อภัยจริงๆ".
+**Grep** (forbidden — any of these = AV190 violation):
+- `rowId: \`purchased-\$\{item\.id\}-row-` (master-id rowId, no per-purchase uid) in `src/lib/treatmentBuyHelpers.js`
+- `rowId: \`promo-\$\{item\.id\}-row-` (master-id promo rowId) in `src/components/TreatmentFormPage.jsx`
+- `remaining: fillLater \? '' : String\(p\.qty \|\| item\.qty` (un-multiplied buy-display qty)
+- `removePurchasedItem` filtering customerCourses by `courseId.startsWith(\`purchased-course-\${item.id}-\`)` as the PRIMARY path (master-id remove — must prefer `c.purchaseUid === targetUid`)
+**Canonical pattern**:
+1. Every buy-this-visit course/promo gets a UNIQUE `purchaseUid` (confirmBuyModal mints from a counter ref); courseId + EVERY product rowId embed it (`purchased-${item.id}-${uid}-row-${pid}`).
+2. `buildPurchasedCourseEntry` multiplies sub-product remaining/total by `buyQty = Math.max(1, Number(item.qty)||1)` so DISPLAY === SALE === PERSIST (`resolvePurchasedCourseForAssign`).
+3. `removePurchasedItem` targets the specific purchase by `purchaseUid` (filters customerCourses/selectedCourseItems/consumables by it); master-id `startsWith` is a legacy fallback only.
+4. `buildCustomerCourseGroups`/`buildCustomerPromotionGroups` surface `purchaseUid`; promo groups key buy-this-visit by `__addon__|${purchaseUid}`.
+**Source-grep regression**: `tests/course-buy-qty-multiply-and-rowid-uniqueness.test.js` SG1-SG4 + A6 (display===persist invariant) lock the contract permanently.
+
 ## How to run
 
 1. Run each grep pattern; classify hits.

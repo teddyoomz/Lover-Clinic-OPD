@@ -29,6 +29,9 @@ export function mapPromotionProductsToConsumables(promotion) {
   if (products.length === 0) return [];
   const promoId = promotion.id != null ? String(promotion.id) : '';
   const promoName = String(promotion.name || '');
+  // 2026-06-09 — carry the per-purchase uid so two buys of the same promo can be
+  // removed independently (filterOutConsumablesForPromotion prefers purchaseUid).
+  const purchaseUid = promotion.purchaseUid != null ? String(promotion.purchaseUid) : '';
   return products
     .filter(p => p && (p.name || p.productName))
     .map(p => {
@@ -43,6 +46,7 @@ export function mapPromotionProductsToConsumables(promotion) {
         unit: String(p.unit || ''),
         promotionId: promoId,
         promotionName: promoName,
+        purchaseUid,
       };
     });
 }
@@ -55,12 +59,20 @@ export function mapPromotionProductsToConsumables(promotion) {
  * Safe with empty / non-array input. Returns the same reference when no
  * filtering is needed (cheap React identity preservation).
  */
-export function filterOutConsumablesForPromotion(consumables, promotionId) {
+export function filterOutConsumablesForPromotion(consumables, promotionId, purchaseUid = null) {
   if (!Array.isArray(consumables) || consumables.length === 0) return consumables || [];
-  if (promotionId == null) return consumables;
-  const target = String(promotionId);
-  if (!target) return consumables;
-  const next = consumables.filter(c => String(c?.promotionId || '') !== target);
+  const targetUid = purchaseUid != null ? String(purchaseUid) : '';
+  const target = promotionId == null ? '' : String(promotionId);
+  if (!target && !targetUid) return consumables;
+  const next = consumables.filter(c => {
+    // 2026-06-09 — prefer the per-purchase match so two buys of the same promo are
+    // removed independently; fall back to promotionId for legacy consumables that
+    // carry no purchaseUid. Backward-compat: 2-arg callers → targetUid '' → by id.
+    if (targetUid && c?.purchaseUid != null && String(c.purchaseUid) !== '') {
+      return String(c.purchaseUid) !== targetUid;
+    }
+    return String(c?.promotionId || '') !== target;
+  });
   return next.length === consumables.length ? consumables : next;
 }
 
@@ -186,6 +198,22 @@ export function findMissingFillLaterQty(treatmentItems) {
 export function buildPurchasedCourseEntry(item, opts = {}) {
   if (!item || typeof item !== 'object' || item.id == null) return null;
   const now = typeof opts.now === 'number' ? opts.now : Date.now();
+  // 2026-06-09 — per-purchase unique id. courseId AND every product rowId derive
+  // from `uid` so the SAME master course bought twice yields DISTINCT identities
+  // (independent checkboxes + targeted remove). item.id is the MASTER course id
+  // (shared across purchases) → item.id alone is NOT unique. Caller
+  // (confirmBuyModal) passes opts.uid from a counter; tests pass opts.now → uid
+  // falls back to now. Bug repro: buy "IV Drip Chelation 1 ครั้ง" twice → ticking
+  // course-1 forced course-2 (shared rowId in selectedCourseItems Set); deleting
+  // one purchase deleted both (courseId.startsWith collision).
+  const uid = opts.uid != null ? String(opts.uid) : String(now);
+  // 2026-06-09 — buy-qty multiplier. The displayed customer-course qty MUST equal
+  // what the sale charges (unitPrice × buyQty) AND what assignCourseToCustomer
+  // persists (resolvePurchasedCourseForAssign multiplies p.qty × pQty). Pre-fix the
+  // products branch used master p.qty un-multiplied → "bought 3, panel showed 1×"
+  // while the bill + the persisted course were 3×. Promotions already multiply
+  // (V42). Self-fallback branch already used item.qty (= buyQty), kept explicit.
+  const buyQty = Math.max(1, Number(item.qty) || 1);
   const courseType = String(item.courseType || '').trim();
   const isRealQty = courseType === 'เหมาตามจริง';
   const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
@@ -202,7 +230,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
   // products[] stays empty; doctor must pick before the course is usable.
   if (isPickAtTreatment) {
     return {
-      courseId: `purchased-course-${item.id}-${now}`,
+      courseId: `purchased-course-${item.id}-${uid}`,
       courseName: item.name,
       courseType,
       isAddon: true,
@@ -211,6 +239,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
       needsPickSelection: true,
       purchasedItemId: item.id,
       purchasedItemType: 'course',
+      purchaseUid: uid,
       // Every master-course product is an "option" the doctor can pick.
       // Field names mirror the resolved product shape so the pick modal
       // can render without re-mapping.
@@ -238,10 +267,14 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
   // (_normalizeStockItems → _deductOneItem) can look up the real
   // be_products doc.
   const products = (rawCourseProducts.length > 0)
-    ? rawCourseProducts.map(p => {
+    ? rawCourseProducts.map((p, idx) => {
         const pid = p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : '');
         return {
-          rowId: `purchased-${item.id}-row-${pid || Math.random().toString(36).slice(2, 6)}`,
+          // 2026-06-09 — rowId includes the per-purchase `uid` so two buys of the
+          // same course (same item.id + same pid) get DISTINCT rowIds → independent
+          // checkboxes. No-pid fallback uses the stable map index (not Math.random)
+          // now that uid guarantees cross-purchase uniqueness.
+          rowId: `purchased-${item.id}-${uid}-row-${pid || `idx${idx}`}`,
           productId: pid,
           // V44 (2026-05-08) — accept BOTH canonical `name` (from
           // beCourseToMasterShape — used by SaleTab + V44 TFP fix) AND
@@ -255,8 +288,10 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
           // pre-validation and deduct-path heuristics can still read a
           // non-empty value) but UI switches to "บุฟเฟต์" text via the
           // isBuffet flag. Specific-qty → configured qty.
-          remaining: fillLater ? '' : String(p.qty || item.qty || 1),
-          total: fillLater ? '' : String(p.qty || item.qty || 1),
+          // 2026-06-09 — multiply master per-product qty by the buy-qty so the
+          // displayed remaining/total matches the bill + the persisted course.
+          remaining: fillLater ? '' : String((Number(p.qty) || 1) * buyQty),
+          total: fillLater ? '' : String((Number(p.qty) || 1) * buyQty),
           unit: p.unit || item.unit || 'ครั้ง',
           fillLater,
           isBuffet,
@@ -266,11 +301,12 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         };
       })
     : [{
-        rowId: `purchased-${item.id}-row-self`,
+        rowId: `purchased-${item.id}-${uid}-row-self`,
         productId: '', // No sub-product master id for self-fallback row
         name: item.name,
-        remaining: fillLater ? '' : String(item.qty || 1),
-        total: fillLater ? '' : String(item.qty || 1),
+        // No sub-products → the course itself IS the unit; qty = buy-qty.
+        remaining: fillLater ? '' : String(buyQty),
+        total: fillLater ? '' : String(buyQty),
         unit: item.unit || 'คอร์ส',
         fillLater,
         isBuffet,
@@ -280,7 +316,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         skipStockDeduction: !!item.skipStockDeduction,
       }];
   return {
-    courseId: `purchased-course-${item.id}-${now}`,
+    courseId: `purchased-course-${item.id}-${uid}`,
     courseName: item.name,
     courseType,
     isAddon: true,
@@ -290,6 +326,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
     needsPickSelection: false,
     purchasedItemId: item.id,
     purchasedItemType: 'course',
+    purchaseUid: uid,
     products,
   };
 }
@@ -709,18 +746,30 @@ export function buildCustomerPromotionGroups(customerCourses, customerPromotions
   const groups = {};
   promoCourses.forEach(c => {
     const pid = c.promotionId;
-    if (!groups[pid]) {
-      const promo = promos.find(p => String(p.id) === String(pid));
-      groups[pid] = {
+    // 2026-06-09 — buy-this-visit promos keyed by purchaseUid so the SAME
+    // promotion bought twice produces TWO groups (independent checkboxes +
+    // targeted remove). Existing (persisted) promos keep the promotionId key —
+    // functionally identical to the pre-fix `groups[pid]` keying.
+    const groupKey = (c.isAddon && c.purchaseUid != null)
+      ? `__addon__|${c.purchaseUid}`
+      : `pid|${pid}`;
+    if (!groups[groupKey]) {
+      const promo = promos.find(p =>
+        (c.purchaseUid != null && p.purchaseUid != null)
+          ? String(p.purchaseUid) === String(c.purchaseUid)
+          : String(p.id) === String(pid));
+      groups[groupKey] = {
         promotionId: pid,
         promotionName: promo?.promotionName || c.courseName || `โปรโมชัน #${pid}`,
+        groupKey,
+        purchaseUid: c.purchaseUid || null,
         isAddon: !!(c.isAddon || promo?.isAddon),
         purchasedItemId: c.purchasedItemId || null,
         purchasedItemType: c.purchasedItemType || null,
         courses: [],
       };
     }
-    groups[pid].courses.push(c);
+    groups[groupKey].courses.push(c);
   });
   return Object.values(groups);
 }
@@ -954,6 +1003,10 @@ export function buildCustomerCourseGroups(customerCourses) {
         isAddon: !!c.isAddon,
         purchasedItemId: c.purchasedItemId || null,
         purchasedItemType: c.purchasedItemType || null,
+        // 2026-06-09 — per-purchase id so the trash button can target THIS
+        // purchase exactly (removePurchasedItem filters by purchaseUid) instead
+        // of the master id (which removed every buy of the same course).
+        purchaseUid: c.purchaseUid || null,
         // Phase 14.7.H follow-up I markers — propagate to group level so
         // "reopen pick-at-treatment" UI can decide which entry surfaces
         // the reopen button (mirrors mapRawCoursesToForm shape).

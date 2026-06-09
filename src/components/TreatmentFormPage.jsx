@@ -739,6 +739,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   // Course items — selected rowIds
   const [selectedCourseItems, setSelectedCourseItems] = useState(new Set());
+  // 2026-06-09 — monotonic counter that mints a UNIQUE per-purchase id for every
+  // buy-this-visit course/promotion. item.id is the MASTER id (shared when the same
+  // course is bought twice) → not unique; the counter guarantees distinct courseId
+  // + rowId per purchase regardless of clock resolution. Used by confirmBuyModal.
+  const purchaseSeqRef = useRef(0);
   const [existingCourseItems, setExistingCourseItems] = useState([]); // saved courseItems from edit mode
   // Phase 14.7.F (2026-04-26) — snapshot of the stock-bearing fields at edit-load
   // time. handleSubmit diffs against this to skip the reverse+rededuct path
@@ -1758,6 +1763,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       const afterDisc = price - disc;
       const vatAmt = vat ? afterDisc * 0.07 : 0;
       const net = Math.max(0, afterDisc + vatAmt);
+      // 2026-06-09 — mint a UNIQUE per-purchase id (counter beats clock-resolution
+      // collisions). Threaded into buildPurchasedCourseEntry (opts.uid) + the promo
+      // courseId/rowId below so the same course/promo bought twice stays distinct.
+      const purchaseUid = `${Date.now().toString(36)}-${++purchaseSeqRef.current}`;
       // Phase 12.2b Step 7 (2026-04-24): preserve courseType through the
       // buy flow so downstream rendering (customerCourses row, DF modal,
       // treatment qty input) knows whether the course is fill-later
@@ -1771,6 +1780,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // SalePrintView prefers this over `name`. AV111.
         receiptCourseName: i.receiptCourseName || '',
         qty: String(qty || 0), discount: String(disc), vat,
+        purchaseUid,
         itemType: i.itemType || buyModalType,
         category: i.category, courses: i.courses, products: i.products,
         courseType: i.courseType || '',
@@ -1797,7 +1807,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // required). buildPurchasedCourseEntry stamps isAddon +
         // purchasedItemId + isRealQty + isPickAtTreatment + empty qty
         // markers when the course type is fill-later.
-        const courseEntry = buildPurchasedCourseEntry(item);
+        const courseEntry = buildPurchasedCourseEntry(item, { uid: item.purchaseUid });
         if (courseEntry) {
           setOptions(prev => ({
             ...prev,
@@ -1816,19 +1826,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const newCourseEntries = item.courses.map(c => {
           const multipliedProducts = buildPromotionSubCourseProducts(c, item.qty, { fallbackName: c.name || item.name });
           return {
-            courseId: `promo-${item.id}-course-${c.id}`,
+            // 2026-06-09 — courseId + rowId include the per-purchase uid so the
+            // same promotion bought twice stays distinct (independent checkboxes +
+            // targeted remove). buildCustomerPromotionGroups groups buy-this-visit
+            // promos by purchaseUid.
+            courseId: `promo-${item.id}-${item.purchaseUid}-course-${c.id}`,
             courseName: c.name,
             promotionId: item.id,
             isAddon: true,
             purchasedItemId: item.id,
             purchasedItemType: 'promotion',
+            purchaseUid: item.purchaseUid,
             products: multipliedProducts.map((mp, idx) => {
               const sourceProduct = (c.products || [])[idx];
               const productId = sourceProduct?.id != null
                 ? sourceProduct.id
                 : (sourceProduct?.productId != null ? sourceProduct.productId : `idx${idx}`);
               return {
-                rowId: `promo-${item.id}-row-${c.id}-${productId}`,
+                rowId: `promo-${item.id}-${item.purchaseUid}-row-${c.id}-${productId}`,
                 name: mp.name,
                 remaining: String(mp.qty),
                 total: String(mp.qty),
@@ -1840,7 +1855,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         setOptions(prev => ({
           ...prev,
           customerCourses: [...(prev?.customerCourses || []), ...newCourseEntries],
-          customerPromotions: [...(prev?.customerPromotions || []), { id: item.id, promotionName: item.name, isAddon: true }],
+          customerPromotions: [...(prev?.customerPromotions || []), { id: item.id, promotionName: item.name, isAddon: true, purchaseUid: item.purchaseUid }],
         }));
       }
       // Purchased promotion's STANDALONE products → consumables (so they
@@ -1857,8 +1872,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setBuyModalOpen(false);
   };
   const removePurchasedItem = (item) => {
+    // 2026-06-09 — target the SPECIFIC purchase via purchaseUid (passed by the trash
+    // button). item.id is the MASTER id (shared when a course/promo is bought twice)
+    // → matching by id alone removed BOTH buys (the user-reported "ลบคอร์สแรกแล้ว
+    // คอร์สที่ 2 หายด้วย"). Legacy fallback (no purchaseUid — standalone products /
+    // pre-fix data) keeps the old first-by-id + startsWith behavior.
+    const targetUid = item.purchaseUid != null ? String(item.purchaseUid) : null;
     setPurchasedItems(prev => {
-      const idx = prev.findIndex(p => String(p.id) === String(item.id) && p.itemType === item.itemType);
+      let idx = targetUid
+        ? prev.findIndex(p => p.purchaseUid != null && String(p.purchaseUid) === targetUid)
+        : -1;
+      if (idx === -1) idx = prev.findIndex(p => String(p.id) === String(item.id) && p.itemType === item.itemType);
       if (idx === -1) return prev;
       return prev.filter((_, i) => i !== idx);
     });
@@ -1867,7 +1891,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       setOptions(prev => {
         if (!prev?.customerCourses) return prev;
         const filtered = prev.customerCourses.filter(c => {
-          // Remove entries that were added for this purchased item
+          // Exact per-purchase match: drop ONLY entries from THIS purchase. Covers
+          // course (1 entry) AND promotion (N sub-course entries) uniformly.
+          if (targetUid && c.purchaseUid != null) return String(c.purchaseUid) !== targetUid;
+          // Legacy fallback (entry without purchaseUid — pre-fix data only).
           if (item.itemType === 'course') return !c.courseId?.startsWith(`purchased-course-${item.id}-`);
           if (item.itemType === 'promotion') return !c.courseId?.startsWith(`promo-${item.id}-`);
           return true;
@@ -1877,7 +1904,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       // Also remove any selected course items that belonged to this purchase
       setSelectedCourseItems(prev => {
         const next = new Set(prev);
-        const prefix = item.itemType === 'course' ? `purchased-${item.id}-row-` : `promo-${item.id}-row-`;
+        const prefix = targetUid
+          ? (item.itemType === 'course' ? `purchased-${item.id}-${targetUid}-row-` : `promo-${item.id}-${targetUid}-row-`)
+          : (item.itemType === 'course' ? `purchased-${item.id}-row-` : `promo-${item.id}-row-`);
         for (const rowId of prev) {
           if (rowId.startsWith(prefix)) {
             next.delete(rowId);
@@ -1889,8 +1918,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     }
     // Also remove consumables that were added by this promotion's standalone
     // products (symmetric with confirmBuyModal — bug fix 2026-04-19).
+    // 2026-06-09 — prefer purchaseUid so removing one promo buy doesn't strip the
+    // OTHER buy's standalone-product consumables (would under-deduct stock on save).
     if (item.itemType === 'promotion') {
-      setConsumables(prev => filterOutConsumablesForPromotion(prev, item.id));
+      setConsumables(prev => filterOutConsumablesForPromotion(prev, item.id, targetUid));
     }
   };
   // Group purchased items by type for display
@@ -4715,7 +4746,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             {course.isAddon && course.purchasedItemId && (
                               <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); removePurchasedItem({ id: course.purchasedItemId, itemType: course.purchasedItemType }); }}
+                                onClick={(e) => { e.stopPropagation(); removePurchasedItem({ id: course.purchasedItemId, itemType: course.purchasedItemType, courseId: course.courseId, purchaseUid: course.purchaseUid }); }}
                                 className="text-red-400 hover:text-red-300 shrink-0 p-1"
                                 aria-label={`ลบ ${course.courseName}`}
                               >
@@ -4801,7 +4832,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                           promotion. Removes the old flat "purchased
                           promotion" list that was rendered below. */}
                       {customerPromotionGroups.map(group => (
-                        <div key={`promo-${group.promotionId}`}>
+                        <div key={group.groupKey || `promo-${group.promotionId}`}>
                           <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-orange-900/40 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-100 text-orange-800'}`}>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{group.promotionName}</span>
@@ -4812,7 +4843,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             {group.isAddon && group.purchasedItemId && (
                               <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); removePurchasedItem({ id: group.purchasedItemId, itemType: group.purchasedItemType || 'promotion' }); }}
+                                onClick={(e) => { e.stopPropagation(); removePurchasedItem({ id: group.purchasedItemId, itemType: group.purchasedItemType || 'promotion', purchaseUid: group.purchaseUid }); }}
                                 className="text-red-400 hover:text-red-300 shrink-0 p-1"
                                 aria-label={`ลบโปรโมชัน ${group.promotionName}`}
                               >

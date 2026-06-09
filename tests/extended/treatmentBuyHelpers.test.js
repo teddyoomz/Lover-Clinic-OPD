@@ -188,8 +188,11 @@ describe('buildPurchasedCourseEntry — Phase 12.2b Step 7 (เหมาตา�
     const out = buildPurchasedCourseEntry(item, { now: NOW });
     expect(out.isRealQty).toBe(false);
     expect(out.isPickAtTreatment).toBe(false);
-    expect(out.products[0].remaining).toBe('3');
-    expect(out.products[0].total).toBe('3');
+    // 2026-06-09 — buy-qty multiplier fix: buy 5 × product qty 3 = 15. Pre-fix
+    // asserted '3' (the un-multiplied display bug). Multiply coverage lives in
+    // tests/course-buy-qty-multiply-and-rowid-uniqueness.test.js A1/A6.
+    expect(out.products[0].remaining).toBe('15');
+    expect(out.products[0].total).toBe('15');
     expect(out.products[0].fillLater).toBe(false);
   });
 
@@ -241,7 +244,8 @@ describe('buildPurchasedCourseEntry — Phase 12.2b Step 7 (เหมาตา�
     expect(out.isRealQty).toBe(false);
     expect(out.isPickAtTreatment).toBe(false);
     expect(out.products[0].fillLater).toBe(false);
-    expect(out.products[0].remaining).toBe('10');
+    // 2026-06-09 — buy-qty 10 × product qty 10 = 100 (multiplier fix; was '10').
+    expect(out.products[0].remaining).toBe('100');
   });
 
   it('BPCE7 missing courseType → falls back to standard (NOT fillLater)', () => {
@@ -258,7 +262,9 @@ describe('buildPurchasedCourseEntry — Phase 12.2b Step 7 (เหมาตา�
     const out = buildPurchasedCourseEntry(item, { now: NOW });
     expect(out.products).toHaveLength(1);
     expect(out.products[0].name).toBe('Self');
-    expect(out.products[0].rowId).toBe('purchased-C-SELF-row-self');
+    // 2026-06-09 — rowId embeds the per-purchase uid (= now when no uid passed)
+    // so two buys of the same course don't collide. Was 'purchased-C-SELF-row-self'.
+    expect(out.products[0].rowId).toBe(`purchased-C-SELF-${NOW}-row-self`);
   });
 
   it('BPCE9 self-row for fillLater uses empty markers', () => {
@@ -316,13 +322,16 @@ describe('buildPurchasedCourseEntry — Phase 12.2b Step 7 (เหมาตา�
     expect(buildPurchasedCourseEntry(item).products[0].productId).toBe('281');
   });
 
-  it('BPCE16 rowId still uses productId (not Math.random) for stability', () => {
+  it('BPCE16 rowId uses productId (not Math.random) + per-purchase uid for uniqueness', () => {
     const item = {
       id: 'C-STABLE', name: 'C', qty: 1,
       products: [{ id: 'P-5', name: 'X', qty: 1 }],
     };
     const out = buildPurchasedCourseEntry(item, { now: 999 });
-    expect(out.products[0].rowId).toBe('purchased-C-STABLE-row-P-5');
+    // 2026-06-09 — uid (= now=999 when no uid passed) now sits between item.id and
+    // -row- so the same course bought twice yields distinct rowIds. Still uses the
+    // stable productId (P-5), never Math.random. Was 'purchased-C-STABLE-row-P-5'.
+    expect(out.products[0].rowId).toBe('purchased-C-STABLE-999-row-P-5');
   });
 
   it('BPCE17 self-fallback row has empty productId (no sub-product id to carry)', () => {
