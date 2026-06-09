@@ -525,6 +525,18 @@ Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky
 4. `buildCustomerCourseGroups`/`buildCustomerPromotionGroups` surface `purchaseUid`; promo groups key buy-this-visit by `__addon__|${purchaseUid}`.
 **Source-grep regression**: `tests/course-buy-qty-multiply-and-rowid-uniqueness.test.js` SG1-SG4 + A6 (display===persist invariant) lock the contract permanently.
 
+### AV191 — Deposit-received in reports comes from be_deposits, NEVER from sale channels (no double-count) + reports-sale deposit list MUST NOT be summed into the sale footer (2026-06-09, deposit-in-reports)
+**Why**: reports-payment must reflect actual cash received → it folds deposits RECEIVED (be_deposits, by `paymentChannel`/`paymentDate`, status≠cancelled) into a per-channel "มัดจำ" column. This is safe ONLY because a deposit is deducted BEFORE a sale's payment.channels are built (`SaleTab`: `afterDeposit = afterMembership − depositApplied → netTotal → channels[0].amount = netTotal`), so `sale.payment.channels` NEVER carry the deposit portion. If a future change ever wrote a `{method:'มัดจำ', amount}` channel onto a sale, the same baht would be counted twice (once at deposit receipt, once at sale). Separately, reports-sale shows deposits-received as an INFORMATIONAL list whose amount must stay OUT of the sale footer totals (user: "ยอดไม่ต้องไปรวมกับอะไรเลย").
+**Grep** (forbidden — any of these = AV191 violation):
+- a sale-write path pushing a `มัดจำ`/`deposit` entry into `payment.channels` (use `billing.depositApplied`, never a channel) — verified by `scripts/diag-deposit-in-reports.mjs` (0 real sales carry a มัดจำ channel)
+- reports-payment computing deposit amounts from `sale.payment.channels` instead of `be_deposits` (`aggregatePaymentSummary` must read the `deposits` arg via `depositsReceivedInRange`, not derive มัดจำ from sales)
+- `SaleReportTab` adding `depositReceived`/`depositReceivedSum`/`remaining` into `out.totals`, the footer, or any sale-paid sum
+**Canonical pattern**:
+1. `paymentSummaryAggregator.aggregatePaymentSummary(sales, deposits, filters)` — salesAmount from `channelsOf` (sale channels), depositAmount from `depositsReceivedInRange` (be_deposits); never cross the two.
+2. reports-sale: `DepositReceivedSection` is rendered separately; `aggregateSaleReport.totals` is untouched.
+3. "มัดจำคงเหลือในระบบ" = `sumSystemRemainingDeposits` (active/partial `remainingAmount`, V154), informational only.
+**Verification**: `scripts/diag-deposit-in-reports.mjs` (Rule Q L2 real prod — double-count-guard 0 + reconcile) + `tests/deposit-in-reports.test.js` B1 (no-double-count) + B2 (reconcile) + `tests/deposit-in-reports-flow-simulate.test.js` (source-grep + Rule I).
+
 ## How to run
 
 1. Run each grep pattern; classify hits.
