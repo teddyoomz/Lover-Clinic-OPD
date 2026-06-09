@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deposit-in-Reports Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color:#111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color:#111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; }
+    .step input[type=checkbox]{ margin-right:0.5em; transform:scale(1.2); accent-color:var(--accent); }
+    .mockup { background:#0d0d0d; color:#e7e7e7; border:1px solid #2a2a2a; border-radius:8px; padding:1.1em; margin:1em 0; }
+    .mockup-label { font-size:0.72em; text-transform:uppercase; letter-spacing:0.05em; color:#8a9097; margin-bottom:0.5em; }
+    table{border-collapse:collapse;width:100%;font-size:0.88em} th,td{border:1px solid #2a2a2a;padding:4px 8px;text-align:left}
+    .num{display:inline-block;width:1.5em;height:1.5em;line-height:1.5em;text-align:center;background:var(--accent);color:#fff;border-radius:50%;font-size:0.85em;font-weight:700}
+  </style>
+</head>
+<body>
+
+<h1>Deposit-in-Reports Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute inline (executing-plans). Spec: <code>docs/superpowers/specs/2026-06-09-deposit-in-reports-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make reports-payment reflect actual cash received by adding deposit-received per channel (ยอดขาย/มัดจำ/ยอดรวม + clickable receipt drill-down), and add a "มัดจำที่รับเข้า" section + "มัดจำคงเหลือในระบบ" chip to reports-sale, with a deposit deep-link.</p>
+  <p><strong>Architecture:</strong> New branch-scoped <code>loadDepositsByDateRange</code> + pure <code>depositReportUtils</code>; rewrite <code>paymentSummaryAggregator</code> to fold deposits in per-channel (no double-count — deposits are deducted before sale channels); two report tabs gain UI; a <code>deposit=</code> URL param opens DepositPanel's existing DetailModal.</p>
+  <p><strong>Tech Stack:</strong> React 19, Firestore client SDK (Rule E), Vitest, branch-scope BS-11.</p>
+  <p><strong>Rules:</strong> Rule K (build source → test bank) for the UI tasks; TDD for pure modules; Rule N targeted tests during iteration + full vitest at batch end; Rule Q L1/L2 before "done"; no deploy without explicit "deploy".</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">reports-payment AFTER · reports-sale section + chip — see spec for full mockup + live at brainstorm server</div>
+  <table>
+    <thead><tr><th>วิธีชำระ</th><th>ยอดขาย</th><th>มัดจำ</th><th>ยอดรวม</th><th>ใบเสร็จ(link)</th><th>%</th></tr></thead>
+    <tbody><tr><td>เงินสด</td><td>45,200</td><td>8,000</td><td>53,200</td><td><u>18</u></td><td>47.9%</td></tr></tbody>
+    <tfoot><tr><th>รวม</th><th>86,900</th><th>24,200</th><th>111,100</th><th>35</th><th>100%</th></tr></tfoot>
+  </table>
+  <div style="color:#8a9097;font-size:.82em">reports-sale: chip "มัดจำคงเหลือในระบบ ฿128,400" + section "มัดจำที่รับเข้า · N · ฿X" (excluded from sale footer).</div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">aggregate + drill-down + deep-link</div>
+  <table>
+    <tr><td><span class="num">1</span></td><td>load sales (saleDate∈range) + deposits (paymentDate∈range), branch-scoped</td></tr>
+    <tr><td><span class="num">2</span></td><td>per method: salesAmount(channels) + depositAmount(paymentChannel, status≠cancelled) → total; rows=union; docCount=uniqueSales+depositCount</td></tr>
+    <tr><td><span class="num">3</span></td><td>ใบเสร็จ click → getMethodDocuments → PaymentDocsModal → sale→SaleDetailModal / deposit→window.open(deep-link)</td></tr>
+    <tr><td><span class="num">4</span></td><td>deep-link: ?tab=finance&subtab=deposit&deposit=DEP-x → financeFocusDepositId → FinanceTab → DepositPanel → setViewingDeposit → DetailModal</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/reportsLoaders.js</code> (modify)</td><td>NEW loadDepositsByDateRange (paymentDate range, branch, try/catch fallback)</td></tr>
+  <tr><td><code>src/lib/depositReportUtils.js</code> (new)</td><td>pure: depositsReceivedInRange, sumSystemRemainingDeposits, buildDepositDeepLinkUrl, canonicalDepositChannel(re-export)</td></tr>
+  <tr><td><code>src/lib/paymentSummaryAggregator.js</code> (rewrite)</td><td>fold deposits per channel; getMethodDocuments; refundsInPeriod; new columns</td></tr>
+  <tr><td><code>src/components/backend/reports/DepositReceiptRow.jsx</code> (new)</td><td>one deposit row → jump-to-deposit (Rule C1 shared)</td></tr>
+  <tr><td><code>src/components/backend/reports/PaymentDocsModal.jsx</code> (new)</td><td>drill-down list (sales + deposits) for a channel</td></tr>
+  <tr><td><code>src/components/backend/reports/PaymentSummaryTab.jsx</code> (modify)</td><td>load deposits+sellers; new cols; clickable receipt; refund footnote</td></tr>
+  <tr><td><code>src/components/backend/reports/SaleReportTab.jsx</code> (modify)</td><td>received-section + remaining chip</td></tr>
+  <tr><td><code>src/pages/BackendDashboard.jsx</code> + <code>FinanceTab.jsx</code> + <code>DepositPanel.jsx</code> (modify)</td><td>deposit= deep-link → DetailModal</td></tr>
+  <tr><td><code>tests/deposit-in-reports.test.js</code> + <code>...flow-simulate.test.js</code> (new)</td><td>aggregator/loader/utils + no-double-count + reconcile + source-grep + AV</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: loadDepositsByDateRange (TDD)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/reportsLoaders.js</code>; Test <code>tests/deposit-in-reports.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>1.1</strong> Write failing test: mock firestore getDocs; assert loader filters paymentDate∈[from,to], applies branchId via shouldFilterByBranch, sorts desc, falls back on index error.</div>
+  <div class="step"><input type="checkbox"> <strong>1.2</strong> Implement — mirror <code>loadSalesByDateRange</code> exactly but on <code>be_deposits</code> + <code>paymentDate</code>:</div>
+<pre><code>const depositsColReports = () =&gt; collection(db, ...basePath(), 'be_deposits');
+export async function loadDepositsByDateRange({ from='', to='', branchId='', allBranches=false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
+  try {
+    const conds = [];
+    if (from) conds.push(where('paymentDate','&gt;=',from));
+    if (to)   conds.push(where('paymentDate','&lt;=',to));
+    if (wantBranch) conds.push(where('branchId','==',branchId));
+    const q = conds.length ? query(depositsColReports(), ...conds, orderBy('paymentDate','desc'))
+                           : query(depositsColReports(), orderBy('paymentDate','desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d =&gt; ({ ...d.data(), id: d.id }));
+  } catch {
+    const snap = await getDocs(depositsColReports());
+    let items = snap.docs.map(d =&gt; ({ ...d.data(), id: d.id }));
+    if (from) items = items.filter(x =&gt; (x.paymentDate||'') &gt;= from);
+    if (to)   items = items.filter(x =&gt; (x.paymentDate||'') &lt;= to);
+    if (wantBranch) items = items.filter(x =&gt; x.branchId === branchId);
+    items.sort((a,b)=&gt;(b.paymentDate||'').localeCompare(a.paymentDate||''));
+    return items;
+  }
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>1.3</strong> Run targeted test → PASS. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 2: depositReportUtils (TDD, pure)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/depositReportUtils.js</code>; Test in <code>tests/deposit-in-reports.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>2.1</strong> Failing tests: depositsReceivedInRange excludes cancelled + filters paymentDate; sumSystemRemainingDeposits sums remainingAmount of active/partial only; buildDepositDeepLinkUrl shape.</div>
+  <div class="step"><input type="checkbox"> <strong>2.2</strong> Implement:</div>
+<pre><code>import { roundTHB } from './reportsUtils.js';
+// status that means money genuinely came in (cancelled = reversed/never received)
+const RECEIVED_STATUSES = new Set(['active','partial','used','refunded','expired']);
+export function depositsReceivedInRange(deposits, { from='', to='' } = {}) {
+  return (Array.isArray(deposits)?deposits:[]).filter(d =&gt; {
+    if (!d || d.status === 'cancelled') return false;
+    const pd = String(d.paymentDate || '');
+    if (from &amp;&amp; pd &lt; from) return false;
+    if (to &amp;&amp; pd &gt; to) return false;
+    return true;
+  });
+}
+export function sumSystemRemainingDeposits(deposits) {
+  let t = 0;
+  for (const d of (Array.isArray(deposits)?deposits:[])) {
+    if (d &amp;&amp; (d.status==='active'||d.status==='partial')) t += Number(d.remainingAmount)||0;
+  }
+  return roundTHB(t);
+}
+export function buildDepositDeepLinkUrl(depositId) {
+  const origin = (typeof window!=='undefined' &amp;&amp; window.location?.origin) || '';
+  return `${origin}?backend=1&amp;tab=finance&amp;subtab=deposit&amp;deposit=${encodeURIComponent(String(depositId||''))}`;
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>2.3</strong> Run targeted → PASS. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 3: paymentSummaryAggregator — fold deposits per channel (TDD)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/paymentSummaryAggregator.js</code>; Test in <code>tests/deposit-in-reports.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>3.1</strong> Failing tests: <code>aggregatePaymentSummary(sales, deposits, {from,to})</code> → per-method {salesAmount, depositAmount, total, docCount}; rows = union of sale-methods + deposit-channels; totals.total = Σ rows.total = salesTotal+depositTotal; cancelled deposit excluded; refund NOT subtracted; <strong>no-double-count guard</strong> (a deposit applied to a sale must NOT add to any sale channel — assert salesAmount derives only from payment.channels); <code>getMethodDocuments(sales,deposits,'เงินสด')</code> returns merged list with type tags; <code>refundsInPeriod(deposits,from,to)</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>3.2</strong> Rewrite aggregate: keep existing <code>channelsOf</code>/<code>canonicalMethod</code> for sales; add deposit bucket by <code>canonicalMethod(d.paymentChannel)</code>. Export <code>canonicalMethod</code>. New shape:</div>
+<pre><code>export function aggregatePaymentSummary(sales, deposits=[], filters={}) {
+  const { from='', to='', branchId='' } = filters;
+  // --- sales side (existing) → salesByMethod: Map&lt;method, amount&gt;, salesDocsByMethod ---
+  // --- deposit side ---
+  const recv = depositsReceivedInRange(deposits, { from, to })
+    .filter(d =&gt; !branchId || d.branchId === branchId);
+  const depByMethod = new Map(); const depDocsByMethod = new Map();
+  for (const d of recv) {
+    const m = canonicalMethod(d.paymentChannel);
+    depByMethod.set(m, (depByMethod.get(m)||0) + (Number(d.amount)||0));
+    (depDocsByMethod.get(m) || depDocsByMethod.set(m,[]).get(m)).push(d);
+  }
+  const methods = new Set([...salesByMethod.keys(), ...depByMethod.keys()]);
+  const rows = [...methods].map(m =&gt; {
+    const salesAmount = roundTHB(salesByMethod.get(m)||0);
+    const depositAmount = roundTHB(depByMethod.get(m)||0);
+    const total = roundTHB(salesAmount + depositAmount);
+    const docCount = (saleIdsByMethod.get(m)?.size||0) + (depDocsByMethod.get(m)?.length||0);
+    return { method:m, salesAmount, depositAmount, total, docCount };
+  });
+  const grand = roundTHB(rows.reduce((s,r)=&gt;s+r.total,0));
+  rows.forEach(r =&gt; r.percentage = grand&gt;0 ? Math.round(r.total/grand*10000)/100 : 0);
+  rows.sort((a,b)=&gt; b.total!==a.total ? b.total-a.total : a.method.localeCompare(b.method,'th'));
+  return { rows, totals:{ salesAmount:..., depositAmount:..., total:grand, docCount:... },
+           refundsTotal: refundsInPeriod(deposits, from, to), meta:{...} };
+}
+export function getMethodDocuments(sales, deposits, method, { from='', to='' } = {}) { /* merged tagged list, date-sorted */ }
+export function refundsInPeriod(deposits, from='', to='') { /* Σ refundAmount where refundDate∈[from,to] */ }</code></pre>
+  <div class="step"><input type="checkbox"> <strong>3.3</strong> Update <code>getPaymentSummaryColumns</code> → ยอดขาย/มัดจำ/ยอดรวม/ใบเสร็จ (for CSV: salesAmount, depositAmount, total, docCount). Run targeted → PASS. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: Shared UI — DepositReceiptRow + PaymentDocsModal</h3>
+  <p><strong>Files:</strong> Create both components. (source-first, Rule K)</p>
+  <div class="step"><input type="checkbox"> <strong>4.1</strong> <code>DepositReceiptRow.jsx</code> — props {deposit}: renders date · HN·name · channel badge · amount · → ; onClick = <code>window.open(buildDepositDeepLinkUrl(deposit.depositId||deposit.id),'_blank')</code>. data-testid.</div>
+  <div class="step"><input type="checkbox"> <strong>4.2</strong> <code>PaymentDocsModal.jsx</code> — props {method, sales, deposits, range, onViewSale, onClose}: header "{method} · N เอกสาร"; maps <code>getMethodDocuments</code>; sale rows (badge ใบขาย, → onViewSale(saleId)) + <code>&lt;DepositReceiptRow&gt;</code>. Backdrop = explicit close only (AV78). data-testid.</div>
+  <div class="step"><input type="checkbox"> <strong>4.3</strong> Build clean. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 5: PaymentSummaryTab wiring</h3>
+  <p><strong>Files:</strong> Modify <code>PaymentSummaryTab.jsx</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>5.1</strong> Load deposits (<code>loadDepositsByDateRange</code>) + sellers (<code>listAllSellers</code>) in the Promise.all alongside sales, all branch-scoped; <code>selectedBranchId</code> in deps (BS-11).</div>
+  <div class="step"><input type="checkbox"> <strong>5.2</strong> <code>out = aggregatePaymentSummary(sales, deposits, {from,to})</code>. New table cols ยอดขาย/มัดจำ/ยอดรวม/ใบเสร็จ(button)/% (drop the bar). subtitle shows ยอดรวม(total). Footnote: คืนมัดจำในช่วงนี้ ฿{out.refundsTotal} when &gt;0.</div>
+  <div class="step"><input type="checkbox"> <strong>5.3</strong> ใบเสร็จ cell = button → <code>setDocsMethod(r.method)</code>. Render <code>&lt;PaymentDocsModal method=docsMethod sales deposits range onViewSale=setViewingSaleId onClose&gt;</code> + reuse <code>&lt;SaleDetailModal sale=viewingSale sellerLookup=sellers&gt;</code> (viewingSale looked up from loaded sales). Build clean. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 6: SaleReportTab — received section + remaining chip</h3>
+  <p><strong>Files:</strong> Modify <code>SaleReportTab.jsx</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>6.1</strong> Add to Promise.all: <code>loadDepositsByDateRange({from,to,branchId})</code> (received list) + <code>getAllDeposits({branchId})</code> (remaining); <code>selectedBranchId</code> already in deps.</div>
+  <div class="step"><input type="checkbox"> <strong>6.2</strong> <code>received = depositsReceivedInRange(deposits,{from,to})</code>; <code>remaining = sumSystemRemainingDeposits(allDeposits)</code>. Render a chip "มัดจำคงเหลือในระบบ ฿{remaining}" near header + a "มัดจำที่รับเข้า (N · ฿sum)" section above the table mapping <code>&lt;DepositReceiptRow&gt;</code>. NOT added to <code>out.totals</code>/footer. Desktop + mobile.</div>
+  <div class="step"><input type="checkbox"> <strong>6.3</strong> Build clean. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 7: Deposit deep-link nav</h3>
+  <p><strong>Files:</strong> Modify <code>BackendDashboard.jsx</code>, <code>FinanceTab.jsx</code>, <code>DepositPanel.jsx</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>7.1</strong> BackendDashboard: add state <code>financeFocusDepositId</code>; in URL-parse useEffect (line ~243), <code>const dep = params.get('deposit'); if (resolvedTab==='finance' &amp;&amp; subtab==='deposit' &amp;&amp; dep) setFinanceFocusDepositId(dep);</code>. Pass <code>focusDepositId={financeFocusDepositId}</code> to <code>&lt;FinanceTab&gt;</code> (line 611). Clear on subtab change.</div>
+  <div class="step"><input type="checkbox"> <strong>7.2</strong> FinanceTab: accept <code>focusDepositId</code>; forward to its deposit subtab <code>&lt;DepositPanel focusDepositId&gt;</code> (verify the render of the deposit subtab; thread the prop).</div>
+  <div class="step"><input type="checkbox"> <strong>7.3</strong> DepositPanel: <code>useEffect</code> on <code>focusDepositId</code> → if set, find in loaded list else <code>getDeposit(focusDepositId)</code> → <code>setViewingDeposit(dep)</code> (opens existing DetailModal). Build clean. Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 8: Test bank + AV + verify (Rule K end, Rule Q)</h3>
+  <p><strong>Files:</strong> <code>tests/deposit-in-reports.test.js</code> (extend) + <code>tests/deposit-in-reports-flow-simulate.test.js</code> (new) + audit-anti-vibe-code AVxx.</p>
+  <div class="step"><input type="checkbox"> <strong>8.1</strong> Aggregator: no-double-count (deposit applied to a sale → appears once in มัดจำ, salesAmount unaffected), reconcile (Σ rows.total == totals.total via assertReconcile-style), cancelled excluded, refund-not-subtracted, union methods, getMethodDocuments merged+tagged, refundsInPeriod. Utils + loader. Adversarial: empty/null/Thai channel/missing paymentDate/0-amount.</div>
+  <div class="step"><input type="checkbox"> <strong>8.2</strong> Source-grep: PaymentSummaryTab + SaleReportTab pass <code>branchId: selectedBranchId</code> to loadDeposits + include in deps (BS-11); reports-sale section NOT summed into out.totals; deep-link param wired. NEW AVxx: "deposit-received is counted from be_deposits.paymentChannel/paymentDate, never from sale.payment.channels; sale channels must never contain a มัดจำ entry (no double-count)".</div>
+  <div class="step"><input type="checkbox"> <strong>8.3</strong> Flow-simulate (Rule I): master deposit + sale → loaders → aggregate → row totals → drill-down docs; PRE-fix vs POST-fix repro that deposit money now appears.</div>
+  <div class="step"><input type="checkbox"> <strong>8.4</strong> <code>npm test -- --run</code> full suite GREEN + <code>npm run build</code> clean.</div>
+  <div class="step"><input type="checkbox"> <strong>8.5</strong> <strong>Rule Q L2</strong>: <code>scripts/diag-deposit-in-reports.mjs</code> (Rule R, admin-SDK, real prod) — pull a real branch's be_sales + be_deposits for a range; run aggregator; assert grand total = sale-channels + deposit-received AND no sale.payment.channels entry canonicalizes to 'มัดจำ' (double-count guard); print the breakdown. Read-only.</div>
+  <div class="step"><input type="checkbox"> <strong>8.6</strong> <strong>Rule Q L1</strong>: dev server (preview) — open reports-payment (new cols + click ใบเสร็จ → modal → ใบขาย opens SaleDetailModal) + reports-sale (chip + section) + a deposit row → deep-link opens DetailModal. Screenshot. Commit. (NO deploy — await explicit "deploy".)</div>
+</div>
+
+<h2>Self-Review</h2>
+<p>Spec coverage: Q1(Task3 gross-no-refund/cancelled), Q2(Task4/5 drill-down), Q3(Task6 section), Q4(Task7 deep-link), remaining-chip(Task6), no-double-count(Task3/8 AV), BS-11(Task5/6/8). Types consistent: <code>loadDepositsByDateRange</code>, <code>depositsReceivedInRange</code>, <code>sumSystemRemainingDeposits</code>, <code>buildDepositDeepLinkUrl</code>, <code>aggregatePaymentSummary(sales,deposits,filters)</code>, <code>getMethodDocuments</code>, <code>refundsInPeriod</code>, <code>focusDepositId</code> used identically across tasks. No placeholders.</p>
+
+</body>
+</html>

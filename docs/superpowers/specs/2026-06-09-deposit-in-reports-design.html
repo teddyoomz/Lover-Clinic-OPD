@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>มัดจำในรายงาน (reports-payment + reports-sale) — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --teal:#0d9488; --emerald:#059669; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background:#f0f0f0; padding:1px 4px; border-radius:3px; }
+    pre code { background:none; padding:0; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .ok { border-left: 4px solid var(--emerald); background: #ecfdf5; padding: 0.5em 1em; border-radius: 0 6px 6px 0; color:#065f46; }
+    .mockup { background: #0d0d0d; color:#e7e7e7; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1.2em; margin: 1em 0; }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: #8a9097; margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size:0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .mockup table, .mockup th, .mockup td { border-color:#2a2a2a; }
+    .mockup th { background:#1c1c1c; color:#8a9097; font-size:0.85em; text-transform:uppercase; }
+    .r { text-align:right; font-variant-numeric:tabular-nums; }
+    .m { color:#34d399; font-weight:700; } .dep { color:#2dd4bf; font-weight:700; } .tot { color:#fff; font-weight:800; }
+    .lnk { color:#22d3ee; text-decoration:underline; } .mut{color:#8a9097}
+    .flowtbl td { vertical-align: top; }
+    .num { display:inline-block; width:1.6em; height:1.6em; line-height:1.6em; text-align:center; background:var(--accent); color:#fff; border-radius:50%; font-size:0.85em; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>มัดจำในรายงาน — reports-payment + reports-sale</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-09 · <strong>Status:</strong> Approved by user (Q1–Q4 locked) ·
+  <strong>Plan:</strong> docs/superpowers/plans/2026-06-09-deposit-in-reports.html ·
+  <strong>Mockup (live):</strong> .superpowers/brainstorm/.../deposit-in-reports.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+  <strong>reports-payment ("สรุปบัญชีรับชำระ") = เงินที่บัญชีได้รับจริง</strong> แต่ปัจจุบันรวมเฉพาะช่องทางชำระจาก <code>be_sales</code>.
+  เงิน <strong>มัดจำ (be_deposits)</strong> ที่ลูกค้าจ่ายเข้ามา <em>ไม่ปรากฏที่ไหนเลย</em> → ยอดบัญชีต่ำกว่าจริง.
+  ต้องเพิ่มมัดจำที่รับเข้าต่อวัน-ต่อช่องทาง, แยกคอลัมน์ <code>ยอดขาย / มัดจำ / ยอดรวม</code>, ทำเลขใบเสร็จกดดูรายการได้,
+  และที่ reports-sale แสดง "มัดจำที่รับเข้า" (ไม่รวมยอดขาย) + "ยอดมัดจำคงเหลือในระบบ".
+</p>
+
+<div class="ok">
+  <strong>✅ ไม่นับซ้ำ (พิสูจน์จากโค้ดจริง — SaleTab.jsx:510-515):</strong> ในการขาย มัดจำถูกหักออก <em>ก่อน</em> สร้างช่องทางชำระ
+  (<code>afterDeposit = afterMembership − depositApplied → netTotal → channels[0].amount = netTotal</code>) →
+  <code>payment.channels[]</code> ไม่เคยมีส่วนมัดจำ. การเพิ่ม "มัดจำที่รับเข้า" จึงเป็นเงินคนละก้อน 100%.
+  มัดจำนับตาม <code>paymentDate</code> + ช่องทาง <code>paymentChannel</code>.
+</div>
+
+<h2>Decisions (locked via Q&amp;A)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> คอลัมน์ "มัดจำ" = <strong>gross รับเข้าจริง</strong> — Σ <code>deposit.amount</code> ที่ <code>paymentDate</code> ในช่วง, จัดตาม <code>paymentChannel</code>; <strong>ตัด <code>status==='cancelled'</code> ออก</strong>; <strong>ไม่หัก refund</strong>. ยอดคืนมัดจำ (refund ในช่วง) แสดงเป็น footnote เล็กแยก.</li>
+  <li><strong>Q2 = A:</strong> เลขใบเสร็จกดได้ → modal รายการเอกสารของช่องทางนั้น = <strong>ใบขาย + ใบมัดจำ</strong>. ใบขาย→ <code>SaleDetailModal</code> เดิม; ใบมัดจำ→ เด้งหน้ามัดจำ.</li>
+  <li><strong>Q3 = A:</strong> reports-sale แสดง <strong>ส่วน "มัดจำที่รับเข้า" แยกต่างหาก</strong> (ไม่รวม footer ยอดขาย).</li>
+  <li><strong>Q4 = A:</strong> เด้งหน้ามัดจำ = <code>window.open(?backend=1&amp;tab=finance&amp;subtab=deposit&amp;deposit=DEP-ID, '_blank')</code> → BackendDashboard เปิด finance·มัดจำ + DepositPanel เปิด DetailModal ของใบนั้น.</li>
+  <li><strong>Auto-locked:</strong> ยอดมัดจำคงเหลือในระบบ = Σ <code>remainingAmount</code> ของ <code>status ∈ {active, partial}</code> (V154), branch-scoped, แสดงเป็นชิปบน header reports-sale. ดึง bar "สัดส่วน" ออกจาก reports-payment เพื่อให้ตารางโล่ง. นับมัดจำทุกสถานะที่เงินเข้าจริง (active/partial/used/refunded/expired) ยกเว้น cancelled.</li>
+</ul>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">reports-payment · AFTER (desktop, dark)</div>
+  <table>
+    <thead><tr><th>วิธีชำระ</th><th class="r">ยอดขาย</th><th class="r">มัดจำ</th><th class="r">ยอดรวม</th><th class="r">ใบเสร็จ</th><th class="r">%</th></tr></thead>
+    <tbody>
+      <tr><td>เงินสด</td><td class="r m">45,200</td><td class="r dep">8,000</td><td class="r tot">53,200</td><td class="r"><span class="lnk">18</span></td><td class="r">47.9%</td></tr>
+      <tr><td>โอน</td><td class="r m">32,000</td><td class="r dep">15,000</td><td class="r tot">47,000</td><td class="r"><span class="lnk">11</span></td><td class="r">42.3%</td></tr>
+      <tr><td>QR</td><td class="r m">9,700</td><td class="r dep">1,200</td><td class="r tot">10,900</td><td class="r"><span class="lnk">6</span></td><td class="r">9.8%</td></tr>
+    </tbody>
+    <tfoot><tr><th>รวม</th><th class="r m">86,900</th><th class="r dep">24,200</th><th class="r tot">111,100</th><th class="r">35</th><th class="r">100%</th></tr></tfoot>
+  </table>
+  <div class="mut" style="font-size:0.82em">footnote: คืนมัดจำในช่วงนี้ ฿2,000 (แสดงแยก ไม่หัก)</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">reports-payment · drill-down (กดเลข "18" ของเงินสด)</div>
+  <div class="mut">เงินสด · 18 เอกสาร</div>
+  <table>
+    <tbody>
+      <tr><td>[ใบขาย]</td><td>INV-20260609-0007</td><td>HN000123 คุณสมหญิง</td><td class="r m">฿2,500</td><td class="r lnk">› รายละเอียดใบเสร็จ</td></tr>
+      <tr><td>[มัดจำ]</td><td>DEP-1779…442</td><td>HN000456 คุณนภา</td><td class="r dep">฿2,000</td><td class="r" style="color:#2dd4bf">› เด้งหน้ามัดจำ</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">reports-sale · AFTER — ชิปคงเหลือ + ส่วนมัดจำที่รับเข้า (ไม่ปน footer ขาย)</div>
+  <div style="margin-bottom:8px"><span style="background:rgba(45,212,191,.12);border:1px solid #2dd4bf;color:#5eead4;border-radius:999px;padding:4px 12px;font-size:0.85em">มัดจำคงเหลือในระบบ <b style="color:#fff">฿128,400</b></span></div>
+  <div class="mut">💧 มัดจำที่รับเข้า · 4 รายการ · ฿24,200 — ไม่รวมใน footer ยอดขาย</div>
+  <table>
+    <tbody>
+      <tr><td>09/06/2026</td><td>HN000456 คุณนภา</td><td>[เงินสด]</td><td class="r dep">฿2,000</td><td class="r" style="color:#2dd4bf">›</td></tr>
+      <tr><td>09/06/2026</td><td>HN001020 คุณกานต์</td><td>[โอน]</td><td class="r dep">฿15,000</td><td class="r" style="color:#2dd4bf">›</td></tr>
+    </tbody>
+  </table>
+  <div class="mut" style="font-size:0.82em">↑ section แยก · ตารางขายเดิม + footer เดิมอยู่ด้านล่าง ไม่เปลี่ยน</div>
+</div>
+
+<h3>Data shape (be_deposits — ของจริง)</h3>
+<pre><code>{ depositId, customerId, customerName, customerHN,
+  amount, usedAmount, remainingAmount,          // V154: remaining = amount − used − refund
+  paymentChannel,        // "เงินสด"/"โอน"/"QR"/... = ช่องทางเงินเข้า
+  paymentDate,           // YYYY-MM-DD = วันเงินเข้า (มีเสมอ; default now)
+  status,                // active | partial | used | refunded | cancelled | expired
+  refundAmount, refundChannel, refundDate,
+  usageHistory: [{ saleId, amount, date }],
+  branchId,              // branch-scoped (BSA leak-sweep-2)
+  createdAt, updatedAt }</code></pre>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Data-flow — reports-payment aggregate (no double-count)</div>
+  <table class="flowtbl" style="color:#e7e7e7">
+    <tr><td><span class="num">1</span></td><td><b>load</b> sales (saleDate∈range, branch) + <b>deposits</b> (paymentDate∈range, branch) — <code>loadSalesByDateRange</code> + NEW <code>loadDepositsByDateRange</code></td></tr>
+    <tr><td><span class="num">2</span></td><td><b>per method</b>: salesAmount = Σ sale.payment.channels[method] · depositAmount = Σ deposit.amount[paymentChannel=method, status≠cancelled] · total = sales+deposit</td></tr>
+    <tr><td><span class="num">3</span></td><td><b>rows</b> = union(sale-methods, deposit-channels) · totals{salesAmount, depositAmount, total, docCount} · refundsInPeriod (footnote)</td></tr>
+    <tr><td><span class="num">4</span></td><td><b>render</b> table; ใบเสร็จ number = clickable → <code>getMethodDocuments(sales,deposits,method)</code> → <b>PaymentDocsModal</b></td></tr>
+    <tr><td><span class="num">5</span></td><td>ใบขาย → <code>SaleDetailModal</code> (in-tab) · มัดจำ → <code>window.open(deposit deep-link)</code></td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Nav-flow — jump to deposit (Q4)</div>
+  <table class="flowtbl" style="color:#e7e7e7">
+    <tr><td><span class="num">A</span></td><td>คลิกแถวมัดจำ → <code>window.open('?backend=1&amp;tab=finance&amp;subtab=deposit&amp;deposit=DEP-x','_blank')</code></td></tr>
+    <tr><td><span class="num">B</span></td><td>BackendDashboard URL-parse useEffect: <code>tab=finance + subtab=deposit</code> → setFinanceSubTab('deposit'); NEW <code>deposit</code> param → <code>financeFocusDepositId</code></td></tr>
+    <tr><td><span class="num">C</span></td><td><code>&lt;FinanceTab initialSubTab focusDepositId&gt;</code> → forward to <code>&lt;DepositPanel focusDepositId&gt;</code></td></tr>
+    <tr><td><span class="num">D</span></td><td>DepositPanel useEffect: focusDepositId → <code>getDeposit</code> → <code>setViewingDeposit</code> → existing <b>DetailModal</b> opens</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Layer</th><th>File</th><th>Change</th></tr>
+  <tr><td>Loader</td><td><code>src/lib/reportsLoaders.js</code></td><td>NEW <code>loadDepositsByDateRange({from,to,branchId,allBranches})</code> — mirror loadSales; filter <code>paymentDate</code>; branch-scoped; try/catch fallback.</td></tr>
+  <tr><td>Pure utils</td><td>NEW <code>src/lib/depositReportUtils.js</code></td><td><code>depositsReceivedInRange</code> (exclude cancelled) · <code>sumSystemRemainingDeposits</code> (active/partial) · <code>buildDepositDeepLinkUrl(depId)</code> · re-export <code>canonicalDepositChannel</code>.</td></tr>
+  <tr><td>Aggregator</td><td><code>src/lib/paymentSummaryAggregator.js</code></td><td>Signature → <code>aggregatePaymentSummary(sales, deposits, {from,to,branchId})</code>; per-method salesAmount/depositAmount/total/docCount; <code>getMethodDocuments(sales,deposits,method)</code>; <code>refundsInPeriod</code>; new columns ยอดขาย/มัดจำ/ยอดรวม.</td></tr>
+  <tr><td>Shared UI</td><td>NEW <code>src/components/backend/reports/DepositReceiptRow.jsx</code> + <code>PaymentDocsModal.jsx</code></td><td>Rule C1: deposit-jump row reused by drill-down + reports-sale section. Modal reuses SaleDetailModal + DepositReceiptRow.</td></tr>
+  <tr><td>UI</td><td><code>PaymentSummaryTab.jsx</code></td><td>Load deposits + sellers; new columns; clickable ใบเสร็จ; refund footnote; BS-11 deps (selectedBranchId).</td></tr>
+  <tr><td>UI</td><td><code>SaleReportTab.jsx</code></td><td>Load deposits (received) + getAllDeposits (remaining); "มัดจำที่รับเข้า" section + chip; mobile variant; BS-11 deps.</td></tr>
+  <tr><td>Nav</td><td><code>BackendDashboard.jsx</code> + <code>FinanceTab.jsx</code> + <code>DepositPanel.jsx</code></td><td>Parse <code>deposit=</code> → <code>focusDepositId</code> → DetailModal.</td></tr>
+</table>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>reports-payment shows per-channel <code>ยอดขาย / มัดจำ / ยอดรวม</code>; grand total = Σ(sale channels) + Σ(deposit received, non-cancelled) for branch+range.</li>
+  <li>มัดจำ column = gross <code>deposit.amount</code> by paymentChannel/paymentDate; cancelled excluded; refunds NOT subtracted; refund footnote present.</li>
+  <li>ใบเสร็จ number clickable → lists both sales + deposits of that channel; sale→SaleDetailModal; deposit→new-tab deposit page.</li>
+  <li>reports-sale shows "มัดจำที่รับเข้า" section (date-range), excluded from sale footer; each row → new-tab deposit page.</li>
+  <li>reports-sale shows "มัดจำคงเหลือในระบบ" chip = Σ remainingAmount of active/partial deposits (branch).</li>
+  <li>Jumping to a deposit opens finance·deposit tab with that deposit's DetailModal open.</li>
+  <li>Branch switch re-fetches both tabs (BS-11); CSV export includes new columns; footer reconciles (audit-reports-accuracy); cancelled excluded.</li>
+  <li><strong>No double-count</strong>: a deposit applied to a sale appears once (as deposit-received), never inflates sale channels — locked by an AV invariant + flow-simulate test.</li>
+</ol>
+
+<h2>Verification (Rule Q — must pass before "done")</h2>
+<ul>
+  <li><strong>Unit/flow</strong>: aggregator no-double-count + reconcile + gross-no-refund + cancelled-excluded + union-methods + drill-down docs; loader; depositReportUtils; reports-sale received+remaining; source-grep + Rule I flow-simulate.</li>
+  <li><strong>Rule Q L2</strong>: real-prod admin-SDK diag — pull a real branch's sales+deposits in a range, run the aggregator, assert grand total = sale-channels + deposit-received and that no <code>มัดจำ</code> channel exists inside <code>sale.payment.channels</code> (double-count guard).</li>
+  <li><strong>Rule Q L1</strong>: preview both tabs on the running dev server (real Firestore) — see the new columns/section, click ใบเสร็จ → modal, click a deposit → deep-link opens DetailModal.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><code>be_deposits</code> composite index (paymentDate, branchId) may not exist → loader mirrors the sales loader try/catch client-side fallback (no hard dependency).</li>
+  <li>FinanceTab must forward <code>focusDepositId</code> to its deposit subtab — verify the wrapper threads props (task 6).</li>
+  <li>PaymentSummaryTab needs sellerLookup for SaleDetailModal — load sellers like SaleReportTab.</li>
+</ul>
+
+</body>
+</html>

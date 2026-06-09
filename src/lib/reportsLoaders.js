@@ -24,6 +24,9 @@ const customersCol = () => collection(db, ...basePath(), 'be_customers');
 // Phase 12.8 — P&L report joins expenses and insurance-claims.
 const expensesColReports = () => collection(db, ...basePath(), 'be_expenses');
 const saleClaimsColReports = () => collection(db, ...basePath(), 'be_sale_insurance_claims');
+// 2026-06-09 — deposit-in-reports: reports-payment + reports-sale read deposits
+// (money actually received). Branch-scoped (be_deposits = BSA leak-sweep-2).
+const depositsColReports = () => collection(db, ...basePath(), 'be_deposits');
 
 /**
  * V52 helper — normalize branch-scope opts.
@@ -127,6 +130,42 @@ export async function loadSalesByDateRange({ from = '', to = '', includeCancelle
     if (!includeCancelled) sales = sales.filter(s => s.status !== 'cancelled');
     sales.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
     return sales;
+  }
+}
+
+/**
+ * Load deposits whose `paymentDate` (the day the money came in) falls in
+ * [from, to] (YYYY-MM-DD inclusive). Mirrors loadSalesByDateRange.
+ *
+ * reports-payment folds these into the per-channel "มัดจำ" column; reports-sale
+ * lists them as "มัดจำที่รับเข้า". Does NOT exclude cancelled here — the
+ * aggregator (depositsReceivedInRange) drops cancelled so a single source of
+ * truth owns the status rule.
+ *
+ * V52 (BS-11): branch-scoped via `branchId`. Cross-branch use → `allBranches: true`.
+ * Requires composite index be_deposits (paymentDate ASC, branchId ASC); on
+ * missing-index error, falls back to client-side filter (same as sales).
+ */
+export async function loadDepositsByDateRange({ from = '', to = '', branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
+  try {
+    const conds = [];
+    if (from) conds.push(where('paymentDate', '>=', from));
+    if (to) conds.push(where('paymentDate', '<=', to));
+    if (wantBranch) conds.push(where('branchId', '==', branchId));
+    const q = conds.length > 0
+      ? query(depositsColReports(), ...conds, orderBy('paymentDate', 'desc'))
+      : query(depositsColReports(), orderBy('paymentDate', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  } catch {
+    const snap = await getDocs(depositsColReports());
+    let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    if (from) items = items.filter(x => (x.paymentDate || '') >= from);
+    if (to) items = items.filter(x => (x.paymentDate || '') <= to);
+    if (wantBranch) items = items.filter(x => x.branchId === branchId);
+    items.sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
+    return items;
   }
 }
 
