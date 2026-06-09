@@ -66,7 +66,10 @@ describe('V129.SG source-grep (AV147)', () => {
     expect(agg).toMatch(/resolveSellerName\(Array\.isArray\(s\.sellers\) \? s\.sellers\[0\] : null, sellerLookup\)/);
   });
   it('SG2: SaleReportTab loads listAllSellers + passes sellers + sellerLookup', () => {
-    expect(tab).toMatch(/import \{ listAllSellers \} from '\.\.\/\.\.\/\.\.\/lib\/scopedDataLayer\.js'/);
+    // 2026-06-09 (deposit-in-reports) co-imports getAllDeposits from the same
+    // module → tolerate additional named imports; lock that listAllSellers is
+    // sourced from scopedDataLayer (BS-1).
+    expect(tab).toMatch(/import \{[^}]*\blistAllSellers\b[^}]*\} from '\.\.\/\.\.\/\.\.\/lib\/scopedDataLayer\.js'/);
     expect(tab).toMatch(/listAllSellers\(\{ branchId: selectedBranchId \}\)/);
     expect(tab).toMatch(/sellers: allSellers/);
     expect(tab).toMatch(/sellerLookup=\{allSellers\}/);

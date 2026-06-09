@@ -157,6 +157,9 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [financeInitialCustomer, setFinanceInitialCustomer] = useState(null);
   const [financeSubTab, setFinanceSubTab] = useState(null);
   const [financeMode, setFinanceMode] = useState(false);
+  // 2026-06-09 deposit-in-reports — ?tab=finance&subtab=deposit&deposit=DEP-x
+  // deep-link (from reports) opens that deposit's DetailModal.
+  const [financeFocusDepositId, setFinanceFocusDepositId] = useState(null);
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Phase 24.0-vicies-novies-ter (2026-05-07) — backend dashboard now uses
@@ -241,6 +244,11 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       if (resolvedTab && ALL_ITEM_IDS.includes(resolvedTab)) {
         setActiveTab(resolvedTab);
         if (resolvedTab === 'finance' && subtab) setFinanceSubTab(subtab);
+        // 2026-06-09 — deposit deep-link from reports → open DetailModal.
+        if (resolvedTab === 'finance' && subtab === 'deposit') {
+          const dep = params.get('deposit');
+          if (dep) setFinanceFocusDepositId(dep);
+        }
       }
       setHydrated(true);
     }
@@ -611,6 +619,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <FinanceTab clinicSettings={clinicSettings} theme={theme}
             initialSubTab={financeSubTab}
             initialCustomer={financeInitialCustomer}
+            focusDepositId={financeFocusDepositId}
             onCustomerUsed={() => { setFinanceInitialCustomer(null); setFinanceSubTab(null); }}
           />
         ) : activeTab === 'stock' ? (

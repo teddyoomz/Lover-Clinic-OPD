@@ -9,11 +9,13 @@ import { Receipt, ChevronRight } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
+import DepositReceiptRow from './DepositReceiptRow.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
-import { loadSalesByDateRange, loadAllCustomersForReport, loadSaleInsuranceClaimsByDateRange } from '../../../lib/reportsLoaders.js';
-import { listAllSellers } from '../../../lib/scopedDataLayer.js';
+import { loadSalesByDateRange, loadAllCustomersForReport, loadSaleInsuranceClaimsByDateRange, loadDepositsByDateRange } from '../../../lib/reportsLoaders.js';
+import { listAllSellers, getAllDeposits } from '../../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { aggregateClaimsBySaleId } from '../../../lib/saleInsuranceClaimValidation.js';
+import { depositsReceivedInRange, sumSystemRemainingDeposits } from '../../../lib/depositReportUtils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -62,6 +64,11 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   // optional but nobody passed it). Only 'paid' claims count per
   // aggregateClaimsBySaleId spec.
   const [allClaims, setAllClaims] = useState([]);
+  // 2026-06-09 deposit-in-reports: deposits received in range (informational
+  // "มัดจำที่รับเข้า" section — NOT summed into the sale footer) + all deposits
+  // for the system-wide "มัดจำคงเหลือในระบบ" chip.
+  const [rangeDeposits, setRangeDeposits] = useState([]);
+  const [allDeposits, setAllDeposits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -88,8 +95,10 @@ export default function SaleReportTab({ clinicSettings, theme }) {
       loadAllCustomersForReport({ branchId: selectedBranchId }),
       loadSaleInsuranceClaimsByDateRange({ branchId: selectedBranchId }),
       listAllSellers({ branchId: selectedBranchId }), // V129 — seller/creator name resolution
+      loadDepositsByDateRange({ from, to, branchId: selectedBranchId }), // received-in-range
+      getAllDeposits({ branchId: selectedBranchId }),                    // all → remaining balance
     ])
-      .then(([s, c, cl, se]) => { if (!abort) { setAllSales(s); setAllCustomers(c); setAllClaims(cl); setAllSellers(se || []); } })
+      .then(([s, c, cl, se, dr, ad]) => { if (!abort) { setAllSales(s); setAllCustomers(c); setAllClaims(cl); setAllSellers(se || []); setRangeDeposits(dr || []); setAllDeposits(ad || []); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
@@ -99,6 +108,21 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   const claimsBySaleId = useMemo(
     () => aggregateClaimsBySaleId(allClaims),
     [allClaims]
+  );
+
+  // 2026-06-09 — deposit-received list (excl cancelled) + sum + system remaining.
+  // These are SEPARATE from the sale aggregate — never folded into out.totals.
+  const depositReceived = useMemo(
+    () => depositsReceivedInRange(rangeDeposits, { from, to }),
+    [rangeDeposits, from, to]
+  );
+  const depositReceivedSum = useMemo(
+    () => depositReceived.reduce((s, d) => s + (Number(d.amount) || 0), 0),
+    [depositReceived]
+  );
+  const remainingDeposit = useMemo(
+    () => sumSystemRemainingDeposits(allDeposits),
+    [allDeposits]
   );
 
   // Aggregate (pure, deterministic — runs in render)
@@ -166,6 +190,7 @@ export default function SaleReportTab({ clinicSettings, theme }) {
         />
       }
     >
+      <DepositReceivedSection deposits={depositReceived} receivedSum={depositReceivedSum} remaining={remainingDeposit} />
       <SaleMobileList rows={out.rows} onOpenCustomer={handleOpenCustomer} onViewSale={handleViewSale} />
       <SaleMobileFooter totals={out.totals} />
       <SaleReportTable
@@ -507,6 +532,38 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
           </tr>
         </tfoot>
       </table>
+    </div>
+  );
+}
+
+// 2026-06-09 deposit-in-reports — informational only. The remaining-balance
+// chip (Σ remainingAmount of active/partial, V154) + the "มัดจำที่รับเข้า"
+// list (received in range, excl cancelled). NEVER summed into the sale footer
+// (per user: "ยอดไม่ต้องไปรวมกับอะไรเลย"). Each row → finance·deposit deep-link.
+function DepositReceivedSection({ deposits, receivedSum, remaining }) {
+  const count = Array.isArray(deposits) ? deposits.length : 0;
+  return (
+    <div className="mb-3" data-testid="deposit-received-section">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full border border-teal-700/50 bg-teal-900/20 text-teal-300 px-3 py-1 text-xs font-bold"
+          data-testid="deposit-remaining-chip"
+        >
+          มัดจำคงเหลือในระบบ <span className="text-[var(--tx-primary)] tabular-nums">{fmtMoney(remaining)}</span>
+        </span>
+        {count > 0 && (
+          <span className="text-[11px] text-[var(--tx-muted)]">
+            💧 มัดจำที่รับเข้า {count} รายการ ·{' '}
+            <span className="text-teal-400 font-bold tabular-nums">{fmtMoney(receivedSum)}</span>{' '}
+            <span className="opacity-70">(ไม่รวมในยอดขายด้านล่าง)</span>
+          </span>
+        )}
+      </div>
+      {count > 0 && (
+        <div className="rounded-lg border border-teal-700/40 bg-teal-900/5 overflow-hidden" data-testid="deposit-received-list">
+          {deposits.map(d => <DepositReceiptRow key={d.depositId || d.id} deposit={d} />)}
+        </div>
+      )}
     </div>
   );
 }

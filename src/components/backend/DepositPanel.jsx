@@ -116,7 +116,7 @@ function StatusBadge({ status, isDark }) {
   );
 }
 
-export default function DepositPanel({ clinicSettings, theme, initialCustomer, onCustomerUsed }) {
+export default function DepositPanel({ clinicSettings, theme, initialCustomer, onCustomerUsed, focusDepositId }) {
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] focus:border-emerald-500' : 'bg-white border-gray-200 text-gray-800 focus:border-emerald-400'}`;
   const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
@@ -277,6 +277,19 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     finally { setListLoading(false); }
   }, [selectedBranchId]);
   useEffect(() => { loadList(); }, [loadList]);
+
+  // 2026-06-09 deposit-in-reports — deep-link (?...&deposit=DEP-x from reports)
+  // opens this deposit's DetailModal. Resolve directly via getDeposit so it's
+  // independent of list-load timing / branch scope (a deposit can be at any
+  // branch).
+  useEffect(() => {
+    if (!focusDepositId) return undefined;
+    let abort = false;
+    getDeposit(focusDepositId)
+      .then(d => { if (!abort && d) setViewingDeposit(d); })
+      .catch(e => console.warn('[DepositPanel] focus deposit load failed:', e));
+    return () => { abort = true; };
+  }, [focusDepositId]);
 
   // ── Load options on demand ─────────────────────────────────────────────
   const [examRooms, setExamRooms] = useState([]);

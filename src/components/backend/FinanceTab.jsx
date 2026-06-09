@@ -28,7 +28,7 @@ const COLOR_HOVER = {
   amber:   'hover:text-orange-400 hover:border-orange-800/50',
 };
 
-export default function FinanceTab({ clinicSettings, theme, initialCustomer, onCustomerUsed, initialSubTab }) {
+export default function FinanceTab({ clinicSettings, theme, initialCustomer, onCustomerUsed, initialSubTab, focusDepositId }) {
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab || 'deposit');
 
   // Support deep link ?backend=1&tab=finance&subtab=deposit
@@ -38,6 +38,10 @@ export default function FinanceTab({ clinicSettings, theme, initialCustomer, onC
     const sub = params.get('subtab');
     if (sub && SUB_TABS.some(t => t.key === sub)) setActiveSubTab(sub);
   }, []);
+
+  // 2026-06-09 — a deposit deep-link (from reports) forces the มัดจำ sub-tab so
+  // its DetailModal shows.
+  useEffect(() => { if (focusDepositId) setActiveSubTab('deposit'); }, [focusDepositId]);
 
   return (
     <div className="space-y-4">
@@ -65,6 +69,7 @@ export default function FinanceTab({ clinicSettings, theme, initialCustomer, onC
           clinicSettings={clinicSettings}
           theme={theme}
           initialCustomer={initialCustomer}
+          focusDepositId={focusDepositId}
           onCustomerUsed={onCustomerUsed}
         />
       )}
