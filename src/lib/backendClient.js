@@ -1309,7 +1309,13 @@ export async function rebuildTreatmentSummary(customerId) {
 
 // ─── Course Deduction ─────────────────────────────────────────────────────
 
-import { deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString, formatQtyString } from './courseUtils.js';
+// parseQtyString MUST be in this module-wide static import — adjustCourseRemainingQty
+// (and any future course mutator) uses it WITHOUT a per-function dynamic import.
+// Its omission here = the "แก้คงเหลือ" prod crash (parseQtyString is not defined),
+// build-invisible because an undefined identifier resolves to a global lookup → only
+// throws at runtime on save. AV192 locks: every courseUtils export this file uses
+// must be in THIS line (or a per-function dynamic import in the using function).
+import { parseQtyString, deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString, formatQtyString } from './courseUtils.js';
 
 // V148 (2026-06-02) — atomic customer.courses[] read-modify-write.
 // Every course mutator (deduct/reverse/add/assign/resolve/exchange) used to do

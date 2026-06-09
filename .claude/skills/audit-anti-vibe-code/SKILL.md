@@ -537,6 +537,16 @@ Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky
 3. "มัดจำคงเหลือในระบบ" = `sumSystemRemainingDeposits` (active/partial `remainingAmount`, V154), informational only.
 **Verification**: `scripts/diag-deposit-in-reports.mjs` (Rule Q L2 real prod — double-count-guard 0 + reconcile) + `tests/deposit-in-reports.test.js` B1 (no-double-count) + B2 (reconcile) + `tests/deposit-in-reports-flow-simulate.test.js` (source-grep + Rule I).
 
+### AV192 — Every courseUtils helper a function uses MUST be in lexical scope (build-invisible ReferenceError class; V6/V11/V104 family) (2026-06-09)
+**Why**: `src/lib/backendClient.js` resolves courseUtils helpers two ways — a single module-top static `import { ... } from './courseUtils.js'` (hoisted → file-wide) AND per-function `const { ... } = await import('./courseUtils.js')` (function-local). The 2026-06-09 "แก้คงเหลือ" prod crash (`parseQtyString is not defined`, screenshot, customer LC-26000138) happened because the unified `adjustCourseRemainingQty` used `parseQtyString` but the static import OMITTED it and the function had no per-function dynamic import. An undefined identifier resolves to a global lookup → **`npm run build` is CLEAN**; it only throws at runtime on the save click. Same build-invisible class as V6 (`handleSyncCoupons is not defined`) / V11 (mock-shadowed export) / V104 (param shadowing state).
+**Grep** (forbidden — any = AV192 violation):
+- a function in `src/lib/backendClient.js` that calls a courseUtils helper (`parseQtyString` / `formatQtyString` / `deductQty` / `reverseQty` / `buildQtyString`) which is NEITHER in the module-top `import {…} from './courseUtils.js'` list NOR destructured from a `= await import('./courseUtils.js')` inside that same function.
+- a partial named import of a leaf util where a sibling function uses an omitted name (general form of the class).
+**Canonical pattern**:
+1. Prefer the module-top static import and keep its named list a SUPERSET of every courseUtils export this file actually uses (the leaf module is pure → no circular-dep risk from a static import).
+2. The per-function dynamic imports are belt-and-suspenders (harmless local shadows) — fine to keep; never RELY on a static import that lacks the name.
+**Verification**: `tests/av192-courseutil-scope-execution-2026-06-09.test.js` — EXECUTES the real `adjustCourseRemainingQty` (reduce/add/cap/floor) with only the Firestore transaction boundary mocked (the `parseQtyString` import resolution is 100% real ESM) → RED on the omitted-import code, GREEN on the fix; AV192.7 locks the static-import list; AV192.8 is a CLASSIFIER over every backendClient function. (Source-grep alone — the old C1.6–C1.13 — could NOT catch this; execution is mandatory for a scope ReferenceError. V66 lesson.)
+
 ## How to run
 
 1. Run each grep pattern; classify hits.
