@@ -1,28 +1,29 @@
 ---
-updated_at: "2026-06-09 EOD+1 — V162: TFP buy critical-path — qty-multiply divergence + per-purchase rowId/remove collision (course+promo). Committed + pushed, NOT deployed."
-status: "Both user-reported buy/sale bugs root-caused on the served code + fixed class-wide (Rule P) + regression-tested + real-browser L1 verified. master ahead of prod; awaiting explicit 'deploy' (frontend-only, vercel-only)."
+updated_at: "2026-06-09 EOD+2 — deposit-in-reports: มัดจำ now counted in reports-payment (ยอดขาย/มัดจำ/ยอดรวม + receipt drill-down) + reports-sale 'มัดจำที่รับเข้า' section + 'มัดจำคงเหลือในระบบ' chip + deposit deep-link. Committed+pushed, NOT deployed."
+status: "SHIPPED to master (ahead of prod). Rule Q L2 (real prod) + L1 (real browser, real Firestore) both VERIFIED. Awaiting explicit 'deploy' (frontend-only, vercel-only, no rules)."
 branch: "master"
-last_commit: "2d13c980 — V162 (fix: TFP buy qty-multiply + per-purchase purchaseUid for rowId/courseId/grouping/remove — course+promo)."
-tests: "default vitest 16300/0 (16277 + 23 new bank) + build clean + extended treatmentBuyHelpers 54/54 + 8 affected runnable 217/217 + Rule Q L1 real-browser served-module (display ×3 + displayEqualsPersist + distinct rowIds + checkbox-independent + targeted remove). NOT re-run at EOD."
+last_commit: "41024418 — deposit-in-reports verify (source-grep + Rule I + AV191 + Rule Q L2 diag). On c90fbf09 (UI+nav) on fbf9a0fa (core)."
+tests: "full vitest 16326/0 (16300 + 26 new: deposit-in-reports 16 + flow-simulate 10) + build clean + Rule Q L2 real-prod diag (double-count-guard 0, reconcile diff 0, ฿19,000 deposit now visible) + Rule Q L1 real-browser (new columns match diag, drill-down sale→detail, sale chip+section, deposit deep-link)."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "Vercel prod = e56d2ac7. master ahead (b8351546 4-fix + 10e2c266 docs + V162). frontend-only, no firestore.rules → vercel-only, no Probe-Deploy-Probe."
+production_commit: "Vercel prod = e56d2ac7. master ahead: V162 (2d13c980) + deposit-in-reports (fbf9a0fa+c90fbf09+41024418). frontend-only, no firestore.rules → vercel-only, no Probe-Deploy-Probe."
 firestore_rules_version: "UNCHANGED."
 ---
 
-# Active — 2026-06-09 EOD+1 — V162: TFP buy qty-multiply + per-purchase rowId/remove collision
+# Active — 2026-06-09 EOD+2 — deposit-in-reports (reports-payment + reports-sale)
 
 ## State
-- master ahead of prod `e56d2ac7`. Tree clean after V162 commit+push. NOT deployed.
-- The buy/sale critical path: both user bugs fixed class-wide (course AND promo); verified on the REAL Vite-served module in the browser.
+- master ahead of prod `e56d2ac7`. Tree clean after 3 commits. NOT deployed.
+- User: reports-payment ต้องนับมัดจำที่รับเข้า (เงินบัญชีจริง) — มัดจำเดิมไม่โผล่ที่ไหนเลย.
 
-## What this session shipped (checkpoint: .agents/sessions/2026-06-09-tfp-buy-qty-and-rowid-collision.md)
-- **Bug #1 qty divergence**: `buildPurchasedCourseEntry` now multiplies sub-product remaining/total by `buyQty` → DISPLAY === SALE === PERSIST (`resolvePurchasedCourseForAssign`). Was display 1× / bill N×.
-- **Bug #2 collision**: per-purchase `purchaseUid` threaded through courseId + every rowId + grouping + `removePurchasedItem` targeting → same course bought twice = independent checkboxes + targeted delete. Promo path fixed identically (Rule P). Consumables carry purchaseUid too.
-- AV190 + new bank `course-buy-qty-multiply-and-rowid-uniqueness` (23) + 4 V21 fixups (extended BPCE).
+## What this session shipped (spec/plan: docs/superpowers/{specs,plans}/2026-06-09-deposit-in-reports*)
+- **reports-payment**: per-channel `ยอดขาย / มัดจำ / ยอดรวม / ใบเสร็จ(กดได้) / %` + refund footnote. เลขใบเสร็จ → PaymentDocsModal (ใบขาย+ใบมัดจำ) → ใบขาย opens SaleDetailModal / ใบมัดจำ → deep-link.
+- **reports-sale**: ชิป "มัดจำคงเหลือในระบบ" (Σ remaining active/partial, V154) + section "มัดจำที่รับเข้า" (NOT summed into footer) → each row deep-links.
+- **No double-count** (proven real prod): SaleTab deducts deposit BEFORE channels → sale channels never carry มัดจำ. มัดจำ counted from be_deposits paymentChannel/paymentDate.
+- New: `loadDepositsByDateRange`, `depositReportUtils`, `DepositReceiptRow`, `PaymentDocsModal`; aggregator rewrite (`aggregatePaymentSummary(sales,deposits,filters)` + `getMethodDocuments` + `refundsInPeriod`); deep-link (`?...&deposit=DEP-x` → BackendDashboard → FinanceTab → DepositPanel DetailModal). AV191 + 26 tests + Rule Q L2 diag.
 
 ## Next action
-- IDLE / await direction. If "deploy" → `vercel --prod` (no rules) → then L1 hands-on.
+- IDLE / await direction. If "deploy" → `vercel --prod` (frontend-only, no rules → no Probe-Deploy-Probe).
 
 ## Outstanding user-triggered actions
-- **deploy** (vercel-only) to ship V162 — then L1: buy a course qty 3 (panel shows N×, bill matches) · buy same course twice → tick one (other unticked) · delete one (other stays).
-- **Pre-existing (flagged, spawned task)**: `npm run test:extended` = 283/4699 fail — V50-deleted AppointmentTab/MasterDataTab/CloneTab still referenced by 46 stale extended RTL tests (since 2026-05-08). Opt-in suite, NOT the tracked baseline; unrelated to V162.
+- **deploy** (vercel-only) to ship. L1 already verified (real browser) — post-deploy is optional re-confirm.
+- **Pre-existing (flagged, NOT this work)**: `npm run test:extended` 283/4699 fail = V50-deleted tabs still imported by 46 stale RTL tests. Opt-in suite, not the tracked baseline.
