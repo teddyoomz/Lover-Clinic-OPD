@@ -26,9 +26,15 @@ describe('WS1 C2-bis — chat_config secret lockdown', () => {
     expect(block).not.toMatch(/if true/);
   });
 
-  it('the public wildcard still serves non-secret settings (theme/main), system_config stays staff-only', () => {
-    expect(rules).toMatch(/match \/clinic_settings\/\{settingId\} \{[\s\S]{0,120}allow read: if true/);
-    expect(rules).toMatch(/match \/clinic_settings\/system_config \{[\s\S]{0,120}allow read: if isClinicStaff\(\)/);
+  it('the LOCKDOWN is in the wildcard (OR-semantics: a specific match cannot restrict) — wildcard EXCLUDES chat_config from public read', () => {
+    // Firestore unions all matching rules, so the public `clinic_settings/{settingId}`
+    // read must itself exclude the secret doc; a staff-only specific match alone is
+    // insufficient (confirmed live: it left chat_config readable at HTTP 200).
+    const wildcard = rules.match(/match \/clinic_settings\/\{settingId\} \{[\s\S]{0,900}?allow write/)?.[0] || '';
+    expect(wildcard).toMatch(/allow read: if settingId != 'chat_config'/);
+    expect(wildcard).not.toMatch(/allow read: if true/);
+    // other docs (main/theme, system_config read by App.jsx v86Glow on anon loads) stay public
+    expect(rules).not.toMatch(/match \/clinic_settings\/main/); // no per-doc lock on main → falls through to public wildcard
   });
 
   it('both webhooks read chat_config via the admin SDK (so the staff-only rule cannot break inbound chat)', () => {

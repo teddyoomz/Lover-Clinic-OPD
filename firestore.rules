@@ -36,7 +36,15 @@ service cloud.firestore {
 
       // ── Clinic Settings (read: anyone for public settings, write: staff only) ──
       match /clinic_settings/{settingId} {
-        allow read: if true;  // Public: theme, logo, clinic name
+        // WS1 C2-bis (2026-06-10) — chat_config holds LINE/FB channel SECRETS and
+        // MUST NOT be public. Firestore unions (OR) ALL matching rules, so a more-
+        // specific `clinic_settings/chat_config` match CANNOT restrict what this
+        // wildcard grants — the exclusion has to live HERE. (Confirmed live: a
+        // specific staff-only chat_config match left it readable at HTTP 200 because
+        // `true OR isClinicStaff == true`.) Other docs (main/theme/logo, system_config
+        // read by App.jsx v86Glow on anon patient loads, schedule_prefs, counters)
+        // stay public. chat_config falls through to its staff-only specific match.
+        allow read: if settingId != 'chat_config';
         allow write: if isClinicStaff();
       }
 
@@ -57,15 +65,15 @@ service cloud.firestore {
       // ── WS1 C2-bis (2026-06-10) — CRITICAL secret lockdown ──
       // clinic_settings/chat_config holds LINE + FB channel SECRETS
       // (line.channelSecret/channelAccessToken, facebook.appSecret/
-      // pageAccessToken/verifyToken). It was matched by the PUBLIC
-      // `clinic_settings/{settingId} read: if true` wildcard above →
-      // WORLD-READABLE (confirmed live 2026-06-10: unauth GET → HTTP 200).
-      // C2 (2bcba3e9) migrated the only unauth-REST reader (webhook
-      // getChatConfig) to the admin SDK but NEVER added this rule, so the
-      // hole stayed open. This more-specific match wins → staff-only.
-      // Readers after the fix: webhook getChatConfig = admin SDK (bypasses
-      // rules); ChatPanel + Line/FbSettingsTab = staff client (isClinicStaff
-      // claim). No anon/patient client reads chat_config.
+      // pageAccessToken/verifyToken). C2 (2bcba3e9) migrated the only unauth-REST
+      // reader (webhook getChatConfig) to the admin SDK but NEVER closed the rule.
+      // IMPORTANT — Firestore UNIONS (OR) all matching rules: this specific match
+      // canNOT restrict; the actual lockdown is the `settingId != 'chat_config'`
+      // EXCLUSION in the wildcard above (a prior staff-only specific match alone
+      // left it readable at HTTP 200 because `true OR isClinicStaff == true`).
+      // This match's job is to GRANT staff read/write to chat_config (the wildcard
+      // now denies it). Readers: webhook getChatConfig = admin SDK (bypasses rules);
+      // ChatPanel + Line/FbSettingsTab = staff client (isClinicStaff claim).
       // Rule B probe: unauth GET clinic_settings/chat_config → must be 403.
       // ⚠ The secrets were publicly exposed for an unknown window — the LINE
       // channelSecret/accessToken + FB appSecret/pageAccessToken MUST be
