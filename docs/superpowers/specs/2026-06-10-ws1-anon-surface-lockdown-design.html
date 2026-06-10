@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WS1 — Anonymous-Surface Lockdown · Security Hardening Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#16a34a; --bad:#dc2626; --warn:#d97706; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .del { background:#ffeef0; color:#b31d28; }
+    .add { background:#e6ffed; color:#176f2c; }
+    .ok { color: var(--ok); font-weight:600; }
+    .bad { color: var(--bad); font-weight:600; }
+    .warn { color: var(--warn); font-weight:600; }
+    .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .pill-crit { background:#dc2626; color:#fff; }
+    .pill-high { background:#ea580c; color:#fff; }
+    .pill-med { background:#d97706; color:#fff; }
+    .flowbox { display:inline-block; border:1.5px solid #94a3b8; border-radius:7px; padding:7px 11px; margin:3px; background:#fff; font-size:0.85em; }
+    .flowbox.attacker { border-color:#dc2626; background:#fef2f2; }
+    .flowbox.patient { border-color:#16a34a; background:#f0fdf4; }
+    .flowbox.server { border-color:#2563eb; background:#eff6ff; }
+    .arrow { color:#64748b; font-weight:700; margin:0 2px; }
+    .blocked { color:#dc2626; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>WS1 — Anonymous-Surface Lockdown</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-10 · <strong>Status:</strong> Approved by user (Q1=แก้ทั้งหมดเรียงตามความเสี่ยง · Q2=C crypto-id + split get/list) · <strong>Implementation plan:</strong> <code>docs/superpowers/plans/2026-06-10-ws1-anon-surface-lockdown.html</code>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+LoverClinic stores patient PII (national ID <code>idCard</code> 13-digit, name, phone, medical/treatment data) and money records. A multi-agent adversarial security audit (2026-06-10) confirmed that several Firestore/Storage rules are over-permissive toward <strong>anonymous</strong> users. The app signs every public-link visitor in via <code>signInAnonymously</code> (<code>src/App.jsx:101</code>), so any rule written <code>if isSignedIn()</code> or <code>if true</code> is reachable by <strong>any internet user</strong> with zero credentials.
+</p>
+<p>WS1 is the first (CRITICAL + HIGH) workstream of a 4-workstream hardening effort. It is a single <code>firestore.rules</code> + <code>storage.rules</code> deploy unit (one Probe-Deploy-Probe cycle — rule deploys are the riskiest, V1/V9), plus the minimal client changes needed so the patient flow does not break (V23 lesson: a prior over-tightening of <code>opd_sessions</code> broke patient form submission).</p>
+
+<table>
+  <tr><th>ID</th><th>Sev</th><th>Finding</th><th>Confirmed exploit</th></tr>
+  <tr><td><strong>C1</strong></td><td><span class="pill pill-crit">CRITICAL</span></td><td><code>opd_sessions</code> <code>read: if isSignedIn()</code> — anon can <code>list</code> the whole collection</td><td>Open any public link → app auto anon-signs-in → console → <code>getDocs(opd_sessions)</code> → dump every patient's national ID + medical PII. (idCard stored in <code>patientData</code>; anon auth enabled; rule permits <code>list</code>.)</td></tr>
+  <tr><td><strong>H1</strong></td><td><span class="pill pill-high">HIGH</span></td><td><code>chat_conversations</code> + <code>messages</code> create/update <code>if true</code></td><td>Anyone on the internet writes/spams/injects chat docs with no auth. Webhook now uses admin SDK (<code>getAdminFirestore()</code>, line.js + facebook.js) → the <code>if true</code> rule is largely vestigial attack surface. (Stored-XSS-to-staff refuted: ChatPanel renders <code>{m.text}</code> via React escaping.)</td></tr>
+  <tr><td><strong>H2</strong></td><td><span class="pill pill-high">HIGH</span></td><td><code>clinic_schedules</code> write <code>if isSignedIn()</code> + read <code>if true</code></td><td>Anon overwrites/vandalizes/enumerates public booking schedule docs (all writers are staff-side AdminDashboard; patient page only <code>get</code>s by token).</td></tr>
+  <tr><td><strong>M2</strong></td><td><span class="pill pill-med">MEDIUM</span></td><td><code>form_templates</code> / <code>chart_templates</code> / <code>be_chart_templates</code> read <code>if isSignedIn()</code>; <code>clinic_settings/{id}</code> read <code>if true</code></td><td>Anon enumerates form structures + medical diagram images. <code>clinic_settings</code> public read must be audited for any leaked secret (FB/LINE tokens live under the separate staff-only <code>chat_config</code> — confirm none in the public doc).</td></tr>
+</table>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">firestore.rules · diff (red = remove, green = add)</div>
+<pre>
+  match /opd_sessions/{sessionId} {
+<span class="del">-   allow read: if isSignedIn();</span>
+<span class="add">+   allow get:  if isSignedIn();              // submit + dashboard read by (crypto-random) id</span>
+<span class="add">+   allow list: if isClinicStaff();           // KILL anon mass-enumeration (C1)</span>
+    allow create: if true;                      // anon kiosk/staff create — id MUST be crypto-random (C1)
+    allow update: if isClinicStaff() || (isSignedIn() && ...hasOnly([11 whitelisted fields]));  // unchanged
+    allow delete: if isClinicStaff() || (isSignedIn() && sessionId.matches('^test-probe-anon-.*$'));  // unchanged
+  }
+
+  match /clinic_schedules/{scheduleId} {
+<span class="del">-   allow read:  if true;</span>
+<span class="del">-   allow write: if isSignedIn();</span>
+<span class="add">+   allow get:   if true;                      // patient booking page reads by token</span>
+<span class="add">+   allow list:  if isClinicStaff();           // KILL anon enumeration (H2)</span>
+<span class="add">+   allow write: if isClinicStaff();           // only staff author schedules (H2)</span>
+  }
+
+  match /chat_conversations/{convId} {
+    allow read: if isClinicStaff();
+<span class="del">-   allow create, update: if true;</span>
+<span class="add">+   allow create, update: if isClinicStaff();  // webhook uses admin SDK (bypasses rules) (H1)</span>
+    allow delete: if isClinicStaff();
+    match /messages/{messageId} {
+      allow read: if isClinicStaff();
+<span class="del">-     allow create: if true;</span>
+<span class="add">+     allow create: if isClinicStaff();        // (H1)</span>
+      allow update, delete: if isClinicStaff();
+    }
+  }
+
+  match /form_templates/{templateId} {
+<span class="del">-   allow read: if isSignedIn();</span>
+<span class="add">+   allow get:  if isSignedIn();               // patient renders a form by id</span>
+<span class="add">+   allow list: if isClinicStaff();            // KILL anon enumeration (M2)</span>
+    allow write: if isClinicStaff();
+  }
+  // chart_templates + be_chart_templates: same get/list split (M2)
+
+  match /clinic_settings/{settingId} {
+    allow read: if true;     // KEEP — theme/logo/name needed pre-auth on patient pages.
+                             //  M2 audit: confirm the public doc holds NO secret
+                             //  (FB/LINE tokens are under the separate staff-only chat_config).
+    allow write: if isClinicStaff();
+  }
+</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">storage.rules · M2 — split get/list on signed-in-readable image paths (optional within WS1)</div>
+<pre>
+  match /chart-templates/{file=**} {
+<span class="del">-   allow read: if request.auth != null;       // any signed-in (incl anon) could enumerate/read</span>
+<span class="add">+   allow read: if request.auth != null;       // (Storage has no list-vs-get rule split;</span>
+<span class="add">+                                              //  Storage list requires the Firebase "list" op which</span>
+<span class="add">+                                              //  anon SDK does not expose by default. KEEP read=signed-in</span>
+<span class="add">+                                              //  for patient TFP render; accept — low-PII diagram images.)</span>
+    allow create, update: if isClinicStaff() && size&lt;10MB && image/*;
+    allow delete: if isClinicStaff();
+  }
+</pre>
+  <p style="font-size:0.85em;color:var(--tx-muted);margin:0.3em 0 0">Note: Storage rules cannot split get/list like Firestore. The diagram images are low-PII; WS1 keeps the existing signed-in read and documents the accepted residual. (No PII change.)</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape — opd_session id: BEFORE (guessable) → AFTER (crypto-secret)</div>
+<table>
+  <tr><th>Site</th><th>BEFORE</th><th>AFTER (C1 = id-as-secret)</th></tr>
+  <tr><td>AdminDashboard.jsx:2770 / 3014 / 3374</td><td class="add"><code>DEP-${shortId}</code> / <code>ND-${shortId}</code> (verify shortId = crypto)</td><td><code>${prefix}-${cryptoShortId}</code> (shortId = <code>crypto.getRandomValues</code> ≥128-bit, audit it is crypto)</td></tr>
+  <tr><td>backendClient.js:4688</td><td class="del"><code>DEP-${Date.now()}</code> (guessable)</td><td>→ crypto-random suffix (this is a deposit id; confirm not an opd_session id; migrate if it is)</td></tr>
+  <tr><td>appointmentDepositBatch.js:1197</td><td class="del"><code>BL-${ts}-${suffix}</code> (ts guessable)</td><td>→ <code>BL-${cryptoShort}</code> (drop the timestamp from the id; keep ts as a field if needed)</td></tr>
+</table>
+  <p style="font-size:0.85em;color:var(--tx-muted);margin:0.3em 0 0"><strong>Residual (honest):</strong> legacy <code>DEP-&lt;ts&gt;</code> session docs already in prod remain per-id guessable. The CRITICAL (mass <code>list</code> dump) is killed regardless. Legacy docs age out via the existing <code>opd-session-cleanup-sweep</code> cron; an optional Rule M field-minimize/re-key migration is offered as a follow-up, not blocking WS1.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Attack flow — BEFORE (CRITICAL) vs AFTER (blocked)</div>
+  <p style="margin:0.2em 0"><strong>BEFORE:</strong>
+    <span class="flowbox attacker">Internet user opens any public link</span><span class="arrow">→</span>
+    <span class="flowbox">app auto <code>signInAnonymously</code></span><span class="arrow">→</span>
+    <span class="flowbox attacker">console: <code>getDocs(opd_sessions)</code></span><span class="arrow">→</span>
+    <span class="flowbox bad" style="border:1.5px solid #dc2626;background:#fef2f2">🔓 dumps ALL patients' national ID + medical</span>
+  </p>
+  <p style="margin:0.6em 0 0"><strong>AFTER:</strong>
+    <span class="flowbox attacker">anon user</span><span class="arrow">→</span>
+    <span class="flowbox attacker">console: <code>getDocs(opd_sessions)</code> (list)</span><span class="arrow">→</span>
+    <span class="blocked">⛔ PERMISSION_DENIED</span>
+    &nbsp; ·&nbsp; per-id <code>getDoc(crypto-id)</code> guess <span class="arrow">→</span> <span class="blocked">⛔ 128-bit id unguessable</span>
+  </p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Patient flow preserved (V23-safe) — each link still works after the change</div>
+  <p style="margin:0.2em 0"><span class="flowbox patient">Patient · <code>?session=&lt;crypto-id&gt;</code> (submit form)</span><span class="arrow">→</span><span class="flowbox"><code>getDoc(opd_sessions, id)</code> = <strong>get</strong></span><span class="arrow">→</span><span class="ok">✓ allowed (get: isSignedIn)</span> <span class="arrow">→</span> fill + <code>update</code> (whitelisted fields) <span class="ok">✓</span></p>
+  <p style="margin:0.5em 0"><span class="flowbox patient">Patient · <code>?patient=&lt;token&gt;</code> (dashboard)</span><span class="arrow">→</span><span class="del" style="padding:2px 6px;border-radius:4px">was: client <code>query(where token)</code> = <strong>list</strong> ⛔</span><span class="arrow">→</span><span class="flowbox server">fetch <code>/api/patient-view?token=</code> (admin SDK)</span><span class="arrow">→</span><span class="ok">✓ field-minimized payload</span></p>
+  <p style="margin:0.5em 0"><span class="flowbox patient">Patient · <code>?schedule=&lt;token&gt;</code> (booking)</span><span class="arrow">→</span><span class="flowbox"><code>getDoc(clinic_schedules, token)</code> = <strong>get</strong></span><span class="arrow">→</span><span class="ok">✓ allowed (get: true)</span></p>
+  <p style="margin:0.5em 0"><span class="flowbox server">Webhook (FB/LINE)</span><span class="arrow">→</span><span class="flowbox server">admin SDK <code>getAdminFirestore()</code></span><span class="arrow">→</span><span class="flowbox">write chat_conversations</span><span class="arrow">→</span><span class="ok">✓ bypasses rules (admin SDK)</span></p>
+  <p style="margin:0.5em 0"><span class="flowbox">Staff (claim isClinicStaff)</span><span class="arrow">→</span> read/list/write everything <span class="ok">✓ unchanged</span></p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Deploy + verification sequence (Probe-Deploy-Probe · Rule Q L1/L2)</div>
+<table>
+  <tr><th>#</th><th>Stage</th><th>Action</th></tr>
+  <tr><td>1</td><td>Pre-migrate (no rule change yet)</td><td>Migrate opd_session id minting → crypto-random everywhere; swap PatientDashboard <code>?patient=</code> query → <code>/api/patient-view</code>; verify ALL chat_conversations writes use admin SDK (migrate any residual REST write first). Deploy this client/webhook layer FIRST (vercel) so the rule tightening can't break a live flow.</td></tr>
+  <tr><td>2</td><td>L1 (real browser, pre-rule)</td><td>Drive all 3 patient links (?session= submit, ?patient= dashboard, ?schedule= booking) on the deployed client — confirm each still works (still on the OLD permissive rules).</td></tr>
+  <tr><td>3</td><td>Pre-Probe</td><td>Rule B probe list (chat_conversations POST, opd_sessions anon CREATE+whitelisted-UPDATE, etc.) → all 200 as expected.</td></tr>
+  <tr><td>4</td><td>Deploy rules</td><td><code>firebase deploy --only firestore:rules,storage</code> (the tightened rules).</td></tr>
+  <tr><td>5</td><td>Post-Probe + NEW probe</td><td>Re-run probe list. <strong>NEW probe</strong>: anon client-SDK <code>getDocs(opd_sessions)</code> → must be <span class="bad">PERMISSION_DENIED</span>; anon <code>getDoc(crypto-id)</code> → 200; anon <code>setDoc(clinic_schedules)</code> → denied. If a legit patient probe regresses (403) → revert immediately (Rule B).</td></tr>
+  <tr><td>6</td><td>L2 adversarial (Rule Q)</td><td><code>scripts/diag-ws1-anon-lockdown.mjs</code> — real <code>@firebase/firestore</code> CLIENT SDK, <code>signInAnonymously</code>: assert <code>list</code> of opd_sessions/clinic_schedules/form_templates DENIED; assert patient <code>get</code> + <code>/api/patient-view</code> still work; assert anon writes to chat/schedules DENIED.</td></tr>
+  <tr><td>7</td><td>L1 (real browser, post-rule)</td><td>Re-drive all 3 patient links on the LIVE deployed build + tightened rules — confirm zero regression.</td></tr>
+</table>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>Boundaries / units changed (small + isolated):</strong></p>
+<ul>
+  <li><strong>firestore.rules</strong> — the get/list splits + write tightenings (C1, H1, H2, M2). The single highest-leverage change; one file.</li>
+  <li><strong>storage.rules</strong> — M2 documented (no functional change; Storage can't split get/list).</li>
+  <li><strong>Client: opd_session id minting</strong> — audit the ~3-5 mint sites (AdminDashboard, backendClient, appointmentDepositBatch) and route them through one crypto-random helper if a shared one exists (Rule of 3); guarantee 128-bit id-as-secret.</li>
+  <li><strong>Client: PatientDashboard <code>?patient=</code></strong> — replace the client-side <code>query(opd_sessions, where patientLinkToken==token)</code> with a fetch to <code>/api/patient-view?token=</code> (extend the endpoint payload only if the dashboard needs fields patient-view doesn't yet return).</li>
+  <li><strong>Webhook chat writes</strong> — confirm/migrate every <code>chat_conversations</code> + <code>messages</code> write to admin SDK so the <code>if true</code> rule can be removed without breaking inbound messages.</li>
+  <li><strong>Audit-anti-vibe-code invariant</strong> — add an AV invariant: no Firestore rule may grant <code>list</code> on a PII collection to anon (<code>isSignedIn()</code> without claim); source-grep the rules file. Locks the class permanently.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Fix all findings in risk order; each workstream gets its own spec + plan; test + deploy per chunk. WS1 first.</li>
+  <li><strong>Q2 = C:</strong> C1 depth = <em>crypto-secret id + split get/list</em> (not full server-mediation B, not enumeration-kill-only A). Keeps patient real-time + no endpoint rewrite of the submit flow; migrates session ids to crypto-random so get-by-id is safe.</li>
+  <li><strong>Bundling:</strong> C1+H1+H2+M2 ship as one rules deploy (one Probe-Deploy-Probe) because rule deploys are the riskiest and batching = one carefully-probed cycle (safer than N cycles).</li>
+  <li><strong>Legacy ids:</strong> rely on existing <code>opd-session-cleanup-sweep</code> cron age-out; optional Rule M migration as a non-blocking follow-up.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>An anonymous client-SDK session CANNOT <code>list</code> <code>opd_sessions</code>, <code>clinic_schedules</code>, or <code>form_templates</code> (PERMISSION_DENIED) — proven by <code>scripts/diag-ws1-anon-lockdown.mjs</code> (Rule Q L2).</li>
+  <li>An anonymous client CANNOT write <code>clinic_schedules</code> or <code>chat_conversations</code>/<code>messages</code> (PERMISSION_DENIED).</li>
+  <li>All 3 patient links (<code>?session=</code> submit, <code>?patient=</code> dashboard, <code>?schedule=</code> booking) work end-to-end on the LIVE deployed build with tightened rules (Rule Q L1, real browser).</li>
+  <li>Every new <code>opd_session</code> id is crypto-random ≥128-bit (no <code>Date.now()</code>-only ids); source-grep audit + AV invariant added.</li>
+  <li>Webhook inbound (FB/LINE) still lands chat messages after the <code>if true</code> rule is removed (admin SDK path).</li>
+  <li>Probe-Deploy-Probe passes pre+post (existing probes 200; new anon-list probe denied); revert on any regression (Rule B).</li>
+  <li>Full vitest green + build clean; no patient-flow RTL/flow-simulate regressions.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>V23 re-break risk (highest):</strong> over-tightening <code>opd_sessions</code> previously broke patient submit. Mitigation: split <code>get</code>/<code>list</code> (NOT blanket staff-only), deploy client layer first, L1 before AND after rules, Probe-Deploy-Probe with a patient-get probe.</li>
+  <li><strong>H1 hidden REST writer:</strong> if any chat write still goes through unauth REST (not admin SDK), tightening breaks inbound messages. Mitigation: grep/confirm every chat write path FIRST; migrate residual to admin SDK before the rule change; post-probe verifies a forged anon write is denied AND a real webhook message still lands.</li>
+  <li><strong>PatientDashboard payload gap:</strong> <code>/api/patient-view</code> may not return every field the dashboard renders. Mitigation: diff the dashboard's needs vs the endpoint payload; extend the endpoint (still field-minimized, no national ID) if needed.</li>
+  <li><strong>Legacy guessable ids:</strong> accepted residual; cron age-out + optional Rule M migration. Document, don't block.</li>
+  <li><strong>clinic_settings public doc:</strong> open question — confirm via Rule R diag that the world-readable <code>clinic_settings/{id}</code> doc contains no secret (channel tokens / keys). If it does → move secret to the staff-only path.</li>
+</ul>
+
+</body>
+</html>
