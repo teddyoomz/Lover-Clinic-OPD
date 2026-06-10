@@ -2766,7 +2766,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setIsGenerating(true);
     setShowDepositForm(false);
 
-    const shortId = genShortId(6);
+    const shortId = genShortId(32); // WS1 C1: 128-bit id-as-secret (was 6=24-bit → guessable). opd_session doc-id IS the patient-link secret; split get/list rule keeps anon from enumerating.
     const sessionId = `DEP-${shortId}`;
 
     const sessionDoc = {
@@ -3010,7 +3010,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setIsGenerating(true);
     setShowNoDepositForm(false);
 
-    const shortId = genShortId(6);
+    const shortId = genShortId(32); // WS1 C1: 128-bit id-as-secret (was 6=24-bit → guessable). opd_session doc-id IS the patient-link secret; split get/list rule keeps anon from enumerating.
     const sessionId = `ND-${shortId}`;
 
     const appointmentData = {
@@ -3361,7 +3361,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setShowNamePrompt(false); 
     
     const { isPermanent, formType, customTemplate } = pendingConfig;
-    const shortId = genShortId(6);
+    const shortId = genShortId(32); // WS1 C1: 128-bit id-as-secret (was 6=24-bit → guessable). opd_session doc-id IS the patient-link secret; split get/list rule keeps anon from enumerating.
     
     const namePrefix = (cs.clinicName || 'LC').replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase() || 'LC';
     let prefix = `${namePrefix}-`;

@@ -1187,11 +1187,13 @@ export async function provisionOpdLinkForBookingPair({
       + `deposit=${depositId || '(none)'} appointment=${appointmentId || '(none)'}`
     );
   }
-  // Mint fresh sessionId — BL-{timestamp}-{8 hex chars} (BL = Backend-Link,
-  // distinct from kiosk DEP-/ND-/CST-/PRM-/FW- prefixes). Crypto-secure
-  // suffix per Rule C2 (crypto.getRandomValues only — no insecure PRNG).
+  // Mint fresh sessionId — BL-{timestamp}-{32 hex chars / 128-bit} (BL = Backend-Link,
+  // distinct from kiosk DEP-/ND-/CST-/PRM-/FW- prefixes). Crypto-secure suffix per
+  // Rule C2. WS1 C1 (2026-06-10): suffix widened 4→16 bytes (32→128-bit) so the
+  // opd_session doc-id is an unguessable secret — the split get/list rule blocks anon
+  // enumeration; the 128-bit suffix blocks per-id guessing (ts prefix is non-secret).
   const ts = Date.now();
-  const buf = new Uint8Array(4);
+  const buf = new Uint8Array(16);
   globalThis.crypto.getRandomValues(buf);
   const suffix = Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
   const sessionId = `BL-${ts}-${suffix}`;
