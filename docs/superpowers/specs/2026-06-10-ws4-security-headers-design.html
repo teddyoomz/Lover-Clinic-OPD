@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WS4 — Security Response Headers + CSP · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --tx-muted: #666; --ok:#16a34a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.82em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .ok { color: var(--ok); font-weight:600; }
+    .flowbox { display:inline-block; border:1.5px solid #94a3b8; border-radius:7px; padding:6px 10px; margin:3px; background:#fff; font-size:0.84em; }
+    .arrow { color:#64748b; font-weight:700; margin:0 2px; }
+  </style>
+</head>
+<body>
+
+<h1>WS4 — Security Response Headers + CSP</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-10 · <strong>Status:</strong> Approved (user delegated judgment "เอาที่นายเห็นว่าเหมาะสมเลย") · <strong>Workstream:</strong> 4 of the Cybersecurity hardening (audit 2026-06-10)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><code>vercel.json</code> shipped with <strong>NO <code>headers</code> block</strong> — the app sends zero security response headers. That leaves it open to clickjacking (no X-Frame-Options/frame-ancestors), MIME-sniffing (no nosniff), referrer leakage, and provides no CSP defense-in-depth against XSS for a PII-handling medical app. WS4 adds a global headers block. The one risky directive — CSP — is scoped to the app's REAL Firebase origins and <strong>L1-verified in a real browser on the production build</strong> before deploy (a wrong CSP would break the whole clinic, so verification is the gate).</p>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">vercel.json · headers added (data shape)</div>
+<pre>
+"headers": [{ "source": "/(.*)", "headers": [
+  { "key": "Content-Security-Policy", "value": "&lt;see below&gt;" },
+  { "key": "Strict-Transport-Security",   "value": "max-age=63072000; includeSubDomains" },
+  { "key": "X-Content-Type-Options",      "value": "nosniff" },
+  { "key": "X-Frame-Options",             "value": "SAMEORIGIN" },
+  { "key": "Referrer-Policy",             "value": "strict-origin-when-cross-origin" },
+  { "key": "Permissions-Policy",          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), ..." },
+  { "key": "X-DNS-Prefetch-Control",      "value": "off" }
+]}]
+</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Content-Security-Policy — scoped to the app's real surface (L1-verified non-breaking)</div>
+<pre>
+default-src 'self'; base-uri 'self'; object-src 'none';
+script-src 'self' 'sha256-jhKhy…'(theme-flash) 'sha256-T+bx…'(body.ready);   ← HASHES, not 'unsafe-inline'
+style-src 'self' 'unsafe-inline';        ← required: inline &lt;style&gt; + thousands of React inline styles
+img-src 'self' data: blob: https:;       ← firebasestorage signed URLs + data:/blob: (PDF/canvas)
+font-src 'self' data:;                   ← Sarabun = OS font (no Google Fonts)
+media-src 'self' https: data: blob:;     ← staff-chat audio/video attachments
+connect-src 'self' https://*.googleapis.com wss://*.googleapis.com https://*.firebaseio.com
+            wss://*.firebaseio.com https://*.firebasestorage.app https://*.cloudfunctions.net
+            https://www.gstatic.com;     ← broad-but-scoped: covers ALL Firebase endpoints, blocks exfil
+worker-src 'self' blob:; manifest-src 'self'; frame-src 'self';
+frame-ancestors 'self'; form-action 'self'; upgrade-insecure-requests
+</pre>
+  <p style="font-size:0.85em;color:var(--tx-muted);margin:0.3em 0 0">No <code>'unsafe-eval'</code> (no eval/wasm in src or bundle — verified). No <code>'unsafe-inline'</code> in script-src (the 2 inline scripts are hash-pinned). A drift test recomputes the hashes from <code>index.html</code> and fails the build if they fall out of sync with <code>vercel.json</code>.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Verify-before-deploy (CSP can't break prod)</div>
+  <p style="margin:0.2em 0">
+    <span class="flowbox">scope CSP from real origins (grep eval/wasm/camera/fonts — none)</span><span class="arrow">→</span>
+    <span class="flowbox">compute SHA-256 of the 2 inline scripts (source===dist, stable)</span>
+  </p>
+  <p style="margin:0.5em 0"><span class="arrow">→</span>
+    <span class="flowbox" style="border-color:#16a34a;background:#f0fdf4">L1: inject CSP meta into the prod build → <code>vite preview</code> → real browser → app renders 64KB DOM, inline scripts run (hashes OK), Firestore connects, <strong>ZERO console CSP violations</strong></span>
+  </p>
+  <p style="margin:0.5em 0"><span class="arrow">→</span>
+    <span class="flowbox">put final headers in vercel.json + hash-drift test (5/5)</span><span class="arrow">→</span>
+    <span class="flowbox" style="border-color:#2563eb;background:#eff6ff">deploy vercel (build-only)</span><span class="arrow">→</span>
+    <span class="flowbox">curl prod → assert all 7 headers present</span>
+  </p>
+</div>
+
+<h2>Decisions</h2>
+<ul>
+  <li><strong>CSP script-src = hashes, not 'unsafe-inline':</strong> real script-XSS protection; the 2 inline scripts (theme-flash + body.ready) are SHA-256-pinned; a drift test guards against silent breakage.</li>
+  <li><strong>connect-src broad-but-scoped (<code>*.googleapis.com</code>):</strong> won't miss a Firebase endpoint (all under googleapis.com) while still blocking exfiltration to arbitrary domains.</li>
+  <li><strong>L1-before-deploy is mandatory:</strong> a wrong CSP breaks the live clinic — verified on the production build in a real browser first.</li>
+  <li><strong>Permissions-Policy disables camera/mic/geolocation/payment/usb:</strong> none used (no getUserMedia/capture in src).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>L1 (real browser, prod build): app renders, inline scripts run, Firestore connects, ZERO CSP violations. <span class="ok">✓ done</span></li>
+  <li>vercel.json valid JSON; 7 headers; hash-drift + invariant test green (5/5). <span class="ok">✓ done</span></li>
+  <li>Post-deploy: <code>curl -I</code> prod shows all 7 headers.</li>
+  <li>No regression: full vitest still green (no src change).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Authenticated-only CSP break (residual):</strong> L1 tested the public landing (script/style/connect-firestore/inline). The authenticated app (storage images, chat media, PDF gen, FCM SW) uses the SAME already-proven directives (script/style 'self', connect <code>*.googleapis.com</code>, img <code>https:</code>, worker <code>blob:</code>) so the risk is low — but full authenticated L1 needs staff creds. Post-deploy: watch for any CSP-blocked feature; relax the specific directive if one surfaces (Rule A).</li>
+  <li><strong>Inline-script drift:</strong> guarded by the hash-drift test (build fails if index.html inline scripts change without updating the CSP hashes).</li>
+</ul>
+
+</body>
+</html>
