@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
 import { hexToRgb, thaiTodayISO } from '../utils.js';
 // V50 (2026-05-08) — ProClinic strip. Migrated from `import * as broker` to
@@ -334,7 +334,6 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const [scriptSyncing, setScriptSyncing] = useState(false); // local loading state for script mode
   const [language, setLanguage]       = useState('th');
   const [, forceUpdate]               = useState(0); // ticker สำหรับ countdown
-  const prevFetchedAtRef    = useRef(null);
   const syncTimeoutRef      = useRef(null);
   const sessionIdRef        = useRef(null);
   const refreshRequestedRef = useRef(false);
@@ -506,92 +505,57 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   }
 
   // Customer patient-link (2026-05-25): resolve via the public /api/patient-view
-  // endpoint FIRST. be_customers/be_appointments are clinic-staff-only → anon
-  // CANNOT read them client-side, so the endpoint (admin SDK) is the data path.
-  // It resolves BOTH be_customers tokens (new) AND legacy opd_session tokens, and
-  // returns the latestCourses-shaped payload the EXISTING render already consumes
-  // (patient card + AppointmentCard + CourseCard reused 100%). The legacy
-  // opd_session Firestore listener below runs ONLY as a fallback when the endpoint
-  // errors (5xx/network) — on success/404 it never overrides.
-  const [legacyFallback, setLegacyFallback] = useState(false);
+  // endpoint (admin SDK). be_customers/be_appointments/opd_sessions are clinic-staff-only
+  // → anon CANNOT read them client-side, so the endpoint is the ONLY data path. It
+  // resolves BOTH be_customers tokens AND legacy opd_session tokens (Rule R diag
+  // 2026-06-10: all 10 prod opd_session tokens carry brokerProClinicId → endpoint covers
+  // 100%; 0 standalone). WS1 C1 (2026-06-10): the old client-side opd_sessions fallback
+  // query was an anon enumeration vector — REMOVED. Its sole purpose (transient 5xx
+  // resilience) is replaced by a bounded retry below. No client opd_sessions read remains.
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
     if (!clinicSettingsLoaded) return;
     let cancelled = false;
     (async () => {
-      try {
-        const r = await fetch(`/api/patient-view?token=${encodeURIComponent(token)}`);
-        if (cancelled) return;
-        if (r.ok) {
-          const data = await r.json();
+      for (let attempt = 0; attempt < 3 && !cancelled; attempt += 1) {
+        try {
+          const r = await fetch(`/api/patient-view?token=${encodeURIComponent(token)}`);
           if (cancelled) return;
-          if (data?.ok) {
-            setSessionData({
-              __customerMode: true,
-              patientLinkEnabled: true,
-              patientData: data.patientData || {},
-              brokerProClinicHN: data.hn || '',
-              latestCourses: {
-                courses: data.courses || [], expiredCourses: data.expiredCourses || [],
-                appointments: data.appointments || [], patientName: data.patientName || '',
-                fetchedAt: data.fetchedAt || new Date().toISOString(), success: true,
-              },
-            });
-            setStatus('done');
+          if (r.ok) {
+            const data = await r.json();
+            if (cancelled) return;
+            if (data?.ok) {
+              setSessionData({
+                __customerMode: true,
+                patientLinkEnabled: true,
+                patientData: data.patientData || {},
+                brokerProClinicHN: data.hn || '',
+                latestCourses: {
+                  courses: data.courses || [], expiredCourses: data.expiredCourses || [],
+                  appointments: data.appointments || [], patientName: data.patientName || '',
+                  fetchedAt: data.fetchedAt || new Date().toISOString(), success: true,
+                },
+              });
+              setStatus('done');
+              return;
+            }
+          }
+          if (r.status === 404) {
+            const body = await r.json().catch(() => ({}));
+            if (cancelled) return;
+            setStatus(body?.error === 'DISABLED' ? 'disabled' : 'notfound');
             return;
           }
+          // 5xx / non-ok / data.ok=false → fall through to retry
+        } catch {
+          // network error → fall through to retry
         }
-        if (r.status === 404) {
-          const body = await r.json().catch(() => ({}));
-          if (cancelled) return;
-          setStatus(body?.error === 'DISABLED' ? 'disabled' : 'notfound');
-          return;
-        }
-        if (!cancelled) setLegacyFallback(true); // 5xx → legacy opd_session listener
-      } catch {
-        if (!cancelled) setLegacyFallback(true); // network → legacy opd_session listener
+        if (attempt < 2 && !cancelled) await new Promise((res) => setTimeout(res, 600));
       }
+      if (!cancelled) setStatus('notfound'); // sustained endpoint failure
     })();
     return () => { cancelled = true; };
   }, [token, clinicSettingsLoaded]);
-
-  useEffect(() => {
-    // 2026-05-25: legacy opd_session listener — FALLBACK ONLY (endpoint errored).
-    if (!legacyFallback) return;
-    if (!token) { setStatus('notfound'); return; }
-    // 2026-04-25 race fix: don't subscribe until clinic settings have at
-    // least loaded once. Without this, a Firestore query can fire before
-    // anon-auth completes (page reaches PatientDashboard before App.jsx's
-    // auth gate has fully resolved on slow networks) → empty snapshot →
-    // status='notfound' flashes briefly. clinicSettingsLoaded is a stable
-    // proxy for "Firebase listeners are now reaching us with auth".
-    if (!clinicSettingsLoaded) return;
-    const q = query(
-      collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'),
-      where('patientLinkToken', '==', token)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) { setStatus('notfound'); return; }
-      const d = snap.docs[0];
-      const data = { ...d.data(), id: d.id };
-      if (!data.patientLinkEnabled) { setStatus('disabled'); return; }
-      sessionIdRef.current = data.id;
-      setSessionData(data);
-      setStatus('done');
-
-      const newFetchedAt = data.latestCourses?.fetchedAt || null;
-      if (newFetchedAt && newFetchedAt !== prevFetchedAtRef.current) {
-        prevFetchedAtRef.current = newFetchedAt;
-        clearSyncTimeout();
-        setSyncTimedOut(false);
-        if (data.latestCourses?.success !== false) setJustSynced(true);
-      }
-
-      sessionDataRef.current = data;
-
-    }, () => setStatus('notfound'));
-    return () => unsub();
-  }, [token, clinicSettingsLoaded, legacyFallback]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   // ── Controls bar (reused in loading/error/main screens) ───────────────────
