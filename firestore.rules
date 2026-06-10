@@ -58,7 +58,12 @@ service cloud.firestore {
       // Read: any signed-in user (admin + kiosk) needs to render forms.
       // Write: clinic staff only.
       match /form_templates/{templateId} {
-        allow read: if isSignedIn();
+        // WS1 M2 (2026-06-10) — split read. PatientForm does not read this
+        // collection; the only readers are the staff form-builder. GET-by-id stays
+        // open to any signed-in (defensive — in case a patient renders a custom
+        // form by id); LIST is staff-only to kill anon enumeration of form structures.
+        allow get:  if isSignedIn();
+        allow list: if isClinicStaff();
         allow write: if isClinicStaff();
       }
 
@@ -84,7 +89,14 @@ service cloud.firestore {
       // DEP-XXXXXX / QR-XXXXXX / IMP-XXXXXX — never start with
       // `test-probe-anon-`, so legit data is unreachable by this branch.
       match /opd_sessions/{sessionId} {
-        allow read: if isSignedIn();
+        // WS1 C1 (2026-06-10) — split read into get/list. Anon may GET a session
+        // by its crypto-random doc-id (the patient-link secret, now 128-bit) but
+        // may NOT LIST/enumerate the collection. Kills the mass-PII dump (national
+        // ID + medical) via an anon getDocs(opd_sessions). Patient submit + the
+        // dashboard only ever get-by-id; staff (claim) keep full list.
+        // Rule B probe: anon list → DENIED; anon get-by-id → 200.
+        allow get:  if isSignedIn();
+        allow list: if isClinicStaff();
         allow create: if true;  // Patients (anon) can create new sessions
         allow update: if isClinicStaff() ||
           (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys()
@@ -603,14 +615,26 @@ service cloud.firestore {
       //    storagePath, builtIn, locked, _seedOrder, createdAt, updatedAt}.
       //    Image bytes live in Storage at chart-templates/{id}.{ext}. ──
       match /be_chart_templates/{templateId} {
-        allow read: if isSignedIn();   // patients reach via TFP
+        // WS1 M2 (2026-06-10) — KEPT signed-in read (NOT split to staff-list).
+        // ChartTemplateSelector subscribes via onSnapshot(query(be_chart_templates))
+        // = a LIST, and anon patients reach it through TFP, so a list→staff split
+        // would break the patient chart-template picker. These are low-PII medical
+        // diagram templates (name/category/imageUrl) — accepted residual.
+        allow read: if isSignedIn();   // patients reach via TFP (list needed by ChartTemplateSelector)
         allow write: if isClinicStaff();
       }
 
       // ── Clinic Schedules (booking) ──
       match /clinic_schedules/{scheduleId} {
-        allow read: if true;  // Public: patients view available slots
-        allow write: if isSignedIn();
+        // WS1 H2 (2026-06-10) — split read + tighten write. The patient booking
+        // page (ClinicSchedule.jsx:90) only getDoc(clinic_schedules, token) — a
+        // GET by crypto token; it never lists and never writes. So: GET stays
+        // public, LIST is staff-only (kills anon enumeration), WRITE is staff-only
+        // (all schedule authors are AdminDashboard staff — anon could previously
+        // overwrite/vandalize public booking docs via signInAnonymously).
+        allow get:   if true;            // Public: patient booking page reads by token
+        allow list:  if isClinicStaff();
+        allow write: if isClinicStaff();
       }
 
       // ── Chat conversations ──
@@ -621,12 +645,20 @@ service cloud.firestore {
       // Delete stays staff-only so internet randos can't wipe history.
       match /chat_conversations/{convId} {
         allow read: if isClinicStaff();
-        allow create, update: if true;
+        // WS1 H1 (2026-06-10) — tightened create/update from `if true`. Every
+        // webhook writer (api/webhook/line.js + facebook.js + send.js) now writes
+        // via the firebase-admin SDK (getAdminFirestore/adminChatSet) which BYPASSES
+        // rules — so dropping the anon `if true` does NOT break inbound/outbound
+        // messages. Staff client-SDK writes pass isClinicStaff(). Closes the open-
+        // internet write/spam/forge surface. Rule B probe: anon create → DENIED.
+        allow create, update: if isClinicStaff();
         allow delete: if isClinicStaff();
 
         match /messages/{messageId} {
           allow read: if isClinicStaff();
-          allow create: if true;
+          // WS1 H1 — webhook message writes use admin SDK (bypass rules); staff
+          // client-SDK writes pass isClinicStaff(). Anon REST create now DENIED.
+          allow create: if isClinicStaff();
           allow update, delete: if isClinicStaff();
         }
       }
