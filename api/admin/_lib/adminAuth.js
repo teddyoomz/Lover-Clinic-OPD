@@ -129,6 +129,41 @@ export async function verifyAdminOrPermissionToken(req, res, permissionKey) {
   };
 }
 
+// WS3 (2026-06-10) — verify ID token + require a CLINIC-STAFF claim (admin OR
+// isClinicStaff OR bootstrap uid). For STAFF-callable endpoints that are not
+// admin-only — api/webhook/send + saved-replies (replying to a customer chat is
+// a staff action). Restores the auth gate those two files LOST when V50 deleted
+// api/proclinic/_lib/auth.js. NOTE: the deleted verifyAuth only checked that the
+// ID token was VALID — it did NOT check any claim, so an anonymous-auth user
+// (a patient) could have passed it and triggered outbound LINE/FB sends. This
+// gate closes that latent weak-auth by mirroring the firestore.rules
+// isClinicStaff() claim check. Returns { uid, email, decoded } or null
+// (writes 401/403 to res). checkRevoked=true rejects disabled/revoked tokens.
+export async function verifyClinicStaffToken(req, res) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    res.status(401).json({ success: false, error: 'Unauthorized: missing Bearer token' });
+    return null;
+  }
+  let decoded;
+  try {
+    decoded = await getAdminAuth().verifyIdToken(token, true);
+  } catch (err) {
+    res.status(401).json({ success: false, error: `Unauthorized: ${err?.code || 'invalid-token'}` });
+    return null;
+  }
+  const isStaff =
+    decoded.isClinicStaff === true ||
+    decoded.admin === true ||
+    isBootstrapAdmin(decoded.uid);
+  if (!isStaff) {
+    res.status(403).json({ success: false, error: 'Forbidden: clinic-staff privilege required' });
+    return null;
+  }
+  return { uid: decoded.uid, email: decoded.email || '', decoded };
+}
+
 // Reset module state — test-only helper.
 export function __resetAdminAuthForTests() {
   cachedAuth = null;

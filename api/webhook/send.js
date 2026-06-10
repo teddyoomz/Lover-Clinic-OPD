@@ -19,7 +19,12 @@
 
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { verifyAuth } from '../proclinic/_lib/auth.js';
+// WS3 (2026-06-10) — restored auth gate. Was importing verifyAuth from the
+// V50-deleted ../proclinic/_lib/auth.js (broken import → endpoint 500'd since
+// 2026-05-08). Now uses verifyClinicStaffToken (admin SDK verifyIdToken + the
+// isClinicStaff/admin claim check) — fixes the broken endpoint AND the latent
+// weak-auth (old verifyAuth checked token-validity only, not any claim).
+import { verifyClinicStaffToken } from '../admin/_lib/adminAuth.js';
 import { resolveLineConfigForAdmin } from '../admin/_lib/lineConfigAdmin.js';
 import { resolveFbConfigForAdmin } from '../admin/_lib/fbConfigAdmin.js';
 // A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
@@ -112,7 +117,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = await verifyAuth(req, res);
+  const user = await verifyClinicStaffToken(req, res);
   if (!user) return;
 
   try {

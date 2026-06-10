@@ -1910,8 +1910,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       }
 
-      // 4. Generate token
-      const token = 'SCH-' + Array.from(crypto.getRandomValues(new Uint8Array(5))).map(b => b.toString(16).padStart(2, '0')).join('');
+      // 4. Generate token — WS3 (2026-06-10): 16 bytes = 128-bit (was 5 bytes =
+      // 40-bit). Mirrors patientLinkToken (AdminDashboard:4597). clinic_schedules
+      // `get` is public-by-token (WS1) so the token must be unguessable.
+      const token = 'SCH-' + Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
 
       // V56 / BS-15 (2026-05-08) — auto-close dates where the picked
       // (schedSelectedDoctor, schedSelectedRoom) combo isn't licensed per

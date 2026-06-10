@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WS3 — Public-Endpoint Hardening · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --tx-muted: #666; --ok:#16a34a; --bad:#dc2626; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.82em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .del { background:#ffeef0; color:#b31d28; }
+    .add { background:#e6ffed; color:#176f2c; }
+    .ok { color: var(--ok); font-weight:600; }
+    .bad { color: var(--bad); font-weight:600; }
+    .pill-high { background:#ea580c; color:#fff; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .pill-med { background:#d97706; color:#fff; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .pill-ok { background:#16a34a; color:#fff; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .flowbox { display:inline-block; border:1.5px solid #94a3b8; border-radius:7px; padding:6px 10px; margin:3px; background:#fff; font-size:0.84em; }
+    .flowbox.attacker { border-color:#dc2626; background:#fef2f2; }
+    .arrow { color:#64748b; font-weight:700; margin:0 2px; }
+    .blocked { color:#dc2626; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>WS3 — Public-Endpoint Hardening</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-10 · <strong>Status:</strong> Approved (user "ws3 ทำเลย" + delegated judgment) · <strong>Workstream:</strong> 3 of the Cybersecurity hardening (audit 2026-06-10)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The WS3 review (Rule Q — verified against the LIVE deployed endpoints, not assumed) found the audit's framing was off, and uncovered a real bug:</p>
+<table>
+  <tr><th>#</th><th>Sev</th><th>Finding (verified)</th></tr>
+  <tr><td><strong>S1</strong></td><td><span class="pill-high">HIGH</span></td><td><code>api/webhook/send.js</code> + <code>saved-replies.js</code> have imported <code>../proclinic/_lib/auth.js</code> since V50 (2026-05-08) <strong>DELETED it</strong> — broken import → the deployed <code>/api/webhook/send</code> returns <strong>HTTP 500</strong> (confirmed live). It fails CLOSED (no abuse possible right now). BUT the deleted <code>verifyAuth</code> only checked <em>token-validity, NOT any claim</em> — so if the import weren't broken, an <strong>anonymous-auth user (a patient) could trigger outbound LINE/FB sends</strong> (latent weak-auth). The auth gate is a ghost.</td></tr>
+  <tr><td><strong>S2</strong></td><td><span class="pill-med">LOW-MED</span></td><td>The schedule (<code>?schedule=</code>) link token is <code>crypto.getRandomValues(new Uint8Array(5))</code> = <strong>40-bit</strong> (AdminDashboard.jsx:1914). Below best-practice; WS1 made <code>clinic_schedules get</code> public-by-token so the token should be unguessable. (Low-sensitivity data + online brute-force of 40 bits is still infeasible, but inconsistent with the 128-bit patientLinkToken.)</td></tr>
+  <tr><td><strong>S3</strong></td><td><span class="pill-ok">OK</span></td><td><code>patient-view</code> token = <code>crypto.getRandomValues(new Uint8Array(16))</code> = <strong>128-bit</strong> (AdminDashboard:4597/4671) → NOT enumerable. <strong>No IDOR.</strong> Response is field-minimized (no national ID). <code>branch-line-oa</code> (validated branchId, lin.ee-only response, AV139) and <code>bootstrap-self</code> (genesis check + owner allowlist + verified ID token) are sound. No fix.</td></tr>
+</table>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Auth-gate restoration (data shape) — S1</div>
+<pre>
+  // api/admin/_lib/adminAuth.js  (NEW)
+<span class="add">+ export async function verifyClinicStaffToken(req, res) {</span>
+<span class="add">+   const token = Bearer header;  if (!token) → 401</span>
+<span class="add">+   const decoded = await getAdminAuth().verifyIdToken(token, true);   // checkRevoked</span>
+<span class="add">+   const isStaff = decoded.isClinicStaff === true || decoded.admin === true || isBootstrapAdmin(uid);</span>
+<span class="add">+   if (!isStaff) → 403 "clinic-staff privilege required";   return { uid, email, decoded };</span>
+<span class="add">+ }</span>
+
+  // api/webhook/send.js  +  saved-replies.js
+<span class="del">- import { verifyAuth } from '../proclinic/_lib/auth.js';   // V50-DELETED → 500; no claim check</span>
+<span class="add">+ import { verifyClinicStaffToken } from '../admin/_lib/adminAuth.js';</span>
+<span class="del">- const user = await verifyAuth(req, res);              // any valid token (incl anon)</span>
+<span class="add">+ const user = await verifyClinicStaffToken(req, res);  // requires isClinicStaff/admin claim</span>
+
+  // src/pages/AdminDashboard.jsx:1914  (S2)
+<span class="del">- 'SCH-' + crypto.getRandomValues(new Uint8Array(5))    // 40-bit</span>
+<span class="add">+ 'SCH-' + crypto.getRandomValues(new Uint8Array(16))   // 128-bit (mirrors patientLinkToken)</span>
+</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">send.js — BEFORE (broken + latent weak) vs AFTER (proper clinic-staff gate)</div>
+  <p style="margin:0.2em 0"><strong>BEFORE:</strong>
+    <span class="flowbox attacker">POST /api/webhook/send</span><span class="arrow">→</span>
+    <span class="flowbox">import verifyAuth (V50-deleted)</span><span class="arrow">→</span>
+    <span class="blocked">💥 HTTP 500 (broken-closed)</span>
+    &nbsp;·&nbsp; <span style="color:var(--tx-muted)">had the import worked: anon token → verifyAuth pass (no claim) → 🔓 clinic sends arbitrary message</span>
+  </p>
+  <p style="margin:0.6em 0 0"><strong>AFTER:</strong>
+    <span class="flowbox attacker">POST (no auth)</span><span class="arrow">→</span><span class="blocked">⛔ 401</span>
+    &nbsp;·&nbsp; <span class="flowbox attacker">anon-auth token</span><span class="arrow">→</span><span class="blocked">⛔ 403 (no clinic-staff claim)</span>
+    &nbsp;·&nbsp; <span class="flowbox">staff token (isClinicStaff)</span><span class="arrow">→</span><span class="ok">✓ send (feature restored)</span>
+  </p>
+</div>
+
+<h2>Decisions</h2>
+<ul>
+  <li><strong>Restore with a CLINIC-STAFF gate, not admin-only nor any-auth:</strong> replying to a customer chat is a staff action; the gate mirrors firestore.rules <code>isClinicStaff()</code> (admin OR isClinicStaff claim). This fixes the 500 AND closes the latent weak-auth.</li>
+  <li><strong>Schedule token → 128-bit</strong> for consistency with patientLinkToken.</li>
+  <li><strong>patient-view rate-limiting = documented residual, NOT shipped (Rule Q-honest):</strong> the 128-bit token already kills enumeration; a per-instance in-memory limit on Vercel is security-theater (many instances, cold-start reset); a real shared-store limit adds a Firestore round-trip to every legit patient request. Given the strong token + Vercel's platform DDoS protection, application rate-limiting is low-value here. Recommend revisiting only if abuse is observed.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Deployed <code>POST /api/webhook/send</code> with NO auth → <strong>401</strong> (was 500) — proves the import is fixed AND the gate rejects unauthenticated callers.</li>
+  <li>No api file IMPORTS the V50-deleted <code>proclinic/_lib/auth.js</code> (regression guard).</li>
+  <li>send.js + saved-replies.js gate on <code>verifyClinicStaffToken</code>; the gate checks isClinicStaff/admin claims.</li>
+  <li>Schedule token is 128-bit; full vitest green; build clean.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Restoring send.js un-breaks FB-reply-via-app:</strong> it's been 500ing for a month (LINE replies already go via LINE OA Chat per the stack docs; FB reply via app was the broken path). Restoring it WITH proper auth is correct regardless; if the clinic doesn't want the FB-reply-via-app feature, it can be removed separately — the auth-gate fix stands either way.</li>
+  <li><strong>verifyClinicStaffToken behavior:</strong> verified by source-grep + a post-deploy L2 (curl no-auth → 401). It mirrors the already-tested <code>verifyAdminToken</code> (same admin-SDK verifyIdToken + claim pattern), so the logic risk is low.</li>
+</ul>
+
+</body>
+</html>
