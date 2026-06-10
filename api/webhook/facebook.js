@@ -13,6 +13,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { resolveChatBranchIdFromFbEvent } from './_lib/fbChatBranchResolver.js';
 import { getFbConfigByPageId } from './_lib/fbConfig.js';
 import { resolveChatFallbackBranchId } from './_lib/chatBranchDefaults.js';
+// WS1 H1 (2026-06-10) — chat writes via admin SDK (removes unauth REST dependency).
+import { adminChatGet, adminChatSet } from './_lib/adminChatStore.js';
 // A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
 // Bare fetch() hangs forever if upstream stalls; default 5s timeout
 // prevents webhook from blocking Vercel return queue.
@@ -130,20 +132,11 @@ async function getFBProfile(psid, accessToken) {
   }
 }
 
-async function firestorePatch(path, fields) {
-  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
-  await apiFetch(`${FIRESTORE_BASE}/${path}?${mask}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields }),
-  });
-}
-
-async function firestoreGet(path) {
-  const res = await apiFetch(`${FIRESTORE_BASE}/${path}`);
-  if (!res.ok) return null;
-  return await res.json();
-}
+// WS1 H1 (2026-06-10): chat_conversations + messages writes migrated from unauthenticated
+// Firestore REST (firestorePatch/firestoreGet) to the firebase-admin SDK via
+// adminChatGet/adminChatSet (./_lib/adminChatStore.js), so the `chat_conversations
+// create/update: if true` rule can be tightened to isClinicStaff(). (FIRESTORE_BASE is
+// still used by getChatConfig's legacy config read above.)
 
 // ─── Process FB messaging event ─────────────────────────────────────────────
 
@@ -154,7 +147,7 @@ async function processMessage(senderId, message, config, branchInfo = {}) {
   const now = new Date().toISOString();
 
   // Get or create conversation — always retry profile if name is missing/numeric
-  const existingConv = await firestoreGet(convPath);
+  const existingConv = await adminChatGet(getAdminFirestore(), convPath);
   const existingName = existingConv?.fields?.displayName?.stringValue || '';
   const existingPic = existingConv?.fields?.pictureUrl?.stringValue || '';
   const nameIsGood = existingName && !/^\d+$/.test(existingName) && existingName !== 'ลูกค้า FB';
@@ -221,7 +214,7 @@ async function processMessage(senderId, message, config, branchInfo = {}) {
     : 0;
 
   // Save message
-  await firestorePatch(msgPath, {
+  await adminChatSet(getAdminFirestore(), msgPath, {
     text: { stringValue: text },
     messageType: { stringValue: messageType },
     imageUrl: { stringValue: imageUrl },
@@ -255,7 +248,7 @@ async function processMessage(senderId, message, config, branchInfo = {}) {
   if (!existingConv?.fields) {
     convFields.createdAt = { stringValue: now };
   }
-  await firestorePatch(convPath, convFields);
+  await adminChatSet(getAdminFirestore(), convPath, convFields);
 }
 
 // ─── Process echo message (admin/AI reply from FB) ─────────────────────────
@@ -272,7 +265,7 @@ async function processEchoMessage(recipientId, message) {
   if (String(message.app_id) === OUR_APP_ID) return;
 
   // Check conversation exists
-  const existingConv = await firestoreGet(convPath);
+  const existingConv = await adminChatGet(getAdminFirestore(), convPath);
   if (!existingConv?.fields) return; // No conversation = ignore
 
   // Parse message content
@@ -293,7 +286,7 @@ async function processEchoMessage(recipientId, message) {
   }
 
   // Save message as admin reply (isFromCustomer: false)
-  await firestorePatch(msgPath, {
+  await adminChatSet(getAdminFirestore(), msgPath, {
     text: { stringValue: text },
     messageType: { stringValue: messageType },
     imageUrl: { stringValue: imageUrl },
@@ -310,7 +303,7 @@ async function processEchoMessage(recipientId, message) {
     || 'webhook-fb-fallback-legacy';
 
   // Update lastMessage but NOT displayName/pictureUrl — keep customer profile
-  await firestorePatch(convPath, {
+  await adminChatSet(getAdminFirestore(), convPath, {
     lastMessage: { stringValue: text },
     lastMessageAt: { stringValue: now },
     branchId: { stringValue: existingBranchId },

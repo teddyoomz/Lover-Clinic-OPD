@@ -256,7 +256,9 @@ describe('L8 api/webhook/line.js bot integration', () => {
   });
   test('L8.3 processEvent calls maybeEmitBotReply AFTER chat-message storage', () => {
     const proc = WEBHOOK_SRC.match(/async function processEvent[\s\S]*?^\}/m)?.[0] || '';
-    const storeIdx = proc.indexOf('firestorePatch(convPath');
+    // WS1 H1 (2026-06-10): chat write migrated firestorePatch → adminChatSet (admin SDK).
+    // The "bot reply AFTER chat storage" invariant is unchanged — only the call name.
+    const storeIdx = proc.indexOf('adminChatSet(getAdminFirestore(), convPath');
     const botIdx = proc.indexOf('maybeEmitBotReply');
     expect(storeIdx).toBeGreaterThan(0);
     expect(botIdx).toBeGreaterThan(storeIdx); // bot AFTER storage

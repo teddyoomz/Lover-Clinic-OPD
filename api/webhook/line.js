@@ -38,6 +38,8 @@ import {
 // during transition.
 import { resolveLineConfigForWebhook } from '../admin/_lib/lineConfigAdmin.js';
 import { resolveChatFallbackBranchId } from './_lib/chatBranchDefaults.js';
+// WS1 H1 (2026-06-10) — chat writes via admin SDK (removes unauth REST dependency).
+import { adminChatGet, adminChatSet } from './_lib/adminChatStore.js';
 // A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
 import { apiFetch } from '../_lib/apiFetch.js';
 // LINE Reminder (2026-05-15) Task 7 — postback handler. Customer taps Flex
@@ -145,31 +147,13 @@ async function getLineProfile(userId, accessToken) {
   }
 }
 
-async function firestorePatch(path, fields) {
-  // CLAUDE.md rule 7 / audit-api-layer A1: Firestore REST PATCH without
-  // updateMask.fieldPaths REPLACES the entire document — silently wipes
-  // every field not included in `fields`. The mask restricts the PATCH to
-  // the named fields only. Match the pattern used by facebook.js / send.js.
-  const mask = Object.keys(fields || {}).map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
-  const url = mask ? `${FIRESTORE_BASE}/${path}?${mask}` : `${FIRESTORE_BASE}/${path}`;
-  await apiFetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields }),
-  });
-}
-
-async function firestoreGet(path) {
-  const res = await apiFetch(`${FIRESTORE_BASE}/${path}`);
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-// V32-tris-ter-fix (2026-04-26): firestoreDelete + runQuery + unwrapDoc/
-// unwrapValue helpers were used only for be_* paths which now go through
-// firebase-admin SDK (see findCustomerByLineUserId /
-// findUpcomingAppointmentsForCustomer). Removed; firestoreGet stays for
-// chat_conversations existence check (public read rule).
+// WS1 H1 (2026-06-10): chat_conversations + messages writes migrated from
+// unauthenticated Firestore REST (firestorePatch/firestoreGet) to the firebase-admin
+// SDK via adminChatGet/adminChatSet (./_lib/adminChatStore.js), so the
+// `chat_conversations create/update: if true` rule can be tightened to isClinicStaff().
+// (firestoreDelete/runQuery were already removed in V32-tris-ter-fix when be_* reads
+// moved to the admin SDK; FIRESTORE_BASE no longer used for chat — kept only if some
+// non-chat REST path still references it.)
 
 async function pushLineMessage(userId, text, accessToken) {
   if (!userId || !text || !accessToken) return false;
@@ -781,8 +765,8 @@ async function processEvent(event, fallbackConfig) {
   const msgPath = `${convPath}/messages/${event.message.id}`;
   const now = new Date().toISOString();
 
-  // Get or create conversation
-  const existingConv = await firestoreGet(convPath);
+  // Get or create conversation (WS1 H1 — admin SDK; wrapper returns the REST {fields} shape)
+  const existingConv = await adminChatGet(getAdminFirestore(), convPath);
   let displayName = userId;
   let pictureUrl = '';
 
@@ -822,8 +806,8 @@ async function processEvent(event, fallbackConfig) {
     ? parseInt(existingConv.fields.unreadCount.integerValue)
     : 0;
 
-  // Save message
-  await firestorePatch(msgPath, {
+  // Save message (WS1 H1 — admin SDK; same REST-typed literal, converter handles it)
+  await adminChatSet(getAdminFirestore(), msgPath, {
     text: { stringValue: text },
     messageType: { stringValue: messageType },
     imageUrl: { stringValue: imageUrl },
@@ -868,7 +852,7 @@ async function processEvent(event, fallbackConfig) {
   if (!existingConv?.fields) {
     convFields.createdAt = { stringValue: now };
   }
-  await firestorePatch(convPath, convFields);
+  await adminChatSet(getAdminFirestore(), convPath, convFields);
 
   // V32-tris-ter — bot Q&A + LINK consumer. Runs AFTER chat-message
   // storage so admin still sees every incoming message in the chat panel

@@ -73,18 +73,21 @@ describe('F1 webhook uses firebase-admin SDK (not unauth REST) for be_* paths', 
     expect(WEBHOOK_SRC).not.toMatch(/^async function firestoreDelete/m);
   });
 
-  test('F1.12 firestoreGet retained (used for chat_conversations existence check — public-read rule)', () => {
-    // chat_config is read by getChatConfig (REST) which DOES go through
-    // firestoreGet alternative. chat_conversations existence check uses
-    // firestoreGet — the rule allows webhook unauth read.
-    expect(WEBHOOK_SRC).toMatch(/async function firestoreGet/);
-    // Used for convPath (chat_conversations) only — NOT for be_*.
-    const usages = WEBHOOK_SRC.match(/firestoreGet\(([^)]+)\)/g) || [];
-    for (const u of usages) {
-      // None of the surviving usages target be_* paths.
-      expect(u).not.toMatch(/be_customer/);
-      expect(u).not.toMatch(/be_appointments/);
-    }
+  test('F1.12 WS1 H1: chat reads/writes use admin SDK — firestoreGet/firestorePatch REMOVED (no unauth REST chat access)', () => {
+    // WS1 H1 (2026-06-10): chat_conversations + messages reads/writes migrated from
+    // unauthenticated Firestore REST (firestoreGet/firestorePatch) to the admin SDK
+    // (adminChatGet/adminChatSet, ./_lib/adminChatStore.js) so the `chat_conversations
+    // create/update: if true` rule can be tightened to isClinicStaff(). The REST chat
+    // helpers are gone; only a non-chat getChatConfig REST read remains (legacy config).
+    expect(WEBHOOK_SRC).not.toMatch(/async function firestoreGet/);
+    expect(WEBHOOK_SRC).not.toMatch(/async function firestorePatch/);
+    // No actual firestoreGet(/firestorePatch( CALLS remain (comments may still name them).
+    const codeOnly = WEBHOOK_SRC.replace(/\/\/[^\n]*/g, '');
+    expect(codeOnly).not.toMatch(/firestoreGet\(/);
+    expect(codeOnly).not.toMatch(/firestorePatch\(/);
+    // Chat reads/writes now go through the admin-SDK helpers.
+    expect(WEBHOOK_SRC).toMatch(/adminChatGet\(getAdminFirestore\(\)/);
+    expect(WEBHOOK_SRC).toMatch(/adminChatSet\(getAdminFirestore\(\)/);
   });
 
   test('F1.13 V32-tris-ter-fix marker comment present (institutional memory)', () => {
