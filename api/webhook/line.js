@@ -48,7 +48,8 @@ import { apiFetch } from '../_lib/apiFetch.js';
 import { parsePostbackData } from '../../src/lib/lineReminderTemplate.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
-const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+// WS1 (2026-06-10): FIRESTORE_BASE removed — all chat reads/writes now go via the admin
+// SDK (no unauth REST to Firestore remains; LINE/Graph API calls use apiFetch directly).
 const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
 
 // V32-tris-ter-fix (2026-04-26) — be_* collections (be_customers,
@@ -97,22 +98,22 @@ async function getChatConfig() {
   // Phase BS V3 (2026-05-04) — used as a fallback for top-of-handler signature
   // verification only. Per-event branch routing happens later via
   // resolveLineConfigForWebhook(event). Once all branches have configs in
-  // be_line_configs/* this top-of-handler check becomes redundant + can be
-  // simplified to "webhook is enabled?" without touching any tokens.
-  const res = await apiFetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
-  if (!res.ok) return null;
-  const doc = await res.json();
-  if (!doc.fields?.line?.mapValue?.fields) return null;
-  const f = doc.fields.line.mapValue.fields;
-  // V33.5 — also surface clinicName + accentColor for Flex bubble theming.
-  // These read from the parent doc (clinic_settings/chat_config) and are
-  // optional. Webhook falls back to defaults inside the Flex builders.
+  // be_line_configs/* this top-of-handler check becomes redundant.
+  // WS1 (2026-06-10): read via admin SDK. clinic_settings/chat_config holds the LINE
+  // channelSecret + channelAccessToken; it is now staff-only at the rule layer (was
+  // world-readable `if true` — CRITICAL secret leak), so an unauth REST read would 403.
+  const snap = await getAdminFirestore().doc(CHAT_CONFIG_PATH).get();
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  const f = data.line;
+  if (!f || typeof f !== 'object') return null;
+  // V33.5 — also surface clinicName + accentColor for Flex bubble theming (optional).
   return {
-    channelAccessToken: f.channelAccessToken?.stringValue || '',
-    channelSecret: f.channelSecret?.stringValue || '',
-    enabled: f.enabled?.booleanValue === true,
-    clinicName: doc.fields?.clinicName?.stringValue || '',
-    accentColor: doc.fields?.accentColor?.stringValue || '',
+    channelAccessToken: f.channelAccessToken || '',
+    channelSecret: f.channelSecret || '',
+    enabled: f.enabled === true,
+    clinicName: data.clinicName || '',
+    accentColor: data.accentColor || '',
   };
 }
 
@@ -152,8 +153,8 @@ async function getLineProfile(userId, accessToken) {
 // SDK via adminChatGet/adminChatSet (./_lib/adminChatStore.js), so the
 // `chat_conversations create/update: if true` rule can be tightened to isClinicStaff().
 // (firestoreDelete/runQuery were already removed in V32-tris-ter-fix when be_* reads
-// moved to the admin SDK; FIRESTORE_BASE no longer used for chat — kept only if some
-// non-chat REST path still references it.)
+// moved to the admin SDK; getChatConfig also moved to admin SDK in WS1, so FIRESTORE_BASE
+// is gone — no unauth REST to Firestore remains in this webhook.)
 
 async function pushLineMessage(userId, text, accessToken) {
   if (!userId || !text || !accessToken) return false;

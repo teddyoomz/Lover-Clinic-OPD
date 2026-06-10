@@ -325,7 +325,9 @@ describe('V33.5.H — source-grep guards', () => {
   it('H4 — getChatConfig surfaces clinicName + accentColor (best-effort)', async () => {
     const fs = await import('node:fs/promises');
     const src = await fs.readFile('api/webhook/line.js', 'utf-8');
-    expect(src).toMatch(/clinicName:\s*doc\.fields\?\.clinicName/);
-    expect(src).toMatch(/accentColor:\s*doc\.fields\?\.accentColor/);
+    // WS1 (2026-06-10): getChatConfig reads via admin SDK (plain values), not REST
+    // {fields}.stringValue — the chat_config doc is now staff-only (held channel secrets).
+    expect(src).toMatch(/clinicName:\s*data\.clinicName/);
+    expect(src).toMatch(/accentColor:\s*data\.accentColor/);
   });
 });

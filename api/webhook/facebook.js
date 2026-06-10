@@ -21,7 +21,8 @@ import { adminChatGet, adminChatSet } from './_lib/adminChatStore.js';
 import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
-const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+// WS1 (2026-06-10): FIRESTORE_BASE removed — all chat reads/writes now go via the admin
+// SDK (no unauth REST to Firestore remains; FB Graph API calls use apiFetch directly).
 const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
 // V78 (2026-05-16 NIGHT — BUG-XR-24 fix): wire FALLBACK_BRANCH_ID through
 // resolveChatFallbackBranchId() so hardcoded NAKHON constant kicks in when
@@ -65,22 +66,23 @@ function verifySignature(rawBody, signature, appSecret) {
 }
 
 async function getChatConfig() {
+  // WS1 (2026-06-10): read via admin SDK. clinic_settings/chat_config holds the FB
+  // appSecret + pageAccessToken; it is now staff-only at the rule layer (was world-
+  // readable `if true` — CRITICAL secret leak), so an unauth REST read would 403.
   try {
-    const res = await apiFetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
-    if (!res.ok) { console.log('[fb-webhook] getChatConfig: Firestore fetch failed', res.status); return null; }
-    const doc = await res.json();
-    // Try mapValue format (saved via Firebase SDK from client)
-    const fbMap = doc.fields?.facebook?.mapValue?.fields;
-    if (fbMap) {
+    const snap = await getAdminFirestore().doc(CHAT_CONFIG_PATH).get();
+    if (!snap.exists) { console.log('[fb-webhook] getChatConfig: doc not found'); return null; }
+    const fb = (snap.data() || {}).facebook;
+    if (fb && typeof fb === 'object') {
       return {
-        pageAccessToken: fbMap.pageAccessToken?.stringValue || '',
-        appSecret: fbMap.appSecret?.stringValue || '',
-        verifyToken: fbMap.verifyToken?.stringValue || '',
-        pageId: fbMap.pageId?.stringValue || '',
-        enabled: fbMap.enabled?.booleanValue === true,
+        pageAccessToken: fb.pageAccessToken || '',
+        appSecret: fb.appSecret || '',
+        verifyToken: fb.verifyToken || '',
+        pageId: fb.pageId || '',
+        enabled: fb.enabled === true,
       };
     }
-    console.log('[fb-webhook] getChatConfig: no facebook mapValue found, fields:', JSON.stringify(doc.fields).slice(0, 200));
+    console.log('[fb-webhook] getChatConfig: no facebook config in chat_config doc');
     return null;
   } catch (e) {
     console.error('[fb-webhook] getChatConfig error:', e.message);

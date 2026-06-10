@@ -77,8 +77,9 @@ describe('F1 webhook uses firebase-admin SDK (not unauth REST) for be_* paths', 
     // WS1 H1 (2026-06-10): chat_conversations + messages reads/writes migrated from
     // unauthenticated Firestore REST (firestoreGet/firestorePatch) to the admin SDK
     // (adminChatGet/adminChatSet, ./_lib/adminChatStore.js) so the `chat_conversations
-    // create/update: if true` rule can be tightened to isClinicStaff(). The REST chat
-    // helpers are gone; only a non-chat getChatConfig REST read remains (legacy config).
+    // create/update: if true` rule can be tightened to isClinicStaff(). getChatConfig
+    // also moved to the admin SDK (WS1) since chat_config holds channel secrets and is
+    // now staff-only — NO unauthenticated REST to Firestore remains in this webhook.
     expect(WEBHOOK_SRC).not.toMatch(/async function firestoreGet/);
     expect(WEBHOOK_SRC).not.toMatch(/async function firestorePatch/);
     // No actual firestoreGet(/firestorePatch( CALLS remain (comments may still name them).
