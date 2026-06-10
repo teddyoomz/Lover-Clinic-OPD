@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WS2 — Dependency Vulnerability Remediation · Security Hardening Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#16a34a; --bad:#dc2626; --warn:#d97706; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .del { background:#ffeef0; color:#b31d28; }
+    .add { background:#e6ffed; color:#176f2c; }
+    .ok { color: var(--ok); font-weight:600; }
+    .pill-crit { background:#dc2626; color:#fff; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .pill-high { background:#ea580c; color:#fff; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .pill-med { background:#d97706; color:#fff; padding:1px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+    .flowbox { display:inline-block; border:1.5px solid #94a3b8; border-radius:7px; padding:6px 10px; margin:3px; background:#fff; font-size:0.84em; }
+    .arrow { color:#64748b; font-weight:700; margin:0 2px; }
+  </style>
+</head>
+<body>
+
+<h1>WS2 — Dependency Vulnerability Remediation</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-10 · <strong>Status:</strong> Approved (Q1=Bump jspdf 4.2.1 + full verify · Q2=full scope html2pdf+vite+postcss+jspdf) · <strong>Workstream:</strong> 2 of 4 (Cybersecurity hardening, audit 2026-06-10)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><code>npm audit</code> reports 2 CRITICAL + several HIGH/MODERATE. WS2 clears the 4 that are DIRECT, client-side / build-time, and have a clean fix path. <strong>Reachability-honest:</strong> the jspdf CRITICAL is NOT actually exploitable in our usage (we only ever <code>addImage</code> a flat html2canvas JPEG — no AcroForm, no local-file load, no <code>pdf.text()</code>, no font-embed) — but the user chose to bump for hygiene + defense-in-depth. The firebase-admin 14 major cluster (server-side, low-reachability, breaks-risk across all <code>api/admin</code> + cron) is DEFERRED to a separate chunk.</p>
+
+<table>
+  <tr><th>dep</th><th>sev</th><th>advisory</th><th>reachability in OUR code</th><th>fix</th></tr>
+  <tr><td><code>html2pdf.js</code> 0.10.3</td><td><span class="pill-crit">CRIT</span></td><td>XSS (GHSA-w8x4-x68c-m6fc)</td><td><strong>NONE</strong> — DEAD dep. Zero source files import it (V32 saga removed the orchestration; only a stale comment + tests asserting "must NOT import html2pdf" remain)</td><td class="add">REMOVE from package.json</td></tr>
+  <tr><td><code>jspdf</code> 3.0.4</td><td><span class="pill-crit">CRIT</span></td><td>AcroForm JS-injection + LFI/path-traversal (GHSA-f8cm-6447-x5h2)</td><td><strong>NOT reachable</strong> — 4 sites (doc-print engine + 3 reports) all <code>new jsPDF</code> → <code>addImage(JPEG/PNG)</code> → <code>output/save</code>. No AcroForm, no loadFile, no <code>.text()</code></td><td class="add">→ 4.2.1 (major; API surface used is stable)</td></tr>
+  <tr><td><code>vite</code> 8.0.1</td><td><span class="pill-high">HIGH</span></td><td>dev-server path-traversal + <code>server.fs.deny</code> bypass (GHSA-4w7w-66w2-5vf9)</td><td><strong>dev-only</strong> — prod = Vercel static (vite not running). Local <code>vite dev</code> exposure only</td><td class="add">→ 8.0.16 (patch)</td></tr>
+  <tr><td><code>postcss</code> 8.5.8</td><td><span class="pill-med">MOD</span></td><td>XSS via unescaped &lt;/style&gt; (GHSA-qx2v-qp2m-jg93)</td><td><strong>build-time</strong> only</td><td class="add">→ 8.5.15 (patch)</td></tr>
+</table>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">package.json · dependency diff</div>
+<pre>
+  "dependencies": {
+<span class="del">-   "html2pdf.js": "^0.10.3",        // DEAD — no source import (V32 removed orchestration)</span>
+<span class="del">-   "jspdf": "^3.0.4",</span>
+<span class="add">+   "jspdf": "^4.2.1",               // clears CRIT (not-reachable in our flat-image usage; API surface stable)</span>
+    ...
+  },
+  "devDependencies": {
+<span class="del">-   "vite": "^8.0.1",                // clears HIGH (dev-server-only advisory)</span>
+<span class="add">+   "vite": "^8.0.16",</span>
+<span class="del">-   "postcss": "^8.5.8",             // clears MOD (build-time XSS)</span>
+<span class="add">+   "postcss": "^8.5.15",</span>
+  }
+</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">jsPDF API surface used (ALL 4 sites) — proves 3→4 compat (every call is stable across the major)</div>
+<pre>
+  new jsPDF({ orientation, unit, format })        // constructor — stable
+  pdf.addImage(imgData, 'JPEG'|'PNG', x,y,w,h, alias?, 'FAST'?)  // stable
+  pdf.addPage()                                   // stable
+  pdf.internal.pageSize.getWidth()                // stable
+  pdf.output('blob')  /  pdf.save(filename)       // stable
+
+  NOT USED: pdf.text() · addFont/addFileToVFS (Thai fonts go through html2canvas → image)
+            · AcroForm* · loadFile · setLanguage   ← the CRIT advisory's attack surfaces
+</pre>
+  <p style="font-size:0.85em;color:var(--tx-muted);margin:0.3em 0 0">The jspdf 4.0 breaking changes (ESM module shape, deprecated text/font internals) touch APIs we never call → low real risk despite being a "major". No <code>jspdf-autotable</code> dep (confirmed) → no plugin compat to manage.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Upgrade → verify → deploy (with Rule A safe-revert fallback)</div>
+  <p style="margin:0.2em 0">
+    <span class="flowbox">edit package.json (remove html2pdf, bump jspdf/vite/postcss)</span><span class="arrow">→</span>
+    <span class="flowbox">npm install (lockfile updates)</span><span class="arrow">→</span>
+    <span class="flowbox">npm run build (clean — vite 8.0.16 + jspdf 4)</span>
+  </p>
+  <p style="margin:0.5em 0">
+    <span class="arrow">→</span> <span class="flowbox">full vitest (V32 source-grep "no html2pdf import" stays green; no PDF-test regression)</span><span class="arrow">→</span>
+    <span class="flowbox">node API-compat script: exercise EVERY jsPDF call our code makes on v4 (new/addImage/addPage/output/internal) → no-throw</span>
+  </p>
+  <p style="margin:0.5em 0">
+    <span class="arrow">→</span> <span class="flowbox" style="border-color:#16a34a;background:#f0fdf4">L1 (Claude Preview, real browser): run the REAL <code>exportDocumentToPdf</code> engine → valid non-empty PDF blob renders</span><span class="arrow">→</span>
+    <span class="flowbox">npm audit: the 4 targeted advisories cleared</span><span class="arrow">→</span>
+    <span class="flowbox" style="border-color:#2563eb;background:#eff6ff">deploy vercel (build-only; no rules)</span>
+  </p>
+  <p style="margin:0.5em 0;color:var(--bad)"><strong>Fallback (Rule A):</strong> if build OR jsPDF render breaks → revert the jspdf bump to 3.x + document not-reachable (safe — the CRIT is not actually exploitable today). vite/postcss/html2pdf-remove stay (independent, safe).</p>
+</div>
+
+<h2>Architecture</h2>
+<p>Pure dependency-manifest change — no source logic touched (except possibly fixing the stale "Lazy-imports html2pdf.js" comment in <code>documentPrintEngine.js:477</code>, which already describes removed behavior). Units: <code>package.json</code> + <code>package-lock.json</code> + an optional <code>scripts/diag-ws2-jspdf4-compat.mjs</code> API-exercise. The 4 PDF-generation call sites (<code>documentPrintEngine.js</code>, <code>AppointmentHubView.jsx</code>, <code>ClinicReportTab.jsx</code>, <code>ExpenseReportTab.jsx</code>) are NOT edited — their API usage is already v4-compatible.</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Bump jspdf 3→4.2.1 + FULL verification (build + node API-compat + browser L1 render). Rule A revert to 3.x if rendering breaks (safe — vuln not reachable).</li>
+  <li><strong>Q2 = full scope:</strong> html2pdf (remove) + jspdf (bump) + vite (patch) + postcss (patch). firebase-admin 14 cluster deferred to a later chunk.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><code>npm run build</code> clean with vite 8.0.16 + jspdf 4 + postcss 8.5.15.</li>
+  <li>Full vitest green (V32 "no html2pdf import" guards still pass; no PDF-test regression).</li>
+  <li>node API-compat script exercises every jsPDF call our code makes on v4 with zero throw + valid PDF bytes.</li>
+  <li>L1 (real browser) — the actual <code>exportDocumentToPdf</code> engine produces a valid, non-empty, renderable PDF.</li>
+  <li><code>npm audit</code> no longer lists html2pdf.js / jspdf / vite / postcss advisories.</li>
+  <li>No new advisory introduced by the bumps.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>jspdf major breaks PDF rendering (primary):</strong> mitigated — the used API surface is stable across 3→4, no autotable plugin, + full build/node/L1 verification + Rule A safe-revert (the CRIT is not reachable, so reverting loses no real protection).</li>
+  <li><strong>vite 8.0.x patch changes build output:</strong> low — patch within the same major; build + smoke catch it.</li>
+  <li><strong>Deferred firebase-admin cluster:</strong> still shows MODERATE advisories in <code>npm audit</code> after WS2 (server-side, low reachability, fix = risky major). Tracked as a separate chunk.</li>
+</ul>
+
+</body>
+</html>

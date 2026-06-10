@@ -432,13 +432,16 @@ export async function generateQrDataUrl(text, { width = 120, margin = 2 } = {}) 
   return url;
 }
 
-// ─── Phase 14.8.C (2026-04-26) — PDF export via html2pdf.js ──────────────
+// ─── Phase 14.8.C (2026-04-26) — PDF export ─────────────────────────────
 // User directive (Tier 3 P1): "T3.c Phase 14.8.C PDF export".
 //
-// html2pdf.js renders an HTML string to a PDF blob via html2canvas + jsPDF.
-// We lazy-import the lib so it isn't in the main bundle (it's ~150 KB).
-// The produced PDF is a faithful render of buildPrintDocument's body —
-// same paper size, same fonts (browser default), same images.
+// WS2 (2026-06-10): comment corrected — V32 (2026-04-26) already replaced the
+// html2pdf.js orchestration with DIRECT html2canvas + jsPDF (see line ~621).
+// html2pdf.js was removed from package.json in WS2 (it was a dead dep + carried
+// a CRITICAL XSS advisory). We lazy-import html2canvas + jspdf so they stay out
+// of the main bundle. The produced PDF is a faithful render of
+// buildPrintDocument's body — same paper size, same fonts (browser default),
+// same images.
 //
 // Filename convention: <docTypeSlug>_<isoDate>_<HHmm>.pdf in user's locale.
 
@@ -474,7 +477,7 @@ export function pdfPaperConfig(paperSize = 'A4') {
 
 /**
  * Export a document template to PDF + trigger browser download.
- * Lazy-imports html2pdf.js so the lib stays out of the main bundle.
+ * Lazy-imports html2canvas + jspdf (direct, V32 — no html2pdf wrapper).
  *
  * @param {Object} opts
  * @param {Object} opts.template — same shape as printDocument template
