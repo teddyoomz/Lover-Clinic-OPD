@@ -94,6 +94,15 @@ async function main() {
   await probe('M2 form_templates LIST (enumeration)', 'DENIED', () =>
     getDocs(query(dataCol(db, 'form_templates'), limit(1))));
 
+  // ── C2-bis: clinic_settings/chat_config (LINE/FB channel SECRETS) ──────────
+  // was world-readable via the `clinic_settings/{settingId} read:if true`
+  // wildcard (C2 migrated readers to admin SDK but never added the rule).
+  await probe('C2-bis clinic_settings/chat_config GET (channel secrets)', 'DENIED', () =>
+    getDoc(dataDoc(db, 'clinic_settings', 'chat_config')));
+  // control: theme/logo/name doc MUST stay public (patient pages read pre-auth)
+  await probe('C2-bis clinic_settings/main GET (theme — must stay PUBLIC)', 'ALLOWED', () =>
+    getDoc(dataDoc(db, 'clinic_settings', 'main')));
+
   // ── Control: a PII collection must remain fully staff-only (anon get DENIED) ─
   await probe('CTRL be_customers GET (must stay staff-only)', 'DENIED', () =>
     getDoc(dataDoc(db, 'be_customers', 'ws1-probe')));
