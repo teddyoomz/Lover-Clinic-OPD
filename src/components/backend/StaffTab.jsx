@@ -13,6 +13,8 @@ import StaffFormModal from './StaffFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { STATUS_OPTIONS, POSITION_OPTIONS } from '../../lib/staffValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { countLiveBranchMemberships } from '../../lib/branchScopeUtils.js';
 
 const STATUS_BADGE = {
   'ใช้งาน':   { cls: 'bg-emerald-700/20 border-emerald-700/40 text-emerald-400' },
@@ -31,6 +33,10 @@ export default function StaffTab({ clinicSettings, theme }) {
   const [error, setError] = useState('');
   // Phase 13.5.3 — gate staff delete on user_management. Admin bypasses.
   const canDelete = useHasPermission('user_management');
+  // AV193 (2026-06-10) — live branch list for branch-count live-resolve.
+  // branchIds[] can carry orphan ids of deleted branches (Rule H soft-keep);
+  // the card must count only memberships that resolve in be_branches.
+  const { branches } = useSelectedBranch();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -194,8 +200,11 @@ export default function StaffTab({ clinicSettings, theme }) {
                       <ShieldCheck size={11} /> <span>Firebase account ใช้งานได้</span>
                     </div>
                   )}
-                  {Array.isArray(s.branchIds) && s.branchIds.length > 0 && (
-                    <div><span className="font-semibold">สาขา:</span> {s.branchIds.length} สาขา</div>
+                  {/* AV193 — live-resolved count; raw branchIds.length counted
+                      orphan ids of deleted branches (user saw 4 สาขา with only
+                      3 branches in the system). */}
+                  {countLiveBranchMemberships(s.branchIds, branches) > 0 && (
+                    <div><span className="font-semibold">สาขา:</span> {countLiveBranchMemberships(s.branchIds, branches)} สาขา</div>
                   )}
                 </div>
 

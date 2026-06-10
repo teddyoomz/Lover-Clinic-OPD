@@ -65,3 +65,39 @@ export function filterStaffByBranch(staffList, branchId) {
 export function filterDoctorsByBranch(doctorList, branchId) {
   return filterStaffByBranch(doctorList, branchId);
 }
+
+/**
+ * Count a staff/doctor's branch memberships that resolve against the LIVE
+ * branch list (AV193, 2026-06-10).
+ *
+ * Branch deletion does NOT cascade-clean `branchIds[]` on be_staff /
+ * be_doctors (Rule H soft-keep), so stored arrays can carry orphan ids —
+ * e.g. the V81 test-fixture branch `TEST-V81-TS-BR-…` that left OoMz + Mild
+ * showing "สาขา: 4 สาขา" while only 3 branches existed. Any UI that renders
+ * a branch-membership COUNT must use this instead of raw `branchIds.length`.
+ *
+ * - ids are deduped (a duplicate id is one membership)
+ * - branch docs match on `branchId` OR `id` (same chain BranchContext uses)
+ * - empty/not-loaded `branches` → raw unique-count fallback, so
+ *   provider-absent mounts (tests, early render) keep today's behavior
+ *   instead of flashing a misleading 0
+ *
+ * @param {string[] | null | undefined} branchIds — stored membership array
+ * @param {Array<{branchId?: string, id?: string}> | null | undefined} branches — live be_branches list
+ * @returns {number}
+ */
+export function countLiveBranchMemberships(branchIds, branches) {
+  if (!Array.isArray(branchIds)) return 0;
+  const ids = new Set(
+    branchIds.filter((x) => x !== null && x !== undefined && String(x) !== '').map((x) => String(x)),
+  );
+  if (ids.size === 0) return 0;
+  const live = Array.isArray(branches) ? branches : [];
+  const liveSet = new Set(
+    live.map((b) => String(b?.branchId || b?.id || '')).filter(Boolean),
+  );
+  if (liveSet.size === 0) return ids.size; // branch list not loaded — defensive raw fallback
+  let n = 0;
+  for (const id of ids) if (liveSet.has(id)) n++;
+  return n;
+}

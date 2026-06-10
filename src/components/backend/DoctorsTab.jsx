@@ -11,6 +11,8 @@ import DoctorFormModal from './DoctorFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { STATUS_OPTIONS, POSITION_OPTIONS } from '../../lib/doctorValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { countLiveBranchMemberships } from '../../lib/branchScopeUtils.js';
 
 const STATUS_BADGE = {
   'ใช้งาน':   { cls: 'bg-emerald-700/20 border-emerald-700/40 text-emerald-400' },
@@ -34,6 +36,9 @@ export default function DoctorsTab({ clinicSettings, theme }) {
   const [error, setError] = useState('');
   // Phase 13.5.3 — gate doctor delete on doctor_management. Admin bypasses.
   const canDelete = useHasPermission('doctor_management');
+  // AV193 (2026-06-10) — live branch list for branch-count live-resolve
+  // (mirror StaffTab; branchIds[] can carry orphan ids of deleted branches).
+  const { branches } = useSelectedBranch();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -198,8 +203,10 @@ export default function DoctorsTab({ clinicSettings, theme }) {
                       <ShieldCheck size={11} /> <span>Firebase account ใช้งานได้</span>
                     </div>
                   )}
-                  {Array.isArray(d.branchIds) && d.branchIds.length > 0 && (
-                    <div><span className="font-semibold">สาขา:</span> {d.branchIds.length} สาขา</div>
+                  {/* AV193 — live-resolved count (mirror StaffTab); raw
+                      branchIds.length counted orphan ids of deleted branches. */}
+                  {countLiveBranchMemberships(d.branchIds, branches) > 0 && (
+                    <div><span className="font-semibold">สาขา:</span> {countLiveBranchMemberships(d.branchIds, branches)} สาขา</div>
                   )}
                   {d.hourlyIncome != null && d.hourlyIncome !== '' && (
                     <div><span className="font-semibold">รายได้ต่อชม.:</span> {Number(d.hourlyIncome).toLocaleString('th-TH')} บาท</div>

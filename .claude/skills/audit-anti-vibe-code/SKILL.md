@@ -547,6 +547,14 @@ Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky
 2. The per-function dynamic imports are belt-and-suspenders (harmless local shadows) — fine to keep; never RELY on a static import that lacks the name.
 **Verification**: `tests/av192-courseutil-scope-execution-2026-06-09.test.js` — EXECUTES the real `adjustCourseRemainingQty` (reduce/add/cap/floor) with only the Firestore transaction boundary mocked (the `parseQtyString` import resolution is 100% real ESM) → RED on the omitted-import code, GREEN on the fix; AV192.7 locks the static-import list; AV192.8 is a CLASSIFIER over every backendClient function. (Source-grep alone — the old C1.6–C1.13 — could NOT catch this; execution is mandatory for a scope ReferenceError. V66 lesson.)
 
+### AV193 — Branch-membership counts rendered in UI MUST live-resolve against be_branches (orphan-FK display class; V47/AV25 family) (2026-06-10)
+**Why**: `branchIds[]` on be_staff / be_doctors is NOT cascade-cleaned when a branch is deleted (Rule H soft-keep) — stored arrays can carry orphan ids. 2026-06-10 user report: StaffTab showed "สาขา: 4 สาขา" for OoMz + Mild while only 3 branches existed; both docs carried the V81 test-fixture orphan `TEST-V81-TS-BR-1778958484080` and StaffTab/DoctorsTab rendered raw `branchIds.length`. Membership CHECKS (`isStaffAccessibleInBranch` / `filterStaffByBranch` / BranchContext intersections) are orphan-tolerant by construction (an orphan id never matches a live id) — only COUNT/LIST renders are vulnerable.
+**Grep** (forbidden — any = AV193 violation):
+- `branchIds\.length\}\s*สาขา` (or any JSX render of raw `branchIds.length` as a branch count) in `src/components/`.
+**Canonical pattern**: `countLiveBranchMemberships(person.branchIds, branches)` from `src/lib/branchScopeUtils.js` with `branches` from `useSelectedBranch()` — dedups ids, matches `branchId || id`, raw-fallback only when the branch list is empty/not loaded.
+**Sanctioned exceptions**: NONE for count renders. Membership-check consumers (`.some`/intersection against live ids) are out of scope by construction.
+**Verification**: `tests/staff-doctor-branch-count-live-resolve.test.js` — L1 unit (prod repro: 4 ids incl. orphan → 3) + G source-grep (both tabs use the helper; anti-regression on the raw render) + C1 classifier (recursive scan: zero raw-count renders in src/) + M Rule M decision-helper unit. Data heal: `scripts/cleanup-orphan-staff-branchids.mjs` (two-phase, forensic `_branchIdsOrphanRemoved`, audit doc, idempotent).
+
 ## How to run
 
 1. Run each grep pattern; classify hits.
