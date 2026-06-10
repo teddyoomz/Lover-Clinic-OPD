@@ -115,7 +115,7 @@ default workflow is local-only (per `feedback_local_only_no_deploy.md`).
 both atomically. Both rule files must be probe-tested.
 
 ทุกครั้งที่จะ `firebase deploy --only firestore:rules` — ไม่มีข้อยกเว้น:
-1. `curl -X POST $BASE/$PREFIX/chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
+1. **WS1 (2026-06-10) — EXPECTATION FLIPPED 200 → 403.** `curl -X POST $BASE/$PREFIX/chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → **ต้อง 403** (was 200 pre-WS1). H1 tightened `chat_conversations create/update` from `if true` → `isClinicStaff()`; the webhook now writes via firebase-admin SDK (bypasses rules), so an UNAUTH REST POST is no longer a legitimate path — 403 is the INTENDED state. A 200 here now = the rule REGRESSED back to `if true` (revert). The canonical WS1 lockdown probe is the client-SDK script `node scripts/diag-ws1-anon-lockdown.mjs` (Rule Q L2) — it asserts anon LIST/forge DENIED + patient get/create ALLOWED in one run.
 
 **V50-followup-2 (2026-05-08) — probes 2/3/4 REMOVED**: pc_appointments,
 clinic_settings/proclinic_session, clinic_settings/proclinic_session_trial.

@@ -113,8 +113,12 @@ describe('ChartTemplateSelector — persistence rewrite (per-doc + Storage)', ()
   it('R1 firestore.rules has be_chart_templates block (writes were silent-denied pre-fix)', () => {
     expect(FRULES).toMatch(/match \/be_chart_templates\/\{templateId\}/);
     // Patients reach via TFP — read on isSignedIn (incl. anon-auth patients).
-    expect(FRULES).toMatch(/match \/be_chart_templates[\s\S]{0,200}allow read:\s*if isSignedIn\(\)/);
-    expect(FRULES).toMatch(/match \/be_chart_templates[\s\S]{0,200}allow write:\s*if isClinicStaff\(\)/);
+    // WS1 (2026-06-10) — window widened 200 -> 700 to accommodate the WS1 M2
+    // doc-comment block explaining why be_chart_templates KEEPS signed-in read
+    // (ChartTemplateSelector lists it; low-PII residual). Behavior unchanged:
+    // read = isSignedIn(), write = isClinicStaff() — the assertions still lock that.
+    expect(FRULES).toMatch(/match \/be_chart_templates[\s\S]{0,700}allow read:\s*if isSignedIn\(\)/);
+    expect(FRULES).toMatch(/match \/be_chart_templates[\s\S]{0,700}allow write:\s*if isClinicStaff\(\)/);
   });
 
   it('R2 storage.rules has chart-templates/{file=**} block (image-only, 10MB, staff-write)', () => {
