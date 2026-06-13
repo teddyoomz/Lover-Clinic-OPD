@@ -71,22 +71,21 @@ describe('V75 Item 3 — fbConfigClient (direct Firestore client SDK)', () => {
     expect(r).toBe(null);
   });
 
-  it('FC1.4 — getFbConfig auto-seeds นครราชสีมา from legacy clinic_settings/chat_config', async () => {
-    // be_fb_configs/{BR-NAKHON} → not exists
-    mockGetDoc.mockResolvedValueOnce({ exists: () => false });
-    // be_branches/{BR-NAKHON} → name === นครราชสีมา
-    mockGetDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ name: 'นครราชสีมา' }) });
-    // clinic_settings/chat_config → exists with legacy FB cred
-    mockGetDoc.mockResolvedValueOnce({
-      exists: () => true,
-      data: () => ({ fbPageId: 'LEGACY-PID', fbAccessToken: 'LEGACY-TOK' }),
-    });
+  it('FC1.4 — getFbConfig does NOT auto-seed from clinic_settings/chat_config (AV195) — returns null when no per-branch doc', async () => {
+    // 2026-06-13 (AV195) — the legacy auto-seed from the secret-bearing
+    // clinic_settings/chat_config was REMOVED (its client read is rule-denied by
+    // WS1-C2-bis + it held the OLD secrets being rotated). getFbConfig now ONLY
+    // reads be_fb_configs and returns null when absent — NEVER touches chat_config.
+    // be_fb_configs/{BR-NAKHON} → not exists; NO further reads must follow.
+    // mockReset (not just clear) → robust to any persistent impl leaked by a
+    // sibling test running first in this shared-module file.
+    mockGetDoc.mockReset();
+    mockGetDoc.mockResolvedValue({ exists: () => false });
     const { getFbConfig } = await import('../src/lib/fbConfigClient.js');
     const r = await getFbConfig('BR-NAKHON');
-    expect(r.pageId).toBe('LEGACY-PID');
-    expect(r.pageAccessToken).toBe('LEGACY-TOK');
-    expect(r._autoSeeded).toBe(true);
-    expect(r.enabled).toBe(false); // admin must explicitly save to enable
+    expect(r).toBe(null);
+    // exactly ONE getDoc (be_fb_configs) — no be_branches probe, no chat_config read
+    expect(mockGetDoc).toHaveBeenCalledTimes(1);
   });
 
   it('FC1.5 — saveFbConfig calls setDoc with merge:true + strips _autoSeeded marker', async () => {

@@ -1,9 +1,10 @@
 // src/components/backend/FbSettingsTab.jsx
 // V75 Item 3 — Per-branch FB Page settings.
 // Mirrors LineSettingsTab.jsx structure but for be_fb_configs/{branchId}.
-// Auto-seed banner when first opened for นครราชสีมา (legacy
-// clinic_settings/chat_config). fbConfigClient uses direct Firestore (Task 13
-// was DROPPED — no /api/admin/fb-config-by-branch endpoint); only the
+// (2026-06-13 AV195 — the legacy auto-seed banner from clinic_settings/chat_config
+// was removed; that client read is rule-denied by WS1-C2-bis. Admin configures
+// each branch's FB credentials manually.) fbConfigClient uses direct Firestore
+// (Task 13 was DROPPED — no /api/admin/fb-config-by-branch endpoint); only the
 // connection-test path goes through /api/admin/fb-test (CORS-proxy).
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21,7 +22,6 @@ const EMPTY_CFG = { ...DEFAULT_FB_CONFIG };
 export default function FbSettingsTab() {
   const { branchId, branch } = useSelectedBranch();
   const [cfg, setCfg] = useState(EMPTY_CFG);
-  const [autoSeeded, setAutoSeeded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showToken, setShowToken] = useState(false);
@@ -41,7 +41,6 @@ export default function FbSettingsTab() {
       const data = await getFbConfig(branchId);
       if (!data) {
         setCfg({ ...EMPTY_CFG });
-        setAutoSeeded(false);
         return;
       }
       setCfg({
@@ -52,7 +51,6 @@ export default function FbSettingsTab() {
         displayName: data.displayName || '',
         enabled: !!data.enabled,
       });
-      setAutoSeeded(!!data._autoSeeded);
     } catch (e) {
       setError(e?.message || 'โหลดข้อมูลล้มเหลว');
     } finally {
@@ -123,14 +121,6 @@ export default function FbSettingsTab() {
         📘 ตั้งค่า FB Page — สาขา {branch?.name || branchId || '—'}
       </h2>
 
-      {autoSeeded && (
-        <div
-          className="rounded border border-amber-500/40 bg-amber-950/30 p-3 text-amber-200"
-          data-testid="fb-auto-seed-banner"
-        >
-          🔄 ดึงค่าจาก clinic_settings/chat_config — กดบันทึกเพื่อยืนยันการตั้งค่าสำหรับสาขานี้
-        </div>
-      )}
 
       <section>
         <h3 className="font-semibold">Channel credentials</h3>

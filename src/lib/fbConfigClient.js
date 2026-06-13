@@ -9,9 +9,7 @@
 // for signature verification + reply.
 //
 // Read/write contract:
-//   - getFbConfig(branchId) → single doc, null if not yet configured
-//     (auto-seed for นครราชสีมา from legacy clinic_settings/chat_config
-//      with _autoSeeded:true flag on first read)
+//   - getFbConfig(branchId) → single be_fb_configs doc, null if not configured
 //   - saveFbConfig(branchId, data) → setDoc({merge:true})
 //   - listenToFbConfig(branchId, onChange, onError) → onSnapshot
 //   - findFbConfigByPageId(pageId) → for webhook routing
@@ -49,13 +47,6 @@ function fbConfigsColRef() {
   return collection(db, 'artifacts', appId, 'public', 'data', 'be_fb_configs');
 }
 
-function branchDocRef(branchId) {
-  return doc(db, 'artifacts', appId, 'public', 'data', 'be_branches', branchId);
-}
-
-function legacyChatConfigRef() {
-  return doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'chat_config');
-}
 
 export function mergeFbConfigDefaults(raw) {
   return { ...DEFAULT_FB_CONFIG, ...(raw || {}) };
@@ -84,10 +75,10 @@ export function validateFbConfig(cfg) {
 }
 
 /**
- * Read a branch's FB config. Auto-seeds นครราชสีมา from legacy
- * clinic_settings/chat_config on first access (silent migration; admin sees
- * pre-populated form). Returns null when branch hasn't been configured AND
- * no legacy fallback applies.
+ * Read a branch's FB config from be_fb_configs. Returns null when the branch
+ * has no per-branch config doc yet (admin configures it via FbSettingsTab).
+ * (2026-06-13 AV195 — the legacy auto-seed from the secret-bearing
+ * clinic_settings doc was removed; that client read is rule-denied by C2-bis.)
  */
 export async function getFbConfig(branchId) {
   if (!branchId) return null;
@@ -96,23 +87,13 @@ export async function getFbConfig(branchId) {
     if (snap.exists()) {
       return mergeFbConfigDefaults(snap.data() || {});
     }
-    // Auto-seed: only for นครราชสีมา branch
-    const branchSnap = await getDoc(branchDocRef(branchId));
-    if (branchSnap.exists() && branchSnap.data()?.name === 'นครราชสีมา') {
-      const legacySnap = await getDoc(legacyChatConfigRef());
-      if (legacySnap.exists()) {
-        const legacy = legacySnap.data() || {};
-        return mergeFbConfigDefaults({
-          pageId: legacy.fbPageId || '',
-          pageAccessToken: legacy.fbAccessToken || '',
-          appSecret: legacy.fbAppSecret || '',
-          verifyToken: legacy.fbVerifyToken || '',
-          displayName: legacy.fbDisplayName || 'Lover Clinic นครราชสีมา',
-          enabled: false, // admin must explicitly save to enable
-          _autoSeeded: true,
-        });
-      }
-    }
+    // 2026-06-13 cleanup (AV195) — the legacy auto-seed from
+    // clinic_settings/chat_config was REMOVED. That client-SDK read is denied
+    // by WS1-C2-bis (chat_config holds LINE/FB SECRETS — staff-admin-SDK only),
+    // so it only ever returned null + a console permission-denied. Worse,
+    // chat_config holds the OLD secrets that are being rotated, so pre-filling
+    // from it would seed stale/compromised values. Admin enters FB config per
+    // branch via FbSettingsTab (manual inputs already present).
     return null;
   } catch {
     return null;
@@ -156,8 +137,6 @@ export async function saveFbConfig(branchId, data) {
     throw new Error('saveFbConfig: ' + validation.errors.join('; '));
   }
   const payload = normalizeFbConfigForWrite({ ...(data || {}), branchId });
-  // Strip auto-seed marker before write (server doesn't need this state stamp)
-  delete payload._autoSeeded;
   await setDoc(fbConfigDocRef(branchId), payload, { merge: true });
   return { branchId, ...payload };
 }

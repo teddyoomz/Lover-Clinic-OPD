@@ -406,7 +406,6 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const [historyDetail, setHistoryDetail] = useState(null); // selected history item to view messages
   const [historyMsgs, setHistoryMsgs] = useState([]);
   const [historyMsgsLoading, setHistoryMsgsLoading] = useState(false);
-  const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
   const [resolvingId, setResolvingId] = useState(null);
   // V75 Item 4 — per-device chat-tab notification mute (localStorage; doctor
@@ -437,16 +436,6 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
     const unsubFb = listenToFbConfig(selectedBranchId, setFbConfig, () => setFbConfig(null));
     return () => { unsubLine?.(); unsubFb?.(); };
   }, [selectedBranchId]);
-
-  // Legacy fallback — kept for envs where per-branch be_line_configs /
-  // be_fb_configs hasn't been seeded yet. Used ONLY when selectedBranchId
-  // has no per-branch config (returns null). Read once on mount.
-  useEffect(() => {
-    const configRef = doc(db, `artifacts/${appId}/public/data/clinic_settings`, 'chat_config');
-    return onSnapshot(configRef, snap => {
-      setChatConfig(snap.data() || null);
-    });
-  }, [db, appId]);
 
   // V75 Item 3 (2026-05-16) — chat_conversations listener through Layer 2
   // wrapper (BS-17). Uses allBranches:true + client-side filter so that
@@ -656,20 +645,14 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const filtered = filter === 'all' ? conversations : conversations.filter(c => c.platform === filter);
 
   // V78 BUG-CHAT-4 + V79 strict-isolation gate: per-branch enable flags.
-  // Legacy single-tenant chat_config fallback ONLY applies when the
-  // selected branch is the legacy นครราชสีมา branch (HARDCODED_NAKHON_BR_ID).
-  // Pre-V79 the `??` fallback applied universally → admin in พระราม 3 saw
-  // นครราชสีมา's enable flags via legacy chat_config. NOW: other branches
-  // strictly require be_line_configs/be_fb_configs doc to enable pills.
-  const allowLegacyFallback = isLegacyNakhonBranch(selectedBranchId);
-  const lineEnabled = !!(
-    lineConfig?.enabled
-    ?? (allowLegacyFallback ? chatConfig?.line?.enabled : undefined)
-  );
-  const fbEnabled = !!(
-    fbConfig?.enabled
-    ?? (allowLegacyFallback ? chatConfig?.facebook?.enabled : undefined)
-  );
+  // 2026-06-13 cleanup (AV195) — the legacy single-tenant chat_config fallback
+  // was REMOVED. Its client-SDK read is denied by WS1-C2-bis (chat_config holds
+  // LINE/FB secrets → staff-admin-SDK only), so the fallback was already always
+  // null (+ a console permission-denied on every mount). Every branch is
+  // configured via per-branch be_line_configs / be_fb_configs (V75); enable
+  // pills now derive SOLELY from per-branch config — behaviour-preserving.
+  const lineEnabled = !!lineConfig?.enabled;
+  const fbEnabled = !!fbConfig?.enabled;
   const noPlatformConfigured = !lineEnabled && !fbEnabled;
 
   function formatContactTime(ts) {

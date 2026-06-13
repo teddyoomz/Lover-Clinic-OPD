@@ -90,23 +90,24 @@ describe('V79.A4 — ChatPanel passes selectedBranchId to ChatDetailView', () =>
   });
 });
 
-describe('V79.A5 — lineEnabled/fbEnabled strict per-branch (NAKHON-gated legacy)', () => {
+describe('V79.A5 — lineEnabled/fbEnabled strict per-branch (AV195: legacy chat_config fallback REMOVED)', () => {
   const src = READ('src/components/ChatPanel.jsx');
 
-  it('A5.1: imports isLegacyNakhonBranch helper', () => {
+  it('A5.1: imports isLegacyNakhonBranch helper (still used by chat_history fall-through)', () => {
     expect(src).toMatch(/import\s*\{[^}]*isLegacyNakhonBranch[^}]*\}\s*from\s*['"]\.\.\/lib\/chatBranchDefaults\.js['"]/);
   });
 
-  it('A5.2: allowLegacyFallback gates on selectedBranchId === NAKHON', () => {
-    expect(src).toMatch(/allowLegacyFallback\s*=\s*isLegacyNakhonBranch\(selectedBranchId\)/);
+  it('A5.2: no allowLegacyFallback / chatConfig (AV195 — secret chat_config read removed → fallback gone, leak impossible)', () => {
+    expect(src).not.toMatch(/allowLegacyFallback/);
+    expect(src).not.toMatch(/chatConfig/);
   });
 
-  it('A5.3: lineEnabled uses ?? with allowLegacyFallback gate', () => {
-    expect(src).toMatch(/lineEnabled\s*=\s*!!\([\s\S]{0,200}allowLegacyFallback\s*\?\s*chatConfig\?\.line\?\.enabled\s*:\s*undefined/);
+  it('A5.3: lineEnabled derives SOLELY from per-branch lineConfig', () => {
+    expect(src).toMatch(/lineEnabled\s*=\s*!!lineConfig\?\.enabled/);
   });
 
-  it('A5.4: fbEnabled uses same gated pattern', () => {
-    expect(src).toMatch(/fbEnabled\s*=\s*!!\([\s\S]{0,200}allowLegacyFallback\s*\?\s*chatConfig\?\.facebook\?\.enabled\s*:\s*undefined/);
+  it('A5.4: fbEnabled derives SOLELY from per-branch fbConfig', () => {
+    expect(src).toMatch(/fbEnabled\s*=\s*!!fbConfig\?\.enabled/);
   });
 });
 
@@ -191,23 +192,22 @@ describe('V79.B1 — useChatUnread per-branch filter (Rule I behavioral)', () =>
   });
 });
 
-describe('V79.B2 — lineEnabled/fbEnabled strict isolation per-branch', () => {
-  // Pure simulate of V79 lineEnabled logic
-  function simulateLineEnabled({ lineConfig, chatConfig, selectedBranchId }) {
-    const allowLegacyFallback = selectedBranchId === NAKHON;
-    return !!(
-      lineConfig?.enabled
-      ?? (allowLegacyFallback ? chatConfig?.line?.enabled : undefined)
-    );
+describe('V79.B2 — lineEnabled/fbEnabled strict isolation per-branch (AV195: no legacy fallback)', () => {
+  // Pure simulate of the AV195 lineEnabled logic — derives SOLELY from the
+  // per-branch lineConfig; the legacy chat_config fallback (which read the
+  // secret doc client-side) was removed, so NO branch — not even NAKHON —
+  // falls back. Cross-branch leak is now impossible by construction.
+  function simulateLineEnabled({ lineConfig }) {
+    return !!lineConfig?.enabled;
   }
 
-  it('B2.1: NAKHON branch + no per-branch config + legacy enabled → TRUE (gated fallback)', () => {
+  it('B2.1: NAKHON branch + no per-branch config → FALSE (AV195 — legacy fallback removed, no leak possible)', () => {
     const r = simulateLineEnabled({
       lineConfig: null,
-      chatConfig: { line: { enabled: true } },
+      chatConfig: { line: { enabled: true } }, // legacy now IGNORED
       selectedBranchId: NAKHON,
     });
-    expect(r).toBe(true);
+    expect(r).toBe(false);
   });
 
   it('B2.2: PRAM3 branch + no per-branch config + legacy enabled → FALSE (strict)', () => {

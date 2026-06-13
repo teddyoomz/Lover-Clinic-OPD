@@ -81,9 +81,12 @@ describe('V75 Item 3 — FbSettingsTab UI', () => {
     expect(screen.getByText(/บันทึก/)).toBeInTheDocument();
   });
 
-  it('FST1.2 — _autoSeeded:true shows banner', async () => {
+  it('FST1.2 — no auto-seed banner (AV195 — legacy chat_config auto-seed removed)', async () => {
+    // 2026-06-13 (AV195) — the auto-seed banner was removed; getFbConfig never
+    // returns _autoSeeded anymore. Even if a config arrives with a stray
+    // _autoSeeded flag, FbSettingsTab must NOT render the legacy banner.
     mockGetFbConfig.mockResolvedValueOnce({
-      pageId: 'LEGACY-PAGE',
+      pageId: 'PAGE',
       pageAccessToken: 'tok',
       appSecret: '',
       verifyToken: '',
@@ -92,10 +95,8 @@ describe('V75 Item 3 — FbSettingsTab UI', () => {
       _autoSeeded: true,
     });
     render(<FbSettingsTab />);
-    await waitFor(() =>
-      expect(screen.getByTestId('fb-auto-seed-banner')).toBeInTheDocument()
-    );
-    expect(screen.getByText(/ดึงค่าจาก clinic_settings\/chat_config/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/บันทึก/)).toBeInTheDocument());
+    expect(screen.queryByTestId('fb-auto-seed-banner')).not.toBeInTheDocument();
   });
 
   it('FST1.3 — save button calls saveFbConfig(branchId, cfg) with edited fields', async () => {

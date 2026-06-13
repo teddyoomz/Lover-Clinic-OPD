@@ -140,16 +140,17 @@ describe('V78 BUG-CHAT-4 — ChatPanel per-branch LINE+FB configs', () => {
     expect(block).not.toBeNull();
   });
 
-  it('CHAT-4.3 — lineEnabled prefers lineConfig.enabled (V79: gated legacy fallback)', () => {
-    // V79 strict-isolation: legacy fallback gated to NAKHON via
-    // `allowLegacyFallback ? chatConfig?.line?.enabled : undefined`.
-    // Pre-V79: `lineConfig?.enabled ?? chatConfig?.line?.enabled` (UNIVERSAL fallback — leak).
-    // Both shapes prefer lineConfig.enabled; the difference is fallback gating.
-    expect(src).toMatch(/lineConfig\?\.enabled[\s\S]{0,200}allowLegacyFallback\s*\?\s*chatConfig\?\.line\?\.enabled/);
+  it('CHAT-4.3 — lineEnabled derives SOLELY from per-branch lineConfig (AV195: legacy chat_config fallback removed)', () => {
+    // 2026-06-13 (AV195) — the legacy chat_config fallback was removed (its
+    // client read is rule-denied by WS1-C2-bis). Enable now = per-branch only,
+    // so cross-branch leak is impossible by construction.
+    expect(src).toMatch(/lineEnabled\s*=\s*!!lineConfig\?\.enabled/);
+    expect(src).not.toMatch(/allowLegacyFallback/);
   });
 
-  it('CHAT-4.4 — fbEnabled prefers fbConfig.enabled (V79: gated legacy fallback)', () => {
-    expect(src).toMatch(/fbConfig\?\.enabled[\s\S]{0,200}allowLegacyFallback\s*\?\s*chatConfig\?\.facebook\?\.enabled/);
+  it('CHAT-4.4 — fbEnabled derives SOLELY from per-branch fbConfig (AV195)', () => {
+    expect(src).toMatch(/fbEnabled\s*=\s*!!fbConfig\?\.enabled/);
+    expect(src).not.toMatch(/chatConfig/);
   });
 });
 

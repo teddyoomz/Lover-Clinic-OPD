@@ -142,15 +142,17 @@ describe('V75 Item 3 CONTINUITY — นครราชสีมา zero-action v
     });
   });
 
-  describe('C4 — Settings auto-seed continuity', () => {
-    it('C4.1 — fbConfigClient auto-seeds NAKHON from clinic_settings/chat_config (silent migration contract)', () => {
-      // fbConfigClient direct-Firestore path (Task 13 DROPPED — no endpoint).
+  describe('C4 — Settings config (AV195: legacy chat_config auto-seed REMOVED)', () => {
+    // 2026-06-13 (AV195) — the V75 auto-seed (read the secret-bearing
+    // clinic_settings/chat_config client-side to pre-fill นครราชสีมา's FB config)
+    // was REMOVED: that read is rule-denied by WS1-C2-bis (chat_config = secrets,
+    // admin-SDK only) and held the OLD secrets being rotated. Admin configures
+    // each branch manually. These tests now lock the REMOVAL.
+    it('C4.1 — fbConfigClient does NOT auto-seed from chat_config (no legacyChatConfigRef / _autoSeeded / chat_config read)', () => {
       const src = fs.readFileSync('src/lib/fbConfigClient.js', 'utf8');
-      // Auto-seed contract: branchSnap.data().name === 'นครราชสีมา' triggers
-      // legacyChatConfigRef read + returns _autoSeeded:true
-      expect(src).toMatch(/นครราชสีมา/);
-      expect(src).toMatch(/_autoSeeded/);
-      expect(src).toMatch(/legacyChatConfigRef|clinic_settings/);
+      expect(src).not.toMatch(/legacyChatConfigRef/);
+      expect(src).not.toMatch(/_autoSeeded/);
+      expect(src).not.toMatch(/['"]chat_config['"]/);
     });
 
     it('C4.2 — LineSettingsTab unchanged (already per-branch via be_line_configs)', () => {
@@ -159,10 +161,11 @@ describe('V75 Item 3 CONTINUITY — นครราชสีมา zero-action v
       expect(src).toMatch(/lineConfigClient|getLineConfigForBranch|getLineConfig\b/);
     });
 
-    it('C4.3 — FbSettingsTab renders auto-seed banner via data-testid (V75 contract)', () => {
+    it('C4.3 — FbSettingsTab no longer renders the dead auto-seed banner', () => {
       const src = fs.readFileSync('src/components/backend/FbSettingsTab.jsx', 'utf8');
-      expect(src).toMatch(/data-testid="fb-auto-seed-banner"/);
-      expect(src).toMatch(/clinic_settings\/chat_config/);
+      expect(src).not.toMatch(/data-testid="fb-auto-seed-banner"/);
+      expect(src).not.toMatch(/autoSeeded/);
+      // (live client read of chat_config is guarded project-wide by AV195.B1)
     });
   });
 
