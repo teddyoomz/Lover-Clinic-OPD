@@ -15,6 +15,7 @@ import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } fr
 // real-time redundant-0-lot auto-clear. Same plan the 03:45 cron runs.
 import { planLotCleanup } from './stockLotCleanupCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
+import { pickKioskAssessmentFields } from './kioskAssessmentFields.js'; // AV194 — carry kiosk perf/hormone assessment fields through the patientData projection
 import { roundTHB } from './financeUtils.js'; // V156 — defensive money rounding at the write boundary (closes M12 caveat)
 import { decideApptStatusServiceSync } from './appointmentDisplay.js';
 // AP1/AP1-bis slot-key builders extracted (2026-06-03, appointment-loop R1) so
@@ -406,6 +407,15 @@ function buildPatientDataFromForm(form) {
   if (form.hrt_trans_type) pd.hrtTransType = form.hrt_trans_type;
   if (form.hrt_other_detail) pd.hrtOtherDetail = form.hrt_other_detail;
 
+  // 2026-06-13 (AV194) — carry the kiosk perf/hormone assessment dataset
+  // (Part1 symp_pe / ADAM adam_1..10 / IIEF-5 iief_1..5 / MRS mrs_1..11) onto
+  // patientData under the SAME names the intake-view reader (AdminDashboard
+  // perf sections + renderAdamSection/renderIiefSection/renderMrsSection) reads.
+  // Pre-fix these were dropped → saved-customer intake showed 0 / ไม่มี /
+  // "ข้อมูลไม่ครบถ้วน". Same class as V141/AV162 (visit_reasons). Only
+  // meaningful answers are carried (helper drops false/empty → lean).
+  Object.assign(pd, pickKioskAssessmentFields(form));
+
   // Emergency contacts (camelCase aliases)
   if (form.contact_1_firstname) pd.emergencyName = form.contact_1_firstname + (form.contact_1_lastname ? ` ${form.contact_1_lastname}` : '');
   if (form.contact_1_telephone_number) pd.emergencyPhone = form.contact_1_telephone_number;
@@ -524,6 +534,11 @@ function buildFormFromCustomer(customer) {
     hrt_goals: Array.isArray(pd.hrtGoals) ? pd.hrtGoals : [],
     hrt_trans_type: pick('hrt_trans_type', 'hrtTransType'),
     hrt_other_detail: pick('hrt_other_detail', 'hrtOtherDetail'),
+    // 2026-06-13 (AV194) — round-trip the kiosk assessment dataset (same-name,
+    // already underscore-keyed) so a backend edit re-save preserves it (the
+    // edit form has no assessment inputs; without this, re-save drops them).
+    // Mirrors the V141 visit_reasons round-trip. Reads from patientData.
+    ...pickKioskAssessmentFields(pd),
     like_note: pick('like_note', 'likeNote'),
     dislike_note: pick('dislike_note', 'dislikeNote'),
     receipt_type: pick('receipt_type', 'receiptType'),

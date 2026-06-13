@@ -20,6 +20,7 @@
 
 import { generateClinicalSummary } from '../utils.js';
 import { derivePatientCongenitalDisease } from './patientHealthMapping.js';
+import { pickKioskAssessmentFields } from './kioskAssessmentFields.js';
 
 /**
  * Convert kiosk PatientForm patientData → canonical snake_case customer form.
@@ -182,6 +183,16 @@ export function kioskPatientToCanonical(d, opts = {}) {
 
     // Free-text note (clinicalSummary; emergency relation moved out)
     note: noteStr,
+
+    // 2026-06-13 (AV194) — carry the kiosk perf/hormone assessment dataset
+    // (Part1 symp_pe / ADAM adam_1..10 / IIEF-5 iief_1..5 / MRS mrs_1..11)
+    // through the projection so be_customers.patientData retains it. The
+    // intake-view reader (AdminDashboard "บันทึกข้อมูลรับเข้า" perf sections)
+    // reads patientData.{symp_pe,adam_*,iief_*,mrs_*}; pre-fix this projection
+    // dropped them → saved customers showed 0 / ไม่มี / "ข้อมูลไม่ครบถ้วน".
+    // Same class as V141/AV162 (visit_reasons dropped → blank intake). Keys are
+    // underscore-cased (no camelCase leak onto the root doc — Phase 23.0).
+    ...pickKioskAssessmentFields(d),
   };
 
   // Strip empty strings ONLY for fields that should not exist when blank
