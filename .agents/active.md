@@ -1,19 +1,23 @@
 ---
-updated_at: "2026-06-14 EOD — AV193 branch-count + AV194 perf-assessment projection + Rule M backfill (28) + AV195 chat_config cleanup; ALL DEPLOYED; suite 16386/0 (first fully-green)."
-status: "DEPLOYED LIVE (frontend 201bd106 vercel + firestore.rules e5418722 unchanged). All today's work frontend-only — vercel-only, no Probe-Deploy-Probe. Full vitest 16386/0."
+updated_at: "2026-06-15 — appt-hub 'ย้อนหลัง 30 วัน' past tab now newest-first (yesterday at top, DESC); DEPLOYED. suite 16398/0."
+status: "DEPLOYED LIVE (frontend f302216c vercel + firestore.rules e5418722 unchanged). Frontend-only — vercel-only, no Probe-Deploy-Probe. Full vitest 16398/0."
 branch: "master"
-last_commit: "201bd106 — test: 3 long-standing flakes made deterministic (16386/0) + Rule R backup-search diag"
+last_commit: "f302216c — fix(appt-hub): past tab sorts newest-first (sortApptsByDateTimeDesc; activeTab==='past'→DESC)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "frontend = 201bd106 LIVE (HTTP 200); firestore.rules = e5418722 LIVE (C2-bis, unchanged this session)."
-firestore_rules_version: "WS1 + C2-bis (unchanged 2026-06-14). chat_config read excluded (settingId != 'chat_config')."
-tests: "16386 / 0 (full vitest, last run this session — fully green)."
+production_commit: "frontend = f302216c LIVE (HTTP 200); firestore.rules = e5418722 LIVE (C2-bis, unchanged)."
+firestore_rules_version: "WS1 + C2-bis (unchanged). chat_config read excluded (settingId != 'chat_config')."
+tests: "16398 / 0 (full vitest, exit-0 this session — fully green; +12: F10 desc-helper ×9 + F11 source-grep ×3)."
 ---
 
-# Active — 2026-06-14 EOD — AV193/194/195 + perf backfill
+# Active — 2026-06-15 — appt-hub past-tab sort flip (DESC) DEPLOYED
 
 ## State
-- prod LIVE: vercel `201bd106` + firebase rules `e5418722` (unchanged). Tree clean. All today's work frontend-only.
-- Full vitest **16386/0** — first fully-green (3 prior flakes made deterministic this session).
+- prod LIVE: vercel `f302216c` + firebase rules `e5418722` (unchanged). Tree clean. Frontend-only.
+- Full vitest **16398/0** (exit-0). Build clean.
+- `/systematic-debugging`: appt-hub "ย้อนหลัง 30 วัน" tab routed `sortApptsByDateTimeAsc`→`sortApptsByDateTimeDesc` (yesterday at top, descending into the past). Upcoming tabs (tomorrow/future/opd-pending) stay ASC; today stays confirmed-first. Print PDF inherits (buildPrintRows no re-sort). Isolated per-tab fix — no class-of-bug siblings.
+- L1 (yesterday-at-top on live past tab w/ real ≤30d appts) = USER hands-on; comparator + routing + build L2-verified.
+
+## Prior (2026-06-14 EOD — AV193/194/195 + perf backfill)
 - 2 prod data mutations idempotent + stable (orphan-branchIds, perf backfill 28). 0 drift.
 
 ## What this session shipped (detail → checkpoint 2026-06-14-av193-194-195-perf-and-chatconfig.md)
