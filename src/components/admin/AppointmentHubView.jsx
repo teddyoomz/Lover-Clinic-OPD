@@ -28,6 +28,7 @@ import {
   applyTabFilter,
   dateRangeForTab,
   sortApptsByDateTimeAsc,
+  sortApptsByDateTimeDesc,   // ③ (2026-06-14) — ย้อนหลัง 30 วัน = newest first
   sortApptsConfirmedFirst,   // ① (2026-05-31)
 } from '../../lib/appointmentHubFilters.js';
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
@@ -373,6 +374,7 @@ export default function AppointmentHubView({
   // Per-tab filtered list (active tab)
   // V64-fix9 (2026-05-09): sort by date+startTime ASC via sortApptsByDateTimeAsc
   // — earliest queue first at top. User: "เรียงแบบลูกค้าที่จะต้องมาถึงก่อนอยู่บน".
+  // ③ (2026-06-14): the past tab inverts to DESC (newest first) — see sort below.
   const filteredAppts = useMemo(() => {
     const filtered = applyTabFilter(appts, {
       tab: activeTab,
@@ -387,11 +389,16 @@ export default function AppointmentHubView({
     const scoped = activeTab === 'opd-pending'
       ? filtered.filter(a => isAppointmentOpdPending({ appt: a, linkedSession: resolveLinkedSession ? resolveLinkedSession(a) : null }))
       : filtered;
-    // ① (2026-05-31) — today tab surfaces confirmed-active rows first (then time);
-    // other tabs keep pure time order.
+    // ① (2026-05-31) — today tab surfaces confirmed-active rows first (then time).
+    // ③ (2026-06-14) — the "ย้อนหลัง 30 วัน" (past) tab is recency-first: yesterday
+    // at the top, descending into the past (DESC). Upcoming tabs (tomorrow/future/
+    // opd-pending) keep "soonest queue first" (ASC). The print PDF inherits this
+    // order (buildPrintRows maps filteredAppts without re-sorting).
     return activeTab === 'today'
       ? sortApptsConfirmedFirst(scoped)
-      : sortApptsByDateTimeAsc(scoped);
+      : activeTab === 'past'
+        ? sortApptsByDateTimeDesc(scoped)
+        : sortApptsByDateTimeAsc(scoped);
   }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill, resolveLinkedSession]);
 
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.

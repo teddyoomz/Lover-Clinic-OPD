@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   dateRangeForTab,
   defaultStatusFilterForTab,
@@ -6,6 +7,7 @@ import {
   isMissedAppointment,
   matchesSearchText,
   sortApptsByDateTimeAsc,
+  sortApptsByDateTimeDesc,
 } from '../src/lib/appointmentHubFilters.js';
 
 const FIXED_NOW = new Date('2026-05-08T07:00:00+07:00');
@@ -183,5 +185,112 @@ describe('V64.F9 sortApptsByDateTimeAsc — earliest queue first at top', () => 
     ]);
     // May 10 14:00 → May 10 16:00 → May 15 09:00 → May 25 10:00
     expect(result.map(r => r.id)).toEqual(['A', 'B', 'C', 'D']);
+  });
+});
+
+// (2026-06-14) — sortApptsByDateTimeDesc helper — the "ย้อนหลัง 30 วัน" (past)
+// tab puts yesterday at the TOP, descending into the past. True mirror of the
+// ASC helper (date DESC primary, startTime DESC tie-breaker). User directive:
+// "frontend หน้าย้อนหลัง 30 วัน ให้สลับเอาเมื่อวานขึ้นก่อน แล้วเรียงลงไปหาอดีต".
+describe('F10 sortApptsByDateTimeDesc — newest first (ย้อนหลัง 30 วัน)', () => {
+  it('F10.1 same date, sorts by startTime DESC', () => {
+    const result = sortApptsByDateTimeDesc([
+      { id: 'A', date: '2026-05-08', startTime: '09:00' },
+      { id: 'B', date: '2026-05-08', startTime: '17:30' },
+      { id: 'C', date: '2026-05-08', startTime: '12:15' },
+    ]);
+    expect(result.map(r => r.id)).toEqual(['B', 'C', 'A']);
+  });
+
+  it('F10.2 different dates, sorts by date DESC primary', () => {
+    const result = sortApptsByDateTimeDesc([
+      { id: 'A', date: '2026-05-09', startTime: '17:00' },
+      { id: 'C', date: '2026-05-12', startTime: '08:00' },
+      { id: 'B', date: '2026-05-10', startTime: '12:00' },
+    ]);
+    expect(result.map(r => r.id)).toEqual(['C', 'B', 'A']);
+  });
+
+  it('F10.3 same date+time → length + content preserved', () => {
+    const result = sortApptsByDateTimeDesc([
+      { id: 'X', date: '2026-05-08', startTime: '10:00' },
+      { id: 'Y', date: '2026-05-08', startTime: '10:00' },
+    ]);
+    expect(result.length).toBe(2);
+    expect(result.map(r => r.id).sort()).toEqual(['X', 'Y']);
+  });
+
+  it('F10.4 missing date or startTime → empty string sorts to BOTTOM in DESC', () => {
+    const result = sortApptsByDateTimeDesc([
+      { id: 'A', startTime: '08:00' },                   // no date
+      { id: 'B', date: '2026-05-08', startTime: '09:00' },
+      { id: 'C', date: '2026-05-08' },                   // no time
+    ]);
+    // Dated rows first (DESC): within '2026-05-08' → B ('09:00') before C ('' time);
+    // 'A' (no date '') sorts to the bottom because '' < '2026-05-08'.
+    expect(result.map(r => r.id)).toEqual(['B', 'C', 'A']);
+  });
+
+  it('F10.5 returns NEW array (does NOT mutate input)', () => {
+    const input = [
+      { id: 'A', date: '2026-05-08', startTime: '09:00' },
+      { id: 'B', date: '2026-05-09', startTime: '10:00' },
+    ];
+    const inputBefore = [...input];
+    const result = sortApptsByDateTimeDesc(input);
+    expect(input).toEqual(inputBefore);
+    expect(result).not.toBe(input);
+  });
+
+  it('F10.6 empty array', () => {
+    expect(sortApptsByDateTimeDesc([])).toEqual([]);
+  });
+
+  it('F10.7 non-array input → []', () => {
+    expect(sortApptsByDateTimeDesc(null)).toEqual([]);
+    expect(sortApptsByDateTimeDesc(undefined)).toEqual([]);
+    expect(sortApptsByDateTimeDesc('not array')).toEqual([]);
+  });
+
+  it('F10.8 ย้อนหลัง 30 วัน scenario — yesterday at top, descending to the past', () => {
+    const result = sortApptsByDateTimeDesc([
+      { id: 'A', date: '2026-05-10', startTime: '14:00' },
+      { id: 'D', date: '2026-05-25', startTime: '10:00' },  // most recent day
+      { id: 'B', date: '2026-05-10', startTime: '16:00' },
+      { id: 'C', date: '2026-05-15', startTime: '09:00' },
+    ]);
+    // May 25 10:00 → May 15 09:00 → May 10 16:00 → May 10 14:00
+    expect(result.map(r => r.id)).toEqual(['D', 'C', 'B', 'A']);
+  });
+
+  it('F10.9 exact inverse of sortApptsByDateTimeAsc (true "สลับ")', () => {
+    const input = [
+      { id: 'A', date: '2026-05-10', startTime: '14:00' },
+      { id: 'D', date: '2026-05-25', startTime: '10:00' },
+      { id: 'B', date: '2026-05-10', startTime: '16:00' },
+      { id: 'C', date: '2026-05-15', startTime: '09:00' },
+    ];
+    const asc = sortApptsByDateTimeAsc(input).map(r => r.id);
+    const desc = sortApptsByDateTimeDesc(input).map(r => r.id);
+    expect(desc).toEqual([...asc].reverse());
+  });
+});
+
+// (2026-06-14) — source-grep regression: lock the per-tab sort routing in the
+// hub so future drift can't silently revert the "ย้อนหลัง 30 วัน" tab back to
+// ascending. Classifier: the `past` tab is the ONLY recency-first (DESC) tab;
+// today=confirmed-first, tomorrow/future/opd-pending stay soonest-first (ASC).
+// No class-of-bug siblings — appointmentHubFilters has exactly one rendering
+// consumer (AppointmentHubView); PatientDashboard reference is a comment.
+describe('F11 AppointmentHubView wires past→DESC, others→ASC (source-grep)', () => {
+  const SRC = readFileSync('src/components/admin/AppointmentHubView.jsx', 'utf8');
+  it('F11.1 imports sortApptsByDateTimeDesc', () => {
+    expect(SRC).toMatch(/sortApptsByDateTimeDesc/);
+  });
+  it('F11.2 routes the past tab to the DESC sort', () => {
+    expect(SRC).toMatch(/activeTab\s*===\s*'past'[\s\S]{0,80}sortApptsByDateTimeDesc/);
+  });
+  it('F11.3 still uses the ASC sort for the non-past default branch', () => {
+    expect(SRC).toMatch(/sortApptsByDateTimeAsc\(scoped\)/);
   });
 });

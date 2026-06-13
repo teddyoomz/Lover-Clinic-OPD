@@ -28,6 +28,32 @@ export function sortApptsByDateTimeAsc(appts) {
   });
 }
 
+/**
+ * Sort an array of appointments by `date` then `startTime`, DESCENDING
+ * (most-recent first). True mirror of sortApptsByDateTimeAsc.
+ *
+ * (2026-06-14) — used by the "ย้อนหลัง 30 วัน" (past) tab so yesterday is at the
+ * TOP, descending into the past. User directive: "frontend หน้าย้อนหลัง 30 วัน
+ * ให้สลับเอาเมื่อวานขึ้นก่อน แล้วเรียงลงไปหาอดีต". Upcoming tabs (today/tomorrow/
+ * future/opd-pending) stay ASC ("soonest queue first"); only `past` is recency-first.
+ * Returns a NEW array; does not mutate input. Empty/missing fields treated as
+ * empty string → sort to the BOTTOM in DESC ('' < any real date/time).
+ *
+ * @param {Array<{date?:string, startTime?:string}>} appts
+ * @returns {Array}
+ */
+export function sortApptsByDateTimeDesc(appts) {
+  if (!Array.isArray(appts)) return [];
+  return [...appts].sort((a, b) => {
+    const ad = String(a?.date || '');
+    const bd = String(b?.date || '');
+    if (ad !== bd) return bd.localeCompare(ad);
+    const at = String(a?.startTime || '');
+    const bt = String(b?.startTime || '');
+    return bt.localeCompare(at);
+  });
+}
+
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function bangkokYearMonthDay(d) {
