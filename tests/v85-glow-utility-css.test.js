@@ -152,19 +152,24 @@ describe('V85 — Glow Utility CSS', () => {
   // assumed direct per-file edits across all ~155 components).
   describe('CG6 — application audit', () => {
     it('CG6.1 — fx-glow-* used at least 8 times across src/', () => {
-      const { execSync } = require('child_process');
+      // 2026-06-14 — switched from `execSync('grep …', {shell:'cmd.exe'})` to a
+      // deterministic Node-fs scan. The old shell-grep returned 0 on Windows
+      // boxes where `grep` is not on PATH (false red — fx-glow- is really used
+      // 10× in src/). Now we count occurrences directly.
+      const { readdirSync, statSync } = require('node:fs');
+      const path = require('node:path');
       let count = 0;
-      try {
-        const raw = execSync('grep -rE "fx-glow-" src/components src/pages 2>nul', {
-          encoding: 'utf8',
-          cwd: process.cwd(),
-          shell: 'cmd.exe',
-        });
-        count = raw.split(/\r?\n/).filter(Boolean).length;
-      } catch {
-        // grep returns non-zero when no matches; treat as 0
-        count = 0;
-      }
+      const walk = (dir) => {
+        for (const f of readdirSync(dir)) {
+          const full = path.join(dir, f);
+          if (statSync(full).isDirectory()) { walk(full); continue; }
+          if (!/\.(jsx?|tsx?)$/.test(f)) continue;
+          const m = readFileSync(full, 'utf8').match(/fx-glow-/g);
+          if (m) count += m.length;
+        }
+      };
+      walk(path.resolve(process.cwd(), 'src/components'));
+      walk(path.resolve(process.cwd(), 'src/pages'));
       expect(count).toBeGreaterThanOrEqual(8);
     });
 

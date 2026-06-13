@@ -45,19 +45,33 @@ describe('Task 7 — H-quater fix: getAllMasterDataItems removed from feature co
   });
 
   it('T7.regression-guard MasterDataTab is the ONLY src file allowed to call getAllMasterDataItems', () => {
-    const out = execSync(
-      'git grep -lE "getAllMasterDataItems\\(" -- "src/**" 2>/dev/null || true',
-      { encoding: 'utf8', cwd: process.cwd() }
-    ).split('\n').filter(Boolean);
-    const violations = out.filter((f) => {
-      // Allowed: MasterDataTab (sanctioned dev-only sync UI)
-      if (f.endsWith('MasterDataTab.jsx')) return false;
-      // Allowed: backendClient.js DEFINES the function (not a call site)
-      if (f.endsWith('backendClient.js')) return false;
-      // Allowed: scopedDataLayer.js re-exports the function (not a call site)
-      if (f.endsWith('scopedDataLayer.js')) return false;
-      return true;
-    });
-    expect(violations, `H-quater violations: ${violations.join(', ')}`).toEqual([]);
+    // 2026-06-14 — switched from `execSync('git grep …')` to a deterministic,
+    // comment-aware Node-fs scan. The old grep matched the LITERAL text
+    // `getAllMasterDataItems()` inside a // comment in TreatmentFormPage.jsx
+    // (which documents the Task-7 REMOVAL) → a false positive that depended on
+    // git-grep being on PATH + POSIX pathspec behaviour. We now strip comments
+    // before matching a real call site.
+    const { readdirSync, statSync } = require('node:fs');
+    const path = require('node:path');
+    const stripComments = (src) => src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+    const violations = [];
+    const walk = (dir) => {
+      for (const f of readdirSync(dir)) {
+        const full = path.join(dir, f);
+        if (statSync(full).isDirectory()) { walk(full); continue; }
+        if (!/\.(jsx?|tsx?)$/.test(f)) continue;
+        const code = stripComments(readFileSync(full, 'utf8'));
+        if (!/getAllMasterDataItems\s*\(/.test(code)) continue;
+        const base = path.basename(full);
+        // Allowed: MasterDataTab (dev-only sync UI) + backendClient.js (DEFINES
+        // the fn) + scopedDataLayer.js (re-exports it). Anything else = H-quater.
+        if (base === 'MasterDataTab.jsx' || base === 'backendClient.js' || base === 'scopedDataLayer.js') continue;
+        violations.push(path.relative(process.cwd(), full));
+      }
+    };
+    walk(path.resolve(process.cwd(), 'src'));
+    expect(violations, `H-quater violations (live getAllMasterDataItems calls): ${violations.join(', ')}`).toEqual([]);
   });
 });

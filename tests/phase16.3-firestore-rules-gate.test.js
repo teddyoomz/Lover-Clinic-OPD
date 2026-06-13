@@ -50,7 +50,13 @@ describe('Phase 16.3 RG.B — be_admin_audit narrow exception', () => {
 
 describe('Phase 16.3 RG.C — anti-regression', () => {
   test('C.1 — clinic_settings/{settingId} wildcard rule still exists (preserves existing isClinicStaff write path)', () => {
-    expect(RULES).toMatch(/match \/clinic_settings\/\{settingId\}\s*\{[\s\S]{0,200}allow write:\s*if isClinicStaff\(\)/);
+    // 2026-06-14 — window widened {0,200}→{0,1200}: the WS1-C2-bis (2026-06-10)
+    // read-rule + its 9-line explanatory comment lengthened the block, pushing
+    // `allow write` past the old 200-char window (the rule itself is unchanged +
+    // correct — verified live: `allow read: if settingId != 'chat_config'` +
+    // `allow write: if isClinicStaff()`). Also assert the C2-bis read lockdown.
+    expect(RULES).toMatch(/match \/clinic_settings\/\{settingId\}\s*\{[\s\S]{0,1200}allow write:\s*if isClinicStaff\(\)/);
+    expect(RULES).toMatch(/allow read:\s*if settingId != 'chat_config'/);
   });
 
   test('C.2 — proclinic_session + proclinic_session_trial blocks REMOVED (V50-followup ProClinic strip)', () => {
