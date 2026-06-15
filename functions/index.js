@@ -4,6 +4,7 @@ const functionsV1 = require('firebase-functions/v1');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { buildAssessmentRoundPatch, isMaterializableAssessment } = require('./assessmentMaterialize');
 
 initializeApp();
 
@@ -28,6 +29,24 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
   if (!sessionDoc.exists) { res.status(200).json({ ok: false, reason: 'session not found' }); return; }
 
   const session = sessionDoc.data();
+
+  // ED Score materialize (2026-06-15) — copy a customer-filled follow-up
+  // assessment's answers into the linked be_assessments round. Runs BEFORE the
+  // push/isUnread checks so it always materializes on submit. Survives
+  // opd_session cleanup (the durability the be_assessments collection exists for).
+  // Non-fatal: a failure here must not block the FCM push. Canonical BASE_PATH.
+  try {
+    if (isMaterializableAssessment(session)) {
+      const patch = buildAssessmentRoundPatch(session, new Date().toISOString().slice(0, 10));
+      if (patch) {
+        await db.doc(`${BASE_PATH}/be_assessments/${session.linkedAssessmentRoundId}`).set(patch, { merge: true });
+        console.log(`[${sessionId}] ED round materialized → ${session.linkedAssessmentRoundId}`);
+      }
+    }
+  } catch (e) {
+    console.error(`[${sessionId}] ED materialize failed:`, e);
+  }
+
   if (!session.isUnread) { res.status(200).json({ ok: false, reason: 'not unread' }); return; }
 
   // ตรวจสอบโหมดทดสอบ (globalPushMuted)
