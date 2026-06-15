@@ -40,7 +40,13 @@ import {
   // Phase 15.7 (2026-04-28) — load doctors for the assistant-name fallback
   // resolver (legacy appts written before assistantNames denorm).
   listDoctors,
+  listenToAssessments, // ED Score — universal customer-scoped listener
 } from '../../lib/scopedDataLayer.js';
+import { pickKioskAssessmentFields } from '../../lib/kioskAssessmentFields.js';
+import { latestPerType, ED_TYPES } from '../../lib/assessmentRoundsCore.js';
+import { stripScreeningSection } from '../../lib/edScoreDisplay.js';
+import EDScoreBox from './EDScoreBox.jsx';
+import EDFollowupModal from './EDFollowupModal.jsx';
 import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
 // Phase BS (2026-05-06) — show "สาขาที่สร้างรายการ" tag on the customer card.
 // Customer base is shared across branches; this field is purely a display
@@ -251,6 +257,29 @@ export default function CustomerDetailView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
   const pd = customer?.patientData || {};
+
+  // ED Score (2026-06-15) — follow-up assessment rounds (universal listener).
+  // Round 1 = virtual record from patientData (intakePerf) → works for current
+  // customers with no migration. edTypesDone seeds the follow-up modal's picker.
+  const [assessments, setAssessments] = useState([]);
+  const [edModalRound, setEdModalRound] = useState(null);
+  useEffect(() => {
+    if (!customerId) { setAssessments([]); return; }
+    const unsub = listenToAssessments(
+      customerId,
+      setAssessments,
+      (err) => console.warn('[CustomerDetailView] assessments listener failed:', err),
+    );
+    return () => unsub();
+  }, [customerId]);
+  const intakePerf = useMemo(() => pickKioskAssessmentFields(pd), [pd]);
+  const edLatestPerType = useMemo(() => latestPerType(intakePerf, assessments), [intakePerf, assessments]);
+  const edTypesDone = ED_TYPES.filter((t) => edLatestPerType[t]);
+  // หมายเหตุทั่วไป: strip the baked ED screening block — the ED Score box owns it now.
+  const edStrippedNote = useMemo(
+    () => stripScreeningSection(String(customer?.note || pd.note || '')).trim(),
+    [customer?.note, pd.note],
+  );
 
   const [treatments, setTreatments] = useState([]);
   const [treatmentsLoading, setTreatmentsLoading] = useState(false);
@@ -975,7 +1004,7 @@ export default function CustomerDetailView({
               canonical customer.note (post-Phase-24) OR patientData.note
               (legacy cloned customers) — first non-empty wins. Hidden when
               both empty (no panel clutter). */}
-          {(customer?.note || pd.note) && (
+          {edStrippedNote && (
             <div className="bg-amber-950/10 border border-amber-900/40 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-amber-900/40 flex items-center gap-2">
                 <ClipboardCheck size={14} className="text-amber-400" />
@@ -983,7 +1012,7 @@ export default function CustomerDetailView({
               </div>
               <div className="p-3">
                 <pre className="text-xs text-[var(--tx-secondary)] whitespace-pre-wrap font-sans leading-relaxed" data-testid="customer-detail-note">
-                  {String(customer?.note || pd.note || '').trim()}
+                  {edStrippedNote}
                 </pre>
               </div>
             </div>
@@ -1407,6 +1436,15 @@ export default function CustomerDetailView({
           {/* AddQtyModal rendered as fixed popup below */}
           </div>
 
+          {/* ED Score box — below the 4-tab course box (2026-06-15) */}
+          <EDScoreBox
+            customerId={customerId}
+            intakePerf={intakePerf}
+            assessments={assessments}
+            isDark={isDark}
+            onSend={(n) => setEdModalRound(n)}
+          />
+
           {/* ── Add Qty Popup ── */}
           {addQtyModal && <AddQtyModal
             course={allCourses[addQtyModal.courseIndex]}
@@ -1484,6 +1522,17 @@ export default function CustomerDetailView({
           isDark={isDark}
           onClose={() => setShowPatientLinkModal(false)}
           onUpdated={() => { /* liveCustomer listener auto-refreshes token state */ }}
+        />
+      )}
+      {/* ED Score follow-up sender (2026-06-15) — round-aware link + QR */}
+      {edModalRound != null && (
+        <EDFollowupModal
+          customerId={customerId}
+          roundNumber={edModalRound}
+          intakeTypes={edTypesDone}
+          branchId={selectedBranchId}
+          isDark={isDark}
+          onClose={() => setEdModalRound(null)}
         />
       )}
       {/* V74 (2026-05-16) — customer backup modal */}
