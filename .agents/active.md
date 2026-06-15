@@ -21,8 +21,10 @@ tests: "16609 / 0 (full suite, +67 net) + build clean + L2 e2e 16/0 real prod. P
 - **Part B (recall):** `overlayRecallNames`/`useEnrichedRecalls` live-resolve customer name at the load chokepoint → fixes "—" in 3 lists + 5 modal headers (already clickable). RecallRow snooze/reschedule date chip (📞 โทรอีกครั้ง / 📅 เลื่อนนัด, dd/mm/yyyy พ.ศ.). `be_recall_cases` delete narrowed (rules). RecallCreateModal resolver.
 
 ## Next action
-- **USER L1 hands-on** (backend-authed — no staff creds for automated L1): on the LIVE app — (a) create a customer with an existing national-id → dup warn modal + เปิดของเดิม/บันทึกซ้ำอยู่ดี; (b) recall list shows real names + clickable + 📞/📅 date chips + ลบเคส works; (c) the 7 TEST-CASE presets are gone.
-- **Merge the 3 dup pairs manually** (the user's long-standing pain): LC-26000069/074, 123/125, 143/155 — backfill RECORDED them (canonical owns the claim; dup in linkedCustomerIds), does NOT auto-merge.
+- **USER L1 hands-on** (preview server can also login as admin — `loverclinic@loverclinic.com`/`Lover2024`): on the app — (a) create a customer with an existing national-id → dup warn modal + เปิดของเดิม/บันทึกซ้ำอยู่ดี; (b) recall list real names + clickable + 📞/📅 date chips + ลบเคส works; (c) the 7 TEST-CASE presets gone.
+
+## Done this session (beyond the feature)
+- ✅ **3 dup-customer pairs RESOLVED** (`scripts/fix-dup-customer-pairs.mjs --apply`, audit doc): pair1 LC-069 (empty) deleted/keep LC-074; pair2 **LC-125's recall MOVED → LC-123** then LC-125 deleted; pair3 LC-143+155 (test) both deleted. **3→0 dups** (re-verified). LESSON: missed `be_recalls` in the first footprint (NOT in CUSTOMER_CASCADE_COLLECTIONS) — user caught it → `feedback_full_customer_footprint_before_delete.md`.
 
 ## Outstanding (carried)
 - ⚠ ROTATE LINE/FB secrets (AV195).
