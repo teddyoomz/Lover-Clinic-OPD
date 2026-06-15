@@ -22,21 +22,34 @@ const DEFAULT_MAX_AUTO_RETRIES = 1;
 export function useResilientLoad(opts = {}) {
   const softTimeoutMs = opts.softTimeoutMs ?? DEFAULT_SOFT_TIMEOUT_MS;
   const maxAutoRetries = opts.maxAutoRetries ?? DEFAULT_MAX_AUTO_RETRIES;
+  // resetKey — pass the consumer's load CONTEXT (e.g. selectedBranchId). When it
+  // changes the consumer re-subscribes to DIFFERENT data, so the loader must
+  // re-arm (fresh stuck-detection for the new load). Omit it for one-shot loads
+  // (customer links) — once ready, a later transient error stays suppressed
+  // (the data is already rendered). Closes the branch-switch-after-ready gap
+  // (adversarial re-hunt 2026-06-16).
+  const resetKey = opts.resetKey;
 
   const [loadStatus, setLoadStatus] = useState('loading');
   const [retryKey, setRetryKey] = useState(0);
   const attemptsRef = useRef(0);
-  const statusRef = useRef('loading');
-  useEffect(() => { statusRef.current = loadStatus; }, [loadStatus]);
+  // settledRef is set SYNCHRONOUSLY in markReady() — NOT via a post-render
+  // effect. Closes the race (adversarial-hunt 2026-06-16) where the soft-timeout
+  // macrotask fires before React commits the markReady re-render: a state-synced
+  // ref would still read 'loading' → spurious retry + reconnect right as data
+  // arrived. A synchronous ref is true the instant a snapshot calls markReady,
+  // so any later timeout/error is correctly ignored (contract: ready = no retry).
+  const settledRef = useRef(false);
 
   const markReady = useCallback(() => {
+    settledRef.current = true;
     attemptsRef.current = 0;
     setLoadStatus((prev) => (prev === 'ready' ? prev : 'ready'));
   }, []);
 
   const handleFail = useCallback(() => {
-    // A snapshot already succeeded — ignore any late timeout/error.
-    if (statusRef.current === 'ready') return;
+    // A snapshot already succeeded — ignore any late timeout/error (sync guard).
+    if (settledRef.current) return;
     if (attemptsRef.current < maxAutoRetries) {
       const isFirst = attemptsRef.current === 0;
       attemptsRef.current += 1;
@@ -50,10 +63,23 @@ export function useResilientLoad(opts = {}) {
   const markError = useCallback(() => { handleFail(); }, [handleFail]);
 
   const retry = useCallback(() => {
+    settledRef.current = false;
     attemptsRef.current = 0;
     setLoadStatus('loading');
     setRetryKey((k) => k + 1);
   }, []);
+
+  // Re-arm when the load CONTEXT changes (resetKey) — e.g. a branch switch
+  // re-subscribes to different data, so a previous success must not suppress the
+  // new load's stuck-detection. Runs once on mount (no-op: already loading) then
+  // on every resetKey change. Does NOT bump retryKey — the consumer's own dep
+  // (resetKey) already re-runs its load effect; this only re-arms the resilience.
+  useEffect(() => {
+    settledRef.current = false;
+    attemptsRef.current = 0;
+    setLoadStatus('loading');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 
   // Soft-timeout: while loading, if no markReady() within softTimeoutMs → fail path.
   // retryKey in deps so each silent auto-retry restarts the timer.

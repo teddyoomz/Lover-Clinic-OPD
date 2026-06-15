@@ -2319,7 +2319,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // used to silently stay empty with no recovery; now it auto-heals (reconnect
   // + re-subscribe) and, if still failing, shows a slim non-blocking
   // "ลองใหม่" banner (chat / rest of the dashboard stay usable).
-  const { loadStatus: queueLoad, retryKey: queueRetryKey, markReady: queueReady, markError: queueErr, retry: queueRetry } = useResilientLoad();
+  // resetKey: selectedBranchId — the opd_sessions listener re-subscribes on a
+  // branch switch (a fresh load to different data), so re-arm stuck-detection
+  // for the new branch (else a hung new-branch sub would show stale data with no
+  // error card). Mid-session drops on the SAME branch are handled by V17
+  // visibility/online reconnect + Firestore's own listener auto-reconnect.
+  // ponytail: error card is for the (re)load; ongoing live resilience = V17 + SDK.
+  const { loadStatus: queueLoad, retryKey: queueRetryKey, markReady: queueReady, markError: queueErr, retry: queueRetry } = useResilientLoad({ resetKey: selectedBranchId });
 
   useEffect(() => {
     if (!user || user.isAnonymous) return;
