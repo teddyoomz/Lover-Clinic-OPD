@@ -268,6 +268,7 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
     expect(kioskPatientToCanonical(d)).toMatchInlineSnapshot(`
       {
         "address": "",
+        "assessment_date": "",
         "birthdate": "1997-03-15",
         "blood_type": "",
         "citizen_id": "1234567890123",
@@ -321,6 +322,7 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
     expect(kioskPatientToCanonical(d)).toMatchInlineSnapshot(`
       {
         "address": "",
+        "assessment_date": "",
         "birthdate": "",
         "blood_type": "",
         "congenital_disease": "",
@@ -370,6 +372,7 @@ describe('S3 — kioskPatientToCanonical canonical shape contract', () => {
     expect(kioskPatientToCanonical(d)).toMatchInlineSnapshot(`
       {
         "address": "",
+        "assessment_date": "",
         "birthdate": "",
         "blood_type": "",
         "citizen_id": "",

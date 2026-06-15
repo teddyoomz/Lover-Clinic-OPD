@@ -196,6 +196,15 @@ export function kioskPatientToCanonical(d, opts = {}) {
     // Same class as V141/AV162 (visit_reasons dropped → blank intake). Keys are
     // underscore-cased (no camelCase leak onto the root doc — Phase 23.0).
     ...pickKioskAssessmentFields(d),
+
+    // 2026-06-16 — preserve the intake assessment date (PatientForm "วันที่บันทึก",
+    // defaulted to the fill day even when the intake UI hides the field). Pre-fix
+    // this projection dropped it → be_customers.patientData.assessmentDate was
+    // undefined for ALL customers (0/40 sampled) → the ED round-1 date showed
+    // blank / fell back to createdAt. Same drop-class as AV194 / V141.
+    // SNAKE_CASE canonical key (Phase 23.0 — no camelCase leak onto the root doc);
+    // buildPatientDataFromForm renames assessment_date → camelCase assessmentDate.
+    assessment_date: d.assessmentDate || '',
   };
 
   // Strip empty strings ONLY for fields that should not exist when blank

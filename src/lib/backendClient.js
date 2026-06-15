@@ -416,6 +416,14 @@ function buildPatientDataFromForm(form) {
   // meaningful answers are carried (helper drops false/empty → lean).
   Object.assign(pd, pickKioskAssessmentFields(form));
 
+  // 2026-06-16 — carry the intake assessment date (วันที่รับเข้า) onto patientData.
+  // Preserve-if-present, NO default here (this runs on EDIT too via
+  // updateCustomerFromForm; defaulting would re-stamp today on every edit). The
+  // CREATE chokepoint (addCustomer) stamps today when absent; edit round-trips it
+  // via buildFormFromCustomer. Read by the ED round-1 date (R4) + intake view.
+  // Renamed snake→camel (assessment_date → assessmentDate), like firstname→firstName.
+  if (form.assessment_date) pd.assessmentDate = form.assessment_date;
+
   // Emergency contacts (camelCase aliases)
   if (form.contact_1_firstname) pd.emergencyName = form.contact_1_firstname + (form.contact_1_lastname ? ` ${form.contact_1_lastname}` : '');
   if (form.contact_1_telephone_number) pd.emergencyPhone = form.contact_1_telephone_number;
@@ -539,6 +547,11 @@ function buildFormFromCustomer(customer) {
     // edit form has no assessment inputs; without this, re-save drops them).
     // Mirrors the V141 visit_reasons round-trip. Reads from patientData.
     ...pickKioskAssessmentFields(pd),
+    // 2026-06-16 — round-trip the intake assessment date so a backend edit re-save
+    // does NOT clobber it (the edit form has no วันที่บันทึก input). Reads from
+    // patientData.assessmentDate; buildPatientDataFromForm carries it back.
+    // snake_case form key (← camelCase patientData), mirrors visit_reasons.
+    assessment_date: pick('assessment_date', 'assessmentDate'),
     like_note: pick('like_note', 'likeNote'),
     dislike_note: pick('dislike_note', 'dislikeNote'),
     receipt_type: pick('receipt_type', 'receiptType'),
@@ -806,12 +819,19 @@ export async function addCustomer(form, opts = {}) {
     created_year: new Date().getFullYear(),
   });
 
+  // V33-customer-create — patientData mirror in camelCase for downstream readers.
+  const createPatientData = buildPatientDataFromForm(finalForm);
+  // 2026-06-16 — stamp the intake/admission date ("วันที่รับเข้า") ONCE at CREATE
+  // (Bangkok). Kiosk intake carries the form-fill assessmentDate through the
+  // projection; admin-created customers have none → default to today (= the
+  // creation/intake day) so the ED round-1 + intake view always have an accurate
+  // date that PERSISTS (not reliant on createdAt, which a later clone/migration
+  // could change). CREATE only — updateCustomerFromForm/edit never re-stamps.
+  if (!createPatientData.assessmentDate) createPatientData.assessmentDate = thaiTodayISO();
+
   const docPayload = {
     ...finalForm,
-    // V33-customer-create — patientData mirror in camelCase for downstream
-    // readers (CustomerListTab, AppointmentFormModal, SaleTab, etc.).
-    // Mirrors the cloneOrchestrator output shape produced by reverseMapPatient.
-    patientData: buildPatientDataFromForm(finalForm),
+    patientData: createPatientData,
     proClinicId: null,
     proClinicHN: null,
     // Phase BS — stamp on CREATE only. Immutable thereafter.
