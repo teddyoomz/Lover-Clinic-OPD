@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dup-customer prevention + Recall fixes — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Dup-customer prevention + Recall fixes — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> implement task-by-task; TDD where the unit is pure. Spec: <code>docs/superpowers/specs/2026-06-16-dup-customer-and-recall-fixes-design.html</code>. Hardened by workflow <code>w89gycg12</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Bulletproof (Rule T) duplicate-national-ID + double-create prevention via an atomic identity-claim; fix recall customer-name "—" everywhere + clickable + snooze/reschedule date chips + recall-case hard-delete.</p>
+  <p><strong>Architecture:</strong> Part A = atomic <code>runTransaction</code> claim in <code>addCustomer</code> (the single create chokepoint) + claim lifecycle on edit/delete + warn-UX + Rule-M backfill. Part B = name live-resolve at the recall-load chokepoint + RecallRow date chip + rules delete-narrow + Rule-M nuke.</p>
+  <p><strong>Tech:</strong> React 19, Firebase client SDK (runTransaction), firebase-admin (scripts), Vitest, firestore.rules. Combined deploy gated on explicit "deploy".</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">be_customer_identity claim doc (new collection)</div>
+<pre>artifacts/{APP_ID}/public/data/be_customer_identity/{claimKey}
+  claimKey = "CITIZEN:1234567890123" | "PASSPORT:AA000123"
+  { customerId:"LC-26000074", linkedCustomerIds:["LC-26000201"], claimedAt, claimedBy }
+be_customers/{id}._identityClaimKey = "CITIZEN:1234567890123"   // denormalized for O(1) cascade/edit</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Recall row AFTER — name (clickable) + date chip</div>
+<pre>15/06  นางสาว แพรพร พรแพร  📞0970794444  [ติดต่อไม่ได้ครั้งที่ 1]  [📞 โทรอีกครั้ง 18/06/2569]
+18/06  นาย ตรีรัตนะ กลิ่นศรีสุข  📞0621870937  [รอโทร]  [📅 เลื่อนนัด 25/06/2569]</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Dup-warn modal (national-ID) / phone hint (full visuals in the spec)</div>
+<pre>⚠ ลูกค้านี้มีอยู่แล้ว: นางสาว แพรพร พรแพร · LC-26000074 · 0970794444 · 20/05/2569
+   [ เปิดของเดิม ]  [ บันทึกเป็นลูกค้าใหม่อยู่ดี ]
+phone-only:  📞 เบอร์นี้ตรงกับ นางสาว แพรพร พรแพร — ใช้ร่วมกันได้   (inline, no block)</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Part A — addCustomer atomic create</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>Detail</th></tr>
+    <tr><td>1</td><td>deriveClaimKey</td><td>CITIZEN:{13d} | PASSPORT:{UPPER} | null (walk-in). Citizen validated ==13 digits.</td></tr>
+    <tr><td>2</td><td>pre-check (no-upload)</td><td>getDoc(claim) exists → throw DUPLICATE_IDENTITY before uploads.</td></tr>
+    <tr><td>3</td><td>uploads</td><td>Storage URLs into payload; on later tx-fail → delete orphans.</td></tr>
+    <tr><td>4</td><td><strong>runTransaction</strong></td><td>tx.get(claim)→throw if taken else tx.set; tx.get(counter)+incr; tx.set(customer+_identityClaimKey). atomic.</td></tr>
+    <tr><td>5</td><td>UI</td><td>catch DUPLICATE_IDENTITY → modal (open-existing / override). override → append linkedCustomerIds + flag.</td></tr>
+  </table>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Part B — recall name enrich at load chokepoint</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>Detail</th></tr>
+    <tr><td>1</td><td>listenToRecalls / listenToRecallsForCustomer</td><td>raw be_recalls docs (customerName may be "").</td></tr>
+    <tr><td>2</td><td>useEnrichedRecalls(recalls)</td><td>fetch unique customerIds (cached) → overlayRecallNames → customerName = resolveCustomerDisplayName || existing.</td></tr>
+    <tr><td>3</td><td>RecallList → RecallRow + modals</td><td>read enriched recall.customerName. Name shows + clickable everywhere.</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/customerIdentity.js</code> (NEW)</td><td><code>deriveClaimKey</code> + <code>DUPLICATE_IDENTITY</code> error class (pure).</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>addCustomer atomic refactor + updateCustomerFromForm reclaim + cascade free-claim + identity helpers (<code>identityClaimDoc</code>, <code>claimIdentityTx</code>).</td></tr>
+  <tr><td><code>src/lib/recallCustomerName.js</code> (NEW)</td><td><code>overlayRecallNames</code> + <code>collectRecallCustomerIds</code> (pure).</td></tr>
+  <tr><td><code>src/hooks/useEnrichedRecalls.js</code> (NEW)</td><td>fetch referenced customers (cached) + overlay names.</td></tr>
+  <tr><td><code>src/components/backend/recall/RecallRow.jsx</code></td><td>snooze/reschedule date chip.</td></tr>
+  <tr><td><code>src/components/backend/recall/RecallTab.jsx</code> · <code>RecallFrontendView.jsx</code> · <code>customer-recall/RecallCard.jsx</code></td><td>wire useEnrichedRecalls.</td></tr>
+  <tr><td><code>src/components/backend/recall/RecallCreateModal.jsx</code></td><td>picker uses resolveCustomerDisplayName; snapshot resolved name.</td></tr>
+  <tr><td><code>src/components/backend/CustomerCreatePage.jsx</code></td><td>dup-warn modal + phone hint + override.</td></tr>
+  <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>OPD/deposit catch DUPLICATE_IDENTITY → link existing.</td></tr>
+  <tr><td><code>src/components/backend/CustomerDetailView.jsx</code></td><td>flagged-duplicate badge.</td></tr>
+  <tr><td><code>firestore.rules</code></td><td>be_customer_identity block + be_recall_cases delete narrow.</td></tr>
+  <tr><td><code>src/lib/customerBackupCore.js</code> · <code>api/admin/delete-customer-cascade*</code></td><td>add be_customer_identity to cascade.</td></tr>
+  <tr><td><code>scripts/backfill-customer-identity.mjs</code> (NEW)</td><td>Rule M seed + dup-report.</td></tr>
+  <tr><td><code>scripts/nuke-test-recall-cases.mjs</code> (NEW)</td><td>Rule M nuke TEST junk.</td></tr>
+  <tr><td><code>scripts/e2e-dup-customer-and-recall.mjs</code> (NEW)</td><td>Rule Q L2 (concurrent create, edit reclaim, cascade free, recall enrich).</td></tr>
+  <tr><td><code>tests/*</code> (NEW)</td><td>unit + Rule I flow-simulate + source-grep + AV.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task A1 — deriveClaimKey (pure) + DUPLICATE_IDENTITY error</h3>
+<p>NEW <code>src/lib/customerIdentity.js</code>. TDD: write <code>tests/customer-identity-claim-key.test.js</code> first (13-digit citizen w/ dashes/spaces → CITIZEN:digits; passport trim+UPPER → PASSPORT:X; both → citizen wins; both empty → null; citizen ≠13 digits → null + invalid flag; adversarial: Thai dashes, leading-zero reject, ≤30-char passport).</p>
+<pre>export class DuplicateIdentityError extends Error {
+  constructor(existingCustomerId, claimKey) { super('DUPLICATE_IDENTITY'); this.name='DuplicateIdentityError';
+    this.code='DUPLICATE_IDENTITY'; this.existingCustomerId=existingCustomerId; this.claimKey=claimKey; }
+}
+export function deriveClaimKey(citizen_id, passport_id) {
+  const c = String(citizen_id||'').replace(/[-\s]/g,'');
+  if (/^\d{13}$/.test(c)) return `CITIZEN:${c}`;
+  const p = String(passport_id||'').trim().toUpperCase().replace(/\s+/g,'');
+  if (p && p.length<=30 && /^[A-Z0-9]+$/.test(p)) return `PASSPORT:${p}`;
+  return null;
+}</pre>
+<p>Run vitest → green. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A2 — addCustomer atomic claim</h3>
+<p>Modify <code>backendClient.js</code> addCustomer (735-852). Add helpers <code>identityClaimDoc(key)</code> + import <code>deriveClaimKey</code>/<code>DuplicateIdentityError</code>. New opt <code>overrideDuplicate</code>. Flow: derive key → if key &amp;&amp; !override: pre-check <code>getDoc(identityClaimDoc(key))</code> → if exists throw <code>DuplicateIdentityError(existing, key)</code>. Uploads (wrap in try; on tx-fail delete uploaded). Replace <code>generateCustomerHN()</code> + <code>setDoc</code> with ONE runTransaction: read claim (re-check race → throw), read counter → HN, set claim ({customerId, linkedCustomerIds:[], claimedAt, claimedBy} OR for override append to linkedCustomerIds), set customer doc (+ <code>_identityClaimKey:key</code>, + for override <code>_duplicateOfCustomerId</code>/<code>_duplicateAckBy</code>/<code>_duplicateAckAt</code>). Counter logic copied from generateCustomerHN. Keep all existing payload fields (assessmentDate stamp, branchId, patientData, etc.).</p>
+<p>Tests: <code>tests/addcustomer-atomic-claim.test.js</code> — mock runTransaction; assert claim read+set, DUPLICATE throw, override appends, walk-in (null key) skips claim, _identityClaimKey denorm, HN counter preserved. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A3 — updateCustomerFromForm claim reclaim on id change</h3>
+<p>Modify <code>updateCustomerFromForm</code> (604-686). After normalization, compute <code>newKey=deriveClaimKey(finalForm.citizen_id, finalForm.passport_id)</code>. Read current doc's <code>_identityClaimKey</code> (oldKey). If oldKey!==newKey, wrap in runTransaction: free old claim (if owner==self → delete), claim new (if exists &amp; owner≠self → throw DUPLICATE_IDENTITY; else set), then <code>tx.update(customer, patch + _identityClaimKey:newKey)</code>. If unchanged → existing updateDoc path. Tests: id-change releases old + claims new; collision throws; no-change no-op. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A4 — cascade frees the claim (client + server + backup)</h3>
+<p>Add <code>'be_customer_identity'</code> to <code>CUSTOMER_CASCADE_COLLECTIONS</code> (backendClient.js:904) — but the claim is keyed by <code>_identityClaimKey</code>, not customerId. So in <code>deleteCustomerCascade</code>: read the customer doc's <code>_identityClaimKey</code> first; add <code>deleteDoc(identityClaimDoc(key))</code> (or if the customer is in a claim's linkedCustomerIds, remove it). Mirror in <code>api/admin/delete-customer-cascade.js</code> + <code>src/lib/customerBackupCore.js</code> CUSTOMER_CASCADE_COLLECTIONS_FULL (+ the parity test). Tests: cascade deletes the claim by denorm key; linked-dup removal. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A5 — firestore.rules (2 edits)</h3>
+<p>Add before the catch-all: <code>match /be_customer_identity/{key} { allow get: if isClinicStaff(); allow list: if false; allow create, update, delete: if isClinicStaff(); }</code>. Narrow <code>be_recall_cases</code> <code>allow delete: if false</code> → <code>if isClinicStaff()</code>. Add to Rule-B probe list (Rule 01): anon-write be_customer_identity → 403; staff-delete be_recall_cases → 200. Tests: <code>tests/firestore-rules-identity-and-recall-delete.test.js</code> source-grep the rule shapes + probe-list presence. Commit (NO deploy).</p>
+</div>
+
+<div class="task">
+<h3>Task A6 — CustomerCreatePage warn modal + phone hint</h3>
+<p>Modify <code>CustomerCreatePage.jsx</code> handleSubmit (242-281): catch <code>e.code==='DUPLICATE_IDENTITY'</code> → fetch existing via <code>getCustomer(e.existingCustomerId)</code> → open a warn modal (existing card + <strong>เปิดของเดิม</strong> → navigate <code>?backend=1&customer={id}</code>; <strong>บันทึกเป็นลูกค้าใหม่อยู่ดี</strong> → re-call addCustomer with <code>{overrideDuplicate:true}</code>). On-change of citizen/passport/phone: debounced <code>findCustomersByField</code> → phone match → inline soft hint (no block). RTL test: <code>tests/customer-create-dup-warn-rtl.test.jsx</code>. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A7 — OPD/deposit catch → link existing</h3>
+<p>Modify <code>AdminDashboard.jsx</code> handleResync/handleDepositSync/handleOpdClick addCustomer callsites: wrap in try/catch <code>DUPLICATE_IDENTITY</code> → instead of creating, link the session to <code>e.existingCustomerId</code> (set brokerProClinicId + relink, same as the notFound-recovery path). Existing session idempotency (brokerProClinicId/depositSyncStatus/in-flight ref) already guards same-session double-click + no-id walk-ins. Tests: source-grep the catch + flow-sim. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A8 — CDV flagged-duplicate badge</h3>
+<p><code>CustomerDetailView.jsx</code>: if <code>customer._duplicateOfCustomerId</code> → render an amber <code>⚠ บันทึกซ้ำกับ {link}</code> badge near the header. Source-grep test. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task A9 — backfill + dup-report (Rule M, local)</h3>
+<p>NEW <code>scripts/backfill-customer-identity.mjs</code> (mirror existing Rule-M scripts: env-pull + admin SDK + canonical path + dry-run→--apply + audit + invocation guard). Scan be_customers; group by deriveClaimKey; per identity: claim → earliest createdAt, others → linkedCustomerIds; stamp customer <code>_identityClaimKey</code>; print a <strong>duplicate report</strong> (identity → [customerIds]). Idempotent. Tests: pure helpers (group/earliest) unit-tested. Commit (run later, post-deploy).</p>
+</div>
+
+<div class="task">
+<h3>Task B1 — recall name helper + hook</h3>
+<p>NEW <code>src/lib/recallCustomerName.js</code>: <code>collectRecallCustomerIds(recalls)</code> (unique non-empty customerIds) + <code>overlayRecallNames(recalls, customersById)</code> (pure: <code>{...r, customerName: resolveCustomerDisplayName(customersById[r.customerId]) || r.customerName}</code>). NEW <code>src/hooks/useEnrichedRecalls.js</code>: given recalls, fetch missing customers via <code>getCustomer</code> into a ref-Map cache, return enriched array. TDD the pure helpers first (<code>tests/recall-customer-name.test.js</code>: overlay resolves kiosk-shape names, keeps existing when customer missing, empty-id passthrough). Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task B2 — wire enrich (3 surfaces) + RecallRow date chip</h3>
+<p>RecallTab / RecallFrontendView / RecallCard: pass <code>useEnrichedRecalls(recalls)</code> output to RecallList (and ensure the enriched recall flows to the modals opened from rows). RecallRow: add the date chip — <code>status==='no-answer' &amp;&amp; snoozedUntil</code> → <code>📞 โทรอีกครั้ง {formatThaiDate(snoozedUntil)}</code>; <code>outcome==='reschedule' &amp;&amp; snoozedUntil</code> → <code>📅 เลื่อนนัด {…}</code>; else pending+snoozedUntil → <code>📅 เลื่อนถึง {…}</code>. Date dd/mm/yyyy พ.ศ. (reuse the ED-followup formatter). RTL + source-grep tests. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task B3 — RecallCreateModal resolver + createRecall snapshot + nuke script</h3>
+<p>RecallCreateModal: picker display + save-time <code>customerName</code> use <code>resolveCustomerDisplayName(picked)</code> (line ~211/337). NEW <code>scripts/nuke-test-recall-cases.mjs</code> (Rule M): delete be_recall_cases id startsWith <code>TEST-CASE-</code> + be_recalls id startsWith <code>TEST-</code>/<code>E2E-</code>; dry-run→--apply + audit. Tests + commit.</p>
+</div>
+
+<div class="task">
+<h3>Task C1 — Rule I flow-simulate + AV + full vitest + build</h3>
+<p>NEW <code>tests/dup-customer-flow-simulate.test.js</code> (create→dup-detect→override→edit-reclaim→delete-frees-claim, pure mirrors of the tx logic) + <code>tests/recall-fixes-flow-simulate.test.js</code> (enrich→render name→date chip→delete). AV invariants in audit-anti-vibe-code (addCustomer MUST claim; recall name MUST resolve via helper). Source-grep regression locks. Run <code>npm test -- --run</code> (full) + <code>npm run build</code>. Fix V21 lock-ins. Commit.</p>
+</div>
+
+<div class="task">
+<h3>Task C2 — Rule Q L2 e2e on real prod (admin-SDK, TEST fixtures)</h3>
+<p>NEW <code>scripts/e2e-dup-customer-and-recall.mjs</code>: (1) <strong>concurrent double-create</strong> — 2 parallel claim-tx with same identity → exactly 1 wins, other throws (proves Rule-T atomicity on real prod). (2) edit changes id → old claim freed + new claimed. (3) cascade deletes the claim. (4) recall enrich — seed a recall with empty customerName + a real customer → overlay resolves the name. (5) nuke dry-run finds TEST junk. All TEST-prefixed + cleaned up + audit doc. Run; report PASS/FAIL. <strong>Honest gap</strong>: client-SDK rules-enforcement + backend-authed L1 = post-deploy (Probe-Deploy-Probe + user hands-on).</p>
+</div>
+
+<h2>Self-review</h2>
+<p>Spec coverage: item 1 (dup) = A1-A6,A9; item 2 (double-save) = A2 atomic + A7; item 3 (name) = B1-B2; item 4 (clickable) = existing + B2 (verify); items 6/7 (dates) = B2; item 5 (delete) = A5 + B3 nuke + appointment-delete verify in C2/impl. No placeholders — every task has files + code shape + test. Types consistent: <code>deriveClaimKey</code>/<code>DuplicateIdentityError</code>/<code>_identityClaimKey</code>/<code>overlayRecallNames</code>/<code>useEnrichedRecalls</code> used identically across tasks.</p>
+
+</body>
+</html>
