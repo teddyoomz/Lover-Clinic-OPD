@@ -22,7 +22,7 @@ import { aaAccent } from '../lib/themeAccent.js';
 import { listenToAssessments } from '../lib/scopedDataLayer.js';
 import { pickKioskAssessmentFields } from '../lib/kioskAssessmentFields.js';
 import { latestRounds } from '../lib/assessmentRoundsCore.js';
-import { scoreForType, ED_TYPE_META, stripScreeningSection } from '../lib/edScoreDisplay.js';
+import { scoreForType, ED_TYPE_META, stripScreeningSection, formatRoundDate } from '../lib/edScoreDisplay.js';
 // 2026-05-25 — Storage-ref for ALL treatment blobs (photos / lab images / PDFs).
 // Class-of-bug fix (Rule P): inline base64 in be_treatments doc → 1 MiB cap →
 // intermittent save failure + upload jank. Mirrors the 2026-05-22 chart fix.
@@ -535,6 +535,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // ED Score (2026-06-15) — the customer's follow-up assessment rounds (universal
   // listener). หมายเหตุทั่วไป shows the latest 2 (date + scores) for doctor context.
   const [edAssessments, setEdAssessments] = useState([]);
+  const [customerCreatedISO, setCustomerCreatedISO] = useState(''); // R4 — intake-round date fallback (admission)
   useEffect(() => {
     if (!customerId) { setEdAssessments([]); return; }
     const unsub = listenToAssessments(
@@ -544,7 +545,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     );
     return () => unsub();
   }, [customerId]);
-  const edIntakePerf = useMemo(() => pickKioskAssessmentFields(patientData || {}), [patientData]);
+  // R4 (2026-06-15) — give the intake round (round 1) a date. Diag confirmed
+  // saved customers' patientData.assessmentDate is typically undefined, so fall
+  // back to the customer's createdAt (admission date) as "วันที่รับเข้า". Merged
+  // HERE (not in the shared AV194 pickKioskAssessmentFields helper) so other
+  // consumers are untouched; hasPerf/typesInRaw only inspect adam_/iief_/mrs_/symp_pe.
+  const edIntakePerf = useMemo(
+    () => ({ ...pickKioskAssessmentFields(patientData || {}), assessmentDate: (patientData?.assessmentDate || customerCreatedISO || '') }),
+    [patientData, customerCreatedISO],
+  );
   const edLatest2 = useMemo(() => latestRounds(edIntakePerf, edAssessments, 2), [edIntakePerf, edAssessments]);
   const edStrippedNote = useMemo(() => stripScreeningSection(customerNote).trim(), [customerNote]);
   // Phase 26.2b (V26.2, 2026-05-13) — History tab strip: top-5 recent treatments.
@@ -1020,6 +1029,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               );
               // Phase 26.2a (V26.2, 2026-05-13) — stamp customer note for display above doctor-save button.
               setCustomerNote(custData?.note || custData?.patientData?.note || patientData?.note || '');
+              // R4 — capture admission date (Bangkok YYYY-MM-DD) as the intake-round date fallback.
+              const _ca = custData?.createdAt;
+              const _ms = _ca?.toMillis?.() ?? (typeof _ca === 'number' ? _ca : 0);
+              if (_ms) setCustomerCreatedISO(new Date(_ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }));
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
@@ -3745,9 +3758,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     <div className={edStrippedNote ? 'mt-3 pt-3 border-t border-amber-900/30' : ''} data-testid="tfp-ed-latest2">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-orange-400 mb-1.5">ED Score · 2 ครั้งล่าสุด</div>
                       <div className="flex flex-col gap-1">
-                        {edLatest2.map((r) => (
+                        {edLatest2.map((r) => {
+                          // R4 — readable date (dd/mm/yyyy พ.ศ.) + "วันนี้" badge when assessed today.
+                          // Block body (NOT IIFE-in-JSX — Vite OXC crashes on that).
+                          const fd = formatRoundDate(r.assessmentDate, thaiTodayISO());
+                          return (
                           <div key={r.id} className="flex items-center justify-between gap-2 text-[11px] bg-black/10 rounded px-2 py-1">
-                            <span className="text-[var(--tx-muted)] shrink-0">ครั้งที่ {r.round}{r.assessmentDate ? ` · ${r.assessmentDate}` : ''}</span>
+                            <span className="text-[var(--tx-muted)] shrink-0 whitespace-nowrap">
+                              ครั้งที่ {r.round}
+                              {fd.text ? <> · <span className="text-[var(--tx-secondary)]">{fd.text}</span></> : ''}
+                              {fd.isToday && <span className="ml-1 inline-block align-middle bg-orange-500/15 border border-orange-500/40 text-orange-300 rounded-full px-1.5 text-[9px] font-bold" data-testid="ed-today-badge">วันนี้</span>}
+                            </span>
                             <span className="text-[var(--tx-secondary)] text-right">
                               {r.types.map((t) => {
                                 const s = scoreForType(t, r.raw);
@@ -3756,7 +3777,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               }).filter(Boolean).join(' · ')}
                             </span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
