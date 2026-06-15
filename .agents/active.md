@@ -1,32 +1,31 @@
 ---
-updated_at: "2026-06-16 EOD+1 — Dup-customer prevention (Part A, Rule T) + Recall fixes (Part B) — ✅ DEPLOYED + Probe-Deploy-Probe green + Rule-M backfill/nuke APPLIED."
-status: "DEPLOYED to prod (firestore.rules + frontend). Probe-Deploy-Probe green (no regression, patient intake intact). Rule-M: 128 identity claims seeded + 131 denorm-stamped + 7 TEST-CASE junk deleted. Pending: USER L1 (backend-authed UI) + manual merge of 3 dup pairs."
+updated_at: "2026-06-16 EOD+2 — Mobile-load reliability (autoDetectLongPolling + useResilientLoad + LoadErrorRetry) SHIPPED + DEPLOYED + L1-verified LIVE."
+status: "DEPLOYED to prod (frontend-only, vercel). No firestore.rules change → no Probe-Deploy-Probe. Adversarial bug-hunt loop CONVERGED (R1→R4, R4 clean). full vitest 16673/0; L1 3/0 (live build); L2 7/0 (real prod)."
 branch: "master"
-last_commit: "c78378a9 — docs(agents): 3 dup pairs resolved (recall moved + dups deleted, 3→0)"
+last_commit: "d54d58c4 — fix(useResilientLoad): R3 resetKey in timer-effect deps (orphaned-timer); adversarial loop converged"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "frontend = lover-clinic-gpxsr048v (HEAD 380ce1ea + probe-fix 36bdbdfd) — DEPLOYED 2026-06-16. firestore.rules DEPLOYED (be_customer_identity + be_recall_cases delete-narrow)."
-firestore_rules_version: "DEPLOYED: + be_customer_identity (get/list:false/create-update-delete staff) + be_recall_cases delete if false→isClinicStaff. Probe #17 live (anon write/delete → 403)."
-tests: "16609 / 0 (full suite, +67 net) + build clean + L2 e2e 16/0 real prod. Probe-Deploy-Probe 8/8 pre+post."
+production_commit: "frontend = lover-clinic-p4uawr0kx (HEAD d54d58c4) — DEPLOYED 2026-06-16, aliased lover-clinic-app.vercel.app, HTTP 200. firestore.rules UNCHANGED."
+firestore_rules_version: "UNCHANGED (this batch = frontend-only). Last rules deploy = dup-customer prevention (be_customer_identity + be_recall_cases) 2026-06-16."
+tests: "full vitest 16673/0 (+~65: 61 new mobile-reliability + 4 fix tests) + build clean + L1 Playwright 3/0 (live deployed build, iPhone-13) + L2 cold-start 7/0 (real prod, both transports)."
 ---
 
-# Active — 2026-06-16 EOD+1 — Dup-customer prevention + Recall fixes (✅ DEPLOYED)
+# Active — 2026-06-16 EOD+2 — Mobile-load reliability (✅ DEPLOYED + L1-verified LIVE)
 
 ## State
-- master HEAD `36bdbdfd` (=origin), tree clean. ~11 commits. Spec+plan: `docs/superpowers/{specs,plans}/2026-06-16-dup-customer-and-recall-fixes*`.
-- Full vitest **16609/0** + build clean + **L2 e2e 16/0 real prod** + adversarial-review (found+fixed 2 HIGH bugs).
-- **DEPLOYED**: firestore.rules + Probe-Deploy-Probe **8/8 green** pre+post (opd_sessions anon→200 intact; be_customer_identity + be_recall_cases anon→403) + frontend live. Rule-M **APPLIED**: backfill 128 claims + 131 denorm (idempotent ✓), nuke 7 TEST-CASE junk (idempotent ✓), both with audit docs.
+- master HEAD `d54d58c4` (=origin), tree clean. prod = `lover-clinic-p4uawr0kx` @ lover-clinic-app.vercel.app (HTTP 200).
+- Adversarial bug-hunt LOOP **CONVERGED**: R1 (6-finder) → 1 race fixed; R2 → resetKey gap fixed; R3 → orphaned-timer (my own R2 fix) fixed; **R4 → 0 findings (clean)**.
+- full vitest **16673/0** + build clean + **Rule Q L1 3/0 on the LIVE deployed build** + **Rule Q L2 7/0 real prod**.
 
-## What shipped (`/brainstorming`→spec→plan→14 tasks + adversarial review)
-- **Part A (Rule T dup-prevention):** `addCustomer` (single chokepoint) → ONE runTransaction claims `be_customer_identity/{CITIZEN:|PASSPORT:key}` (deriveClaimKey/resolveClaimAction in `src/lib/customerIdentity.js`) + counter + customer-doc; throws DUPLICATE_IDENTITY; override → `linkedCustomerIds` + `_duplicateOfCustomerId`. `updateCustomerFromForm` frees-old+claims-new on id change (oldKey re-derived IN-tx — race-safe). `deleteCustomerCascade` + server endpoint free/promote the claim. `CustomerCreatePage` warn modal (เปิดของเดิม / บันทึกซ้ำอยู่ดี) + phone soft-hint. OPD/deposit → `addCustomerOrLinkExisting` (DUPLICATE_IDENTITY → link existing, real HN). CDV flagged-dup badge. firestore.rules + probe #17.
-- **Part B (recall):** `overlayRecallNames`/`useEnrichedRecalls` live-resolve customer name at the load chokepoint → fixes "—" in 3 lists + 5 modal headers (already clickable). RecallRow snooze/reschedule date chip (📞 โทรอีกครั้ง / 📅 เลื่อนนัด, dd/mm/yyyy พ.ศ.). `be_recall_cases` delete narrowed (rules). RecallCreateModal resolver.
+## What shipped (`/brainstorming`→spec→`/writing-plans`→inline impl→adversarial hunt)
+- **Connection layer (the big lever):** `firebase.js` `getFirestore`→`initializeFirestore({experimentalAutoDetectLongPolling:true})` — heals half-dead WebSocket on flaky mobile (no persistence, Q1 fresh-always).
+- **Shared:** `firestoreReconnect.js` (module-debounced disableNetwork→enableNetwork) · `useResilientLoad.js` (loading/ready/error + 8s soft-timeout → 1 auto-retry → error; sync settledRef guard; resetKey re-arm) · `LoadErrorRetry.jsx` (error+retry card, theme-aware).
+- **Wired:** App.jsx (V17→shared reconnect + resilient anon-auth gate = kills black-screen-forever) · PatientForm / ClinicSchedule / PatientDashboard (resilient load + error+retry escape; PatientDashboard retry-budget widened) · AdminDashboard (resilient queue banner, resetKey:selectedBranchId) · useBranchAwareListener (silent auto-heal for backend tabs) · BackendDashboard (Suspense chunk-load retry).
+- Headline proof (captured live): half-dead Firestore that hung the OLD code forever now auto-recovers at 8s WITHOUT refresh (t3s กำลังโหลด → t10s resolved via reconnect→fromCache); blocked anon-auth → ลองใหม่ card instead of permanent black screen.
 
 ## Next action
-- **USER L1 hands-on** (preview server can also login as admin — `loverclinic@loverclinic.com`/`Lover2024`): on the app — (a) create a customer with an existing national-id → dup warn modal + เปิดของเดิม/บันทึกซ้ำอยู่ดี; (b) recall list real names + clickable + 📞/📅 date chips + ลบเคส works; (c) the 7 TEST-CASE presets gone.
-
-## Done this session (beyond the feature)
-- ✅ **3 dup-customer pairs RESOLVED** (`scripts/fix-dup-customer-pairs.mjs --apply`, audit doc): pair1 LC-069 (empty) deleted/keep LC-074; pair2 **LC-125's recall MOVED → LC-123** then LC-125 deleted; pair3 LC-143+155 (test) both deleted. **3→0 dups** (re-verified). LESSON: missed `be_recalls` in the first footprint (NOT in CUSTOMER_CASCADE_COLLECTIONS) — user caught it → `feedback_full_customer_footprint_before_delete.md`.
+- Idle / await next task. (USER hands-on optional: the staff-app AdminDashboard queue banner + backend-tab auto-heal aren't in the automated L1 — covered by unit + L2; verify in real use if desired.)
 
 ## Outstanding (carried)
 - ⚠ ROTATE LINE/FB secrets (AV195).
-- Pending chip: encode customer id in the LINE OA message URL (pre-existing, out of scope — `task_1a3ac96c`).
-- Honest gap (Rule Q): the tx ALGORITHM + concurrency is L2-proven on real prod; claim throw/override/reclaim EXECUTED in `tests/dup-customer-claim-execution.test.js`; anon-deny PROVEN by Probe-Deploy-Probe #17 (live). The staff-writes-via-client-SDK + backend-authed UI = USER L1 (above).
+- Pending chip: encode customer id in the LINE OA message URL (`task_1a3ac96c`).
+- Honest gap (Rule Q): customer-link L1 (auth-gate + half-dead-firestore + normal) PROVEN on the live build. AdminDashboard queue banner + backend useBranchAwareListener auto-heal = unit + L2 proven; real-staff-browser hands-on optional. PatientDashboard `/api/patient-view` resilience = L2 (vite dev doesn't serve /api) + source; live behaviour same wiring.
