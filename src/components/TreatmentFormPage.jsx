@@ -17,6 +17,12 @@ import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster, buildReDeductListWithCarryForward, buildCourseItemsForSave } from '../lib/treatmentBuyHelpers.js';
 import { chartEntryForPersist } from '../lib/tabletChartTools.js';
 import { aaAccent } from '../lib/themeAccent.js';
+// ED Score (2026-06-15) — หมายเหตุทั่วไป shows the latest-2 ED rounds (doctor
+// context while writing) + strips the baked ED screening from the note.
+import { listenToAssessments } from '../lib/scopedDataLayer.js';
+import { pickKioskAssessmentFields } from '../lib/kioskAssessmentFields.js';
+import { latestRounds } from '../lib/assessmentRoundsCore.js';
+import { scoreForType, ED_TYPE_META, stripScreeningSection } from '../lib/edScoreDisplay.js';
 // 2026-05-25 — Storage-ref for ALL treatment blobs (photos / lab images / PDFs).
 // Class-of-bug fix (Rule P): inline base64 in be_treatments doc → 1 MiB cap →
 // intermittent save failure + upload jank. Mirrors the 2026-05-22 chart fix.
@@ -526,6 +532,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [loadedTreatmentCompletedAt, setLoadedTreatmentCompletedAt] = useState(null);
   // Phase 26.2a (V26.2, 2026-05-13) — customer.note display above doctor-save button.
   const [customerNote, setCustomerNote] = useState('');
+  // ED Score (2026-06-15) — the customer's follow-up assessment rounds (universal
+  // listener). หมายเหตุทั่วไป shows the latest 2 (date + scores) for doctor context.
+  const [edAssessments, setEdAssessments] = useState([]);
+  useEffect(() => {
+    if (!customerId) { setEdAssessments([]); return; }
+    const unsub = listenToAssessments(
+      customerId,
+      setEdAssessments,
+      (err) => console.warn('[TreatmentFormPage] assessments listener failed:', err),
+    );
+    return () => unsub();
+  }, [customerId]);
+  const edIntakePerf = useMemo(() => pickKioskAssessmentFields(patientData || {}), [patientData]);
+  const edLatest2 = useMemo(() => latestRounds(edIntakePerf, edAssessments, 2), [edIntakePerf, edAssessments]);
+  const edStrippedNote = useMemo(() => stripScreeningSection(customerNote).trim(), [customerNote]);
   // Phase 26.2b (V26.2, 2026-05-13) — History tab strip: top-5 recent treatments.
   const [historyTreatments, setHistoryTreatments] = useState([]);
   const [selectedHistoryTreatmentId, setSelectedHistoryTreatmentId] = useState(null);
@@ -3702,7 +3723,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* Phase 26.2f-pre (V26.2f, 2026-05-13) — หมายเหตุทั่วไป moved from RIGHT column
                 to LEFT column (between ข้อมูลการรักษา and ข้อมูลสุขภาพลูกค้า) per user spec. */}
-            {customerNote && (
+            {(edStrippedNote || edLatest2.length > 0) && (
               <div
                 data-testid="tfp-customer-note"
                 className="mb-3 bg-amber-950/10 border border-amber-900/40 rounded-xl overflow-hidden"
@@ -3714,9 +3735,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   </h3>
                 </div>
                 <div className="p-3">
-                  <pre className="text-xs text-[var(--tx-secondary)] whitespace-pre-wrap font-sans leading-relaxed">
-                    {String(customerNote || '').trim()}
-                  </pre>
+                  {/* ED Score (2026-06-15) — baked ED screening stripped; clean latest-2 shown below */}
+                  {edStrippedNote && (
+                    <pre className="text-xs text-[var(--tx-secondary)] whitespace-pre-wrap font-sans leading-relaxed" data-testid="tfp-customer-note-text">
+                      {edStrippedNote}
+                    </pre>
+                  )}
+                  {edLatest2.length > 0 && (
+                    <div className={edStrippedNote ? 'mt-3 pt-3 border-t border-amber-900/30' : ''} data-testid="tfp-ed-latest2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-orange-400 mb-1.5">ED Score · 2 ครั้งล่าสุด</div>
+                      <div className="flex flex-col gap-1">
+                        {edLatest2.map((r) => (
+                          <div key={r.id} className="flex items-center justify-between gap-2 text-[11px] bg-black/10 rounded px-2 py-1">
+                            <span className="text-[var(--tx-muted)] shrink-0">ครั้งที่ {r.round}{r.assessmentDate ? ` · ${r.assessmentDate}` : ''}</span>
+                            <span className="text-[var(--tx-secondary)] text-right">
+                              {r.types.map((t) => {
+                                const s = scoreForType(t, r.raw);
+                                if (!s) return null;
+                                return s.boolean ? `${ED_TYPE_META[t].label} ${s.present ? 'มีอาการ' : '-'}` : `${ED_TYPE_META[t].label} ${s.value}/${s.max}`;
+                              }).filter(Boolean).join(' · ')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3742,7 +3785,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 ].map(([key, label, val, setter]) => (
                   <div key={key}>
                     <label className={labelCls}>{label}</label>
-                    <LocalTextarea value={val} onCommit={setter} rows={2} className={`${inputCls} resize-none`} placeholder={label} />
+                    <LocalTextarea value={val} onCommit={setter} rows={4} className={`${inputCls} resize-none`} placeholder={label} />
                   </div>
                 ))}
               </div>
@@ -3799,9 +3842,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 {[
                   ['symptoms', 'CC — อาการ (Chief Complaint)', 3],
                   ['physicalExam', 'PE — ตรวจร่างกาย (Physical Exam)', 3],
-                  ['diagnosis', 'DX — วินิจฉัยโรค (Diagnosis)', 3],
-                  ['treatmentInfo', 'Tx — รักษา / Dr. Note', 3],
-                  ['treatmentPlan', 'Plan — แผนการรักษา', 2],
+                  ['diagnosis', 'DX — วินิจฉัยโรค (Diagnosis)', 6],
+                  ['treatmentInfo', 'Tx — รักษา / Dr. Note', 6],
+                  ['treatmentPlan', 'Plan — แผนการรักษา', 4],
                   ['treatmentNote', 'Note — หมายเหตุการรักษา', 2],
                   ['additionalNote', 'หมายเหตุเพิ่มเติม', 2],
                 ].map(([key, label, rows]) => (
