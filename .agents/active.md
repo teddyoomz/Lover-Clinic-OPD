@@ -1,32 +1,33 @@
 ---
-updated_at: "2026-06-15 EOD+2 — ED Score box + follow-up assessment SHIPPED + DEPLOYED (brainstorm→plan→14-task impl→Rule Q L2 12/0→deploy). 16482/0."
-status: "Feature LIVE. master=3cf4b01b (=origin), prod frontend=019df953 LIVE + firestore.rules DEPLOYED (be_assessments) + functions (materialize CF). Tree clean."
+updated_at: "2026-06-16 — ED follow-up v2 (confirm card / latest-link-only / round dates) + 🔴 province submit-blocker fix — SHIPPED local, NOT deployed. 16531/0."
+status: "Feature complete on master (=origin). NOT deployed (awaiting explicit 'deploy'). Frontend-only — no firestore.rules / CF / data-migration change."
 branch: "master"
-last_commit: "3cf4b01b — chore(ed-score): Rule B probe #17 — be_assessments anon-lockdown (client SDK, 3/3 DENIED post-deploy)"
+last_commit: "c2278190 — test(ed-followup): Rule Q L2 e2e on real prod (13/0)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "frontend = 019df953 LIVE (HTTP 200; ED Score box + materialize CF); firestore.rules = +be_assessments (deployed, Probe-Deploy-Probe)."
-firestore_rules_version: "WS1 + C2-bis + be_assessments (staff-only read/create/update/DELETE)."
-tests: "16482 / 0 (this session's last run — NOT re-run per no-tests rule)."
+production_commit: "frontend = 019df953 (PRE-v2; ED Score box). ED follow-up v2 NOT yet deployed."
+firestore_rules_version: "unchanged (WS1 + C2-bis + be_assessments). v2 needs NO rules change."
+tests: "16531 / 0 (full suite, 2 clean runs; intermittent load-flakes pass on re-run per V161)."
 ---
 
-# Active — 2026-06-15 EOD+2 — ED Score box + follow-up assessment (SHIPPED + DEPLOYED)
+# Active — 2026-06-16 — ED follow-up v2 + province bug-fix (SHIPPED local, NOT deployed)
 
-## State
-- prod LIVE: vercel frontend `019df953` + firebase rules (+be_assessments) + functions (`sendPushOnSubmit` materialize CF). master HEAD `3cf4b01b` (=origin; probe #17 diag, non-bundled). Tree clean.
-- Full vitest **16482/0** + build clean + **Rule Q L2 12/0 on REAL prod** + flow-simulate 6/0. 6-agent adversarial hunt + full-suite caught & fixed 5 real issues + 3 V21 test fixups + audit-design a11y.
-- Zero-migration: round 1 derived LIVE from intake patientData → LC-26000082 (just backfilled) shows immediately, no data migration.
+## What shipped (brainstorm→spec→plan→8 tasks→Rule Q L1+L2)
+- **R1** read-only confirm card on the follow-up link (ชื่อ-สกุล + อายุ + เบอร์ปิดกลาง, passive, neutral colors) — `confirmInfo` snapshotted into the opd_session at generation (anon can `get` session, can't read be_customers → no rule change). Fallback to editable fields when no confirmInfo (pre-ship links don't break).
+- **R2** session pill (`FW-ED-…`) removed from all PatientForm modes.
+- **R3** `supersedePendingFollowups({customerId,branchId})` — on "สร้างลิงก์" deletes prior PENDING follow-up session + its linked pending round → only the latest link per customer+branch is valid.
+- **R4** TFP "หมายเหตุทั่วไป" ED-Score strip shows each round's date (dd/mm/yyyy พ.ศ.) + **"วันนี้"** badge when == today. Intake-round date = `patientData.assessmentDate || customer.createdAt` (diag: saved customers lack assessmentDate → createdAt fallback REQUIRED).
+- **🔴 BUG-FIX** `PatientForm.jsx` province check was UNconditional → blocked follow-up submit ("กรุณาเลือกจังหวัด") → **customers could never submit a follow-up** (live on prod). Gated to `isIntake && !province`.
 
-## What this session shipped
-- **ED Score box** in CustomerDetailView (right col, under the 4-tab course box): latest round hero + 4 chips (ADAM/IIEF/MRS/PE) + expandable deletable history (followups only; intake `__intake__` not deletable) + "ครั้งที่ N" send button. Theme-aware both themes; Thai-culture safe (no red on names).
-- **EDFollowupModal** — round-aware type picker + per-round link + **full-screen mobile QR** (`generateQrDataUrl width:600`). Neutral `formType:'followup_assessment'` (PatientForm gates by `types[]`); 128-bit crypto id; `expiresAt` = +1 day OR on-complete.
-- **be_assessments** durable collection (`createAssessmentRound`/`deleteAssessmentRound`/`createAssessmentSession`/`listenToAssessments`) + BSA universal listener + `assessmentRoundsCore.js` (date-rank derived round# → delete renumbers) + `edScoreDisplay.js`.
-- **Materialize CF** — `sendPushOnSubmit` runs `assessmentMaterialize` (non-fatal, canonical BASE_PATH) → completed follow-up → durable round.
-- **TFP/CDV note** — strip ED from CDV note; TFP หมายเหตุทั่วไป shows clean ED latest-2 + dates (`generateClinicalSummary(...,includeScreening=false)` for the note builder ONLY; print/intake-view keep it). DX/Tx/Plan 2× taller (rows 6/6/4) + health-info rows 4 → both save buttons row-align.
-- Detail → checkpoint `.agents/sessions/2026-06-15-ed-score-feature.md`.
+## Verification (Rule Q — "perfect 100%")
+- **L1 real browser (real prod data)**: confirm card renders (name/age/masked-phone, NO inputs, NO pill); customer filled + **submitted → "ส่งข้อมูลสำเร็จ"** (province fix proven end-to-end). TEST session cleaned up.
+- **L2 e2e real prod 13/0**: supersede deletes exactly the matching pending (completed/other-branch/other-customer survive) + confirmInfo round-trip + submit-no-date→materialize-dated-today + intake 20/05/2569 + zero orphans.
+- Full vitest **16531/0** (2 clean runs) + build clean + Rule I flow-simulate 6/0 + pure helpers 26/0.
+- **Honest L1 gap**: the R4 "วันนี้" badge in the BACKEND TFP note was NOT pixel-rendered in a browser (needs staff login + open LC-26000082 in TFP) — covered by formatRoundDate unit + flow-sim + L2 (round-dated-today) + source-grep. = USER hands-on if wanted.
 
 ## Next action
-- **USER hands-on L1** on live prod (lover-clinic-app.vercel.app): the box on LC-26000082; send modal + full-screen QR; customer fills → materialize; delete a round → renumber; TFP note + button alignment; both themes. (L1 visual gap honestly disclosed — no browser connected this session.)
+- **DEPLOY** when you say "deploy" (V18): frontend-only `vercel --prod` — NO firestore.rules change → NO Probe-Deploy-Probe. Then optional USER L1 of the R4 วันนี้ badge in TFP.
+- Candidate V-entry (session-end): "L2/admin-SDK e2e BYPASSES client-side handleSubmit validation → an unsubmittable form (province block) shipped; only L1 real-browser submit catches it." Rule Q class.
 
-## Outstanding user-triggered actions
-- ⚠ ROTATE LINE/FB secrets (chat_config held OLD — AV195, carried).
-- ภูดิท LC-26000151 = unrecoverable by data (session deleted + not in backups) → clinical re-assessment.
+## Outstanding (carried)
+- ⚠ ROTATE LINE/FB secrets (AV195).
+- ภูดิท LC-26000151 unrecoverable → clinical re-assessment.
