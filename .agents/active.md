@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-06-16 — ED follow-up v2 (confirm card / latest-link-only / round dates) + 🔴 province submit-blocker fix — SHIPPED local, NOT deployed. 16531/0."
-status: "Feature complete on master (=origin). NOT deployed (awaiting explicit 'deploy'). Frontend-only — no firestore.rules / CF / data-migration change."
+updated_at: "2026-06-16 — ED follow-up v2 (confirm card / latest-link-only / round dates + intake-date preserve B) + 🔴 province fix — SHIPPED local, backfill APPLIED, NOT deployed. 16542/0."
+status: "Feature complete on master (=origin). NOT deployed (awaiting 'deploy'). Frontend-only — no firestore.rules / CF change. Rule-M backfill (assessmentDate ×154) APPLIED to prod."
 branch: "master"
-last_commit: "c2278190 — test(ed-followup): Rule Q L2 e2e on real prod (13/0)"
+last_commit: "6d3b35fc — feat(ed-followup): R4 consistency — CDV ED box also shows round date + วันนี้"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "frontend = 019df953 (PRE-v2; ED Score box). ED follow-up v2 NOT yet deployed."
+production_commit: "frontend = 019df953 (PRE-v2). ED follow-up v2 NOT yet deployed. (be_customers.assessmentDate backfill is LIVE data, but the date display needs the v2 deploy.)"
 firestore_rules_version: "unchanged (WS1 + C2-bis + be_assessments). v2 needs NO rules change."
-tests: "16531 / 0 (full suite, 2 clean runs; intermittent load-flakes pass on re-run per V161)."
+tests: "16542 / 0 (full suite; intermittent load-flakes pass on re-run per V161)."
 ---
 
 # Active — 2026-06-16 — ED follow-up v2 + province bug-fix (SHIPPED local, NOT deployed)
@@ -24,9 +24,15 @@ tests: "16531 / 0 (full suite, 2 clean runs; intermittent load-flakes pass on re
 - Full vitest **16531/0** (2 clean runs) + build clean + Rule I flow-simulate 6/0 + pure helpers 26/0.
 - **Honest L1 gap**: the R4 "วันนี้" badge in the BACKEND TFP note was NOT pixel-rendered in a browser (needs staff login + open LC-26000082 in TFP) — covered by formatRoundDate unit + flow-sim + L2 (round-dated-today) + source-grep. = USER hands-on if wanted.
 
+## B — intake-date accuracy (เอาแม่นๆ, 2026-06-16)
+- `patientData.assessmentDate` was dropped by the kiosk→customer projection (0/40 had it). Now PRESERVED: kioskPatientToCanonical → snake `assessment_date` → buildPatientDataFromForm renames → camelCase; buildFormFromCustomer round-trips (edit-safe); addCustomer stamps `thaiTodayISO()` once at CREATE. (AV194/V141 class.)
+- **Backfill APPLIED** (Rule M, audit `backfill-assessmentdate-1781546629477-…`): 154 customers — 29 from EXACT intake-session date, 125 from createdAt; idempotent (re-run 0). LC-26000082 → `2026-05-20`. Proven: the intake date IS findable (LC-82 intake session `BL-1779253531712` assessmentDate "2026-05-20" === createdAt).
+- R4 now shows the date in BOTH the TFP note AND the CDV ED box (dd/mm/yyyy พ.ศ. + วันนี้).
+
 ## Next action
-- **DEPLOY** when you say "deploy" (V18): frontend-only `vercel --prod` — NO firestore.rules change → NO Probe-Deploy-Probe. Then optional USER L1 of the R4 วันนี้ badge in TFP.
-- Candidate V-entry (session-end): "L2/admin-SDK e2e BYPASSES client-side handleSubmit validation → an unsubmittable form (province block) shipped; only L1 real-browser submit catches it." Rule Q class.
+- **DEPLOY** when you say "deploy" (V18): frontend-only `vercel --prod` — NO firestore.rules change → NO Probe-Deploy-Probe. (Backfill data is already LIVE; the date DISPLAY needs this deploy.)
+- Honest L1 gap: backend-authed pixel render (CDV box + TFP "วันนี้") = USER hands-on after deploy (no staff creds for an automated backend L1; confirm-card + province-submit WERE L1-verified via the anon link).
+- Candidate V-entries (session-end): (1) "L2/admin-SDK e2e BYPASSES client handleSubmit validation → unsubmittable province-block shipped; only L1 real-browser submit caught it." (2) "patientData field-drop in the customer projection recurs (assessmentDate, after AV194 perf + V141 visit_reasons) — projection needs a preserved-field audit." Rule Q / AV194 class.
 
 ## Outstanding (carried)
 - ⚠ ROTATE LINE/FB secrets (AV195).
