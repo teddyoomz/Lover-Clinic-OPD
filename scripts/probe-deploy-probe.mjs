@@ -73,7 +73,41 @@ async function probe1_chatConversations(ts) {
   const r = await http('POST', url, {
     body: { fields: { probe: { booleanValue: true }, _probeAt: { stringValue: new Date().toISOString() } } },
   });
-  return { name: 'chat_conversations POST', docId, status: r.status, ok: r.ok, error: r.ok ? null : r.text.slice(0, 200) };
+  // WS1 (2026-06-10) flipped chat_conversations create 200→403 (staff-only; webhook
+  // writes via admin SDK). INVERTED — anon POST MUST be 403; a 200 = rule regressed.
+  return {
+    name: 'chat_conversations anon POST (expect 403 — WS1 staff-only)',
+    docId, status: r.status,
+    ok: r.status === 403,
+    error: r.status === 403 ? null : `expected 403 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
+}
+
+async function probe17_customerIdentityAnon(ts) {
+  // 2026-06-16 Part A — be_customer_identity is staff-only (list:false; create/
+  // update/delete if isClinicStaff). Anon POST MUST be 403. INVERTED probe.
+  const docId = `CITIZEN:TEST-PROBE-${ts}`;
+  const url = `${FIRESTORE_BASE}/${DATA_PATH}/be_customer_identity?documentId=${encodeURIComponent(docId)}`;
+  const r = await http('POST', url, { body: { fields: { customerId: { stringValue: 'PROBE' } } } });
+  return {
+    name: 'be_customer_identity anon WRITE (expect 403)',
+    status: r.status,
+    ok: r.status === 403,
+    error: r.status === 403 ? null : `expected 403 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
+}
+
+async function probe17b_recallCasesAnonDelete() {
+  // 2026-06-16 Part A — be_recall_cases delete narrowed `if false`→isClinicStaff.
+  // Anon DELETE MUST still be 403. INVERTED probe.
+  const url = `${FIRESTORE_BASE}/${DATA_PATH}/be_recall_cases/test-probe-anon-delete`;
+  const r = await http('DELETE', url);
+  return {
+    name: 'be_recall_cases anon DELETE (expect 403)',
+    status: r.status,
+    ok: r.status === 403,
+    error: r.status === 403 ? null : `expected 403 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
 }
 
 async function probe5_anonOpdSessions(ts) {
@@ -194,6 +228,8 @@ async function runProbe(label) {
     probe10_staffChatAttachmentsAnon(ts),
     probe11_customerBackupsAnon(ts),
     probe12_beFbConfigsAnon(ts),
+    probe17_customerIdentityAnon(ts),
+    probe17b_recallCasesAnonDelete(),
   ]);
   let allOk = true;
   for (const r of results) {
