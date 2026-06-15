@@ -27,18 +27,24 @@ function getDb() {
 }
 const data = () => getDb().collection('artifacts').doc(APP_ID).collection('public').doc('data');
 
-// Pure helper (also unit-tested) — is this doc-id a TEST/E2E junk id for this collection?
-export function isJunkRecallId(collection, id) {
+// Pure helper (also unit-tested) — is this doc TEST/E2E junk?
+// be_recall_cases doc-ids are auto-generated CASE-{ts}-{hex}, so the TEST junk
+// is identified by the caseName field (e.g. "TEST-CASE-PHASE2922-RB1-PRP-7d");
+// also match a TEST-/E2E- doc-id defensively. be_recalls = doc-id prefix.
+export function isJunkRecallId(collection, id, doc = {}) {
   const s = String(id || '');
-  if (collection === 'be_recall_cases') return s.startsWith('TEST-CASE-') || s.startsWith('TEST-') || s.startsWith('E2E-');
+  if (collection === 'be_recall_cases') {
+    const name = String(doc?.caseName || '');
+    return s.startsWith('TEST-') || s.startsWith('E2E-') || name.startsWith('TEST-') || name.startsWith('E2E-');
+  }
   if (collection === 'be_recalls') return s.startsWith('TEST-') || s.startsWith('E2E-');
   return false;
 }
 
 async function nukeCollection(name) {
   const snap = await data().collection(name).get();
-  const victims = snap.docs.filter((d) => isJunkRecallId(name, d.id));
-  const sample = victims.slice(0, 8).map((d) => d.id);
+  const victims = snap.docs.filter((d) => isJunkRecallId(name, d.id, d.data()));
+  const sample = victims.slice(0, 8).map((d) => `${d.id} (${d.data().caseName || ''})`);
   if (APPLY) {
     // Chunk deletes (batch cap 500).
     for (let i = 0; i < victims.length; i += 450) {

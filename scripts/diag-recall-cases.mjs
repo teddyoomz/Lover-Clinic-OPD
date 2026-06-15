@@ -1,0 +1,13 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+const APP_ID = 'loverclinic-opd-4c39b';
+const env = Object.fromEntries(readFileSync(path.resolve(process.cwd(), '.env.local.prod'), 'utf8').split(/\r?\n/).filter((l) => l.includes('=')).map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, '')]; }));
+if (!getApps().length) initializeApp({ credential: cert({ projectId: APP_ID, clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL, privateKey: env.FIREBASE_ADMIN_PRIVATE_KEY.split('\\n').join('\n') }) });
+const db = getFirestore();
+const data = () => db.collection('artifacts').doc(APP_ID).collection('public').doc('data');
+const s = await data().collection('be_recall_cases').get();
+console.log('be_recall_cases (', s.size, '):');
+s.docs.forEach((d) => console.log('  id=', d.id, '| caseName=', JSON.stringify(d.data().caseName), '| isHidden=', d.data().isHidden));
+process.exit(0);

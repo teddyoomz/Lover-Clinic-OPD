@@ -59,13 +59,17 @@ describe('C1 recall date chip (items 6/7)', () => {
 });
 
 describe('C1 nuke TEST junk classifier', () => {
-  it('be_recall_cases: TEST-CASE-* / TEST-* / E2E-* are junk; CASE-* is NOT', () => {
-    expect(isJunkRecallId('be_recall_cases', 'TEST-CASE-PHASE2922-RB1-PRP-7d')).toBe(true);
-    expect(isJunkRecallId('be_recall_cases', 'TEST-CASE-PHASE2922-RB3-Acne-21d')).toBe(true);
-    expect(isJunkRecallId('be_recall_cases', 'E2E-CASE-x')).toBe(true);
-    expect(isJunkRecallId('be_recall_cases', 'CASE-1781000000000-abcd')).toBe(false); // real preset
+  it('be_recall_cases: junk is identified by caseName (real doc-id is CASE-{ts}-{hex})', () => {
+    // The user-reported junk: doc-id CASE-…, caseName "TEST-CASE-PHASE2922-…"
+    expect(isJunkRecallId('be_recall_cases', 'CASE-1778751254993-0397', { caseName: 'TEST-CASE-PHASE2922-RB1-PRP-7d' })).toBe(true);
+    expect(isJunkRecallId('be_recall_cases', 'CASE-1778751270649-9068', { caseName: 'TEST-CASE-PHASE2922-RB3-Acne-21d' })).toBe(true);
+    // real presets — NOT junk
+    expect(isJunkRecallId('be_recall_cases', 'CASE-1778759961894-5252', { caseName: 'โทรติดตามอาการ 1 วัน' })).toBe(false);
+    expect(isJunkRecallId('be_recall_cases', 'CASE-1781430859094-e395', { caseName: 'ติดตามอาการหลังทานยา 1 เดือน' })).toBe(false);
+    // defensive: a TEST-/E2E- doc-id is also junk
+    expect(isJunkRecallId('be_recall_cases', 'E2E-CASE-x', {})).toBe(true);
   });
-  it('be_recalls: TEST-* / E2E-* junk; RECALL-* is NOT', () => {
+  it('be_recalls: TEST-* / E2E- doc-id junk; RECALL-* is NOT', () => {
     expect(isJunkRecallId('be_recalls', 'TEST-R-1')).toBe(true);
     expect(isJunkRecallId('be_recalls', 'E2E-R-1')).toBe(true);
     expect(isJunkRecallId('be_recalls', 'RECALL-1781-abcd')).toBe(false);
