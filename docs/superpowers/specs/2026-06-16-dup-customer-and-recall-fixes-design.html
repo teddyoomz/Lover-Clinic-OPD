@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Duplicate-customer prevention + Recall display/delete/date fixes — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color: #b91c1c; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .hi { background:#fef2f2; }
+    /* dark mockup — faithful to the real app recall row (fire/ember dark theme) */
+    .dk { background:#0a0a0a; border-radius:10px; padding:1em; }
+    .dk-row { background:#141414; border:1px solid #2a2a2a; border-radius:12px; padding:.7em .9em; margin:.5em 0; box-shadow:0 2px 6px rgba(0,0,0,.4); display:flex; gap:.6em; align-items:flex-start; }
+    .dk-row.over { border-left:3px solid #ef4444; background:rgba(239,68,68,.06); }
+    .dk-date { font-family:Consolas,monospace; font-size:11px; font-weight:800; color:#888; padding-top:2px; }
+    .dk-name { font-size:13px; font-weight:800; color:#7dd3fc; text-decoration:none; }
+    .dk-name.dash { color:#7dd3fc; }
+    .pill { display:inline-block; font-size:10px; font-weight:700; padding:1px 8px; border-radius:999px; border:1px solid; white-space:nowrap; }
+    .pill-phone { background:rgba(239,68,68,.1); color:#fca5a5; border-color:rgba(239,68,68,.3); }
+    .pill-red { background:rgba(239,68,68,.15); color:#fca5a5; border-color:rgba(239,68,68,.4); }
+    .pill-amber { background:rgba(245,158,11,.15); color:#fcd34d; border-color:rgba(245,158,11,.4); }
+    .pill-snooze { background:rgba(56,189,248,.12); color:#7dd3fc; border-color:rgba(56,189,248,.35); }
+    .pill-resched { background:rgba(167,139,250,.14); color:#c4b5fd; border-color:rgba(167,139,250,.4); }
+    .dk-muted { color:#9ca3af; font-size:11px; }
+    .arrow { text-align:center; color:#dc2626; font-weight:700; margin:.3em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Duplicate-customer prevention + Recall display / delete / date fixes</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-16 · <strong>Status:</strong> Approved by user (design) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-16-dup-customer-and-recall-fixes.html (pending)
+</blockquote>
+
+<p>A two-part batch. <strong>Part A</strong> closes the customer-save integrity gap (duplicate national-IDs + double-click double-creates). <strong>Part B</strong> fixes the recall subsystem (customer name shows "—", clickable confirmation, recall-case hard-delete + TEST junk, and surfacing the snooze/reschedule date). Both ship in one combined <code>firestore.rules</code> deploy (2 edits) + frontend, plus 2 local admin-SDK Rule-M scripts. Design hardened by a 4-agent read-only census + adversarial probe (workflow <code>w89gycg12</code>).</p>
+
+<h2>Purpose / Problem</h2>
+<div class="section">
+<p><strong>Part A (items 1+2).</strong> Today <code>addCustomer</code> (the single create chokepoint at <code>backendClient.js:735</code>) does <em>no</em> pre-create duplicate check — <code>findExistingCustomerByIdentity</code> only fires on a <code>notFound</code> recovery (2 sites). HN minting is atomic, but the claim+counter+customer-write are 3 separate operations, so a double-click on "บันทึกลง OPD" (or two devices) creates two customers with the same national ID. The user has been manually deleting these duplicates.</p>
+<p><strong>Part B (items 3-7).</strong> The recall "bubble list" shows the customer name as "—" on every surface because <code>recall.customerName</code> was snapshotted empty at create time (the picker used <code>customer.displayName || customer.name</code>, which is empty for kiosk customers whose name lives in <code>patientData</code>). Separately: recall-case hard-delete is blocked by <code>firestore.rules</code> (<code>be_recall_cases allow delete: if false</code> — V41 soft-archive), so admins can't remove TEST-CASE junk; and the snooze/reschedule target date isn't surfaced in no-answer / reschedule rows.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Part B · Recall row — BEFORE (real dark theme, the user's screenshot)</div>
+  <div class="dk">
+    <div class="dk-row over">
+      <span class="dk-date">15/06</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="dk-name dash">—</span>
+          <span class="pill pill-phone">📞 0970794444</span>
+          <span class="pill pill-red">ติดต่อไม่ได้ครั้งที่ 1</span>
+        </div>
+        <div style="margin-top:6px" class="dk-muted">📝 ผลการติดต่อ &nbsp; <strong style="color:#e5e5e5">ไม่รับสาย</strong></div>
+        <div style="margin-top:4px" class="dk-muted">บันทึกโดย: วัน</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow">▼ AFTER ▼</div>
+
+<div class="mockup">
+  <div class="mockup-label">Part B · Recall row — AFTER (name live-resolved + clickable, snooze/reschedule date chip)</div>
+  <div class="dk">
+    <div class="dk-row over">
+      <span class="dk-date">15/06</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <a class="dk-name" href="#" style="text-decoration:underline;text-underline-offset:2px">นางสาว แพรพร พรแพร</a>
+          <span class="pill pill-phone">📞 0970794444</span>
+          <span class="pill pill-red">ติดต่อไม่ได้ครั้งที่ 1</span>
+          <span class="pill pill-snooze">📞 โทรอีกครั้ง 18/06/2569</span>
+        </div>
+        <div style="margin-top:6px" class="dk-muted">📝 ผลการติดต่อ &nbsp; <strong style="color:#e5e5e5">ไม่รับสาย</strong></div>
+        <div style="margin-top:4px" class="dk-muted">บันทึกโดย: วัน</div>
+      </div>
+    </div>
+    <div class="dk-row">
+      <span class="dk-date">18/06</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <a class="dk-name" href="#" style="text-decoration:underline;text-underline-offset:2px">นาย ตรีรัตนะ กลิ่นศรีสุข</a>
+          <span class="pill pill-phone">📞 0621870937</span>
+          <span class="pill pill-amber">รอโทร</span>
+          <span class="pill pill-resched">📅 เลื่อนนัด 25/06/2569</span>
+        </div>
+        <div style="margin-top:6px" class="dk-muted">📝 เหตุผลนัด recall &nbsp; <strong style="color:#e5e5e5">สอบถามวันสะดวกเข้ามาเสริมเนื้อเยื่อเทียม</strong></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:.85em;color:#666;margin:.6em 0 0">Name = sky-blue clickable <code>&lt;a&gt;</code> (already in <code>RecallRow.jsx:148/204</code>); only the resolved text is new. The <code>📞 โทรอีกครั้ง</code> chip shows for <code>status==='no-answer'</code> with <code>snoozedUntil</code>; the <code>📅 เลื่อนนัด</code> chip shows when the outcome was <code>reschedule</code> and a snooze date was set. Date = dd/mm/yyyy พ.ศ. (Bangkok).</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Part A · National-ID duplicate — warn modal (Q1 = warn + choose; Q2 = ID blocks)</div>
+  <div style="min-height:auto;background:rgba(0,0,0,0.04);border-radius:8px;padding:1.2em;display:flex;justify-content:center">
+    <div style="background:#fff;border:1px solid #e5e5e5;border-radius:12px;max-width:460px;width:100%;overflow:hidden">
+      <div style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:.9em 1.1em;font-weight:700;color:#b91c1c">⚠ ลูกค้านี้มีอยู่แล้วในระบบ</div>
+      <div style="padding:1.1em">
+        <p style="margin:0 0 .8em;font-size:.92em;color:#444">เลขบัตรประชาชน <code>1-2345-67890-12-3</code> ตรงกับลูกค้าเดิม:</p>
+        <div style="border:1px solid #e5e5e5;border-radius:8px;padding:.7em .9em;display:flex;gap:.7em;align-items:center">
+          <div style="width:38px;height:38px;border-radius:50%;background:#e0f2fe;color:#0369a1;display:flex;align-items:center;justify-content:center;font-weight:700">พพ</div>
+          <div>
+            <div style="font-weight:700">นางสาว แพรพร พรแพร</div>
+            <div style="font-size:.82em;color:#666">HN LC-26000074 · 📞 0970794444 · สร้าง 20/05/2569</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.6em;margin-top:1.1em;justify-content:flex-end">
+          <button style="border:none;background:#0284c7;color:#fff;padding:.55em 1.1em;border-radius:8px;font-weight:700;cursor:pointer">เปิดของเดิม</button>
+          <button style="border:1px solid #d4d4d4;background:#fff;color:#666;padding:.55em 1.1em;border-radius:8px;cursor:pointer">บันทึกเป็นลูกค้าใหม่อยู่ดี</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:.85em;color:#666;margin:.6em 0 0"><strong>เปิดของเดิม</strong> (default) → navigates to the existing customer tab. <strong>บันทึกเป็นลูกค้าใหม่อยู่ดี</strong> (override) → creates a flagged duplicate (<code>_duplicateOfCustomerId</code>) AND appends to the claim's <code>linkedCustomerIds</code> so identity lookups stay complete. A <strong>phone-only</strong> match shows an inline hint instead (no modal, no block): <em>"📞 เบอร์นี้ตรงกับ นางสาว แพรพร พรแพร — ใช้ร่วมกันได้"</em>.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Part A · Data shape — be_customer_identity claim doc (new collection)</div>
+<pre>artifacts/{APP_ID}/public/data/be_customer_identity/{claimKey}
+  claimKey         = "CITIZEN:1234567890123"   // 13 digits, type-prefixed
+                   | "PASSPORT:AA000123"        // trimmed + UPPERCASE
+  {
+    customerId:        "LC-26000074",           // canonical owner (the FIRST customer)
+    linkedCustomerIds: ["LC-26000201"],         // override duplicates (Q1 "save anyway")
+    claimedAt:         &lt;serverTimestamp&gt;,
+    claimedBy:         { uid, name, role },
+  }
+
+// Denormalized on the customer doc for O(1) cascade/edit (no reverse query):
+be_customers/{LC-...}._identityClaimKey = "CITIZEN:1234567890123"</pre>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Part A · addCustomer — atomic create (claim + counter + customer in ONE runTransaction)</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>Where</th><th>Detail</th></tr>
+    <tr><td>1</td><td>normalize + validate</td><td>outside tx</td><td>normalizeCustomer (strip id whitespace/dashes, uppercase passport). <code>deriveClaimKey(citizen_id, passport_id)</code> → <code>CITIZEN:…</code> | <code>PASSPORT:…</code> | <code>null</code> (walk-in). Citizen validated == 13 digits.</td></tr>
+    <tr class="hi"><td>2</td><td>pre-check (fail-fast)</td><td>outside tx</td><td>If claimKey: <code>getDoc(claimRef)</code>. If it exists → throw <code>DUPLICATE_IDENTITY{existingCustomerId}</code> <strong>before</strong> uploading any files (avoids orphaned Storage). Common-case duplicate stops here.</td></tr>
+    <tr><td>3</td><td>uploads</td><td>outside tx</td><td>profile + gallery → Storage URLs into payload. (Wrapped: if the tx later throws, catch + delete these objects before re-throw.)</td></tr>
+    <tr class="hi"><td>4</td><td><strong>runTransaction</strong></td><td>atomic</td><td>(a) <code>tx.get(claimRef)</code> — if exists &amp; owner≠self → throw <code>DUPLICATE_IDENTITY</code> (closes the TOCTOU race); else <code>tx.set(claimRef, {customerId, claimedAt, claimedBy})</code>. (b) <code>tx.get(counter)</code> + increment → HN. (c) <code>tx.set(customerDoc, payload + _identityClaimKey)</code>. All-or-nothing.</td></tr>
+    <tr><td>5</td><td>UI catch</td><td>caller</td><td><code>DUPLICATE_IDENTITY</code> → warn modal (open-existing / override). Override → <code>addCustomer(form, {overrideDuplicate:true})</code>: tx appends to <code>claim.linkedCustomerIds</code> + stamps <code>_duplicateOfCustomerId</code> (claim owner unchanged).</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Part A · Claim lifecycle — edit changes ID, and customer delete (both must free/move the claim)</div>
+<pre>EDIT (updateCustomerFromForm, when citizen_id/passport_id changes):
+  runTransaction:
+    oldKey = deriveClaimKey(currentDoc)         newKey = deriveClaimKey(form)
+    if oldKey !== newKey:
+       tx.get(oldClaim) → if owned by self: tx.delete(oldClaim)
+       tx.get(newClaim) → if exists & owner≠self: throw DUPLICATE_IDENTITY
+                          else: tx.set(newClaim, {customerId, …})
+    tx.update(customerDoc, patch + _identityClaimKey:newKey)
+
+DELETE (deleteCustomerCascade + /api/admin/delete-customer-cascade):
+  add be_customer_identity to CUSTOMER_CASCADE_COLLECTIONS(_FULL)
+  before deleting the customer: deleteDoc(be_customer_identity/{customer._identityClaimKey})
+  (override-duplicate delete: remove its id from the canonical claim's linkedCustomerIds)</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Part B · Recall name — enrich once at the load boundary (chokepoint, not per-site)</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>Detail</th></tr>
+    <tr><td>1</td><td>load recalls</td><td>existing recall loader/hook subscribes to <code>be_recalls</code> (per the 3 list surfaces) + CDV per-customer.</td></tr>
+    <tr class="hi"><td>2</td><td><strong>enrich</strong></td><td>NEW shared <code>enrichRecallsWithCustomerNames(recalls, customersById?)</code>: batch-fetch the referenced <code>customerId</code>s, overlay <code>customerName = resolveCustomerDisplayName(customer) || recall.customerName</code> (non-destructive). One helper, Rule of 3.</td></tr>
+    <tr><td>3</td><td>render</td><td><code>RecallRow</code> (all 3 lists) + the 5 modal headers (outcome/LINE/edit/snooze) all read the now-correct <code>recall.customerName</code> → name shows everywhere, no per-site edits.</td></tr>
+    <tr><td>4</td><td>write (going forward)</td><td><code>RecallCreateModal</code> picker uses <code>resolveCustomerDisplayName</code>; <code>createRecall</code> snapshots the resolved name (correct new snapshots; live-resolve still primary per V113).</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Part B · Recall-case delete — rules unblock + TEST junk nuke</div>
+<pre>firestore.rules  be_recall_cases:  allow delete: if false  →  if isClinicStaff()
+   (safe: recalls snapshot `reason` as a STRING — no FK to caseId; soft-archive isHidden coexists)
+   Probe-Deploy-Probe: anon-write be_customer_identity → 403 ; staff-delete be_recall_cases → 200
+
+Rule-M nuke (local admin-SDK, dry-run → --apply):
+   be_recall_cases  where id startsWith "TEST-CASE-"   → delete  (TEST-CASE-PHASE2922-RB1-PRP-7d, RB3-Acne-21d, …)
+   be_recalls       where id startsWith "TEST-"/"E2E-"  → delete  (junk instances)
+   + audit doc to be_admin_audit</pre>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Part A — Customer-save integrity</h3>
+<ul>
+  <li><strong>Single chokepoint:</strong> all 6 production create paths (CustomerCreatePage, handleOpdClick ×2, handleResync, handleDepositSync ×2) route through <code>addCustomer</code>. Fixing <code>addCustomer</code> covers every caller. (The only bypass is an e2e script — test-only, out of scope.)</li>
+  <li><strong><code>deriveClaimKey(citizen_id, passport_id)</code></strong> (new helper, colocated with normalizeCustomer): citizen → strip <code>/[-\s]/</code>, require <code>^\d{13}$</code>, key <code>CITIZEN:{digits}</code>; passport → trim + UPPERCASE (≤30 chars), key <code>PASSPORT:{X}</code>; both present → citizen wins (passport searchable, not guarded); both empty → <code>null</code> (walk-in, no claim).</li>
+  <li><strong>Atomic <code>addCustomer</code>:</strong> pre-check getDoc(claim) → uploads (with orphan-cleanup on later failure) → <code>runTransaction</code>{claim get/set, counter get/incr, customer set + <code>_identityClaimKey</code>}. Throws typed <code>DUPLICATE_IDENTITY{existingCustomerId}</code>. <code>{overrideDuplicate:true}</code> appends to <code>linkedCustomerIds</code> + stamps <code>_duplicateOfCustomerId</code>/<code>_duplicateAckBy</code>/<code>_duplicateAckAt</code>.</li>
+  <li><strong>Edit:</strong> <code>updateCustomerFromForm</code> becomes a <code>runTransaction</code> that releases the old claim + claims the new one when the identity field changes (else unchanged). Throws <code>DUPLICATE_IDENTITY</code> if the new id collides.</li>
+  <li><strong>Delete/cascade:</strong> add <code>be_customer_identity</code> to <code>CUSTOMER_CASCADE_COLLECTIONS</code> (client <code>deleteCustomerCascade</code>) + <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (server <code>/api/admin/delete-customer-cascade</code> + <code>customerBackupCore</code>). Delete the claim by the denormalized <code>_identityClaimKey</code> (O(1), no reverse query). V81 whole-system backup auto-includes it (V122 dynamic enumeration).</li>
+  <li><strong>UI (warn + choose, Q1/Q2):</strong> CustomerCreatePage catches <code>DUPLICATE_IDENTITY</code> → warn modal (existing card + เปิดของเดิม / บันทึกซ้ำอยู่ดี). Phone match → inline soft hint (uses <code>findCustomersByField('telephone_number')</code>, no block). OPD/deposit paths catch it too → for intake, default to <strong>link to existing</strong>; the existing session idempotency (<code>brokerProClinicId</code> / <code>depositSyncStatus</code> / in-flight ref) already covers no-id walk-ins and same-session double-clicks. CDV shows a <code>⚠ บันทึกซ้ำกับ {existing}</code> badge for flagged duplicates.</li>
+  <li><strong>Backfill + dup-report (Rule M, local):</strong> <code>backfill-customer-identity.mjs</code> — two-phase dry-run → <code>--apply</code>: seed <code>be_customer_identity</code> for every existing customer with an id (claim → earliest <code>createdAt</code>; later ones → <code>linkedCustomerIds</code>), denormalize <code>_identityClaimKey</code>, and <strong>print a duplicate report</strong> (identities with &gt;1 customer) for the user to merge/delete. Idempotent; audit doc.</li>
+  <li><strong>firestore.rules</strong> (new block, before catch-all): <code>be_customer_identity/{key}</code> → <code>get: if isClinicStaff()</code>, <code>list: if false</code> (PII — no enumeration), <code>create, update, delete: if isClinicStaff()</code>. (Create-only-immutable was rejected — it breaks edit-reclaim, cascade-free, and override-append.)</li>
+</ul>
+
+<h3>Part B — Recall display / delete / dates</h3>
+<ul>
+  <li><strong>Name (item 3):</strong> NEW <code>enrichRecallsWithCustomerNames</code> helper applied at the recall-load boundary for the 3 list surfaces (RecallTab, RecallFrontendView) + CDV (customer already loaded). Overlays <code>customerName</code> via <code>resolveCustomerDisplayName</code> (live-resolve primary, denormalized fallback — V113; NO admin-SDK display backfill per <code>feedback_no_admin_sdk_backfill_to_fix_display.md</code>). Every downstream reader (RecallRow + 5 modal headers) gets it free. Write path (RecallCreateModal picker + createRecall) uses the same resolver for correct new snapshots.</li>
+  <li><strong>Clickable (item 4):</strong> already implemented in <code>RecallRow.jsx:148/204</code> (<code>&lt;a href="/?backend=1&customer=…"&gt;</code>). Verify the <code>?customer=</code> handler navigates on all 3 surfaces post-name-fix; keep new-tab (existing system pattern). No new work beyond item 3.</li>
+  <li><strong>Snooze/reschedule date (items 6/7):</strong> add a chip in <code>RecallRow</code>: <code>status==='no-answer' && snoozedUntil</code> → <code>📞 โทรอีกครั้ง {dd/mm/yyyy พ.ศ.}</code>; reschedule (<code>outcome==='reschedule'</code> or pending-with-snooze) → <code>📅 เลื่อนนัด {dd/mm/yyyy พ.ศ.}</code>. Shared atom → shows in all 3 lists. (Bangkok date via the canonical helpers; พ.ศ. like the ED-followup dates.)</li>
+  <li><strong>Delete (item 5):</strong> narrow <code>firestore.rules</code> <code>be_recall_cases allow delete: if isClinicStaff()</code> (safe — recalls snapshot the case name as a string; soft-archive <code>isHidden</code> coexists; UI already has both buttons). The "ลบเคส" button then truly deletes. <code>nuke-test-recall-cases.mjs</code> (Rule M) removes the TEST-CASE/TEST/E2E junk now. <strong>Appointment delete</strong> is the same recall (Recall lives under the นัดหมาย menu) — confirm real <code>be_appointments</code> deletes work (rules already allow <code>write</code>) and root-cause via systematic-debugging if any real appointment delete fails.</li>
+</ul>
+
+<h2>Decisions (locked via Q&A + adversarial hardening)</h2>
+<ul>
+  <li><strong>Q1 = warn + choose:</strong> national-ID dup → warn modal + open-existing (default) / override. Override is auditable (flagged + claim <code>linkedCustomerIds</code>), not a silent dup.</li>
+  <li><strong>Q2 = ID/passport blocks, phone warns:</strong> citizen_id/passport_id = guarded identity (modal). phone = inline soft hint only.</li>
+  <li><strong>Q3 = Bulletproof (Rule T):</strong> atomic identity-claim in one runTransaction (counter+claim+customer). Edit + delete + override all transactional re: the claim. Needs the new collection + rules + backfill.</li>
+  <li><strong>Q4 = hard-delete (rules + deploy):</strong> <code>be_recall_cases</code> delete → isClinicStaff; TEST junk nuked via Rule M.</li>
+  <li><strong>Hardening decisions:</strong> claim key type-prefixed + citizen=13-digit-validated · uploads pre-checked + orphan-cleanup · override appends to claim (not silent) · cascade/edit free/move the claim · rules <code>get</code>/<code>create/update/delete</code> if staff, <code>list:false</code> · name enriched at the load chokepoint (covers rows + 5 modals).</li>
+</ul>
+
+<h2>Acceptance Criteria (Rule Q)</h2>
+<ol>
+  <li>Saving a customer whose <strong>national ID exists</strong> → warn modal (open-existing / override); a <strong>phone-only</strong> match → inline hint, no block. Editing a customer's ID to a colliding one is blocked. <strong>Verify L1</strong> (real browser, both surfaces) <strong>+ L2</strong> (real client-SDK <em>concurrent</em> double-create e2e on prod: two parallel addCustomer with the same id → exactly one created, the other gets DUPLICATE_IDENTITY).</li>
+  <li>Deleting a customer frees its claim; backfill seeds existing claims and prints the duplicate report. Idempotent re-run = 0 writes. <strong>L2</strong> on real prod (TEST-prefixed fixtures, cleaned up + audit doc).</li>
+  <li>Every recall surface (3 lists + 5 modal headers) shows the real customer name, clickable to the customer tab; no "—" when a <code>customerId</code> exists. <strong>L1</strong> real browser across backend recall tab + frontend recall + CDV.</li>
+  <li>No-answer-snoozed rows show <code>📞 โทรอีกครั้ง dd/mm/yyyy พ.ศ.</code>; reschedule rows show <code>📅 เลื่อนนัด dd/mm/yyyy พ.ศ.</code>. <strong>L1</strong>.</li>
+  <li>"ลบเคส" deletes for real (post rules deploy); TEST-CASE junk gone; appointment delete confirmed working. Probe-Deploy-Probe green both sides.</li>
+  <li>Full vitest green + build clean; new AV invariants + flow-simulate + source-grep regression locks.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Deploy-coupled:</strong> Part A's atomic claim needs <code>be_customer_identity</code> live + backfilled BEFORE the new addCustomer enforces it — order: deploy rules → run backfill (seeds claims so existing dupes are detected) → the enforcement is live. Backfill must run with <code>--apply</code> right after the rules deploy.</li>
+  <li><strong>Existing duplicates:</strong> the backfill <em>reports</em> them (claim → earliest, rest → linkedCustomerIds) but does NOT auto-merge — the user resolves them manually (consistent with "ผมไปนั่งลบมาหลายคนแล้ว"). A merge UI is out of scope (follow-up).</li>
+  <li><strong>Walk-in no-id customers</strong> remain un-guarded by identity (only session idempotency). Acceptable — the user's pain is national-ID dupes. Documented, not "fixed".</li>
+  <li><strong>Appointment-delete</strong> root cause is assumed = the recall-case rule (Recall under the นัดหมาย menu). If real <code>be_appointments</code> delete also fails, it's a separate bug to diagnose during implementation (id-resolution / handler) — will surface in the plan if real.</li>
+  <li><strong>Scope:</strong> Part A is sizable (tx refactor of addCustomer + updateCustomerFromForm + cascade + backfill + UI + rules). The plan may split Part A and Part B into separate execution phases; both still ship under one combined deploy.</li>
+</ul>
+
+</body>
+</html>
