@@ -44,7 +44,7 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import { pickKioskAssessmentFields } from '../../lib/kioskAssessmentFields.js';
 import { latestPerType, ED_TYPES } from '../../lib/assessmentRoundsCore.js';
-import { stripScreeningSection } from '../../lib/edScoreDisplay.js';
+import { stripScreeningSection, buildConfirmInfo } from '../../lib/edScoreDisplay.js';
 import EDScoreBox from './EDScoreBox.jsx';
 import EDFollowupModal from './EDFollowupModal.jsx';
 import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
@@ -1531,6 +1531,7 @@ export default function CustomerDetailView({
           roundNumber={edModalRound}
           intakeTypes={edTypesDone}
           branchId={selectedBranchId}
+          confirmInfo={buildConfirmInfo(customer)}
           isDark={isDark}
           onClose={() => setEdModalRound(null)}
         />

@@ -6,13 +6,13 @@
 import React, { useState, useEffect } from 'react';
 import { QrCode, X, Copy, Maximize2 } from 'lucide-react';
 import { ED_TYPE_META } from '../../lib/edScoreDisplay.js';
-import { createAssessmentRound, createAssessmentSession } from '../../lib/scopedDataLayer.js';
+import { createAssessmentRound, createAssessmentSession, supersedePendingFollowups } from '../../lib/scopedDataLayer.js';
 import { generateQrDataUrl } from '../../lib/documentPrintEngine.js';
 
 const TYPE_ORDER = ['adam', 'iief', 'mrs', 'pe'];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, branchId, isDark, onClose, onCreated }) {
+export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, branchId, confirmInfo, isDark, onClose, onCreated }) {
   const defaults = intakeTypes && intakeTypes.length ? intakeTypes : ['adam', 'iief'];
   const [picked, setPicked] = useState(() => new Set(defaults));
   const [busy, setBusy] = useState(false);
@@ -43,9 +43,14 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
     if (types.length === 0) { setErr('เลือกอย่างน้อย 1 แบบประเมิน'); return; }
     setErr(''); setBusy(true);
     try {
+      // R3 — kill any prior PENDING link + round for this customer+branch FIRST,
+      // so only this newest link is valid (prevents duplicate submissions).
+      await supersedePendingFollowups({ customerId, branchId });
       const expiresAt = Date.now() + ONE_DAY_MS;
       const roundId = await createAssessmentRound({ customerId, types, expiresAt });
-      const sessionId = await createAssessmentSession({ customerId, types, branchId, expiresAt, roundId });
+      // R1 — confirmInfo (read-only identity snapshot) so the link shows the
+      // customer instead of asking them to re-type their data.
+      const sessionId = await createAssessmentSession({ customerId, types, branchId, expiresAt, roundId, confirmInfo });
       const link = `${window.location.origin}/?session=${sessionId}`;
       const qr = await generateQrDataUrl(link, { width: 600 });
       setResult({ link, qr, sessionId });
