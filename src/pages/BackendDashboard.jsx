@@ -127,6 +127,33 @@ import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '..
 // ข้อมูลจาก Proclinic จริงที่ไม่ใช่ Trial แล้ว ซึ่งจะเป็นอันเดียวกับที่
 // Frontend เชื่อมต่ออยู่".
 import { useTabAccess } from '../hooks/useTabAccess.js';
+import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
+
+// 2026-06-16 (mobile-load reliability) — lazy-tab chunk fetch can HANG on a
+// flaky mobile network → the Suspense fallback spins forever. After 10s, offer
+// a reload (the only recovery for a stalled dynamic import). Module-level
+// component (not defined in render) so it isn't remounted every parent render.
+function BackendTabFallback() {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setStuck(true), 10000);
+    return () => clearTimeout(id);
+  }, []);
+  if (stuck) {
+    return (
+      <div className="py-16 px-4 max-w-md mx-auto">
+        <LoadErrorRetry onRetry={() => window.location.reload()} isDark fullScreen={false}
+          title="โหลดแท็บไม่สำเร็จ" message="การเชื่อมต่ออาจไม่เสถียร" retryLabel="โหลดใหม่" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-center py-16 text-[var(--tx-muted)]" data-testid="backend-tab-loading">
+      <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+      <span className="ml-3 text-sm">กำลังโหลด...</span>
+    </div>
+  );
+}
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
@@ -409,12 +436,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             lazy-imported tabs (reports + heavy modals) trigger this fallback
             for ~50-200ms on first click then cache. Simple spinner — heavy
             visual treatment defeats the perf goal. */}
-        <Suspense fallback={
-          <div className="flex items-center justify-center py-16 text-[var(--tx-muted)]" data-testid="backend-tab-loading">
-            <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-            <span className="ml-3 text-sm">กำลังโหลด...</span>
-          </div>
-        }>
+        <Suspense fallback={<BackendTabFallback />}>
         {saleMode ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer}
             onCustomerUsed={() => setSaleInitialCustomer(null)}

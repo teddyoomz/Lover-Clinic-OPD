@@ -15,6 +15,8 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 import DateField from '../components/DateField.jsx';
 import thaiAddressDB from '../data/thai-address-db.js';
 import { aaAccent } from '../lib/themeAccent.js';
+import { useResilientLoad } from '../hooks/useResilientLoad.js';
+import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
 
 export default function PatientForm({ db, appId, user, sessionId, isSimulation, suppressNotif, onBack, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
@@ -53,6 +55,10 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const [countryFilter, setCountryFilter] = useState('');
   const countryDropdownRef = useRef(null);
   const originalDataRef = useRef(null); // เก็บ snapshot ข้อมูลก่อนแก้ไข สำหรับ diff notification
+  // 2026-06-16 (mobile-load reliability) — resilient session load. If the
+  // onSnapshot never fires (half-dead mobile network) the form was stuck on the
+  // loading spinner forever; now it auto-retries then shows a "ลองใหม่" escape.
+  const { loadStatus, retryKey, markReady, markError, retry } = useResilientLoad();
 
   useEffect(() => {
     setFormData(prev => {
@@ -73,6 +79,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     // result → false-positive "Invalid Link". Wait for auth.
     if (!user) return;
     const unsubscribe = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), (snapshot) => {
+      markReady(); // snapshot fired = load OK (doc-found AND doc-not-found both count)
       if (!snapshot.exists()) { setSessionExists(false); return; }
       // Set to true on first server-confirmed exists() === true
       setSessionExists(true);
@@ -125,12 +132,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
         if (!isEditing) setIsSuccess(true);
       }
     }, (error) => {
-      // Prevent silent hang: if Firestore errors, surface it
+      // Prevent silent hang: if Firestore errors, surface it.
+      // 2026-06-16 — transient errors now go through the resilient retry path
+      // (auto-retry → "ลองใหม่") instead of an instant "Invalid Link" flash.
       console.error('[PatientForm] onSnapshot error:', error);
-      setSessionExists(false);
+      markError();
     });
     return () => unsubscribe();
-  }, [db, appId, user, sessionId, isEditing, language]);
+  }, [db, appId, user, sessionId, isEditing, language, retryKey]);
 
   // 2026-05-26 — fetch the SESSION's branch LINE OA add-URL via the public
   // server endpoint (be_branches is clinic-staff-only; the endpoint returns ONLY
@@ -461,6 +470,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     );
   }
   if (sessionExists === null) {
+    // 2026-06-16 — auto-retries exhausted → "ลองใหม่" escape instead of a
+    // permanent spinner (mobile half-dead-connection / stuck snapshot).
+    if (loadStatus === 'error') {
+      return <LoadErrorRetry onRetry={retry} accentColor={ac} isDark={isDark}
+        title={language === 'en' ? 'Could not load' : 'โหลดข้อมูลไม่สำเร็จ'}
+        message={language === 'en' ? 'Your connection may be unstable. Please check your internet and try again.' : 'การเชื่อมต่ออาจไม่เสถียร กรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'}
+        retryLabel={language === 'en' ? 'Retry' : 'ลองใหม่'} />;
+    }
     return (
       <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <div className={`w-10 h-10 rounded-full border-2 animate-spin mx-auto mb-4 ${isDark ? 'border-gray-800 border-t-red-400' : 'border-pink-200 border-t-pink-500'}`} />

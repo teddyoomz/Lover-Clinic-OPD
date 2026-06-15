@@ -11,6 +11,8 @@ import {
   Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle, Database, MoreHorizontal
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
+import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
+import { useResilientLoad } from '../hooks/useResilientLoad.js';
 // Phase 20.0 Tasks 1-6 + 5a-5c (2026-05-06) — Frontend ProClinic rewire
 // COMPLETE. AdminDashboard no longer imports brokerClient — every broker.*
 // call has been replaced with be_* equivalents from scopedDataLayer:
@@ -2312,10 +2314,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => { cancelled = true; };
   }, [db, appId, user]);
 
+  // 2026-06-16 (mobile-load reliability) — resilient queue load. If the
+  // opd_sessions snapshot never fires (half-dead mobile connection), the queue
+  // used to silently stay empty with no recovery; now it auto-heals (reconnect
+  // + re-subscribe) and, if still failing, shows a slim non-blocking
+  // "ลองใหม่" banner (chat / rest of the dashboard stay usable).
+  const { loadStatus: queueLoad, retryKey: queueRetryKey, markReady: queueReady, markError: queueErr, retry: queueRetry } = useResilientLoad();
+
   useEffect(() => {
     if (!user || user.isAnonymous) return;
     const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions');
     const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {
+      queueReady(); // snapshot fired = queue loaded
       const now = Date.now();
       const allDocsRaw = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       // Phase 20.0 follow-up (2026-05-06) — per-branch session filter.
@@ -2601,11 +2611,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // resolution (includes card-flow / isHiddenFromQueue sessions the queue
       // filters drop). Read-only: no Firestore write here (V34/V36 cascade lock).
       setAllLinkedSessions(allDocs);
-    }, (error) => console.error("Firestore Error:", error));
+    }, (error) => { console.error("Firestore Error:", error); queueErr(); });
     return () => unsubscribe();
     // Phase 20.0 follow-up (2026-05-06) — selectedBranchId in deps so the
     // filter re-applies on BranchSelector switch.
-  }, [db, appId, user, isNotifEnabled, notifVolume, selectedBranchId]);
+    // 2026-06-16 — queueRetryKey in deps so resilient auto-retry / "ลองใหม่" re-subscribes.
+  }, [db, appId, user, isNotifEnabled, notifVolume, selectedBranchId, queueRetryKey]);
 
   // ── Auto-fetch deposit options when viewing a session with deposit data ──
   useEffect(() => {
@@ -6074,6 +6085,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
        so the sticky header sticks to the viewport. Verified in a real browser. DO NOT
        revert to overflow-x-hidden while the menu is sticky. */
     <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-clip admin-frontend-zone" data-section="appointments">
+
+      {/* 2026-06-16 (mobile-load reliability) — non-blocking queue-load error
+          banner. Shows only when the opd_sessions listener failed to load after
+          auto-retries; the rest of the dashboard (chat / menu) stays usable. */}
+      {queueLoad === 'error' && (
+        <div className="mb-4">
+          <LoadErrorRetry onRetry={queueRetry} accentColor={cs.accentColor || '#dc2626'} isDark={true} fullScreen={false}
+            title="โหลดคิว/นัดหมายไม่สำเร็จ" retryLabel="ลองใหม่" />
+        </div>
+      )}
 
       {toastMsg && (
         <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] flex items-center gap-4 animate-in slide-in-from-bottom-5 z-[100] border border-blue-400">

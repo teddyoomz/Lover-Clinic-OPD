@@ -121,20 +121,24 @@ describe('Race-condition fix: public-link pages must not flash error pre-auth', 
       expect(pd).toMatch(/const\s+\[status,\s*setStatus\]\s*=\s*useState\('loading'\)/);
     });
 
-    it('R3.2: subscription useEffect waits for clinicSettingsLoaded', () => {
-      // The effect must early-return if !clinicSettingsLoaded
-      const ix = pd.indexOf('patientLinkToken');
+    it('R3.2: load useEffect waits for clinicSettingsLoaded', () => {
+      // 2026-06-16: WS1 (2026-06-10) migrated PatientDashboard from a client
+      // onSnapshot to the /api/patient-view fetch — anchor on that fetch, not
+      // the removed `patientLinkToken` listener. The effect must early-return
+      // until clinicSettingsLoaded.
+      // anchor on the fetch CALL (`patient-view?token`), not the comment mention.
+      const ix = pd.indexOf('patient-view?token');
       expect(ix).toBeGreaterThan(-1);
       const before = pd.slice(Math.max(0, ix - 600), ix);
       expect(before).toMatch(/if\s*\(!clinicSettingsLoaded\)\s*return/);
     });
 
-    it('R3.3: subscription useEffect deps include clinicSettingsLoaded', () => {
-      // Without this in deps, the effect won't re-run when settings load
-      const ix = pd.indexOf('patientLinkToken');
-      const after = pd.slice(ix, ix + 1000);
-      const depsMatch = after.match(/\}\,\s*\[([^\]]+)\]\)/);
-      expect(depsMatch, 'expected deps array on PatientDashboard subscription effect').toBeTruthy();
+    it('R3.3: load useEffect deps include clinicSettingsLoaded', () => {
+      // Without this in deps, the effect won't re-run when settings load.
+      const ix = pd.indexOf('patient-view?token');
+      const after = pd.slice(ix, ix + 3000);
+      const depsMatch = after.match(/\}\,\s*\[(token[^\]]*)\]\)/);
+      expect(depsMatch, 'expected deps array on PatientDashboard load effect').toBeTruthy();
       expect(depsMatch[1].includes('clinicSettingsLoaded')).toBe(true);
     });
   });

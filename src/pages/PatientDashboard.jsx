@@ -16,6 +16,8 @@ import PhoneLink from '../components/PhoneLink.jsx';
 import { Package, PackageX, CalendarClock, Phone, PhoneCall, AlertCircle, Loader2,
          CheckCircle2, XCircle, RefreshCw, MapPin, Clock, Stethoscope, MessageCircle } from 'lucide-react';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
+import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
+import { useResilientLoad } from '../hooks/useResilientLoad.js';
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 const TX = {
@@ -512,6 +514,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   // 100%; 0 standalone). WS1 C1 (2026-06-10): the old client-side opd_sessions fallback
   // query was an anon enumeration vector — REMOVED. Its sole purpose (transient 5xx
   // resilience) is replaced by a bounded retry below. No client opd_sessions read remains.
+  // 2026-06-16 (mobile-load reliability) — resilient view load. A sustained
+  // slow/flaky network used to false-dead-end to "ไม่พบข้อมูล" (the tight
+  // 3×600ms budget); now a sustained failure goes through the resilient retry
+  // path (auto-retry → reconnect → re-fetch → "ลองใหม่"). A genuine 404 still
+  // shows notfound/disabled (markReady, no retry).
+  const { loadStatus, retryKey, markReady, markError, retry } = useResilientLoad();
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
     if (!clinicSettingsLoaded) return;
@@ -536,6 +544,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   fetchedAt: data.fetchedAt || new Date().toISOString(), success: true,
                 },
               });
+              markReady(); // loaded
               setStatus('done');
               return;
             }
@@ -543,6 +552,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
           if (r.status === 404) {
             const body = await r.json().catch(() => ({}));
             if (cancelled) return;
+            markReady(); // loaded — token resolved (just absent/disabled), not a connection failure
             setStatus(body?.error === 'DISABLED' ? 'disabled' : 'notfound');
             return;
           }
@@ -552,10 +562,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         }
         if (attempt < 2 && !cancelled) await new Promise((res) => setTimeout(res, 600));
       }
-      if (!cancelled) setStatus('notfound'); // sustained endpoint failure
+      // Sustained endpoint failure → resilient retry path (NOT a permanent
+      // "ไม่พบข้อมูล" dead-end on a slow mobile network).
+      if (!cancelled) markError();
     })();
     return () => { cancelled = true; };
-  }, [token, clinicSettingsLoaded]);
+  }, [token, clinicSettingsLoaded, retryKey]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   // ── Controls bar (reused in loading/error/main screens) ───────────────────
@@ -584,6 +596,19 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   );
 
   if (status === 'loading') {
+    // 2026-06-16 — auto-retries exhausted → "ลองใหม่" escape (keep Controls)
+    // instead of a permanent spinner on a half-dead mobile connection.
+    if (loadStatus === 'error') {
+      return (
+        <div className="relative">
+          <Controls />
+          <LoadErrorRetry onRetry={retry} accentColor={ac} isDark={isDark}
+            title={language === 'en' ? 'Could not load' : 'โหลดข้อมูลไม่สำเร็จ'}
+            message={language === 'en' ? 'Your connection may be unstable. Please check your internet and try again.' : 'การเชื่อมต่ออาจไม่เสถียร กรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'}
+            retryLabel={language === 'en' ? 'Retry' : 'ลองใหม่'} />
+        </div>
+      );
+    }
     return (
       <div className={`relative flex flex-col items-center justify-center min-h-screen gap-4 ${isDark ? 'bg-[var(--bg-base)]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
         <Controls />

@@ -1,8 +1,10 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
+import { reconnectFirestore } from './lib/firestoreReconnect.js';
+import LoadErrorRetry from './components/LoadErrorRetry.jsx';
 import { UserPermissionProvider } from './contexts/UserPermissionContext.jsx';
 import { BranchProvider } from './lib/BranchContext.jsx';
 // DEBUG: expose auth for console API calls (DEV ONLY — Vite tree-shakes
@@ -96,11 +98,30 @@ export default function App() {
   // sessionFromUrl; expanding to all 3 public-link types — patient + schedule
   // had the same race per user report 2026-04-25.)
   const needsPublicAuth = !!(sessionFromUrl || patientFromUrl || scheduleFromUrl);
+  // 2026-06-16 (mobile-load reliability) — resilient anon-auth. If
+  // signInAnonymously hangs on a half-dead mobile network, `user` stays null
+  // and the render gate below shows a black "กำลังโหลด..." FOREVER (symptom a).
+  // Fix: kick off anon-auth, and if it hasn't resolved in 8s, retry it (≤2);
+  // after that show a "ลองใหม่" escape instead of a dead screen.
+  const [authAttempt, setAuthAttempt] = useState(0);
+  const [authStuck, setAuthStuck] = useState(false);
   useEffect(() => {
-    if (needsPublicAuth && !user && !isInitializing) {
-      signInAnonymously(auth).catch(err => console.error('Anonymous Auth Error:', err));
-    }
-  }, [needsPublicAuth, user, isInitializing]);
+    if (!needsPublicAuth || user || isInitializing) return undefined;
+    let cancelled = false;
+    signInAnonymously(auth).catch(err => console.error('Anonymous Auth Error:', err));
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      if (authAttempt < 2) setAuthAttempt(a => a + 1); // re-runs effect → retry signInAnonymously
+      else setAuthStuck(true);
+    }, 8000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [needsPublicAuth, user, isInitializing, authAttempt]);
+  useEffect(() => { if (user) setAuthStuck(false); }, [user]);
+  const retryAuth = () => {
+    setAuthStuck(false);
+    setAuthAttempt(0);
+    signInAnonymously(auth).catch(() => {});
+  };
 
   useEffect(() => {
     const handler = () => setPrintMode(null);
@@ -130,29 +151,15 @@ export default function App() {
   // Resource cost: ZERO polling. Only fires on visibility-change + online
   // events (browser-native, rare). Debounced 1500ms to prevent thrashing
   // on rapid focus/blur.
+  // 2026-06-16 — reconnect logic extracted to the shared, module-debounced
+  // reconnectFirestore() (src/lib/firestoreReconnect.js) so V17 here +
+  // useResilientLoad + useBranchAwareListener all share ONE debounce (no
+  // multi-listener toggle thrash). Behavior identical to the original V17.
   useEffect(() => {
-    let lastToggleAt = 0;
-    let toggling = false;
-    const TOGGLE_DEBOUNCE_MS = 1500;
-    const reconnect = async () => {
-      if (toggling) return;
-      if (Date.now() - lastToggleAt < TOGGLE_DEBOUNCE_MS) return;
-      toggling = true;
-      lastToggleAt = Date.now();
-      try {
-        await disableNetwork(db);
-        await enableNetwork(db);
-      } catch (err) {
-        // Non-fatal — SDK may still recover via its own retries.
-        console.warn('[FirestoreReconnect] toggle failed:', err?.message || err);
-      } finally {
-        toggling = false;
-      }
-    };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') reconnect();
+      if (document.visibilityState === 'visible') reconnectFirestore();
     };
-    const onOnline = () => reconnect();
+    const onOnline = () => reconnectFirestore();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('online', onOnline);
     return () => {
@@ -192,6 +199,12 @@ export default function App() {
   // succeeds. (User-reported bug 2026-04-25: "QR ลิ้งใช้ครั้งแรกไม่ได้
   // ต้อง refresh ถึงจะติด"). Loading screen here = ZERO flash.
   if (needsPublicAuth && !user) {
+    // Resilient gate — if anon-auth is stuck (half-dead network) show a retry
+    // escape instead of a permanent black "กำลังโหลด..." (symptom a). V16
+    // zero-flash loading screen preserved for the normal sub-second case.
+    if (authStuck) {
+      return <LoadErrorRetry onRetry={retryAuth} accentColor={ac} isDark={true} message="เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง" />;
+    }
     return <div className="flex items-center justify-center min-h-screen bg-[#050505] font-medium tracking-widest uppercase animate-pulse" style={{color: ac}}>กำลังโหลด...</div>;
   }
 

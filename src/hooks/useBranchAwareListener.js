@@ -23,8 +23,18 @@
 // hooks live in the React layer. V36.G.51 lock applies to data layer
 // (scopedDataLayer.js) NOT to hooks.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { reconnectFirestore } from '../lib/firestoreReconnect.js';
+
+// 2026-06-16 (mobile-load reliability) — silent auto-heal. If a listener
+// subscribed during a half-dead mobile connection and the first onChange never
+// arrives within SOFT_TIMEOUT_MS, reconnect (shared debounced toggle) and
+// re-subscribe (capped). Returns void as before — every backend tab using this
+// hook auto-heals with ZERO consumer change. V17 visibility/online + the next
+// branch switch remain the longer-term recovery.
+const SOFT_TIMEOUT_MS = 8000;
+const MAX_AUTO_RETRIES = 2;
 
 export function useBranchAwareListener(listenerFn, args, onChange, onError) {
   const { branchId } = useSelectedBranch();
@@ -37,6 +47,13 @@ export function useBranchAwareListener(listenerFn, args, onChange, onError) {
   // Universal listeners ignore branchId entirely — exclude from deps so they
   // don't re-subscribe on branch switch.
   const effectiveBranchId = isUniversal ? null : branchId;
+  const argsKey = JSON.stringify(args);
+
+  const [retryNonce, setRetryNonce] = useState(0);
+  const attemptsRef = useRef(0);
+  // Reset the auto-heal counter whenever the SUBSCRIPTION identity changes
+  // (branch / args / fn) — NOT on a retry nonce bump (that IS a retry).
+  useEffect(() => { attemptsRef.current = 0; }, [listenerFn, effectiveBranchId, argsKey]);
 
   useEffect(() => {
     if (!listenerFn) return undefined;
@@ -52,12 +69,24 @@ export function useBranchAwareListener(listenerFn, args, onChange, onError) {
       // branchId injection. Fallback shape preserves back-compat.
       enrichedArgs = args;
     }
+
+    let gotData = false;
+    const timer = setTimeout(() => {
+      if (gotData) return;
+      if (attemptsRef.current < MAX_AUTO_RETRIES) {
+        attemptsRef.current += 1;
+        reconnectFirestore();        // heal half-dead conn (shared debounce → no thrash)
+        setRetryNonce((n) => n + 1); // re-subscribe
+      }
+      // else: give up; V17 visibility/online + next branch switch recover.
+    }, SOFT_TIMEOUT_MS);
+
     const unsub = listenerFn(
       enrichedArgs,
-      (data) => onChangeRef.current?.(data),
+      (data) => { gotData = true; clearTimeout(timer); onChangeRef.current?.(data); },
       (err) => onErrorRef.current?.(err)
     );
-    return () => { try { unsub?.(); } catch {} };
+    return () => { clearTimeout(timer); try { unsub?.(); } catch {} };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listenerFn, effectiveBranchId, JSON.stringify(args)]);
+  }, [listenerFn, effectiveBranchId, argsKey, retryNonce]);
 }

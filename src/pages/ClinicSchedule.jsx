@@ -4,6 +4,8 @@ import { db, appId, auth } from '../firebase.js';
 import { CalendarDays, ChevronLeft, ChevronRight, X, Clock, Stethoscope, Phone, MessageCircle, Globe, CheckCircle2, XCircle } from 'lucide-react';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
+import { useResilientLoad } from '../hooks/useResilientLoad.js';
 import { bangkokNow, thaiTodayISO, thaiNowMinutes } from '../utils.js';
 import {
   generateTimeSlots, isSlotBooked, getDoctorRangesForDate,
@@ -83,12 +85,19 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     return () => unsub();
   }, []);
 
+  // 2026-06-16 (mobile-load reliability) — resilient schedule load. A stuck
+  // snapshot used to leave the page on the spinner forever; now it auto-retries
+  // then shows a "ลองใหม่" escape. A transient onError no longer instantly
+  // flashes "ไม่พบตาราง".
+  const { loadStatus, retryKey, markReady, markError, retry } = useResilientLoad();
+
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
     if (!authReady) return;
     const unsub = onSnapshot(
       doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token),
       (snap) => {
+        markReady(); // snapshot fired = load OK (notfound/expired/done all count)
         if (!snap.exists() || snap.data().enabled === false) { setStatus('notfound'); return; }
         const d = snap.data();
         if (d.createdAt?.toMillis) {
@@ -98,13 +107,20 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
         setScheduleData(d);
         setStatus('done');
       },
-      () => setStatus('notfound')
+      () => markError()
     );
     return () => unsub();
-  }, [token, authReady]);
+  }, [token, authReady, retryKey]);
 
   // ── Loading ──
   if (status === 'loading') {
+    // 2026-06-16 — auto-retries exhausted → "ลองใหม่" escape (mobile stuck snapshot).
+    if (loadStatus === 'error') {
+      return <LoadErrorRetry onRetry={retry} accentColor={ac} isDark={isDark}
+        title={lang === 'en' ? 'Could not load' : 'โหลดข้อมูลไม่สำเร็จ'}
+        message={lang === 'en' ? 'Your connection may be unstable. Please check your internet and try again.' : 'การเชื่อมต่ออาจไม่เสถียร กรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'}
+        retryLabel={lang === 'en' ? 'Retry' : 'ลองใหม่'} />;
+    }
     return (
       <div className={`flex flex-col items-center justify-center min-h-screen gap-3 ${isDark ? 'bg-[#050505] text-gray-500' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50 text-pink-400'}`}>
         <div className={`w-10 h-10 rounded-full border-2 animate-spin ${isDark ? 'border-gray-800 border-t-red-400' : 'border-pink-200 border-t-pink-500'}`} />
