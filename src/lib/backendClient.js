@@ -1098,6 +1098,33 @@ export async function deleteAssessmentRound(id) {
   await deleteDoc(assessmentDoc(sid));
 }
 
+/** Create a public opd_session for the customer to fill a follow-up ED assessment.
+ *  Per-round, expires (default caller passes +1 day). Reuses the existing
+ *  followup_* PatientForm render (gate extended for types[]). The onPatientSubmit
+ *  Cloud Function materializes the submitted answers into the linked
+ *  be_assessments round (linkedAssessmentRoundId). Returns the sessionId (the
+ *  128-bit doc-id IS the patient-link secret — WS1 C1; split get/list rule keeps
+ *  anon from enumerating). */
+export async function createAssessmentSession({ customerId, types, branchId, sessionName, expiresAt, roundId } = {}) {
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  const sessionId = `FW-ED-${rand}`;
+  await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    branchId: branchId || '',
+    patientData: null,
+    isPermanent: false,
+    formType: 'followup_ed', // PatientForm follow-up render (gate extended for types[])
+    types: Array.isArray(types) ? types : [],
+    expiresAt: expiresAt || null,
+    linkedCustomerId: String(customerId || ''),
+    linkedAssessmentRoundId: roundId || '',
+    sessionName: sessionName || 'แบบประเมินติดตาม',
+  });
+  return sessionId;
+}
+
 /** Get single treatment from be_treatments */
 export async function getTreatment(treatmentId) {
   const snap = await getDoc(treatmentDoc(treatmentId));

@@ -715,6 +715,7 @@ listenToRecallsForCustomer.__universal__ = true;
 // ED Score writers — universal (be_assessments, no branchId)
 export const createAssessmentRound = (...args) => raw.createAssessmentRound(...args);
 export const deleteAssessmentRound = (...args) => raw.deleteAssessmentRound(...args);
+export const createAssessmentSession = (...args) => raw.createAssessmentSession(...args);
 
 // Writers — branchId stamping handled inside raw via _resolveBranchIdForWrite
 export const createRecall = (...args) => raw.createRecall(...args);
