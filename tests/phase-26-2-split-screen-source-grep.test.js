@@ -17,10 +17,13 @@ describe('Phase 26.2 — split-screen + customer.note source-grep', () => {
     it('Item-E.3 — display block has data-testid="tfp-customer-note"', () => {
       expect(TFP_SOURCE).toMatch(/data-testid="tfp-customer-note"/);
     });
-    it('Item-E.4 — display gated on customerNote truthy', () => {
+    it('Item-E.4 — display gated on note content (truthy)', () => {
       const idx = TFP_SOURCE.indexOf('tfp-customer-note');
       const before = TFP_SOURCE.slice(Math.max(0, idx - 300), idx);
-      expect(before).toMatch(/\{customerNote\s*&&/);
+      // 2026-06-15 (ED Score) — the card is now gated on the ED-stripped note OR
+      // ED rounds (the box owns ED scores; the note shows non-ED content + a clean
+      // ED latest-2). Still gated on note content being present — intent preserved.
+      expect(before).toMatch(/\{\(edStrippedNote \|\| edLatest2\.length > 0\)\s*&&/);
     });
     it('Item-E.5 — uses ClipboardCheck icon + "หมายเหตุทั่วไป" title', () => {
       expect(TFP_SOURCE).toMatch(/import\s+\{[^}]*ClipboardCheck[^}]*\}\s+from\s+['"]lucide-react['"]/);

@@ -1109,13 +1109,16 @@ export async function createAssessmentSession({ customerId, types, branchId, ses
   const rand = Array.from(crypto.getRandomValues(new Uint8Array(16)))
     .map((b) => b.toString(16).padStart(2, '0')).join('');
   const sessionId = `FW-ED-${rand}`;
-  await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+  await setDoc(doc(db, ...basePath(), 'opd_sessions', sessionId), {
     status: 'pending',
     createdAt: serverTimestamp(),
     branchId: branchId || '',
     patientData: null,
     isPermanent: false,
-    formType: 'followup_ed', // PatientForm follow-up render (gate extended for types[])
+    // NEUTRAL follow-up formType (NOT 'followup_ed') — PatientForm gates the
+    // assessment sections PURELY by types[]; a specific 'followup_ed' would force
+    // isPerfMode→true and render IIEF even when the doctor did not pick it.
+    formType: 'followup_assessment',
     types: Array.isArray(types) ? types : [],
     expiresAt: expiresAt || null,
     linkedCustomerId: String(customerId || ''),

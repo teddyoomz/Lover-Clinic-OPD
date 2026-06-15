@@ -38,7 +38,10 @@ export function stripScreeningSection(note) {
   let skipping = false;
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
-    if (!skipping && SCREEN_HEADERS.some((h) => ln.trim().startsWith(h))) {
+    // EXACT match (not startsWith) — generateClinicalSummary emits the header on
+    // its OWN line (utils.js:407). startsWith would falsely strip a note whose
+    // CONTENT merely mentions the word (e.g. "CC: ผลการคัดกรองอาการปกติ").
+    if (!skipping && SCREEN_HEADERS.some((h) => ln.trim() === h)) {
       skipping = true;
       if (out.length && isSep(out[out.length - 1])) out.pop(); // drop the preceding ─── divider
       continue;

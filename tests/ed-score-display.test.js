@@ -91,4 +91,12 @@ describe('stripScreeningSection (real generateClinicalSummary format)', () => {
     expect(stripScreeningSection(null)).toBe('');
     expect(stripScreeningSection(undefined)).toBe('');
   });
+
+  it('a note whose CONTENT merely mentions the screening word is NOT stripped (exact-header match)', () => {
+    // adversarial — the word appears inside a value line, not as a standalone header
+    const note = 'CC: มาตรวจ ผลการคัดกรองอาการปกติดี ไม่มีปัญหา\nแผน: นัดติดตาม';
+    const out = stripScreeningSection(note);
+    expect(out).toContain('ผลการคัดกรองอาการปกติดี'); // content preserved — NOT eaten
+    expect(out).toContain('แผน: นัดติดตาม');
+  });
 });

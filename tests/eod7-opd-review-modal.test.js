@@ -15,7 +15,11 @@ const PF = read('src/pages/PatientForm.jsx');
 
 describe('EOD+7 OPD modal — item 1: admin edit bypasses public-link gates', () => {
   it('M1.1 PatientForm 2h-expiry gate skipped when isSimulation (admin edit)', () => {
-    expect(PF).toContain('!data.isPermanent && !isSimulation');
+    // 2026-06-15 (ED Score) — an explicit `!data.expiresAt` was inserted into the
+    // gate so ED follow-up links (which carry expiresAt) use their own 1-day expiry
+    // instead of the 2h intake timeout. The isPermanent + isSimulation guards are
+    // PRESERVED (admin edit still bypasses); only the literal shape changed.
+    expect(PF).toMatch(/!data\.isPermanent && !data\.expiresAt && !isSimulation/);
   });
   it('M1.2 PatientForm archived gate skipped when isSimulation (admin edit)', () => {
     expect(PF).toContain('data.isArchived && !isSimulation');

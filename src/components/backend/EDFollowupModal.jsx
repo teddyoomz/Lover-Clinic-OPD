@@ -31,6 +31,12 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
     if (next.has(t)) next.delete(t); else next.add(t);
     return next;
   });
+  // Named close handlers (NOT inline `() => onClose()` / `() => setFullscreen(false)`)
+  // so the AV78 audit (backdrop-must-not-close) sees these are on BUTTONS, not the
+  // backdrop. The backdrop divs themselves carry NO onClick (explicit-close-only).
+  const closeModal = () => onClose?.();
+  const openFullscreen = () => setFullscreen(true);
+  const closeFullscreen = () => setFullscreen(false);
 
   const handleCreate = async () => {
     const types = TYPE_ORDER.filter((t) => picked.has(t));
@@ -61,7 +67,7 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
       <div className="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center p-4" data-testid="ed-qr-fullscreen">
         <div className="flex items-center justify-between w-full max-w-md mb-4">
           <span className="text-white font-bold">แบบประเมิน ครั้งที่ {roundNumber}</span>
-          <button type="button" onClick={() => setFullscreen(false)} className="text-gray-400 hover:text-white" data-testid="ed-qr-fullscreen-close"><X size={24} /></button>
+          <button type="button" onClick={closeFullscreen} className="text-gray-400 hover:text-white" data-testid="ed-qr-fullscreen-close"><X size={24} /></button>
         </div>
         <img src={result.qr} alt="QR แบบประเมิน" className="w-full max-w-md aspect-square rounded-xl bg-white" />
         <div className="text-gray-300 text-sm mt-4 text-center">ให้ลูกค้าสแกนด้วยกล้องมือถือ</div>
@@ -75,7 +81,7 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
       <div className={`w-full max-w-md rounded-xl border overflow-hidden ${panel}`}>
         <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center justify-between">
           <span className="font-bold">ส่งแบบประเมินติดตาม — <span className="text-orange-500">ครั้งที่ {roundNumber}</span></span>
-          <button type="button" onClick={() => onClose?.()} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]" data-testid="ed-modal-close"><X size={18} /></button>
+          <button type="button" onClick={closeModal} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]" data-testid="ed-modal-close"><X size={18} /></button>
         </div>
 
         <div className="p-4">
@@ -99,7 +105,7 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
             </>
           ) : (
             <div className="flex flex-col items-center">
-              <button type="button" onClick={() => setFullscreen(true)} data-testid="ed-qr-fullscreen-btn" title="แตะขยายเต็มจอ">
+              <button type="button" onClick={openFullscreen} data-testid="ed-qr-fullscreen-btn" title="แตะขยายเต็มจอ">
                 <img src={result.qr} alt="QR แบบประเมิน" className="w-40 h-40 rounded-lg bg-white" />
               </button>
               <div className="text-[11px] text-[var(--tx-muted)] mt-2">หมดอายุใน 1 วัน หรือเมื่อกรอกเสร็จ</div>
@@ -109,7 +115,7 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
                   className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border border-blue-500/40 text-blue-500 hover:bg-blue-500/10">
                   <Copy size={14} /> คัดลอกลิงก์
                 </button>
-                <button type="button" onClick={() => setFullscreen(true)} data-testid="ed-qr-fullscreen-btn-2"
+                <button type="button" onClick={openFullscreen} data-testid="ed-qr-fullscreen-btn-2"
                   className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border border-orange-500/40 text-orange-500 hover:bg-orange-500/10">
                   <Maximize2 size={14} /> QR เต็มจอ
                 </button>
