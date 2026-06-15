@@ -2,7 +2,7 @@
 updated_at: "2026-06-16 EOD+1 — Dup-customer prevention (Part A, Rule T) + Recall fixes (Part B) — ✅ DEPLOYED + Probe-Deploy-Probe green + Rule-M backfill/nuke APPLIED."
 status: "DEPLOYED to prod (firestore.rules + frontend). Probe-Deploy-Probe green (no regression, patient intake intact). Rule-M: 128 identity claims seeded + 131 denorm-stamped + 7 TEST-CASE junk deleted. Pending: USER L1 (backend-authed UI) + manual merge of 3 dup pairs."
 branch: "master"
-last_commit: "36bdbdfd — fix(probe): WS1 chat 200→403 + probe #17 (be_customer_identity + be_recall_cases anon-deny)"
+last_commit: "c78378a9 — docs(agents): 3 dup pairs resolved (recall moved + dups deleted, 3→0)"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "frontend = lover-clinic-gpxsr048v (HEAD 380ce1ea + probe-fix 36bdbdfd) — DEPLOYED 2026-06-16. firestore.rules DEPLOYED (be_customer_identity + be_recall_cases delete-narrow)."
 firestore_rules_version: "DEPLOYED: + be_customer_identity (get/list:false/create-update-delete staff) + be_recall_cases delete if false→isClinicStaff. Probe #17 live (anon write/delete → 403)."
