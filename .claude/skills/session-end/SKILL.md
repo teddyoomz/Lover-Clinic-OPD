@@ -25,6 +25,14 @@ Wrap session into 3 files in ≤ 5k tokens.
    - User directive (2026-05-27, verbatim): "session end ไม่ต้องรันเทสอะไรแล้ว
      โดยเฉพาะ Full suite ... กูเพิ่งรันไป ไม่ต้องเทสอะไรทั้งสิ้น".
 
+1.5. **📊 Graphify update (AST-only — NOT a test)** — if the project has a
+   `graphify-out/`, run `graphify update .` (or `python -m graphify update .`).
+   AST-only → no API cost, no LLM call, fast → keeps the graph synced to this
+   session's code edits so the NEXT boot reads a fresh graph (🔁 compounding
+   loop). Explicitly allowed at session-end — it is **NOT a test**, so the
+   no-tests directive above does not apply. Skip if no `graphify-out/`. (Global
+   Master Flow session-end step — see `~/.claude/CLAUDE.md` § 🧭 MASTER FLOW.)
+
 2. **Edit `.agents/active.md`** (Write OK — small file):
    - Frontmatter: updated_at, status, branch, last_commit, tests, production_url, production_commit, firestore_rules_version
    - Body — 4 sections only: `## State` (3 bullets), `## What this session shipped` (≤ 8 bullets, link to checkpoint), `## Next action`, `## Outstanding user-triggered actions`

@@ -40,6 +40,10 @@ Skill(skill="real-adversarial-verification")  ← NEW V66 mandatory
 ```
 This loads the skill catalogue + invocation discipline + Rule Q reminder. The user-level CLAUDE.md mirrors these triggers so the boot fires from either side. After Step 0, continue with the rest of this file.
 
+**📊 STEP 0.5 — Graphify read**: this project HAS `graphify-out/` → read `graphify-out/GRAPH_REPORT.md` (god nodes + community structure) + `graphify-out/wiki/index.md` (if present) to build a codebase mental model **from the graph** before raw-file reads (token economy + big-picture). For "how does X relate to Y" → prefer `graphify query` / `path` / `explain` over grep. At **session end** → `graphify update .` (AST-only, no API cost — keeps the graph fresh for next boot; not a test). The `session-start` + `session-end` skills carry these steps.
+
+**🧭 MASTER FLOW (single source)**: this project follows the global **Master Flow** (`~/.claude/CLAUDE.md` § 🧭 MASTER FLOW) — the canonical skill-orchestration: boot-3 + graphify bookends · task tiers **T0–T3** (trivial / small-fix / feature / release → calibrated gate depth) · ponytail layer · precedence. **The rules in THIS file are the LoverClinic-specific deltas** (iron-clad A–T · `/audit-all` + project audits · Rule I/N/P/Q specifics · V-log) layered on top of that generic flow — they are NOT duplicated there. When the generic boot/tier/precedence is needed, read the global Master Flow; when LoverClinic specifics are needed, read here.
+
 ---
 
 ## 0. CHARACTER + EXPECTATIONS

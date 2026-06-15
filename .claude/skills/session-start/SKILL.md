@@ -46,6 +46,18 @@ Based on what Step 1 revealed:
 - If a memory system exists (e.g. `~/.claude/projects/*/memory/MEMORY.md`),
   note it — Claude Code auto-loads; no manual Read needed.
 
+### Step 2.5 — Graphify read (codebase mental model) 📊
+
+If the project has a `graphify-out/` directory (this one does), READ
+`graphify-out/GRAPH_REPORT.md` (god nodes + community structure) — and
+`graphify-out/wiki/index.md` if present — to build a mental model of the
+codebase FROM THE GRAPH before raw-file spelunking. The graph is faster,
+cheaper, and clearer than reading source files one by one (token economy +
+better big-picture). For cross-module "how does X relate to Y" questions,
+prefer `graphify query` / `path` / `explain` over grep. Skip if no
+`graphify-out/`. (Global Master Flow boot step — see
+`~/.claude/CLAUDE.md` § 🧭 MASTER FLOW.)
+
 ### Step 3 — Verify iron-clad rule comprehension
 
 After reading, mentally confirm you can state:
