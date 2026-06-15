@@ -20,7 +20,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const TFP = readFileSync('src/components/TreatmentFormPage.jsx', 'utf8');
+// CRLF→LF normalize (2026-06-15): core.autocrlf=true → the Windows working tree
+// is CRLF, but L5's multi-line indexOf("…{\n  await…") uses an LF literal → it
+// could never match on a dev checkout. Normalize so the source-grep is EOL-agnostic
+// (CI is LF; dev is CRLF) — the asserted gates are unchanged.
+const TFP = readFileSync('src/components/TreatmentFormPage.jsx', 'utf8').replace(/\r\n/g, '\n');
 
 const TREATMENT_MOVEMENT_TYPE = 6; // stockUtils.MOVEMENT_TYPES.TREATMENT
 const TREATMENT_MED_TYPE = 7;      // stockUtils.MOVEMENT_TYPES.TREATMENT_MED

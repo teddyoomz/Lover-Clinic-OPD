@@ -10,7 +10,8 @@ describe('CustomerDetailView — ED Score wiring', () => {
     expect(cdv).toMatch(/import EDFollowupModal from '\.\/EDFollowupModal\.jsx'/);
     expect(cdv).toMatch(/listenToAssessments,/);                       // from scopedDataLayer (BS-1)
     expect(cdv).toMatch(/import \{ pickKioskAssessmentFields \} from '\.\.\/\.\.\/lib\/kioskAssessmentFields\.js'/);
-    expect(cdv).toMatch(/import \{ stripScreeningSection \} from '\.\.\/\.\.\/lib\/edScoreDisplay\.js'/);
+    // ED follow-up v2 (2026-06-15) — CDV now also imports buildConfirmInfo (R1 confirm card).
+    expect(cdv).toMatch(/import \{ stripScreeningSection, buildConfirmInfo \} from '\.\.\/\.\.\/lib\/edScoreDisplay\.js'/);
     expect(cdv).toMatch(/import \{ latestPerType, ED_TYPES \} from '\.\.\/\.\.\/lib\/assessmentRoundsCore\.js'/);
   });
 

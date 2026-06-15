@@ -950,9 +950,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       try {
         // ── BACKEND MODE: load from master_data + be_treatments ──
         if (saveTarget === 'backend') {
-          // Task 7 (BSA, 2026-05-04) — Rule H-quater fix: replaced
-          // getAllMasterDataItems() (master_data/* universal pool, branch-blind)
-          // with be_* listers via scopedDataLayer. listProducts/listCourses
+          // Task 7 (BSA, 2026-05-04) — Rule H-quater fix: replaced the legacy
+          // master-data universal-pool lister (branch-blind) with be_* listers
+          // via scopedDataLayer. listProducts/listCourses
           // auto-inject the selected branchId. listStaff/listDoctors are
           // universal — branch soft-gate via filterStaffByBranch /
           // filterDoctorsByBranch (Phase BS V1) is preserved below.

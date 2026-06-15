@@ -9,7 +9,8 @@ describe('TFP — ED Score in หมายเหตุทั่วไป (Task 1
     expect(tfp).toMatch(/import \{ listenToAssessments \} from '\.\.\/lib\/scopedDataLayer\.js'/);
     expect(tfp).toMatch(/import \{ pickKioskAssessmentFields \} from '\.\.\/lib\/kioskAssessmentFields\.js'/);
     expect(tfp).toMatch(/import \{ latestRounds \} from '\.\.\/lib\/assessmentRoundsCore\.js'/);
-    expect(tfp).toMatch(/import \{ scoreForType, ED_TYPE_META, stripScreeningSection \} from '\.\.\/lib\/edScoreDisplay\.js'/);
+    // ED follow-up v2 (2026-06-15) — TFP now also imports formatRoundDate (R4 round date).
+    expect(tfp).toMatch(/import \{ scoreForType, ED_TYPE_META, stripScreeningSection, formatRoundDate \} from '\.\.\/lib\/edScoreDisplay\.js'/);
   });
   it('subscribes assessments + derives latest-2 + stripped note', () => {
     expect(tfp).toMatch(/const \[edAssessments, setEdAssessments\] = useState\(\[\]\)/);

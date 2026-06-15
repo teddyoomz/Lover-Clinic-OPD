@@ -5,11 +5,14 @@ import React from 'react';
 const m = vi.hoisted(() => ({
   createAssessmentRound: vi.fn(() => Promise.resolve('R1')),
   createAssessmentSession: vi.fn(() => Promise.resolve('FW-ED-abc123')),
+  // ED follow-up v2 (2026-06-15, R3) — handleCreate now calls this FIRST.
+  supersedePendingFollowups: vi.fn(() => Promise.resolve({ superseded: 0 })),
   generateQrDataUrl: vi.fn(() => Promise.resolve('data:image/png;base64,QRDATA')),
 }));
 vi.mock('../src/lib/scopedDataLayer.js', () => ({
   createAssessmentRound: m.createAssessmentRound,
   createAssessmentSession: m.createAssessmentSession,
+  supersedePendingFollowups: m.supersedePendingFollowups,
 }));
 vi.mock('../src/lib/documentPrintEngine.js', () => ({ generateQrDataUrl: m.generateQrDataUrl }));
 
