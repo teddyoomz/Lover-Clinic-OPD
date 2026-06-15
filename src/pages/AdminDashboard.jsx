@@ -347,7 +347,15 @@ async function addCustomerOrLinkExisting(patient, opts) {
     return await addCustomer(patient, opts);
   } catch (e) {
     if (e?.code === 'DUPLICATE_IDENTITY' && e.existingCustomerId) {
-      return { id: e.existingCustomerId, hn: '', linkedExisting: true };
+      // Resolve the existing customer's HN so the OPD session links with a real
+      // brokerProClinicHN (not blank). For LC- customers the doc-id IS the HN;
+      // ProClinic-cloned customers carry it on hn_no/proClinicHN.
+      let hn = '';
+      try {
+        const ex = await getCustomer(e.existingCustomerId);
+        hn = (ex && (ex.hn_no || ex.proClinicHN)) || e.existingCustomerId || '';
+      } catch { hn = e.existingCustomerId || ''; }
+      return { id: e.existingCustomerId, hn, linkedExisting: true };
     }
     throw e;
   }

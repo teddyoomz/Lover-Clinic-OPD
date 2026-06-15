@@ -144,11 +144,19 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
       // 2026-06-16 Part A — identity-claim (Rule T bulletproof dup-prevention).
-      // doc-id = type-prefixed key (CITIZEN:{13d} | PASSPORT:{UPPER}). Read by id
-      // ONLY (get) — NO list (PII: prevents enumeration/scraping of national ids).
-      // create/update/delete required: the claim is set at create, appended on
-      // override, re-pointed on edit, and freed on customer delete (so create-only
-      // immutable was REJECTED — it would orphan claims). Probe-Deploy-Probe: anon
+      // doc-id = type-prefixed key (CITIZEN:{13d} | PASSPORT:{UPPER}).
+      //
+      // 🚨 CRITICAL PII INVARIANT — `allow list: if false` MUST NEVER be relaxed.
+      // The doc-id embeds the national id; `list:false` makes the collection
+      // non-enumerable (read by exact id ONLY). A future "admin audit list" must
+      // NOT add `allow list` here — it would expose the entire clinic's national-id
+      // set in one scan. (Marginal exposure today is ~nil — the same ids already
+      // live staff-readable on be_customers.citizen_id — but list:false keeps this
+      // collection from WIDENING that surface; the audit grep + probe #17 lock it.)
+      //
+      // create/update/delete are required: the claim is set at create, appended on
+      // override, re-pointed on edit, and freed on customer delete — so create-only
+      // immutable was REJECTED (it would orphan claims). Probe-Deploy-Probe: anon
       // write → 403.
       match /be_customer_identity/{claimKey} {
         allow get: if isClinicStaff();

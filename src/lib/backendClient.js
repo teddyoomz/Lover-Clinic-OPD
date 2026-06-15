@@ -688,22 +688,28 @@ export async function updateCustomerFromForm(customerId, form, opts = {}) {
   // a colliding one throws DUPLICATE_IDENTITY). Unchanged id → plain updateDoc
   // (still heal the _identityClaimKey denorm). All tx reads precede all writes.
   const newKey = deriveClaimKey(finalForm.citizen_id, finalForm.passport_id);
-  let oldKey = null;
-  try {
-    const curSnap = await getDoc(customerDoc(customerId));
-    if (curSnap.exists()) {
-      const cur = curSnap.data();
-      oldKey = deriveClaimKey(cur.citizen_id, cur.passport_id) || cur._identityClaimKey || null;
-    }
-  } catch { /* best-effort — fall through to plain update */ }
   patch._identityClaimKey = newKey;  // heal/refresh the denorm
 
-  if (oldKey !== newKey) {
+  // Pre-read the current identity — OPTIMIZATION ONLY (skip the claim-tx when the
+  // identity clearly isn't changing). The AUTHORITATIVE oldKey is re-derived from
+  // a FRESH in-transaction read below, so a concurrent edit can't make us free the
+  // wrong claim (Rule T — race-safe; closes the workflow-w89 pre-tx-read finding).
+  let preOldKey = null;
+  try {
+    const s = await getDoc(customerDoc(customerId));
+    if (s.exists()) { const d = s.data(); preOldKey = deriveClaimKey(d.citizen_id, d.passport_id) || d._identityClaimKey || null; }
+  } catch { /* fall through to the tx (it re-reads the authoritative state) */ }
+
+  if (preOldKey !== newKey) {
     const editNowIso = new Date().toISOString();
     await runTransaction(db, async (tx) => {
+      // READS first, ALL inside the tx (Firestore: all reads before all writes).
+      const curSnap = await tx.get(customerDoc(customerId));
+      const cur = curSnap.exists() ? curSnap.data() : {};
+      const oldKey = deriveClaimKey(cur.citizen_id, cur.passport_id) || cur._identityClaimKey || null;
+      if (oldKey === newKey) { tx.update(customerDoc(customerId), patch); return; } // raced back to same key
       const oldRef = oldKey ? identityClaimDoc(oldKey) : null;
       const newRef = newKey ? identityClaimDoc(newKey) : null;
-      // READS first (Firestore: all reads before all writes).
       const oldSnap = oldRef ? await tx.get(oldRef) : null;
       const newSnap = newRef ? await tx.get(newRef) : null;
       if (newRef) {
