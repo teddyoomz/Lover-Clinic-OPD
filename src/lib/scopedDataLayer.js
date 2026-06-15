@@ -716,6 +716,8 @@ listenToRecallsForCustomer.__universal__ = true;
 export const createAssessmentRound = (...args) => raw.createAssessmentRound(...args);
 export const deleteAssessmentRound = (...args) => raw.deleteAssessmentRound(...args);
 export const createAssessmentSession = (...args) => raw.createAssessmentSession(...args);
+// R3 — targeted op (explicit customerId+branchId), pass-through (NOT branch-auto-inject)
+export const supersedePendingFollowups = (...args) => raw.supersedePendingFollowups(...args);
 
 // Writers — branchId stamping handled inside raw via _resolveBranchIdForWrite
 export const createRecall = (...args) => raw.createRecall(...args);

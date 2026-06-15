@@ -1109,6 +1109,38 @@ export function shouldSupersedeSession(s, customerId, branchId) {
     && s.status !== 'completed';
 }
 
+/** R3 (2026-06-15) — before minting a NEW follow-up link, delete prior PENDING
+ *  follow-up sessions + their linked pending rounds for the SAME customer+branch,
+ *  so only the latest link is valid (prevents duplicate customer submissions).
+ *  single-field where(linkedCustomerId) is auto-indexed; branch/status/formType
+ *  filtered client-side via shouldSupersedeSession.
+ *  ponytail: best-effort + no lock — two admins generating at the same instant is
+ *  a negligible manual-flow race; the customer scans the latest QR either way. If
+ *  listing fails (perm/network) we proceed to create the new link anyway (blocking
+ *  link creation is worse than a rare leftover pending). */
+export async function supersedePendingFollowups({ customerId, branchId } = {}) {
+  const cid = String(customerId ?? '').trim();
+  if (!cid) return { superseded: 0 };
+  let superseded = 0;
+  try {
+    const snap = await getDocs(query(
+      collection(db, ...basePath(), 'opd_sessions'),
+      where('linkedCustomerId', '==', cid),
+    ));
+    for (const d of snap.docs) {
+      const s = d.data();
+      if (!shouldSupersedeSession(s, cid, branchId)) continue;
+      if (s.linkedAssessmentRoundId) {
+        try { await deleteAssessmentRound(s.linkedAssessmentRoundId); } catch { /* round already gone */ }
+      }
+      try { await deleteDoc(d.ref); superseded += 1; } catch { /* leave; new link still supersedes */ }
+    }
+  } catch (e) {
+    console.warn('[supersedePendingFollowups] non-fatal:', e?.message || e);
+  }
+  return { superseded };
+}
+
 /** Create a public opd_session for the customer to fill a follow-up ED assessment.
  *  Per-round, expires (default caller passes +1 day). Reuses the existing
  *  followup_* PatientForm render (gate extended for types[]). The onPatientSubmit
@@ -1116,7 +1148,7 @@ export function shouldSupersedeSession(s, customerId, branchId) {
  *  be_assessments round (linkedAssessmentRoundId). Returns the sessionId (the
  *  128-bit doc-id IS the patient-link secret — WS1 C1; split get/list rule keeps
  *  anon from enumerating). */
-export async function createAssessmentSession({ customerId, types, branchId, sessionName, expiresAt, roundId } = {}) {
+export async function createAssessmentSession({ customerId, types, branchId, sessionName, expiresAt, roundId, confirmInfo } = {}) {
   const rand = Array.from(crypto.getRandomValues(new Uint8Array(16)))
     .map((b) => b.toString(16).padStart(2, '0')).join('');
   const sessionId = `FW-ED-${rand}`;
@@ -1135,6 +1167,11 @@ export async function createAssessmentSession({ customerId, types, branchId, ses
     linkedCustomerId: String(customerId || ''),
     linkedAssessmentRoundId: roundId || '',
     sessionName: sessionName || 'แบบประเมินติดตาม',
+    // R1 (2026-06-15) — read-only identity snapshot for the follow-up confirm card.
+    // Anon link can `get` this session but NOT read be_customers (staff-only), so
+    // the display fields are snapshotted here at generation time. Separate from
+    // patientData (the customer's submit) so submit never overwrites it.
+    confirmInfo: confirmInfo || null,
   });
   return sessionId;
 }
