@@ -15,10 +15,17 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const APPLY = process.argv.includes('--apply');
-const env = Object.fromEntries(readFileSync(path.resolve(process.cwd(), '.env.local.prod'), 'utf8').split(/\r?\n/).filter((l) => l.includes('=')).map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, '')]; }));
-if (!getApps().length) initializeApp({ credential: cert({ projectId: APP_ID, clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL, privateKey: env.FIREBASE_ADMIN_PRIVATE_KEY.split('\\n').join('\n') }) });
-const db = getFirestore();
-const data = () => db.collection('artifacts').doc(APP_ID).collection('public').doc('data');
+// Lazy firebase-admin init so the pure isJunkRecallId helper is importable in
+// tests without reading .env.local.prod or initializing the SDK (V107 lesson).
+let _db = null;
+function getDb() {
+  if (_db) return _db;
+  const env = Object.fromEntries(readFileSync(path.resolve(process.cwd(), '.env.local.prod'), 'utf8').split(/\r?\n/).filter((l) => l.includes('=')).map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, '')]; }));
+  if (!getApps().length) initializeApp({ credential: cert({ projectId: APP_ID, clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL, privateKey: env.FIREBASE_ADMIN_PRIVATE_KEY.split('\\n').join('\n') }) });
+  _db = getFirestore();
+  return _db;
+}
+const data = () => getDb().collection('artifacts').doc(APP_ID).collection('public').doc('data');
 
 // Pure helper (also unit-tested) — is this doc-id a TEST/E2E junk id for this collection?
 export function isJunkRecallId(collection, id) {
@@ -35,7 +42,7 @@ async function nukeCollection(name) {
   if (APPLY) {
     // Chunk deletes (batch cap 500).
     for (let i = 0; i < victims.length; i += 450) {
-      const batch = db.batch();
+      const batch = getDb().batch();
       for (const d of victims.slice(i, i + 450)) batch.delete(d.ref);
       await batch.commit();
     }

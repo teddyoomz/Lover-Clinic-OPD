@@ -18,7 +18,7 @@ vi.mock('../src/firebase.js', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: (db, ...path) => ({ __doc: path.join('/') }),
   collection: (db, ...path) => ({ __col: path.join('/') }),
-  getDoc: vi.fn(),
+  getDoc: vi.fn(async () => ({ exists: () => false, data: () => undefined })), // claim pre-check → free
   getDocs: vi.fn(),
   setDoc: vi.fn(async (ref, data) => {
     writtenDocPath = ref.__doc;
@@ -33,12 +33,23 @@ vi.mock('firebase/firestore', () => ({
   writeBatch: vi.fn(() => ({ set: vi.fn(), update: vi.fn(), delete: vi.fn(), commit: vi.fn(async () => undefined) })),
   runTransaction: vi.fn(async (db, fn) => {
     runTxCalls += 1;
+    // 2026-06-16 — addCustomer now writes the customer doc + identity claim
+    // inside a runTransaction (Rule T). Route tx writes by ref path so the
+    // customer doc is captured (was only setDoc before).
     return fn({
       get: async (ref) => {
+        const p = ref && ref.__doc ? ref.__doc : '';
+        if (p.includes('be_customer_identity')) return { exists: () => false, data: () => undefined }; // claim free
         if (counterStore == null) return { exists: () => false, data: () => undefined };
         return { exists: () => true, data: () => counterStore };
       },
-      set: (ref, data) => { counterStore = data; },
+      set: (ref, data) => {
+        const p = ref && ref.__doc ? ref.__doc : '';
+        if (p.includes('be_customers/')) { writtenDocPath = p; writtenDoc = data; }
+        else counterStore = data; // counter or claim
+      },
+      update: () => {},
+      delete: () => {},
     });
   }),
   onSnapshot: vi.fn(),

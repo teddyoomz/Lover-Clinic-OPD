@@ -131,6 +131,7 @@ const COLLECTION_MATRIX = {
   'be_central_stock_orders_counter': { scope: 'global', reason: 'Atomic central-PO id sequencer (Phase 15.2 — singleton doc, monthly reset)' },
   'be_sales_counter':      { scope: 'global',  reason: 'Atomic sale-id sequencer (singleton doc)' },
   'be_customer_counter':   { scope: 'global',  reason: 'V33-customer-create — atomic HN sequencer for manually-created customers (singleton doc)' },
+  'be_customer_identity':  { scope: 'global',  reason: '2026-06-16 Part A — identity-claim uniqueness guard (doc-id = CITIZEN:/PASSPORT: key; no branchId; claimed atomically in addCustomer for Rule T dup-prevention)' },
 
   // ─── Parent-scoped (inherit branch via foreign key) ──
   'be_customer_wallets':   { scope: 'global',  reason: 'Customer-owned; tx record inherits sale.branchId' },

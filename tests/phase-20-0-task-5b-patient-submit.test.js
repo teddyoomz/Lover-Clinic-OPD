@@ -78,8 +78,11 @@ describe('Phase 20.0 Task 5b — Y3 patient-submit (handleOpdClick + handleResyn
     // Phase 23.0 (2026-05-06) tightened: every kiosk callsite ALSO passes
     // branchId explicitly to mirror CustomerCreatePage + close the
     // "สร้างรายการที่" race vs implicit resolveSelectedBranchId fallback.
+    // 2026-06-16 — the OPD create callsites now route through the
+    // addCustomerOrLinkExisting chokepoint (catches DUPLICATE_IDENTITY → links
+    // the existing customer). Same {strict:false, branchId} opts.
     const matches = STRIPPED.match(
-      /addCustomer\s*\(\s*patient\s*,\s*\{[^}]*strict:\s*false[^}]*branchId:\s*selectedBranchId/g,
+      /addCustomerOrLinkExisting\s*\(\s*patient\s*,\s*\{[^}]*strict:\s*false[^}]*branchId:\s*selectedBranchId/g,
     ) || [];
     // 3 callsites: handleOpdClick + handleOpdClick-retry + handleResync + confirmDepositSync
     expect(matches.length).toBeGreaterThanOrEqual(3);
@@ -143,7 +146,7 @@ describe('Phase 20.0 Task 5b — Y5 confirmDepositSync customer-create branch wi
   it('Y5.1 — addCustomer called with strict:false + explicit branchId in deposit-sync customer-create branch (Phase 23.0)', () => {
     // Phase 23.0 contract: branchId stamped explicitly from selectedBranchId.
     expect(STRIPPED).toMatch(
-      /const\s+created\s*=\s*await\s+addCustomer\s*\(\s*patient\s*,\s*\{[^}]*strict:\s*false[^}]*branchId:\s*selectedBranchId[^}]*\}\s*\)/,
+      /const\s+created\s*=\s*await\s+addCustomerOrLinkExisting\s*\(\s*patient\s*,\s*\{[^}]*strict:\s*false[^}]*branchId:\s*selectedBranchId[^}]*\}\s*\)/,
     );
   });
 

@@ -39,7 +39,7 @@ vi.mock('../src/lib/storageClient.js', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: (db, ...path) => ({ __doc: path.join('/') }),
   collection: () => ({}),
-  getDoc: vi.fn(),
+  getDoc: vi.fn(async () => ({ exists: () => false, data: () => undefined })), // claim pre-check → free
   getDocs: vi.fn(),
   setDoc: vi.fn(async (ref, data) => {
     writtenDocId = ref.__doc;
@@ -52,7 +52,14 @@ vi.mock('firebase/firestore', () => ({
   limit: vi.fn(),
   orderBy: vi.fn(),
   writeBatch: vi.fn(() => ({ commit: vi.fn() })),
-  runTransaction: vi.fn(async () => 42),  // counter returns seq=42
+  // 2026-06-16 — addCustomer now writes the customer doc + identity claim inside
+  // a runTransaction (Rule T). Run the callback + capture be_customers writes;
+  // the counter tx returns seq=1 (counter fresh).
+  runTransaction: vi.fn(async (db, fn) => fn({
+    get: async () => ({ exists: () => false, data: () => undefined }),
+    set: (ref, data) => { const p = ref && ref.__doc ? ref.__doc : ''; if (p.includes('be_customers/')) { writtenDocId = p; writtenPayload = data; } },
+    update: () => {}, delete: () => {},
+  })),
   onSnapshot: vi.fn(),
 }));
 

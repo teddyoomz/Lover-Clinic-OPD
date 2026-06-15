@@ -277,7 +277,8 @@ describe('Phase 23.0 / B — AdminDashboard.jsx contract guards', () => {
     // Pre-fix: addCustomer(patient, { strict: false }) — relied on implicit
     // resolveSelectedBranchId() inside addCustomer. Post-fix: every site
     // passes branchId explicitly to mirror CustomerCreatePage's pattern.
-    const matches = ADMIN.match(/addCustomer\(patient,\s*\{[^}]*branchId:\s*selectedBranchId/g) || [];
+    // 2026-06-16 — callsites route through addCustomerOrLinkExisting (DUPLICATE_IDENTITY → link existing).
+    const matches = ADMIN.match(/addCustomerOrLinkExisting\(patient,\s*\{[^}]*branchId:\s*selectedBranchId/g) || [];
     expect(matches.length).toBeGreaterThanOrEqual(4);
   });
 

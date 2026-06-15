@@ -41,7 +41,8 @@ describe('Phase 25.0c — Walk-in OPD-save → modal flow simulation', () => {
   it('F2 step 3 — handleOpdClick saves customer via addCustomer (existing)', () => {
     // Customer save semantics already exist (Phase 23.0). Walk-in flow
     // depends on this remaining intact.
-    expect(ADMIN_DASHBOARD).toMatch(/addCustomer\(patient,\s*\{\s*strict:\s*false,\s*branchId/);
+    // 2026-06-16 — via addCustomerOrLinkExisting chokepoint (DUPLICATE_IDENTITY → link existing).
+    expect(ADMIN_DASHBOARD).toMatch(/addCustomerOrLinkExisting\(patient,\s*\{\s*strict:\s*false,\s*branchId/);
   });
 
   it('F3 step 4 — _maybeOpenWalkInModal helper exists + gated by adminMode', () => {
