@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Follow-up Assessment v2 — Confirm-Identity · Latest-Link-Only · Round Dates Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    .bug { border-left: 4px solid #dc2626; background: #fef2f2; padding: 0.6em 1em; border-radius: 0 6px 6px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    /* faithful dark clinic brand (replicated from real .pf-* / TFP classes — fixed dark, not theme-adaptive) */
+    .phone { width: 290px; border-radius: 24px; overflow: hidden; border: 1px solid rgba(90,16,16,0.5); background: #0a0a0a; font-size: 13px; }
+    .pf-hero { background: linear-gradient(160deg,#1a0000 0%,#0a0a0a 45%,#200000 100%); padding: 20px 14px; text-align: center; }
+    .pf-logo { font-size: 22px; font-weight: 900; letter-spacing: .04em; color: #fff; }
+    .pf-logo b { color: #dc2626; font-weight: 900; }
+    .pf-title { font-size: 14px; font-weight: 900; color: #fff; margin-top: 8px; }
+    .pf-body { background: linear-gradient(180deg,#0a0a0a,#0d0500 40%,#0a0a0a); padding: 14px 12px 16px; }
+    .pf-card { position: relative; background: linear-gradient(135deg,rgba(26,8,0,.4),rgba(10,10,10,.95) 50%,rgba(45,15,0,.3)); border: 1px solid rgba(74,26,10,.4); border-radius: 14px; padding: 13px; overflow: hidden; }
+    .pf-card::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; background:#dc2626; }
+    .pf-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+    .pf-row:last-child { border-bottom:none; }
+    .pf-k { font-size:11px; color:rgba(255,255,255,.5); }
+    .pf-v { font-size:13px; font-weight:700; color:#e5e5e5; }
+    .pill { display:inline-flex; align-items:center; gap:7px; background:rgba(220,38,38,.07); border:1px solid rgba(220,38,38,.18); border-radius:999px; padding:6px 13px; margin-top:12px; }
+    .dot { width:7px; height:7px; border-radius:50%; background:#dc2626; box-shadow:0 0 8px rgba(220,38,38,.8); }
+    .mono { font-family: monospace; font-size:10px; color:rgba(255,255,255,.55); letter-spacing:.06em; }
+    .strike { text-decoration: line-through; opacity:.45; }
+    .todaybadge { display:inline-block; background:rgba(249,115,22,.18); border:1px solid rgba(249,115,22,.4); color:#fdba74; border-radius:999px; padding:1px 7px; font-size:9.5px; font-weight:700; }
+    /* flow diagram boxes */
+    .flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .fbox { background:#fff; border:1.5px solid var(--bd); border-radius:8px; padding:8px 12px; font-size:0.86em; min-width:90px; }
+    .fbox.acc { border-color: var(--accent); }
+    .fbox.del { border-color:#dc2626; background:#fef2f2; }
+    .farr { color:#999; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>ED Follow-up Assessment v2 — Confirm-Identity · Latest-Link-Only · Round Dates</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-15 (EOD+2) · <strong>Status:</strong> Approved by user (Q1–Q4 locked) · <strong>Builds on:</strong> ED Score feature (2026-06-15, prod <code>019df953</code>) · <strong>Plan:</strong> see <code>docs/superpowers/plans/2026-06-15-ed-followup-confirm-supersede-date.html</code>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The ED follow-up assessment link is generated <strong>from a specific customer's page</strong> (CDV → EDFollowupModal), so the clinic already knows who it's for. Four user-reported problems + one bug surfaced while reading the real submit path:</p>
+<ul>
+  <li><strong>R1</strong> — The follow-up link asks the customer to re-type their name/age/blood-type/date. Pointless (we know the customer) and error-prone. Change to a <strong>read-only identity card</strong> so the customer confirms it's the right person, then assesses.</li>
+  <li><strong>R2</strong> — A meaningless token chip <code>FW-ED-db69fb0d…</code> shows in the header. It means nothing to a human → remove it from every PatientForm mode.</li>
+  <li><strong>R3</strong> — Generating a new QR/link while an old one is still unanswered leaves multiple live links → duplicate customer submissions. Only the <strong>latest link per customer+branch</strong> may be valid; older pending ones are deleted on generate.</li>
+  <li><strong>R4</strong> — The TFP "หมายเหตุทั่วไป" ED-Score strip shows each round's scores but not <strong>when</strong> each round was assessed → a doctor can't tell which round was done today. Add the date per round + a <strong>"วันนี้"</strong> badge when the round's date is today.</li>
+</ul>
+
+<div class="bug">
+  <strong>🔴 Bug found (live on prod, in-scope fix):</strong> <code>PatientForm.jsx:350</code> validates <code>if (!formData.province)</code> with <strong>no mode gate</strong>. The follow-up form never renders a province field and <code>defaultFormData.province === ''</code> → a customer who fills the follow-up assessment and presses Send is <strong>blocked with "กรุณาเลือกจังหวัด" and cannot submit</strong>. The existing L2 e2e wrote Firestore directly (bypassing this client-side validation) and L1 was deferred, so it shipped unnoticed. Fix: gate to <code>if (isIntake &amp;&amp; !formData.province)</code> (province is an intake/deposit address field) — unblocks follow-up <em>and</em> custom submit.
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">R1 + R2 · Follow-up render — BEFORE (editable + token pill) → AFTER (read-only confirm card, no pill)</div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;">
+    <!-- BEFORE -->
+    <div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px;">ก่อน — ลูกค้ากรอกเอง</div>
+      <div class="phone">
+        <div class="pf-hero">
+          <div class="pf-logo">LO<b>V</b>ER <span style="font-size:12px;letter-spacing:.3em;">CLINIC</span></div>
+          <div class="pf-title">ติดตามการรักษา</div>
+          <div class="pill"><span class="dot"></span><span class="mono">FW-ED-db69fb0d…633fc4a</span></div>
+        </div>
+        <div class="pf-body">
+          <div class="pf-card">
+            <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:10px;">👤 ข้อมูลผู้ป่วย</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.5);">คำนำหน้า *</div>
+            <div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 9px;font-size:12px;color:#fff;margin:3px 0 8px;">นาย</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.5);">ชื่อจริง *</div>
+            <div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 9px;font-size:12px;color:rgba(255,255,255,.35);margin:3px 0 8px;">ชื่อจริง (ภาษาไทยเท่านั้น)</div>
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;"><div style="font-size:10px;color:rgba(255,255,255,.5);">อายุ *</div><div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 9px;font-size:12px;color:rgba(255,255,255,.35);margin-top:3px;">ปี</div></div>
+              <div style="flex:1;"><div style="font-size:10px;color:rgba(255,255,255,.5);">วันที่บันทึก *</div><div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 9px;font-size:12px;color:#fff;margin-top:3px;">15/06/2569</div></div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;font-weight:700;color:#dc2626;">● ส่วนที่ 1: การประเมินอาการเบื้องต้น</div>
+        </div>
+      </div>
+    </div>
+    <!-- AFTER -->
+    <div>
+      <div style="font-size:12px;color:#2563eb;margin-bottom:6px;font-weight:600;">หลัง — แสดงให้ยืนยัน (ไม่กรอก) · ไม่มี pill</div>
+      <div class="phone">
+        <div class="pf-hero">
+          <div class="pf-logo">LO<b>V</b>ER <span style="font-size:12px;letter-spacing:.3em;">CLINIC</span></div>
+          <div class="pf-title">ติดตามการรักษา</div>
+        </div>
+        <div class="pf-body">
+          <div class="pf-card">
+            <div style="font-size:12px;font-weight:700;color:#fff;">🪪 ยืนยันตัวตน</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.45);margin-bottom:8px;">โปรดตรวจสอบว่านี่คือข้อมูลของคุณก่อนทำแบบประเมิน</div>
+            <div class="pf-row"><span class="pf-k">ชื่อ-สกุล</span><span class="pf-v">นายสมชาย ใจดี</span></div>
+            <div class="pf-row"><span class="pf-k">อายุ</span><span class="pf-v">45 ปี</span></div>
+            <div class="pf-row"><span class="pf-k">เบอร์โทร</span><span class="pf-v mono" style="font-size:13px;color:#e5e5e5;">081-•••-5678</span></div>
+            <div style="margin-top:8px;font-size:9.5px;color:rgba(255,255,255,.35);">ไม่ใช่ข้อมูลของคุณ? กรุณาติดต่อคลินิก</div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;font-weight:700;color:#dc2626;">● ส่วนที่ 1: การประเมินอาการเบื้องต้น</div>
+          <div style="margin-top:4px;font-size:11px;color:rgba(255,255,255,.4);">● แบบประเมิน: ADAM / IIEF … (passive — ทำต่อได้เลย)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:0.86em;color:#666;margin-top:0.6em;">Read-only fields = <code>confirmInfo</code> snapshotted into the session at generation (anon can <code>get</code> the session but cannot read <code>be_customers</code>). Name/phone use neutral <code>#e5e5e5</code> — never red (Thai culture). <strong>Fallback:</strong> a link with no <code>confirmInfo</code> (sent before this ships) renders the original editable fields — no breakage.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">R4 · TFP "หมายเหตุทั่วไป" ED-Score strip — BEFORE (no date) → AFTER (date per round + "วันนี้")</div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:280px;">
+      <div style="font-size:12px;color:#666;margin-bottom:6px;">ก่อน</div>
+      <div style="background:#0e0e0e;border:1px solid #1f1f1f;border-radius:12px;padding:12px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c;text-transform:uppercase;margin-bottom:7px;">ED Score · 2 ครั้งล่าสุด</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;background:rgba(255,255,255,.04);border-radius:6px;padding:6px 8px;margin-bottom:4px;"><span style="color:rgba(255,255,255,.45);">ครั้งที่ 1</span><span style="color:rgba(255,255,255,.7);">ADAM 3/10 · IIEF-5 21/25 · PE มีอาการ</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;background:rgba(255,255,255,.04);border-radius:6px;padding:6px 8px;"><span style="color:rgba(255,255,255,.45);">ครั้งที่ 2</span><span style="color:rgba(255,255,255,.7);">ADAM 2/10 · IIEF-5 23/25</span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;">
+      <div style="font-size:12px;color:#2563eb;margin-bottom:6px;font-weight:600;">หลัง</div>
+      <div style="background:#0e0e0e;border:1px solid #1f1f1f;border-radius:12px;padding:12px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c;text-transform:uppercase;margin-bottom:7px;">ED Score · 2 ครั้งล่าสุด</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;background:rgba(255,255,255,.04);border-radius:6px;padding:6px 8px;margin-bottom:4px;"><span style="color:rgba(255,255,255,.55);white-space:nowrap;">ครั้งที่ 1 · <span style="color:rgba(255,255,255,.75);">12/06/2569</span></span><span style="color:rgba(255,255,255,.7);">ADAM 3/10 · IIEF-5 21/25 · PE มีอาการ</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;background:rgba(255,255,255,.04);border-radius:6px;padding:6px 8px;"><span style="color:rgba(255,255,255,.55);white-space:nowrap;">ครั้งที่ 2 · <span style="color:rgba(255,255,255,.75);">15/06/2569</span> <span class="todaybadge">วันนี้</span></span><span style="color:rgba(255,255,255,.7);">ADAM 2/10 · IIEF-5 23/25</span></div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:0.86em;color:#666;margin-top:0.6em;">Date = <code>dd/mm/yyyy</code> พ.ศ. (consistent with the 2569 already shown in this feature). Intake round (round 1) date sourced from <code>patientData.assessmentDate</code> → fallback <code>customer.createdAt</code>; follow-up rounds = the fill date. "วันนี้" badge when the round's date-part equals <code>thaiTodayISO()</code>.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape — <code>opd_sessions/{FW-ED-…}</code> after R1 + R3 (new <code>confirmInfo</code> field)</div>
+<pre><code>opd_sessions/FW-ED-&lt;128-bit hex&gt; {
+  status: 'pending',                 // → 'completed' on customer submit
+  formType: 'followup_assessment',   // NEUTRAL (gates by types[], unchanged)
+  types: ['adam','iief'],
+  expiresAt: &lt;ms epoch, +1 day&gt;,
+  linkedCustomerId: 'LC-26000082',   // R3 supersede match key (single-field index — no composite)
+  branchId: 'BR-…',                  // R3 supersede match key (client-filtered)
+  linkedAssessmentRoundId: '&lt;be_assessments id&gt;',  // R3 deletes this pending round too
+  sessionName: 'แบบประเมินติดตาม',
+  patientData: null,                 // ← customer's assessment answers on submit
+  confirmInfo: {                     // ★ NEW (R1) — read-only identity snapshot
+    name: 'นายสมชาย ใจดี',           // composed at generate; anon-readable via session get
+    age: '45',
+    phoneMasked: '081-•••-5678'      // maskPhone(): first 3 + ••• + last 4
+  }
+}</code></pre>
+  <p style="font-size:0.86em;color:#666;">No Firestore rule change: anon <code>get</code> on <code>opd_sessions</code> is already allowed; <code>be_assessments</code> + <code>opd_sessions</code> staff-delete is already allowed (R3). <code>confirmInfo</code> is separate from <code>patientData</code> so the customer's submit never overwrites it, and the materialize CF (picks only <code>adam_/iief_/mrs_/symp_pe</code>) ignores it.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow A · R1 generate → render (confirmInfo snapshot)</div>
+  <div class="flow">
+    <div class="fbox acc">CDV: <code>buildConfirmInfo(customer)</code></div><span class="farr">→</span>
+    <div class="fbox">EDFollowupModal</div><span class="farr">→</span>
+    <div class="fbox acc">createAssessmentSession({…, <b>confirmInfo</b>})</div><span class="farr">→</span>
+    <div class="fbox">opd_session.confirmInfo</div>
+  </div>
+  <div class="flow" style="margin-top:8px;">
+    <div class="fbox">customer scans QR</div><span class="farr">→</span>
+    <div class="fbox">PatientForm onSnapshot reads <code>confirmInfo</code></div><span class="farr">→</span>
+    <div class="fbox acc">confirmInfo present → read-only card</div>
+    <span class="farr">|</span><div class="fbox">absent → editable fallback (old links)</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow B · R3 latest-link-only (supersede on generate)</div>
+  <div class="flow">
+    <div class="fbox acc">admin clicks "สร้างลิงก์ + QR"</div><span class="farr">→</span>
+    <div class="fbox">supersedePendingFollowups({customerId, branchId})</div>
+  </div>
+  <div class="flow" style="margin-top:8px;">
+    <div class="fbox">query <code>where(linkedCustomerId==id)</code></div><span class="farr">→</span>
+    <div class="fbox">filter: followup &amp; branch &amp; status≠completed</div><span class="farr">→</span>
+    <div class="fbox del">delete each session + its pending round (best-effort)</div>
+  </div>
+  <div class="flow" style="margin-top:8px;">
+    <span class="farr">then →</span><div class="fbox acc">createAssessmentRound + createAssessmentSession (new)</div>
+  </div>
+  <p style="font-size:0.86em;color:#666;margin-top:0.5em;">Old link → session gone → PatientForm shows "ไม่พบ/หมดอายุ". Only the newest link is live. Pending rounds are already hidden from the box (<code>assessmentRoundsCore.js:44</code> skips <code>status≠completed</code>) — deleting them is housekeeping that prevents <code>be_assessments</code> litter. <code>ponytail:</code> best-effort + no lock — two admins generating at the same instant is a negligible manual-flow race; the customer scans the latest QR either way.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow C · submit → province-fix → materialize → display (R4 date)</div>
+  <table>
+    <tr><th>#</th><th>step</th><th>before</th><th>after (this spec)</th></tr>
+    <tr><td>1</td><td>customer fills assessment, presses Send</td><td>handleSubmit</td><td>handleSubmit</td></tr>
+    <tr><td>2</td><td>province validation</td><td class="bug"><code>if (!province)</code> → <strong>BLOCKED</strong> "กรุณาเลือกจังหวัด"</td><td><code>if (isIntake &amp;&amp; !province)</code> → follow-up passes ✓</td></tr>
+    <tr><td>3</td><td>write</td><td colspan="2"><code>updateDoc(session, {status:'completed', patientData})</code> — patientData.assessmentDate defaults to today (R1 dropped the input; default stands)</td></tr>
+    <tr><td>4</td><td>materialize</td><td colspan="2"><code>sendPushOnSubmit</code> CF → <code>assessmentMaterialize</code> → <code>be_assessments</code> round {status:'completed', rawAnswers, assessmentDate}</td></tr>
+    <tr><td>5</td><td>display</td><td>CDV box (round appears)</td><td>CDV box + <strong>TFP note shows round + date + "วันนี้"</strong> (R4)</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>Type</th><th>Responsibility</th></tr>
+  <tr><td><code>maskPhone(phone)</code></td><td>NEW pure (edScoreDisplay.js)</td><td>'0812345678' → '081-•••-5678'; graceful on short/intl/empty input.</td></tr>
+  <tr><td><code>buildConfirmInfo(customer)</code></td><td>NEW pure (edScoreDisplay.js)</td><td>→ <code>{name, age, phoneMasked}</code> from customer.patientData (name composed prefix+first+last via existing resolver; age field; maskPhone(phone)).</td></tr>
+  <tr><td><code>formatRoundDate(assessmentDate, todayISO)</code></td><td>NEW pure (edScoreDisplay.js)</td><td>ISO ('YYYY-MM-DD' or full) → <code>{ text: 'dd/mm/yyyy พ.ศ.', isToday: bool }</code>; date-part compare to todayISO; '' → {text:'', isToday:false}.</td></tr>
+  <tr><td><code>supersedePendingFollowups({customerId, branchId})</code></td><td>NEW (backendClient.js → scopedDataLayer pass-through)</td><td>query linkedCustomerId → client-filter (followup + branch + status≠completed) → delete each session + its linked pending round (best-effort per item). Returns <code>{superseded}</code>.</td></tr>
+  <tr><td><code>createAssessmentSession({…, confirmInfo})</code></td><td>MOD (backendClient.js)</td><td>+ <code>confirmInfo</code> param → stored on the session doc.</td></tr>
+  <tr><td><code>EDFollowupModal.handleCreate</code></td><td>MOD</td><td>await supersedePendingFollowups → createAssessmentRound → createAssessmentSession(confirmInfo from CDV). supersede failure non-fatal (proceed + warn).</td></tr>
+  <tr><td><code>CustomerDetailView</code></td><td>MOD</td><td>compute confirmInfo (has full customer) → pass to EDFollowupModal.</td></tr>
+  <tr><td><code>PatientForm</code></td><td>MOD</td><td>(R1) onSnapshot reads <code>confirmInfo</code> → state; follow-up + confirmInfo → read-only card, else editable fallback. (R2) delete <code>pf-session-pill</code> block. (🔴) province check gated <code>isIntake &amp;&amp;</code>.</td></tr>
+  <tr><td><code>TreatmentFormPage:3750</code></td><td>MOD</td><td>(R4) intake round date sourced at <code>edIntakePerf</code> (merge <code>assessmentDate: patientData.assessmentDate || createdAt</code> — NOT in the shared AV194 helper); render <code>formatRoundDate</code> + "วันนี้" badge.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>R1 fields:</strong> ชื่อ-สกุล + อายุ + เบอร์โทร (NO HN — customers don't know it).</li>
+  <li><strong>R1 phone:</strong> masked middle <code>081-•••-5678</code> (safer on a public anon link, still recognizable).</li>
+  <li><strong>R1 interaction:</strong> passive read-only card (assessment directly below) — no confirm-gate button.</li>
+  <li><strong>R1 fallback:</strong> no <code>confirmInfo</code> on the session → render the original editable fields (already-sent links keep working).</li>
+  <li><strong>R2:</strong> remove the session pill from every PatientForm mode (intake/deposit/follow-up); sessionId stays as the doc-id internally.</li>
+  <li><strong>R3:</strong> hard-delete prior pending follow-up sessions + their linked pending rounds for the same customer+branch, before creating the new one ("ลบทิ้งไปเลย").</li>
+  <li><strong>R4:</strong> date per round, dd/mm/yyyy พ.ศ., + "วันนี้" badge when date == today; intake date from <code>patientData.assessmentDate</code> → fallback <code>customer.createdAt</code>.</li>
+  <li><strong>🔴 Bug-fix:</strong> province validation gated to <code>isIntake</code> — folded into this spec because it's the submit path of the form being redesigned.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Generating a follow-up link snapshots <code>confirmInfo</code>; the customer link renders a read-only card (name neutral, phone masked) and NO editable name/age/date inputs and NO token pill.</li>
+  <li>A follow-up link generated BEFORE this ships (no <code>confirmInfo</code>) still renders the editable fields (no breakage).</li>
+  <li>A customer can fill the assessment and <strong>submit successfully</strong> (province no longer blocks) → a <code>be_assessments</code> round is materialized.</li>
+  <li>Generating a 2nd link for the same customer+branch while the 1st is still pending deletes the 1st session + its pending round; opening the 1st link shows "ไม่พบ/หมดอายุ"; the 2nd link works.</li>
+  <li>The TFP ED-Score strip shows each round's date (dd/mm/yyyy พ.ศ.); a round assessed today shows the "วันนี้" badge; the intake round shows its admission/assessment date (not blank).</li>
+  <li>No token pill anywhere in PatientForm (intake/deposit/follow-up).</li>
+  <li><strong>Verify bar (user: "perfect 100%"):</strong> pure-unit (maskPhone/buildConfirmInfo/formatRoundDate/supersede-predicate) + RTL + Rule I flow-simulate + <strong>Rule Q L2 on real prod</strong> (real client-SDK supersede + submit) + <strong>Rule Q L1 real browser</strong> (real link → card → submit passes → materialize → TFP date+วันนี้, both themes). Honest disclosure of any L1 gap if no browser is connected. Full vitest green + build clean.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Concurrent generate (Rule T):</strong> two admins generating simultaneously could both pass supersede and create two pending links. Manual once-in-a-while flow → negligible; documented with a <code>ponytail:</code> comment, no lock.</li>
+  <li><strong>Supersede partial failure:</strong> a delete failing mid-batch could leave one old pending link. Best-effort per-item + proceed-to-create keeps the clinic able to send a link; common case (deletes succeed) meets the goal.</li>
+  <li><strong>L1 browser availability:</strong> real-browser L1 needs a connected Chrome MCP browser; if none is connected at execution, the L1 step is disclosed as a gap and handed to the user (Rule Q-honest) — never claimed as done.</li>
+  <li><strong>Date era:</strong> spec uses พ.ศ. to match the feature's existing 2569 surfaces; switchable to ค.ศ. with a one-line change if the doctor prefers.</li>
+  <li><strong>CDV consistency (out of scope):</strong> the CDV EDScoreBox history could show round dates too for parity, but only the TFP note was requested — left as an optional follow-up (YAGNI).</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Follow-up Assessment v2 Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .fbox { display:inline-block; background:#fff; border:1.5px solid var(--bd); border-radius:8px; padding:6px 10px; font-size:0.82em; margin:2px; }
+    .fbox.acc { border-color: var(--accent); } .fbox.del { border-color:#dc2626; background:#fef2f2; }
+  </style>
+</head>
+<body>
+
+<h1>ED Follow-up Assessment v2 Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development OR superpowers:executing-plans. Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-06-15-ed-followup-confirm-supersede-date-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Follow-up ED link shows a read-only identity card (R1), no token pill (R2), only-latest-link-valid per customer+branch (R3), and the TFP ED-Score strip shows each round's date + a "วันนี้" badge (R4) — plus a live bug-fix: the province check blocks follow-up submit.</p>
+  <p><strong>Architecture:</strong> Pure helpers in <code>edScoreDisplay.js</code> (maskPhone / buildConfirmInfo / formatRoundDate / shouldSupersedeSession). <code>confirmInfo</code> snapshotted into the <code>opd_session</code> at generation (anon can <code>get</code> the session, cannot read be_customers — no rule change). <code>supersedePendingFollowups</code> deletes prior pending session+round before creating the new one. PatientForm renders the card (fallback to editable if no confirmInfo) + drops the pill + gates the province check to intake. No Firestore-rule / Cloud-Function change.</p>
+  <p><strong>Tech Stack:</strong> React 19, Firebase client SDK, Vitest + @testing-library/react. <strong>Vite OXC: NO IIFE in JSX</strong> (parser crash) — compute in <code>.map</code> block bodies.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">R1 · follow-up read-only confirm card (AFTER) — faithful dark brand</div>
+  <div style="width:290px;border-radius:24px;overflow:hidden;border:1px solid rgba(90,16,16,.5);background:#0a0a0a;font-size:13px;">
+    <div style="background:linear-gradient(160deg,#1a0000,#0a0a0a 45%,#200000);padding:18px 14px;text-align:center;">
+      <div style="font-size:21px;font-weight:900;color:#fff;">LO<span style="color:#dc2626;">V</span>ER <span style="font-size:11px;letter-spacing:.3em;">CLINIC</span></div>
+      <div style="font-size:13px;font-weight:900;color:#fff;margin-top:7px;">ติดตามการรักษา</div>
+      <!-- NO session pill (R2) -->
+    </div>
+    <div style="background:linear-gradient(180deg,#0a0a0a,#0d0500 40%,#0a0a0a);padding:13px 12px;">
+      <div style="position:relative;background:linear-gradient(135deg,rgba(26,8,0,.4),rgba(10,10,10,.95) 50%,rgba(45,15,0,.3));border:1px solid rgba(74,26,10,.4);border-radius:13px;padding:12px;">
+        <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:#dc2626;"></div>
+        <div style="font-size:12px;font-weight:700;color:#fff;">🪪 ยืนยันตัวตน</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.45);margin-bottom:8px;">โปรดตรวจสอบว่านี่คือข้อมูลของคุณก่อนทำแบบประเมิน</div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);"><span style="font-size:11px;color:rgba(255,255,255,.5);">ชื่อ-สกุล</span><span style="font-size:13px;font-weight:700;color:#e5e5e5;">นายสมชาย ใจดี</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);"><span style="font-size:11px;color:rgba(255,255,255,.5);">อายุ</span><span style="font-size:13px;font-weight:700;color:#e5e5e5;">45 ปี</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;"><span style="font-size:11px;color:rgba(255,255,255,.5);">เบอร์โทร</span><span style="font-size:13px;font-weight:700;color:#e5e5e5;font-family:monospace;">081-•••-5678</span></div>
+      </div>
+      <div style="margin-top:10px;font-size:11px;font-weight:700;color:#dc2626;">● ส่วนที่ 1 + แบบประเมิน (passive — ทำต่อได้เลย)</div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">R4 · TFP ED-Score strip row (AFTER) — date + "วันนี้"</div>
+  <div style="background:#0e0e0e;border:1px solid #1f1f1f;border-radius:12px;padding:12px;max-width:430px;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#fb923c;text-transform:uppercase;margin-bottom:7px;">ED Score · 2 ครั้งล่าสุด</div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;background:rgba(255,255,255,.04);border-radius:6px;padding:6px 8px;margin-bottom:4px;"><span style="color:rgba(255,255,255,.55);">ครั้งที่ 1 · <span style="color:rgba(255,255,255,.75);">12/06/2569</span></span><span style="color:rgba(255,255,255,.7);">ADAM 3/10 · IIEF-5 21/25 · PE มีอาการ</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;background:rgba(255,255,255,.04);border-radius:6px;padding:6px 8px;"><span style="color:rgba(255,255,255,.55);">ครั้งที่ 2 · <span style="color:rgba(255,255,255,.75);">15/06/2569</span> <span style="background:rgba(249,115,22,.18);border:1px solid rgba(249,115,22,.4);color:#fdba74;border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;">วันนี้</span></span><span style="color:rgba(255,255,255,.7);">ADAM 2/10 · IIEF-5 23/25</span></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Data shape — opd_session new field</div>
+<pre><code>opd_sessions/FW-ED-&lt;hex&gt; {
+  status:'pending', formType:'followup_assessment', types:['adam','iief'],
+  expiresAt:&lt;+1d&gt;, linkedCustomerId:'LC-26000082', branchId:'BR-…',
+  linkedAssessmentRoundId:'ASMT-…', patientData:null,
+  confirmInfo: { name:'นายสมชาย ใจดี', age:'45', phoneMasked:'081-•••-5678' }  // ★ NEW
+}</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Generate (R1 snapshot + R3 supersede) → fill → submit (province-fix) → materialize → display (R4)</div>
+  <p>
+    <span class="fbox acc">CDV buildConfirmInfo(customer)</span> →
+    <span class="fbox">handleCreate: <b>supersedePendingFollowups</b></span> →
+    <span class="fbox del">delete old pending session + round</span> →
+    <span class="fbox acc">createAssessmentRound + createAssessmentSession(confirmInfo)</span>
+  </p>
+  <p>
+    <span class="fbox">customer scans QR</span> →
+    <span class="fbox">PatientForm reads confirmInfo → read-only card</span> (no confirmInfo → editable fallback) →
+    <span class="fbox">fills assessment, Send</span> →
+    <span class="fbox acc">province check gated isIntake → passes</span> →
+    <span class="fbox">updateDoc(status:completed, patientData)</span> →
+    <span class="fbox">sendPushOnSubmit CF → materialize</span> →
+    <span class="fbox acc">be_assessments round (status:completed, assessmentDate)</span> →
+    <span class="fbox">CDV box + TFP note: round + date + "วันนี้"</span>
+  </p>
+</div>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Rule R diag — verify the data reality (read-only, real prod)</h3>
+  <p>Confirms (a) saved customer <code>patientData.assessmentDate</code> presence (informs R4 intake-date), (b) whether LC-26000082 has stray pending follow-up sessions (informs R3), before writing code.</p>
+  <ul><li>Create: <code>scripts/diag-ed-followup-data-reality.mjs</code></li></ul>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1:</strong> Write a Rule R diag (admin SDK, canonical path, <code>diag-</code> prefix, invocation-guard).</label></div>
+<pre><code class="language-javascript">// READ-ONLY. node scripts/diag-ed-followup-data-reality.mjs LC-26000082
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs'; import { fileURLToPath } from 'url';
+const APP_ID = 'loverclinic-opd-4c39b';
+const BASE = ['artifacts', APP_ID, 'public', 'data'];
+async function main(cid) {
+  const env = Object.fromEntries(readFileSync('.env.local.prod','utf8').split('\n')
+    .filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1).replace(/^"|"$/g,'')];}));
+  initializeApp({ credential: cert({ projectId: APP_ID,
+    clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    privateKey: env.FIREBASE_ADMIN_PRIVATE_KEY.split('\\n').join('\n') }) });
+  const db = getFirestore();
+  const cust = await db.doc([...BASE,'be_customers',cid].join('/')).get();
+  const pd = cust.data()?.patientData || {};
+  console.log('patientData.assessmentDate =', JSON.stringify(pd.assessmentDate), '| createdAt =', cust.data()?.createdAt?.toDate?.());
+  console.log('phone =', JSON.stringify(cust.data()?.patientData?.phone || cust.data()?.phone));
+  const sess = await db.collection([...BASE,'opd_sessions'].join('/')).where('linkedCustomerId','==',cid).get();
+  console.log('linked sessions:', sess.docs.map(d=>({id:d.id,status:d.data().status,formType:d.data().formType,branchId:d.data().branchId})));
+}
+if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv[2] || 'LC-26000082');
+</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2:</strong> <code>vercel env pull .env.local.prod --environment=production</code> (if not pulled this session) then <code>node scripts/diag-ed-followup-data-reality.mjs LC-26000082</code>.</label></div>
+  <p>Record: does <code>patientData.assessmentDate</code> exist? (If non-empty → R4 intake date is sourced from it; the createdAt fallback in Task 6 still ships as belt-and-suspenders.) Note any stray pending sessions.</p>
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3:</strong> No commit (diag script may be committed with Task 8).</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: Pure helpers — maskPhone / buildConfirmInfo / formatRoundDate / shouldSupersedeSession (TDD)</h3>
+  <ul>
+    <li>Modify: <code>src/lib/edScoreDisplay.js</code> (add 4 exports)</li>
+    <li>Test: <code>tests/ed-confirm-and-date-helpers.test.js</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write failing tests.</strong></label></div>
+<pre><code class="language-javascript">import { describe, it, expect } from 'vitest';
+import { maskPhone, buildConfirmInfo, formatRoundDate } from '../src/lib/edScoreDisplay.js';
+import { shouldSupersedeSession } from '../src/lib/backendClient.js';
+
+describe('maskPhone', () => {
+  it('masks middle of a Thai 10-digit', () => expect(maskPhone('0812345678')).toBe('081-•••-5678'));
+  it('strips dashes/spaces first', () => expect(maskPhone('081-234 5678')).toBe('081-•••-5678'));
+  it('empty → ""', () => expect(maskPhone('')).toBe(''));
+  it('null → ""', () => expect(maskPhone(null)).toBe(''));
+  it('too short → returned as-is', () => expect(maskPhone('1234')).toBe('1234'));
+});
+describe('buildConfirmInfo', () => {
+  it('composes name/age/phoneMasked from patientData', () => {
+    const c = { id:'LC-1', patientData:{ prefix:'นาย', firstName:'สมชาย', lastName:'ใจดี', age:'45', phone:'0812345678' } };
+    const r = buildConfirmInfo(c);
+    expect(r.name).toContain('สมชาย'); expect(r.age).toBe('45'); expect(r.phoneMasked).toBe('081-•••-5678');
+  });
+  it('missing fields → empty strings, never throws', () => {
+    const r = buildConfirmInfo({}); expect(r).toEqual({ name:'', age:'', phoneMasked:'' });
+  });
+  it('null customer → empty shape', () => expect(buildConfirmInfo(null)).toEqual({ name:'', age:'', phoneMasked:'' }));
+});
+describe('formatRoundDate', () => {
+  it('ISO date → dd/mm/yyyy พ.ศ.', () => expect(formatRoundDate('2026-06-12','2026-06-15')).toEqual({ text:'12/06/2569', isToday:false }));
+  it('today → isToday true', () => expect(formatRoundDate('2026-06-15','2026-06-15').isToday).toBe(true));
+  it('full ISO timestamp date-part compared', () => expect(formatRoundDate('2026-06-15T08:30:00Z','2026-06-15').isToday).toBe(true));
+  it('empty → blank', () => expect(formatRoundDate('','2026-06-15')).toEqual({ text:'', isToday:false }));
+});
+describe('shouldSupersedeSession', () => {
+  const base = { linkedCustomerId:'LC-1', branchId:'BR-A', formType:'followup_assessment', status:'pending' };
+  it('matches same customer+branch pending followup', () => expect(shouldSupersedeSession(base,'LC-1','BR-A')).toBe(true));
+  it('skips completed', () => expect(shouldSupersedeSession({...base,status:'completed'},'LC-1','BR-A')).toBe(false));
+  it('skips other branch', () => expect(shouldSupersedeSession(base,'LC-1','BR-B')).toBe(false));
+  it('skips non-followup (intake)', () => expect(shouldSupersedeSession({...base,formType:'intake'},'LC-1','BR-A')).toBe(false));
+  it('skips other customer', () => expect(shouldSupersedeSession(base,'LC-2','BR-A')).toBe(false));
+});
+</code></pre>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2:</strong> <code>npm test -- --run tests/ed-confirm-and-date-helpers.test.js</code> → FAIL (exports not defined).</label></div>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3:</strong> Implement in <code>src/lib/edScoreDisplay.js</code> (append; add import).</label></div>
+<pre><code class="language-javascript">import { resolveCustomerDisplayName, resolveCustomerPhone } from './customerDisplayName.js';
+
+// '0812345678' → '081-•••-5678'. Graceful for short/intl/empty.
+export function maskPhone(phone) {
+  const s = String(phone ?? '').replace(/[\s-]/g, '');
+  if (!s) return '';
+  if (s.length < 7) return s;
+  return `${s.slice(0, 3)}-•••-${s.slice(-4)}`;
+}
+// Read-only identity snapshot for the follow-up confirm card (R1).
+export function buildConfirmInfo(customer) {
+  const c = customer || {}; const pd = c.patientData || {};
+  const name = resolveCustomerDisplayName(c) || '';
+  const age = (pd.age != null && String(pd.age).trim() !== '') ? String(pd.age)
+            : (c.age != null && String(c.age).trim() !== '' ? String(c.age) : '');
+  const phoneMasked = maskPhone(resolveCustomerPhone(c) || pd.phone || c.phone || '');
+  return { name, age, phoneMasked };
+}
+// ISO ('YYYY-MM-DD' or full) + todayISO → { text:'dd/mm/yyyy พ.ศ.', isToday }.
+export function formatRoundDate(assessmentDate, todayISO) {
+  const raw = String(assessmentDate || '').trim();
+  const today = String(todayISO || '').slice(0, 10);
+  if (!raw) return { text: '', isToday: false };
+  const datePart = raw.slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+  if (!m) return { text: raw, isToday: datePart === today };
+  return { text: `${m[3]}/${m[2]}/${Number(m[1]) + 543}`, isToday: datePart === today };
+}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4:</strong> Add <code>shouldSupersedeSession</code> in <code>src/lib/backendClient.js</code> (near the assessment helpers ~1057). Pure, exported.</label></div>
+<pre><code class="language-javascript">/** Pure predicate (Rule R3): is this an OLD pending follow-up to supersede for customer+branch? */
+export function shouldSupersedeSession(s, customerId, branchId) {
+  if (!s) return false;
+  return String(s.linkedCustomerId || '') === String(customerId || '')
+      && String(s.branchId || '') === String(branchId || '')
+      && String(s.formType || '').startsWith('followup')
+      && s.status !== 'completed';
+}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5:</strong> Re-run → PASS (all helpers + predicate).</label></div>
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Commit.</strong></label></div>
+<pre><code class="language-bash">git add src/lib/edScoreDisplay.js src/lib/backendClient.js tests/ed-confirm-and-date-helpers.test.js
+git commit -m "feat(ed-followup): pure helpers — maskPhone/buildConfirmInfo/formatRoundDate + shouldSupersedeSession predicate"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: backendClient — confirmInfo on session + supersedePendingFollowups + scopedDataLayer pass-through</h3>
+  <ul>
+    <li>Modify: <code>src/lib/backendClient.js</code> (<code>createAssessmentSession</code> ~1108; add <code>supersedePendingFollowups</code>)</li>
+    <li>Modify: <code>src/lib/scopedDataLayer.js</code> (re-export <code>supersedePendingFollowups</code>)</li>
+    <li>Test: <code>tests/ed-supersede-and-confirminfo-source.test.js</code> (source-grep — the Firestore behavior is proven by the Task 8 L2 e2e)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1:</strong> Add <code>confirmInfo</code> param to <code>createAssessmentSession</code> + store it.</label></div>
+<pre><code class="language-javascript">export async function createAssessmentSession({ customerId, types, branchId, sessionName, expiresAt, roundId, confirmInfo } = {}) {
+  // …unchanged rand/sessionId…
+  await setDoc(doc(db, ...basePath(), 'opd_sessions', sessionId), {
+    // …unchanged fields…
+    linkedAssessmentRoundId: roundId || '',
+    sessionName: sessionName || 'แบบประเมินติดตาม',
+    confirmInfo: confirmInfo || null,   // ★ R1 read-only identity snapshot (anon-readable via session get)
+  });
+  return sessionId;
+}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2:</strong> Add <code>supersedePendingFollowups</code> (uses already-imported collection/query/where/getDocs/deleteDoc + deleteAssessmentRound).</label></div>
+<pre><code class="language-javascript">/** R3 — before minting a new follow-up link, delete prior PENDING follow-up
+ *  sessions + their linked pending rounds for the same customer+branch, so only
+ *  the latest link is valid (prevents duplicate customer submissions).
+ *  Single-field where(linkedCustomerId) — auto-indexed; branch/status filtered
+ *  client-side. ponytail: best-effort + no lock — two admins generating at the
+ *  same instant is a negligible manual-flow race; the customer scans the latest QR. */
+export async function supersedePendingFollowups({ customerId, branchId } = {}) {
+  const cid = String(customerId ?? '').trim();
+  if (!cid) return { superseded: 0 };
+  let superseded = 0;
+  try {
+    const snap = await getDocs(query(collection(db, ...basePath(), 'opd_sessions'),
+      where('linkedCustomerId', '==', cid)));
+    for (const d of snap.docs) {
+      const s = d.data();
+      if (!shouldSupersedeSession(s, cid, branchId)) continue;
+      if (s.linkedAssessmentRoundId) {
+        try { await deleteAssessmentRound(s.linkedAssessmentRoundId); } catch { /* round already gone */ }
+      }
+      try { await deleteDoc(d.ref); superseded++; } catch { /* leave; new link still supersedes */ }
+    }
+  } catch (e) {
+    console.warn('[supersedePendingFollowups] non-fatal:', e?.message || e);
+  }
+  return { superseded };
+}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3:</strong> In <code>scopedDataLayer.js</code> add a pass-through next to <code>createAssessmentSession</code>/<code>createAssessmentRound</code> (these are targeted ops with explicit ids — pass-through, NOT branch-auto-inject).</label></div>
+<pre><code class="language-javascript">export const supersedePendingFollowups = (...a) => raw.supersedePendingFollowups(...a);
+</code></pre>
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4:</strong> Write source-grep test locking the contract.</label></div>
+<pre><code class="language-javascript">import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+const bc = readFileSync('src/lib/backendClient.js','utf8');
+const sdl = readFileSync('src/lib/scopedDataLayer.js','utf8');
+describe('R1 confirmInfo + R3 supersede', () => {
+  it('createAssessmentSession accepts + stores confirmInfo', () => {
+    expect(bc).toMatch(/createAssessmentSession\(\{[^}]*confirmInfo/);
+    expect(bc).toMatch(/confirmInfo:\s*confirmInfo\s*\|\|\s*null/);
+  });
+  it('supersedePendingFollowups exists + deletes session + round', () => {
+    expect(bc).toMatch(/export async function supersedePendingFollowups/);
+    expect(bc).toMatch(/deleteAssessmentRound\(s\.linkedAssessmentRoundId\)/);
+    expect(bc).toMatch(/deleteDoc\(d\.ref\)/);
+  });
+  it('scopedDataLayer re-exports supersedePendingFollowups', () =>
+    expect(sdl).toMatch(/supersedePendingFollowups\s*=\s*\(\.\.\.a\)\s*=>\s*raw\.supersedePendingFollowups/));
+});
+</code></pre>
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5:</strong> <code>npm test -- --run tests/ed-supersede-and-confirminfo-source.test.js</code> → PASS. <code>npm run build</code> → clean.</label></div>
+  <div class="step"><input type="checkbox" id="t3s6"> <label for="t3s6"><strong>Step 6: Commit.</strong></label></div>
+<pre><code class="language-bash">git add src/lib/backendClient.js src/lib/scopedDataLayer.js tests/ed-supersede-and-confirminfo-source.test.js
+git commit -m "feat(ed-followup): R1 confirmInfo on session + R3 supersedePendingFollowups (latest-link-only)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: EDFollowupModal + CustomerDetailView wiring (supersede + confirmInfo)</h3>
+  <ul>
+    <li>Modify: <code>src/components/backend/EDFollowupModal.jsx</code> (prop <code>confirmInfo</code>; <code>handleCreate</code> supersede-then-create)</li>
+    <li>Modify: <code>src/components/backend/CustomerDetailView.jsx</code> (import + pass <code>confirmInfo={buildConfirmInfo(customer)}</code> at the modal ~1529)</li>
+    <li>Test: <code>tests/ed-followup-modal-supersede-rtl.test.jsx</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1:</strong> EDFollowupModal — import supersede, add <code>confirmInfo</code> to the props destructure, call supersede first in <code>handleCreate</code>, pass confirmInfo.</label></div>
+<pre><code class="language-jsx">import { createAssessmentRound, createAssessmentSession, supersedePendingFollowups } from '../../lib/scopedDataLayer.js';
+export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, branchId, confirmInfo, isDark, onClose, onCreated }) {
+  // …
+  const handleCreate = async () => {
+    const types = TYPE_ORDER.filter((t) => picked.has(t));
+    if (types.length === 0) { setErr('เลือกอย่างน้อย 1 แบบประเมิน'); return; }
+    setErr(''); setBusy(true);
+    try {
+      await supersedePendingFollowups({ customerId, branchId });   // ★ R3 — kill prior pending link+round first
+      const expiresAt = Date.now() + ONE_DAY_MS;
+      const roundId = await createAssessmentRound({ customerId, types, expiresAt });
+      const sessionId = await createAssessmentSession({ customerId, types, branchId, expiresAt, roundId, confirmInfo }); // ★ R1
+      const link = `${window.location.origin}/?session=${sessionId}`;
+      const qr = await generateQrDataUrl(link, { width: 600 });
+      setResult({ link, qr, sessionId });
+      onCreated?.({ roundId, sessionId });
+    } catch (e) { setErr('สร้างลิงก์ไม่สำเร็จ: ' + (e?.message || e)); }
+    finally { setBusy(false); }
+  };
+</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2:</strong> CDV — import <code>buildConfirmInfo</code> and pass it to the modal (the live customer is <code>customer = liveCustomer || customerProp</code>, line 231).</label></div>
+<pre><code class="language-jsx">// top imports
+import { buildConfirmInfo } from '../../lib/edScoreDisplay.js';
+// at the &lt;EDFollowupModal …&gt; (~1529), add the prop:
+  confirmInfo={buildConfirmInfo(customer)}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3:</strong> Write RTL test — clicking "สร้างลิงก์" calls supersede BEFORE create, and create receives confirmInfo.</label></div>
+<pre><code class="language-jsx">import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+const calls = [];
+vi.mock('../src/lib/scopedDataLayer.js', () => ({
+  supersedePendingFollowups: vi.fn(async (a) => { calls.push(['supersede', a]); return { superseded: 1 }; }),
+  createAssessmentRound: vi.fn(async () => { calls.push(['round']); return 'ASMT-x'; }),
+  createAssessmentSession: vi.fn(async (a) => { calls.push(['session', a]); return 'FW-ED-x'; }),
+}));
+vi.mock('../src/lib/documentPrintEngine.js', () => ({ generateQrDataUrl: vi.fn(async () => 'data:image/png;base64,x') }));
+import EDFollowupModal from '../src/components/backend/EDFollowupModal.jsx';
+describe('EDFollowupModal supersede+confirmInfo', () => {
+  it('supersede runs before create and confirmInfo is forwarded', async () => {
+    calls.length = 0;
+    render(<EDFollowupModal customerId="LC-1" roundNumber={2} intakeTypes={['adam']} branchId="BR-A"
+      confirmInfo={{ name:'นายสมชาย ใจดี', age:'45', phoneMasked:'081-•••-5678' }} isDark onClose={()=>{}} />);
+    fireEvent.click(screen.getByTestId('ed-create-link-btn'));
+    await waitFor(() => expect(calls.find(c => c[0]==='session')).toBeTruthy());
+    expect(calls[0][0]).toBe('supersede');                         // supersede FIRST
+    expect(calls[0][1]).toEqual({ customerId:'LC-1', branchId:'BR-A' });
+    const session = calls.find(c => c[0]==='session');
+    expect(session[1].confirmInfo).toEqual({ name:'นายสมชาย ใจดี', age:'45', phoneMasked:'081-•••-5678' });
+  });
+});
+</code></pre>
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4:</strong> <code>npm test -- --run tests/ed-followup-modal-supersede-rtl.test.jsx</code> → PASS. <code>npm run build</code> → clean.</label></div>
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit.</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/EDFollowupModal.jsx src/components/backend/CustomerDetailView.jsx tests/ed-followup-modal-supersede-rtl.test.jsx
+git commit -m "feat(ed-followup): modal supersedes prior pending link + snapshots confirmInfo from CDV"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: PatientForm — R1 read-only card + fallback, R2 remove pill, 🔴 province gate</h3>
+  <ul>
+    <li>Modify: <code>src/pages/PatientForm.jsx</code> (state ~49; onSnapshot ~78; province ~350; pill ~682; patient-info section ~698-768)</li>
+    <li>Test: <code>tests/patientform-followup-confirm-card-rtl.test.jsx</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1:</strong> Add state + read confirmInfo in onSnapshot.</label></div>
+<pre><code class="language-jsx">// near sessionTypes state (~49)
+const [confirmInfo, setConfirmInfo] = useState(null);
+// inside onSnapshot, after setSessionTypes(...) (~82)
+setConfirmInfo(data.confirmInfo || null);
+</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: 🔴 province gate</strong> — line ~350.</label></div>
+<pre><code class="language-jsx">// BEFORE:  if (!formData.province) {
+// AFTER:
+if (isIntake && !formData.province) {
+  scrollToField('province', language === 'en' ? "Please select a province." : "กรุณาเลือกจังหวัด");
+  return;
+}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: R2</strong> — delete the session-pill block (~682-687).</label></div>
+<pre><code class="language-jsx">// REMOVE entirely:
+// {!isCustom && (
+//   <div className="pf-session-pill"><span className="pf-session-dot" /><span className="pf-session-id">{sessionId}</span></div>
+// )}
+</code></pre>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: R1</strong> — in the patient-info section, when <code>isFollowUp &amp;&amp; confirmInfo</code> render the read-only card and SKIP the editable name/age/bloodType/date inputs; else keep the existing inputs (fallback for old links). Wrap the follow-up editable fields' gate from <code>(isFollowUp || isCustom)</code> → <code>((isFollowUp &amp;&amp; !confirmInfo) || isCustom)</code>, and add the card block.</label></div>
+<pre><code class="language-jsx">{/* R1 read-only identity card — follow-up with snapshot. Name/phone NEUTRAL (no red). */}
+{isFollowUp && confirmInfo && (
+  <div data-testid="pf-confirm-card" style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+    <div style={{ fontSize:'11px', color:'var(--tx-muted)' }}>
+      {language === 'en' ? 'Please confirm this is you before assessing' : 'โปรดตรวจสอบว่านี่คือข้อมูลของคุณก่อนทำแบบประเมิน'}
+    </div>
+    <div style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid var(--bd)' }}>
+      <span className={labelClass} style={{ margin:0 }}>{language === 'en' ? 'Name' : 'ชื่อ-สกุล'}</span>
+      <span style={{ fontWeight:700, color:'var(--tx-secondary)' }}>{confirmInfo.name || '-'}</span>
+    </div>
+    {confirmInfo.age && (
+      <div style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid var(--bd)' }}>
+        <span className={labelClass} style={{ margin:0 }}>{language === 'en' ? 'Age' : 'อายุ'}</span>
+        <span style={{ fontWeight:700, color:'var(--tx-secondary)' }}>{confirmInfo.age} {language === 'en' ? 'yrs' : 'ปี'}</span>
+      </div>
+    )}
+    {confirmInfo.phoneMasked && (
+      <div style={{ display:'flex', justifyContent:'space-between', padding:'7px 0' }}>
+        <span className={labelClass} style={{ margin:0 }}>{language === 'en' ? 'Phone' : 'เบอร์โทร'}</span>
+        <span style={{ fontWeight:700, color:'var(--tx-secondary)', fontFamily:'monospace' }}>{confirmInfo.phoneMasked}</span>
+      </div>
+    )}
+    <div style={{ fontSize:'10px', color:'var(--tx-muted)' }}>
+      {language === 'en' ? 'Not you? Please contact the clinic.' : 'ไม่ใช่ข้อมูลของคุณ? กรุณาติดต่อคลินิก'}
+    </div>
+  </div>
+)}
+</code></pre>
+  <p>Then change the 3 follow-up editable-field gates (prefix/firstName row + age + bloodType + date) from <code>(isFollowUp || isCustom)</code> to <code>((isFollowUp &amp;&amp; !confirmInfo) || isCustom)</code> so they hide when the card is shown but still render for custom forms and for follow-up links without confirmInfo (fallback). The prefix/firstName row's <code>!isFollowUp &amp;&amp; !isCustom</code> branches are unchanged.</p>
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5:</strong> Write RTL test (mock firebase onSnapshot to emit a follow-up session WITH confirmInfo; assert card shown, no name input, no pill; then a session WITHOUT confirmInfo → editable shown).</label></div>
+<pre><code class="language-jsx">// Asserts (with a session doc { formType:'followup_assessment', types:['adam'], confirmInfo:{name,age,phoneMasked} }):
+//   • screen.getByTestId('pf-confirm-card') visible; name text present
+//   • screen.queryByPlaceholderText(/ชื่อจริง/) === null  (no editable name input)
+//   • document.querySelector('.pf-session-pill') === null  (R2)
+// And with confirmInfo:null → getByPlaceholderText(/ชื่อจริง|First Name/) is present (fallback), card absent.
+</code></pre>
+  <div class="step"><input type="checkbox" id="t5s6"> <label for="t5s6"><strong>Step 6:</strong> Run the RTL test → PASS. <code>npm run build</code> → clean (catches any JSX/gate slip).</label></div>
+  <div class="step"><input type="checkbox" id="t5s7"> <label for="t5s7"><strong>Step 7: Commit.</strong></label></div>
+<pre><code class="language-bash">git add src/pages/PatientForm.jsx tests/patientform-followup-confirm-card-rtl.test.jsx
+git commit -m "feat(ed-followup): R1 read-only confirm card (+editable fallback) + R2 remove pill + fix province blocking follow-up submit"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: TFP — R4 round date + "วันนี้" badge</h3>
+  <ul>
+    <li>Modify: <code>src/components/TreatmentFormPage.jsx</code> (import thaiTodayISO + formatRoundDate; edIntakePerf ~547; capture custData.createdAt ~1021; render ~3748-3753)</li>
+    <li>Test: <code>tests/tfp-ed-round-date-rtl.test.jsx</code> (render-shape; formatRoundDate logic already unit-tested in Task 2)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1:</strong> Imports — ensure <code>thaiTodayISO</code> from utils + <code>formatRoundDate</code> from edScoreDisplay.</label></div>
+<pre><code class="language-jsx">import { scoreForType, ED_TYPE_META, stripScreeningSection, formatRoundDate } from '../lib/edScoreDisplay.js';
+// add thaiTodayISO to the existing utils import if absent: import { …, thaiTodayISO } from '../utils.js';
+</code></pre>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2:</strong> Capture customer createdAt (Bangkok ISO) as the intake-date fallback, where custData is loaded (~1021).</label></div>
+<pre><code class="language-jsx">// new state near edAssessments (~537)
+const [customerCreatedISO, setCustomerCreatedISO] = useState('');
+// where custData is read (~1021, alongside setCustomerNote):
+const _ca = custData?.createdAt;
+const _ms = _ca?.toMillis?.() ?? (typeof _ca === 'number' ? _ca : 0);
+if (_ms) setCustomerCreatedISO(new Date(_ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })); // YYYY-MM-DD
+</code></pre>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3:</strong> Give the intake round a date (~547) — merge assessmentDate (NOT into the shared AV194 helper).</label></div>
+<pre><code class="language-jsx">const edIntakePerf = useMemo(
+  () => ({ ...pickKioskAssessmentFields(patientData || {}),
+           assessmentDate: (patientData?.assessmentDate || customerCreatedISO || '') }),
+  [patientData, customerCreatedISO]);
+</code></pre>
+  <p><em>Note:</em> <code>hasPerf</code>/<code>typesInRaw</code> (assessmentRoundsCore) only inspect <code>adam_/iief_/mrs_/symp_pe</code> keys, so adding <code>assessmentDate</code> does not create a false round nor a phantom type.</p>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4:</strong> Render date + badge (~3748). Convert the <code>.map</code> arrow to a BLOCK body (NO IIFE-in-JSX — Vite OXC).</label></div>
+<pre><code class="language-jsx">{edLatest2.map((r) => {
+  const fd = formatRoundDate(r.assessmentDate, thaiTodayISO());
+  return (
+    <div key={r.id} className="flex items-center justify-between gap-2 text-[11px] bg-black/10 rounded px-2 py-1">
+      <span className="text-[var(--tx-muted)] shrink-0 whitespace-nowrap">
+        ครั้งที่ {r.round}
+        {fd.text ? <> · <span className="text-[var(--tx-secondary)]">{fd.text}</span></> : ''}
+        {fd.isToday && <span className="ml-1 inline-block align-middle bg-orange-500/15 border border-orange-500/40 text-orange-300 rounded-full px-1.5 text-[9px] font-bold">วันนี้</span>}
+      </span>
+      <span className="text-[var(--tx-secondary)] text-right">
+        {r.types.map((t) => { const s = scoreForType(t, r.raw); /* …existing chip render… */ })}
+      </span>
+    </div>
+  );
+})}
+</code></pre>
+  <p>(Keep the existing inner <code>r.types.map(...)</code> score-chip render exactly as-is — only the left-hand <code>ครั้งที่</code> span + the <code>.map</code> block-body conversion change.)</p>
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5:</strong> RTL test — mount TFP with a customer whose latest follow-up round assessmentDate == today → assert "วันนี้" badge present + a past round shows its date and NO badge. <code>npm test -- --run tests/tfp-ed-round-date-rtl.test.jsx</code> → PASS. <code>npm run build</code> → clean.</label></div>
+  <div class="step"><input type="checkbox" id="t6s6"> <label for="t6s6"><strong>Step 6: Commit.</strong></label></div>
+<pre><code class="language-bash">git add src/components/TreatmentFormPage.jsx tests/tfp-ed-round-date-rtl.test.jsx
+git commit -m "feat(ed-followup): R4 TFP note shows each round date + วันนี้ badge (intake date from patientData.assessmentDate || createdAt)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule I full-flow simulate + classifier + full suite</h3>
+  <ul>
+    <li>Test: <code>tests/ed-followup-v2-flow-simulate.test.js</code></li>
+    <li>Modify (if needed): <code>tests/branch-collection-coverage.test.js</code> (no new collection — confirm none needed)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1:</strong> Write the Rule I flow-simulate chaining the REAL pure helpers + cores: <code>buildConfirmInfo</code> → session shape → <code>shouldSupersedeSession</code> (supersede picks only the matching pending) → customer submit answers → <code>buildAssessmentRoundPatch</code> (functions/assessmentMaterialize.js) → <code>deriveRounds</code> → <code>latestRounds</code> → <code>formatRoundDate</code> (today round → isToday). Assert: confirm card fields correct; only the matching pending session superseded (other branch/customer/completed survive); the materialized round derives a number + a today-dated row.</label></div>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2:</strong> <code>npm test -- --run tests/ed-followup-v2-flow-simulate.test.js</code> → PASS.</label></div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3:</strong> Full suite + build: <code>npm test -- --run</code> (expect prior baseline 16482 + new, 0 fail) and <code>npm run build</code> clean. Fix any V21 source-grep lock-ins surfaced (e.g. a test asserting the old <code>if (!formData.province)</code> or the session-pill) — update them to the new contract with a comment.</label></div>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Commit.</strong></label></div>
+<pre><code class="language-bash">git add tests/
+git commit -m "test(ed-followup): Rule I v2 flow-simulate (confirm→supersede→materialize→date) + V21 fixups"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 8: Rule Q verification (L2 real prod + L1 real browser) + deploy gate</h3>
+  <ul>
+    <li>Create: <code>scripts/e2e-ed-followup-v2.mjs</code> (Rule Q L2 — real client SDK against real prod)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Rule Q L2 (real prod, real CLIENT SDK).</strong> Auth as a real staff user (signInWithEmailAndPassword) on a TEST-prefixed customer: (a) create round1+session1; (b) call <code>supersedePendingFollowups</code> → assert session1 + round1 DELETED, then create session2 → assert session2 alone is live; (c) write a follow-up submit through the EXACT client path (status:completed + patientData with adam_* answers) — assert the materialize side wrote a completed round; (d) cleanup all TEST fixtures, assert zero orphans. Use the existing <code>scripts/e2e-ed-assessment.mjs</code> as the harness pattern.</label></div>
+  <p>Expected: <code>PASS (N) FAIL (0)</code> on real prod; supersede deletes exactly the prior pending; submit materializes.</p>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Rule Q L1 (real browser).</strong> If a Chrome MCP browser is connected (Rule S): drive the deployed app — open a generated follow-up link → SEE the read-only card (name neutral, phone masked, NO editable inputs, NO pill) → fill the assessment → press Send → <strong>submit succeeds</strong> (proves the province fix) → confirm the round materializes → open TFP → SEE the round date + "วันนี้" badge → check both dark/light themes via preview_resize. Screenshot each. <strong>If NO browser is connected:</strong> disclose the L1 gap honestly (Rule Q-honest) and hand the L1 walkthrough to the user — do NOT claim L1 done.</p></label></div>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3:</strong> Update <code>.agents/active.md</code> + SESSION_HANDOFF (one section) + V-entry if a class-of-bug lesson (the province latent-blocker = a Rule Q "L2-bypasses-client-validation" lesson worth a short V-entry). Commit + push.</label></div>
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Deploy gate.</strong> NO deploy without the user typing "deploy" THIS turn (V18). Frontend-only change (no firestore.rules / no Cloud Function / no data migration) → if authorized, <code>vercel --prod</code> only; NO Probe-Deploy-Probe needed (no rules change). Report awaiting-deploy status.</label></div>
+</div>
+
+<h2>Self-Review (done)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> R1 (Tasks 2-5), R2 (Task 5), R3 (Tasks 2-4), R4 (Tasks 2,6), 🔴 province fix (Task 5), verify bar (Tasks 7-8). All mapped.</li>
+  <li><strong>Type consistency:</strong> <code>confirmInfo</code> shape {name,age,phoneMasked} consistent across buildConfirmInfo → createAssessmentSession → PatientForm. <code>deleteAssessmentRound(id)</code> single-arg used correctly. <code>shouldSupersedeSession(s,customerId,branchId)</code> signature consistent. <code>formatRoundDate(date,todayISO)</code> consistent.</li>
+  <li><strong>No placeholders:</strong> every code step shows real code; the one inner score-chip render in Task 6 is explicitly "keep existing as-is" (not a new contract).</li>
+  <li><strong>Vite OXC:</strong> Task 6 converts the <code>.map</code> to a block body — no IIFE-in-JSX.</li>
+  <li><strong>No rule/CF/migration change:</strong> anon already <code>get</code>s sessions; staff already <code>delete</code>s sessions+rounds; materialize CF unchanged.</li>
+</ul>
+
+</body>
+</html>
