@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mobile-Load Reliability Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#16a34a; --warn:#d97706; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .phone { width: 300px; margin: 0 auto; border: 10px solid #111; border-radius: 28px; background: #050505; padding: 14px 12px; color: #e5e5e5; font-size: 13px; }
+    .skel { background: linear-gradient(90deg,#1a1a1a 25%,#262626 50%,#1a1a1a 75%); border-radius: 6px; height: 14px; margin: 8px 0; }
+    .skel.sm{width:60%} .skel.lg{height:48px}
+    .ok { color: var(--ok); } .warn{color:var(--warn);} .bad{color:var(--accent);}
+    .flowbox { display:inline-block; border:1.5px solid #444; border-radius:8px; padding:8px 12px; margin:4px; background:#fff; font-size:0.85em; }
+    .arrow { font-size:1.3em; color:#888; margin:0 2px; }
+  </style>
+</head>
+<body>
+
+<h1>Mobile-Load Reliability Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-16 · <strong>Status:</strong> Approved by user · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-16-mobile-load-reliability.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>On mobile, pages SOMETIMES fail to load on the first try — <strong>(a)</strong> hang on a black screen, <strong>(b)</strong> hang on a "กำลังโหลด" spinner forever, or <strong>(c)</strong> load but show only an empty skeleton with NO data. The only recovery today is a manual refresh / close-reopen / re-scan. This hits BOTH the staff app (AdminDashboard Frontend + BackendDashboard) AND every customer-facing shareable link (PatientForm, ED Scoring, view-data, view-appointment). For customer links this is worse — the customer can't easily recover, and may act on incomplete/missing data (clinical risk).</p>
+
+<p><strong>Root causes (grounded in code — Explore map 2026-06-16):</strong></p>
+<table>
+  <tr><th>#</th><th>Root cause</th><th>Evidence</th><th>Symptom</th></tr>
+  <tr><td>1 🔴</td><td><strong>No long-polling fallback.</strong> <code>firebase.js:18</code> = bare <code>getFirestore(app)</code>. On flaky mobile networks / proxies, Firestore's WebSocket can half-connect (looks connected but the snapshot stream never delivers).</td><td><code>src/firebase.js:18</code></td><td>(b)+(c)</td></tr>
+  <tr><td>2 🔴</td><td><strong>No timeout on ANY onSnapshot.</strong> If the first snapshot never fires, the page stays on <code>loading</code> forever with no escape.</td><td>PatientForm:75, ClinicSchedule:89, AdminDashboard:2318</td><td>(b)</td></tr>
+  <tr><td>3 🔴</td><td><strong>No retry/escape in the UI.</strong> The only recovery is a manual refresh the user has to guess.</td><td>all link pages</td><td>(a)(b)(c)</td></tr>
+  <tr><td>4 🟡</td><td><strong>PatientDashboard retry budget too tight.</strong> 3 retries × 600ms = ~1.8s → a legit slow mobile response false-fails to "notfound".</td><td>PatientDashboard:520-553</td><td>(b)</td></tr>
+  <tr><td>5 🟡</td><td><strong>No test coverage</strong> for mobile-load / reconnect / stuck-skeleton at all.</td><td>tests/</td><td>—</td></tr>
+</table>
+
+<p><strong>Already in place &amp; KEPT (working):</strong> V16 anon-auth render gate (<code>App.jsx:194</code>, covers <code>?session=</code> / <code>?patient=</code> / <code>?schedule=</code> → ED Scoring=session, ดูนัด=schedule, ดูข้อมูล=patient all covered) · V17 visibilitychange+online reconnect (<code>App.jsx:133</code>, network toggle).</p>
+
+<h2>Mockup Design</h2>
+<p>The target is a 3-state load machine at every entry point: <strong>loading</strong> (existing skeleton/spinner) → silently auto-retries → <strong>ready</strong> (data) OR, only if all retries fail, <strong>error+retry</strong> (never a dead/stuck screen).</p>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile · State 1 — loading (existing skeleton/spinner, KEPT)</div>
+  <div class="phone">
+    <div class="skel lg"></div><div class="skel"></div><div class="skel sm"></div>
+    <div style="text-align:center;color:#888;margin-top:14px;font-size:12px">⟳ กำลังโหลด...</div>
+    <div style="text-align:center;color:#555;font-size:11px;margin-top:4px">(8s ผ่าน → auto-retry เงียบ — ผู้ใช้ไม่รู้ตัว)</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile · State 2 — ready (data arrived — normal)</div>
+  <div class="phone">
+    <div style="font-weight:600;font-size:15px;margin-bottom:6px;color:#fff">แบบฟอร์มผู้ป่วย</div>
+    <div style="background:#141414;border-radius:8px;padding:10px;margin:6px 0;font-size:12px">ชื่อ-สกุล: <span style="color:#fff">นาย ภูดิท ใจดี</span></div>
+    <div style="background:#141414;border-radius:8px;padding:10px;margin:6px 0;font-size:12px">เบอร์โทร: <span style="color:#fff">08x-xxx-xxxx</span></div>
+    <div style="background:var(--accent);color:#fff;text-align:center;border-radius:8px;padding:10px;margin-top:10px;font-size:13px">ส่งข้อมูล</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile · State 3 — error+retry (only after auto-retries fail; NEW shared &lt;LoadErrorRetry&gt;)</div>
+  <div class="phone">
+    <div style="text-align:center;padding:30px 10px">
+      <div style="font-size:34px">⚠️</div>
+      <div style="color:#fff;font-weight:600;margin-top:10px;font-size:14px">โหลดข้อมูลไม่สำเร็จ</div>
+      <div style="color:#999;font-size:12px;margin-top:6px;line-height:1.5">การเชื่อมต่ออาจไม่เสถียร<br>กรุณาตรวจสอบสัญญาณแล้วลองใหม่</div>
+      <div style="background:var(--accent);color:#fff;border-radius:8px;padding:11px 20px;margin-top:16px;display:inline-block;font-size:13px;font-weight:600">↻ ลองใหม่</div>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted);margin:0.5em 0 0">Theme-aware (dark/light). ⚠️ icon + accent button — <strong>no red on a patient name</strong> (rule 04; the error card text itself is neutral). Clicking ↻ resets attempts → re-subscribes.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Connection layer — data shape change (firebase.js)</div>
+  <pre>// BEFORE
+export const db = getFirestore(app);
+
+// AFTER
+import { initializeFirestore } from 'firebase/firestore';
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,   // WebSocket when it works; long-polling when the stream is detected broken
+});
+// NO persistence (Q1 = สดเสมอ / fresh-always). Default in-memory cache only.</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Per-page load lifecycle (useResilientLoad state machine)</div>
+  <div style="text-align:center;line-height:2.4">
+    <span class="flowbox">mount</span><span class="arrow">→</span>
+    <span class="flowbox">V16 render-gate<br>(public links: wait anon-auth)</span><span class="arrow">→</span>
+    <span class="flowbox">subscribe onSnapshot / fetch<br><b>+ start soft timer (8s)</b></span>
+    <br><span class="arrow">↓</span><br>
+    <span class="flowbox" style="border-color:var(--ok)">first snapshot/fetch fires<br>→ <b class="ok">markReady() → READY</b></span>
+    &nbsp;&nbsp;<b>OR</b>&nbsp;&nbsp;
+    <span class="flowbox" style="border-color:var(--warn)">soft timer fires (no data in 8s)<br>OR onError</span>
+    <br><span class="arrow">↓ (timeout/error path)</span><br>
+    <span class="flowbox" style="border-color:var(--warn)">attempts &lt; 1 ?<br><b>auto-retry (silent):</b> network toggle + bump retryKey → re-subscribe, restart timer</span>
+    <span class="arrow">→</span>
+    <span class="flowbox" style="border-color:var(--accent)">attempts exhausted<br>→ <b class="bad">ERROR</b> → &lt;LoadErrorRetry&gt;</span>
+    <br><span class="arrow">↓ user taps ↻</span><br>
+    <span class="flowbox">retry(): reset attempts → LOADING → bump retryKey → re-subscribe</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Backend tabs — useBranchAwareListener internal silent auto-heal (no UI / no consumer change)</div>
+  <table>
+    <tr><th>Stage</th><th>Behavior</th></tr>
+    <tr><td>subscribe</td><td>listener subscribes (as today) + start internal soft timer (8s)</td></tr>
+    <tr><td>onChange fires</td><td>clear timer + reset attempt counter (data delivered)</td></tr>
+    <tr><td>soft timer fires (no onChange)</td><td>if attempts &lt; 2: network toggle (once) + bump internal nonce → re-subscribe; else stop (rely on V17 / next branch switch). <em>Returns void as before — fully backward-compatible; every tab using the hook auto-heals.</em></td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>What it does</th><th>How used</th><th>Depends on</th></tr>
+  <tr><td><code>src/firebase.js</code> (edit)</td><td>Enables autoDetectLongPolling at the single Firestore init point</td><td>global — every listener/read in the app</td><td>firebase/firestore <code>initializeFirestore</code></td></tr>
+  <tr><td><code>src/hooks/useResilientLoad.js</code> (NEW)</td><td>3-state load machine: loading→ready/error + soft-timeout + auto-retry + retry()</td><td>customer links + AdminDashboard queue</td><td>react, firebase db (network toggle)</td></tr>
+  <tr><td><code>src/components/LoadErrorRetry.jsx</code> (NEW)</td><td>Shared error+retry card (theme-aware, Thai, no-red-on-name)</td><td>rendered when loadStatus==='error'</td><td>—</td></tr>
+  <tr><td><code>src/hooks/useBranchAwareListener.js</code> (edit)</td><td>+ internal silent timeout→toggle→re-subscribe (backward-compatible, void return)</td><td>backend tabs (existing consumers, no change)</td><td>react, firebase db</td></tr>
+  <tr><td>customer link pages (edit)</td><td>wire useResilientLoad: retryKey in deps, markReady on success, render LoadErrorRetry on error; PatientDashboard also widens retry budget</td><td>PatientForm, PatientDashboard, ClinicSchedule</td><td>useResilientLoad, LoadErrorRetry</td></tr>
+  <tr><td>AdminDashboard.jsx (edit)</td><td>wire useResilientLoad to the opd_sessions queue listener</td><td>staff Frontend</td><td>useResilientLoad, LoadErrorRetry</td></tr>
+  <tr><td>BackendDashboard.jsx (edit)</td><td>Suspense fallback gains a timeout→retry (chunk-load failure on flaky mobile)</td><td>staff Backend shell</td><td>LoadErrorRetry</td></tr>
+</table>
+
+<h3>useResilientLoad API (contract)</h3>
+<pre>const { loadStatus, retryKey, markReady, markError, retry } = useResilientLoad({
+  softTimeoutMs = 8000,   // no data in this window → auto-retry (silent)
+  maxAutoRetries = 1,     // silent retries before showing error
+});
+// loadStatus: 'loading' | 'ready' | 'error'
+// retryKey:   number — include in the load effect's deps; bumping re-runs the load
+// markReady(): call inside the onSnapshot/fetch SUCCESS callback (doc-found OR not-found both count as "loaded")
+// markError(err?): optional — call inside onError; funnels to the same auto-retry/error path
+// retry(): bound to the LoadErrorRetry button — resets attempts → loading → bump retryKey
+// On the FIRST auto-retry the hook performs ONE disableNetwork→enableNetwork (heals a half-dead connection that a bare re-subscribe can't).</pre>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = No offline cache (fresh-always):</strong> customers must never see stale course balance / appointment time. Fix via connection layer + timeout/retry only. No IndexedDB persistence.</li>
+  <li><strong>Q2 = Auto-retry → error + "ลองใหม่" button:</strong> ~8s soft timeout → 1 silent auto-retry → if still failing, the LoadErrorRetry card with a retry button. No silent dead screen, no full page reload.</li>
+  <li><strong>Q3 = All three test layers + L2:</strong> Playwright mobile-viewport e2e (throttle / offline→online / tab-suspend→resume) + unit (state machine, fake timers) + RTL flow-sim (stuck-snapshot → error+retry) + L2 client-SDK cold-start (real prod, proves long-polling fallback).</li>
+  <li><strong>Scope:</strong> connection layer = global (all pages incl. all backend tabs). Resilient-load UI escape = customer links + AdminDashboard queue. Backend tabs = silent auto-heal via useBranchAwareListener + Suspense retry. (Per-tab error buttons beyond the shared hook = out of scope unless requested.)</li>
+  <li><strong>KEEP V16 + V17</strong> as-is; auto-retry reuses the same network-toggle path.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>On a real mobile viewport, every customer link (PatientForm/<code>?session=</code> · PatientDashboard/<code>?patient=</code> · ClinicSchedule/<code>?schedule=</code> · ED Scoring) loads data on first try under normal network.</li>
+  <li>offline→online mid-load → data appears WITHOUT a manual refresh.</li>
+  <li>tab background→foreground → data refreshes (V17) WITHOUT a refresh.</li>
+  <li>Blocked/half-dead network → after ~8s auto-retry then a clear "โหลดข้อมูลไม่สำเร็จ — ลองใหม่" card (NOT a stuck spinner / black screen / empty skeleton). Tapping ลองใหม่ recovers once the network returns.</li>
+  <li>No page can reach a permanent stuck-skeleton state: every load path ends in ready OR error+retry.</li>
+  <li>Staff queue (AdminDashboard) + backend tabs auto-heal a half-dead connection (silent re-subscribe) without a manual refresh.</li>
+  <li>Customers never see stale cached data (no persistence).</li>
+  <li>L2 client-SDK cold-start against real prod returns data via long-polling fallback.</li>
+  <li>Full vitest green + build clean + Playwright mobile e2e green.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>autoDetectLongPolling vs forceLongPolling:</strong> autoDetect chosen (keeps WebSocket speed where it works; falls back only when broken). If real-device testing shows the auto-detection itself is unreliable on a target carrier, escalate to <code>experimentalForceLongPolling</code> (slower but bulletproof) — name the ceiling in a <code>ponytail:</code> comment.</li>
+  <li><strong>8s timeout tuning:</strong> too short = false auto-retries on slow-but-fine networks; too long = user stares longer. 8s + 1 silent retry ≈ ~16s worst case before the error card. Constant, tunable.</li>
+  <li><strong>useBranchAwareListener retry + branch-switch interplay:</strong> the internal nonce must not fight the existing <code>effectiveBranchId</code> re-subscribe (BSA). Reset attempts on branch change.</li>
+  <li><strong>doc-not-found vs load-failure:</strong> markReady() must fire for a legit "doc doesn't exist" snapshot (that's a successful load → the page shows its own notfound/expired), NOT be treated as a timeout. Only a snapshot that NEVER fires (or onError) triggers retry.</li>
+  <li><strong>Test honesty (Rule Q):</strong> mock/unit tests prove the state machine; only Playwright mobile (L1) + L2 client-SDK cold-start prove the real network behavior. Both required before "no bug" claim.</li>
+</ul>
+
+</body>
+</html>

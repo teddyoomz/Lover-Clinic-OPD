@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mobile-Load Reliability Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Mobile-Load Reliability Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> execute task-by-task (inline executing-plans). Spec: <code>docs/superpowers/specs/2026-06-16-mobile-load-reliability-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make every mobile entry point (staff app + all customer links) load reliably on the first try — no black-screen / stuck-spinner / empty-skeleton — with an auto-retry → "ลองใหม่" escape that can never stay stuck, plus tests that prove it.</p>
+  <p><strong>Architecture:</strong> (1) global connection fix: <code>experimentalAutoDetectLongPolling</code>; (2) one shared debounced <code>reconnectFirestore()</code>; (3) <code>useResilientLoad</code> hook + <code>&lt;LoadErrorRetry&gt;</code> at the customer links + AdminDashboard queue + App.jsx auth gate; (4) silent auto-heal inside <code>useBranchAwareListener</code> for backend tabs. No offline cache (Q1 = fresh-always).</p>
+  <p><strong>Tech Stack:</strong> React 19, Firebase JS SDK 12, Vite 8, Vitest 4, Playwright 1.59.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>3-state load machine. State 1+2+3 + error card are specified visually in the spec. The new shared error card:</p>
+<div class="mockup">
+  <div class="mockup-label">&lt;LoadErrorRetry&gt; — mobile, dark</div>
+  <div style="max-width:300px;margin:auto;background:#050505;border-radius:14px;padding:30px 18px;text-align:center;color:#e5e5e5">
+    <div style="font-size:34px">⚠️</div>
+    <div style="color:#fff;font-weight:600;margin-top:10px">โหลดข้อมูลไม่สำเร็จ</div>
+    <div style="color:#999;font-size:12px;margin-top:6px;line-height:1.5">การเชื่อมต่ออาจไม่เสถียร<br>กรุณาตรวจสอบสัญญาณแล้วลองใหม่</div>
+    <div style="background:#dc2626;color:#fff;border-radius:8px;padding:11px 22px;margin-top:16px;display:inline-block;font-weight:600">↻ ลองใหม่</div>
+  </div>
+  <p style="font-size:0.8em;color:var(--tx-muted)">theme-aware; ⚠️ + accent button only — no red on any patient name (rule 04). Inline variant (fullScreen=false) used as a slim banner above the AdminDashboard queue.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Resilient load lifecycle + shared reconnect</div>
+  <table>
+    <tr><th>Stage</th><th>What happens</th></tr>
+    <tr><td>1. subscribe</td><td>page subscribes onSnapshot/fetch; <code>useResilientLoad</code> starts an 8s soft timer (loadStatus='loading')</td></tr>
+    <tr><td>2a. data arrives</td><td>snapshot/fetch callback calls <code>markReady()</code> → loadStatus='ready', timer cleared, attempts reset (doc-found AND doc-not-found both = ready)</td></tr>
+    <tr><td>2b. 8s, no data / onError</td><td><code>handleFail()</code>: attempts&lt;1 → first retry calls shared <code>reconnectFirestore()</code> (debounced network toggle) + bumps <code>retryKey</code> → page re-subscribes, timer restarts (still 'loading', silent to user)</td></tr>
+    <tr><td>3. retries exhausted</td><td>loadStatus='error' → page renders <code>&lt;LoadErrorRetry onRetry={retry}&gt;</code></td></tr>
+    <tr><td>4. user taps ลองใหม่</td><td><code>retry()</code>: attempts=0, loadStatus='loading', bump retryKey → re-subscribe</td></tr>
+    <tr><td>App.jsx auth gate</td><td>anon-auth hangs &gt;8s → re-call signInAnonymously (≤2) → still stuck → LoadErrorRetry (kills black-screen-forever)</td></tr>
+    <tr><td>backend tabs</td><td><code>useBranchAwareListener</code>: no onChange in 8s → re-subscribe (+reconnectFirestore), capped 2; resets on branch/args change; returns void (backward-compatible)</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/firestoreReconnect.js</code></td><td>NEW</td><td>module-level debounced network toggle, shared by V17 + hooks</td></tr>
+  <tr><td><code>src/hooks/useResilientLoad.js</code></td><td>NEW</td><td>3-state load machine + soft-timeout + auto-retry</td></tr>
+  <tr><td><code>src/components/LoadErrorRetry.jsx</code></td><td>NEW</td><td>shared error+retry card</td></tr>
+  <tr><td><code>src/firebase.js</code></td><td>EDIT</td><td>autoDetectLongPolling</td></tr>
+  <tr><td><code>src/App.jsx</code></td><td>EDIT</td><td>use reconnectFirestore; resilient anon-auth gate</td></tr>
+  <tr><td><code>src/pages/PatientForm.jsx</code></td><td>EDIT</td><td>resilient session load</td></tr>
+  <tr><td><code>src/pages/ClinicSchedule.jsx</code></td><td>EDIT</td><td>resilient schedule load</td></tr>
+  <tr><td><code>src/pages/PatientDashboard.jsx</code></td><td>EDIT</td><td>resilient view load + widen retry budget</td></tr>
+  <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>EDIT</td><td>resilient queue load (inline banner)</td></tr>
+  <tr><td><code>src/hooks/useBranchAwareListener.js</code></td><td>EDIT</td><td>silent auto-heal for backend tabs</td></tr>
+  <tr><td><code>src/pages/BackendDashboard.jsx</code></td><td>EDIT</td><td>Suspense chunk-load retry</td></tr>
+  <tr><td>tests + e2e + L2 script</td><td>NEW</td><td>unit / flow-sim / Playwright mobile / cold-start</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Shared reconnectFirestore() + refactor App.jsx V17</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/firestoreReconnect.js</code>; Modify <code>src/App.jsx:133-162</code>; Test <code>tests/firestore-reconnect.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: write the util</strong></div>
+<pre><code>// src/lib/firestoreReconnect.js
+// Shared debounced Firestore network toggle. Heals a half-dead WebSocket
+// (looks connected, snapshot stream dead) by forcing a clean reconnect.
+// Module-level debounce → many concurrent callers (V17 visibilitychange +
+// useResilientLoad + useBranchAwareListener) collapse into ONE toggle (no thrash).
+// ponytail: single global debounce; per-listener coordination only if profiling shows contention.
+import { disableNetwork, enableNetwork } from 'firebase/firestore';
+import { db } from '../firebase.js';
+
+let lastToggleAt = 0;
+let toggling = false;
+const DEBOUNCE_MS = 1500;
+
+export async function reconnectFirestore() {
+  if (toggling) return;
+  if (Date.now() - lastToggleAt < DEBOUNCE_MS) return;
+  toggling = true;
+  lastToggleAt = Date.now();
+  try {
+    await disableNetwork(db);
+    await enableNetwork(db);
+  } catch (err) {
+    console.warn('[reconnectFirestore] toggle failed:', err?.message || err);
+  } finally {
+    toggling = false;
+  }
+}
+
+// test seam — reset module debounce between unit tests
+export function __resetReconnectDebounceForTest() { lastToggleAt = 0; toggling = false; }</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: refactor App.jsx V17</strong> — replace the inline <code>reconnect</code> closure (lines 133-151) with a call to <code>reconnectFirestore</code>; keep the visibilitychange + online listeners.</div>
+<pre><code>// App.jsx — import
+import { reconnectFirestore } from './lib/firestoreReconnect.js';
+// remove disableNetwork/enableNetwork from the firebase/firestore import if now unused there
+
+// replace the effect body (keep the comment block):
+useEffect(() => {
+  const onVisibility = () => { if (document.visibilityState === 'visible') reconnectFirestore(); };
+  const onOnline = () => reconnectFirestore();
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('online', onOnline);
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('online', onOnline);
+  };
+}, []);</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3: test</strong> — debounce: 2 rapid calls → 1 toggle; after DEBOUNCE_MS → toggles again; toggle failure is swallowed.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: run</strong> <code>npx vitest run tests/firestore-reconnect.test.js</code> → PASS. <strong>Step 5: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: useResilientLoad hook + unit tests</h3>
+  <p><strong>Files:</strong> Create <code>src/hooks/useResilientLoad.js</code>; Test <code>tests/use-resilient-load.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: write the hook</strong></div>
+<pre><code>// src/hooks/useResilientLoad.js
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { reconnectFirestore } from '../lib/firestoreReconnect.js';
+
+const DEFAULT_SOFT_TIMEOUT_MS = 8000;
+const DEFAULT_MAX_AUTO_RETRIES = 1;
+
+// 3-state resilient load machine for any onSnapshot/fetch load.
+//   loadStatus: 'loading' | 'ready' | 'error'
+//   retryKey:   put in the load effect's deps; bumping re-runs the load
+//   markReady(): call in the SUCCESS callback (doc-found OR not-found both count)
+//   markError(): optional — call in onError; funnels to the same retry/error path
+//   retry():     bound to the LoadErrorRetry button
+// First auto-retry triggers one shared reconnectFirestore() (heal half-dead conn).
+export function useResilientLoad(opts = {}) {
+  const softTimeoutMs = opts.softTimeoutMs ?? DEFAULT_SOFT_TIMEOUT_MS;
+  const maxAutoRetries = opts.maxAutoRetries ?? DEFAULT_MAX_AUTO_RETRIES;
+
+  const [loadStatus, setLoadStatus] = useState('loading');
+  const [retryKey, setRetryKey] = useState(0);
+  const attemptsRef = useRef(0);
+  const statusRef = useRef('loading');
+  useEffect(() => { statusRef.current = loadStatus; }, [loadStatus]);
+
+  const markReady = useCallback(() => {
+    attemptsRef.current = 0;
+    setLoadStatus((prev) => (prev === 'ready' ? prev : 'ready'));
+  }, []);
+
+  const handleFail = useCallback(() => {
+    if (statusRef.current === 'ready') return; // already succeeded — ignore late failures
+    if (attemptsRef.current < maxAutoRetries) {
+      const isFirst = attemptsRef.current === 0;
+      attemptsRef.current += 1;
+      if (isFirst) reconnectFirestore();        // heal half-dead conn before re-subscribe
+      setRetryKey((k) => k + 1);                // re-run consumer load effect; stays 'loading'
+    } else {
+      setLoadStatus('error');
+    }
+  }, [maxAutoRetries]);
+
+  const markError = useCallback(() => { handleFail(); }, [handleFail]);
+
+  const retry = useCallback(() => {
+    attemptsRef.current = 0;
+    setLoadStatus('loading');
+    setRetryKey((k) => k + 1);
+  }, []);
+
+  useEffect(() => {
+    if (loadStatus !== 'loading') return undefined;
+    const id = setTimeout(() => handleFail(), softTimeoutMs);
+    return () => clearTimeout(id);
+  }, [loadStatus, retryKey, softTimeoutMs, handleFail]);
+
+  return { loadStatus, retryKey, markReady, markError, retry };
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: unit tests</strong> (vitest fake timers + @testing-library/react renderHook):</div>
+  <ul>
+    <li>initial loadStatus==='loading', retryKey===0</li>
+    <li>markReady() before timeout → 'ready', advancing past timeout stays 'ready'</li>
+    <li>timeout (advance 8s) with maxAutoRetries=1 → retryKey bumps, stays 'loading'; 2nd timeout → 'error'</li>
+    <li>markReady() after a soft-timeout retry → 'ready' (recovered)</li>
+    <li>markError() funnels to auto-retry then 'error' (same as timeout)</li>
+    <li>retry() from 'error' → 'loading' + retryKey bumps</li>
+    <li>first auto-retry calls reconnectFirestore (mock the module, assert called once)</li>
+    <li>markReady is idempotent across many snapshot fires</li>
+  </ul>
+  <div class="step"><input type="checkbox"> <strong>Step 3: run</strong> → PASS. <strong>Step 4: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 3: LoadErrorRetry component + RTL test</h3>
+  <p><strong>Files:</strong> Create <code>src/components/LoadErrorRetry.jsx</code>; Test <code>tests/load-error-retry-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: write the component</strong></div>
+<pre><code>// src/components/LoadErrorRetry.jsx
+import { AlertTriangle, RotateCw } from 'lucide-react';
+
+// Shared error+retry card. Theme-aware. NEVER red on a patient name (rule 04) —
+// this is a connection-status card; accent is on the button only.
+export default function LoadErrorRetry({
+  onRetry,
+  accentColor = '#dc2626',
+  isDark = true,
+  title = 'โหลดข้อมูลไม่สำเร็จ',
+  message = 'การเชื่อมต่ออาจไม่เสถียร กรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง',
+  retryLabel = 'ลองใหม่',
+  fullScreen = true,
+}) {
+  const wrap = fullScreen
+    ? `flex flex-col items-center justify-center min-h-screen gap-4 px-8 text-center ${isDark ? 'bg-[#050505]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`
+    : `flex items-center justify-center gap-3 px-4 py-3 text-center rounded-xl border ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-pink-200'}`;
+  return (
+    <div className={wrap} data-testid="load-error-retry" role="alert">
+      <AlertTriangle size={fullScreen ? 34 : 20} style={{ color: accentColor }} aria-hidden="true" />
+      <div className={fullScreen ? '' : 'flex-1 text-left'}>
+        <p className={`font-bold ${fullScreen ? 'text-base mt-1' : 'text-sm'} ${isDark ? 'text-white' : 'text-gray-800'}`}>{title}</p>
+        {fullScreen && <p className={`text-xs mt-1.5 leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{message}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-95"
+        style={{ backgroundColor: accentColor }}
+        data-testid="load-error-retry-btn"
+        aria-label={retryLabel}
+      >
+        <RotateCw size={15} /> {retryLabel}
+      </button>
+    </div>
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: RTL test</strong> — renders title + button; clicking button calls onRetry; <code>data-testid="load-error-retry"</code> present; no red applied to a name (the component never receives a name — assert title text is the status copy).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: run → PASS. Step 4: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 4: firebase.js — autoDetectLongPolling (the big lever)</h3>
+  <p><strong>Files:</strong> Modify <code>src/firebase.js:3,18</code>; Test <code>tests/firebase-init-longpolling.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: edit</strong></div>
+<pre><code>// src/firebase.js
+import { initializeFirestore } from 'firebase/firestore'; // replace getFirestore import
+// ...
+// experimentalAutoDetectLongPolling: use WebSocket when it works (fast), fall
+// back to long-polling automatically when the SDK detects the stream is broken
+// (flaky mobile networks / carrier proxies half-connect WebSocket — looks
+// connected but the snapshot stream never delivers). No persistence (Q1 = fresh-always).
+// ponytail: autoDetect, not forceLongPolling — escalate to force only if a target carrier defeats auto-detection.
+export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: source-grep test</strong> — assert firebase.js imports <code>initializeFirestore</code>, calls it with <code>experimentalAutoDetectLongPolling: true</code>, and no longer uses bare <code>getFirestore(app)</code>; assert NO <code>enableIndexedDbPersistence</code>/<code>persistentLocalCache</code> (Q1).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: run + <code>npm run build</code></strong> (initializeFirestore must precede any getFirestore — single init point, safe). <strong>Step 4: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 5: App.jsx — resilient anon-auth gate (black-screen fix)</h3>
+  <p><strong>Files:</strong> Modify <code>src/App.jsx</code> (anon-auth effect ~99-103, gate ~194-196); import LoadErrorRetry.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: add state + resilient effect</strong></div>
+<pre><code>import LoadErrorRetry from './components/LoadErrorRetry.jsx';
+// ...state...
+const [authAttempt, setAuthAttempt] = useState(0);
+const [authStuck, setAuthStuck] = useState(false);
+
+// replace the existing anon-auth effect:
+useEffect(() => {
+  if (!needsPublicAuth || user || isInitializing) return undefined;
+  let cancelled = false;
+  signInAnonymously(auth).catch((err) => console.error('Anonymous Auth Error:', err));
+  // If anon-auth hangs (half-dead network), retry; after retries → show escape
+  // instead of a black "กำลังโหลด..." forever (symptom a).
+  const timer = setTimeout(() => {
+    if (cancelled) return;
+    if (authAttempt < 2) setAuthAttempt((a) => a + 1);
+    else setAuthStuck(true);
+  }, 8000);
+  return () => { cancelled = true; clearTimeout(timer); };
+}, [needsPublicAuth, user, isInitializing, authAttempt]);
+
+useEffect(() => { if (user) setAuthStuck(false); }, [user]);
+
+const retryAuth = () => {
+  setAuthStuck(false);
+  setAuthAttempt(0);
+  signInAnonymously(auth).catch(() => {});
+};</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: gate render</strong> — replace lines 194-196:</div>
+<pre><code>if (needsPublicAuth && !user) {
+  if (authStuck) return <LoadErrorRetry onRetry={retryAuth} accentColor={ac} isDark={true} />;
+  return <div className="flex items-center justify-center min-h-screen bg-[#050505] font-medium tracking-widest uppercase animate-pulse" style={{color: ac}}>กำลังโหลด...</div>;
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3: source-grep test</strong> (<code>tests/app-auth-gate-resilient.test.js</code>) — authAttempt/authStuck present, retry path, LoadErrorRetry rendered in the gate. <strong>Step 4: build + commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 6: PatientForm — resilient session load</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/PatientForm.jsx</code> (listener 67-133, render guards 449-475); Test <code>tests/patient-form-resilient-load.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: wire the hook</strong></div>
+<pre><code>import { useResilientLoad } from '../hooks/useResilientLoad.js';
+import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
+// inside component:
+const { loadStatus, retryKey, markReady, markError, retry } = useResilientLoad();
+
+// listener effect — add retryKey to deps; markReady at the TOP of the snapshot
+// callback (snapshot fired = load OK, whether doc exists or not); markError in onError
+const unsubscribe = onSnapshot(doc(...), (snapshot) => {
+  markReady();                       // &lt;-- NEW: any snapshot = loaded
+  if (!snapshot.exists()) { setSessionExists(false); return; }
+  /* ...existing body unchanged... */
+}, (error) => {
+  console.error('[PatientForm] onSnapshot error:', error);
+  markError();                       // &lt;-- NEW: transient error → resilient retry (NOT instant Invalid Link)
+});
+// deps: [db, appId, user, sessionId, isEditing, language, retryKey]</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: render escape</strong> — at the <code>sessionExists === null</code> branch (line ~463): if <code>loadStatus === 'error'</code> render <code>&lt;LoadErrorRetry onRetry={retry} accentColor={ac} isDark={...}/&gt;</code>; else the existing loading render. (Leave <code>sessionExists === false</code> Invalid-Link branch as-is — that's a real "doc absent" after a successful snapshot.)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: flow-sim test</strong> — mock onSnapshot to NEVER fire → advance timers → assert error+retry appears (not stuck loading); snapshot fires → markReady → form renders; onError once then success → recovers.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: run + commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 7: ClinicSchedule — resilient schedule load</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/ClinicSchedule.jsx</code> (listener 86-104, loading render 107-114); Test <code>tests/clinic-schedule-resilient-load.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: wire</strong> — <code>useResilientLoad</code>; in the onSnapshot success callback call <code>markReady()</code> at the top (both <code>!exists/enabled===false</code> → setStatus('notfound') AND the happy path count as loaded); onError → <code>markError()</code> (instead of <code>setStatus('notfound')</code>); add <code>retryKey</code> to the effect deps.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: render</strong> — in the <code>status === 'loading'</code> branch: if <code>loadStatus === 'error'</code> render <code>&lt;LoadErrorRetry onRetry={retry} accentColor={ac} isDark={isDark}/&gt;</code>; else existing spinner.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: flow-sim test</strong> (snapshot-never-fires → error+retry; fires → schedule; onError → retry). <strong>Step 4: run + commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 8: PatientDashboard — resilient view load + widen retry budget</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/PatientDashboard.jsx</code> (fetch 515-558, loading 586-594); Test <code>tests/patient-dashboard-resilient-load.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: wire</strong> — <code>useResilientLoad</code>. In the fetch effect: on success (<code>data.ok</code> → setStatus('done')) call <code>markReady()</code>; on a definite 404/DISABLED call <code>markReady()</code> too (loaded, just absent → page shows notfound/disabled); only on sustained 5xx/network failure call <code>markError()</code> instead of <code>setStatus('notfound')</code>. Add <code>retryKey</code> to deps. Replace the tight 3×600ms loop budget: keep a SHORT in-call retry (e.g. 2 attempts × 400ms for transient blips) but the OUTER recovery is the resilient hook (8s soft-timeout → reconnect → re-fetch → error+retry) so a slow-but-fine network no longer false-fails to notfound.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: render</strong> — in the <code>status === 'loading'</code> branch: if <code>loadStatus === 'error'</code> render <code>&lt;LoadErrorRetry onRetry={retry} accentColor={ac} isDark={isDark} fullScreen/&gt;</code> (keep the &lt;Controls/&gt; bar). Note: clinicSettingsLoaded-gate is covered transitively — the hook's reconnect re-fires the App.jsx clinic_settings listener.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: flow-sim test</strong> — sustained fetch failure → error+retry (not silent notfound); slow success within soft-timeout → done; 404 → notfound (markReady, no retry loop). <strong>Step 4: run + commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 9: AdminDashboard — resilient queue (inline banner)</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/AdminDashboard.jsx</code> (opd_sessions listener 2315-2608 + queue render); Test <code>tests/admin-dashboard-resilient-queue.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: wire</strong> — <code>useResilientLoad</code>; at the top of the opd_sessions snapshot callback call <code>markReady()</code>; the errorCallback (currently <code>console.error</code>) also calls <code>markError()</code>; add <code>retryKey</code> to the listener effect deps. (Keep the existing console.error.)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: render</strong> — above the queue list, when <code>loadStatus === 'error'</code> render a slim <code>&lt;LoadErrorRetry onRetry={retry} accentColor={ac} isDark fullScreen={false}/&gt;</code> banner (NON-blocking — chat/rest of dashboard stay usable). Place it where the queue header renders.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: source-grep + flow-sim test</strong> — markReady/markError/retryKey wired; banner appears on error, not a full-screen takeover. <strong>Step 4: run + commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 10: useBranchAwareListener — silent auto-heal (backend tabs)</h3>
+  <p><strong>Files:</strong> Modify <code>src/hooks/useBranchAwareListener.js</code>; Test <code>tests/use-branch-aware-listener-retry.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: add internal retry</strong> (backward-compatible, still returns void)</div>
+<pre><code>import { useEffect, useRef, useState } from 'react';
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { reconnectFirestore } from '../lib/firestoreReconnect.js';
+
+const SOFT_TIMEOUT_MS = 8000;
+const MAX_AUTO_RETRIES = 2;
+
+export function useBranchAwareListener(listenerFn, args, onChange, onError) {
+  const { branchId } = useSelectedBranch();
+  const onChangeRef = useRef(onChange);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  const isUniversal = listenerFn?.__universal__ === true;
+  const effectiveBranchId = isUniversal ? null : branchId;
+  const argsKey = JSON.stringify(args);
+
+  const [retryNonce, setRetryNonce] = useState(0);
+  const attemptsRef = useRef(0);
+  // reset attempts whenever the SUBSCRIPTION identity changes (not on a retry)
+  useEffect(() => { attemptsRef.current = 0; }, [listenerFn, effectiveBranchId, argsKey]);
+
+  useEffect(() => {
+    if (!listenerFn) return undefined;
+    let enrichedArgs;
+    if (isUniversal) enrichedArgs = args;
+    else if (typeof args === 'object' && args !== null && !Array.isArray(args)) enrichedArgs = { ...args, branchId };
+    else enrichedArgs = args;
+
+    let gotData = false;
+    // Silent auto-heal: if no onChange within SOFT_TIMEOUT_MS, reconnect + re-subscribe
+    // (capped). Heals a listener that subscribed during a half-dead connection.
+    const timer = setTimeout(() => {
+      if (gotData) return;
+      if (attemptsRef.current < MAX_AUTO_RETRIES) {
+        attemptsRef.current += 1;
+        reconnectFirestore();
+        setRetryNonce((n) => n + 1);
+      }
+      // else: give up; V17 visibility/online + next branch switch recover.
+    }, SOFT_TIMEOUT_MS);
+
+    const unsub = listenerFn(
+      enrichedArgs,
+      (data) => { gotData = true; clearTimeout(timer); onChangeRef.current?.(data); },
+      (err) => { onErrorRef.current?.(err); }
+    );
+    return () => { clearTimeout(timer); try { unsub?.(); } catch {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenerFn, effectiveBranchId, argsKey, retryNonce]);
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: unit test</strong> — listener that never calls onChange → after 8s, re-subscribed (listenerFn called 2nd time) + reconnectFirestore called; capped at MAX; onChange fires → no retry; branch change resets attempts; existing behavior (onChange/onError forwarding, universal skip-branch) preserved.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: run + full-suite check of existing useBranchAwareListener consumers (no regression). Step 4: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 11: BackendDashboard — Suspense chunk-load retry</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/BackendDashboard.jsx</code> (LazyFallback / tab Suspense ~205); Test <code>tests/backend-dashboard-suspense-retry.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1</strong> — give the tab Suspense fallback a soft-timeout that, if the lazy chunk hasn't resolved in ~10s (flaky-mobile chunk fetch), shows <code>&lt;LoadErrorRetry onRetry={() => window.location.reload()} fullScreen={false}/&gt;</code> (chunk reload is the only recovery for a failed dynamic import). Implement as a tiny <code>&lt;SuspenseWithRetry&gt;</code> wrapper or a fallback component with its own timer. Keep the spinner for the first 10s.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: source-grep/RTL test</strong> — fallback shows spinner, then after timeout shows retry. <strong>Step 3: run + build + commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 12: Playwright mobile e2e (Rule Q L1)</h3>
+  <p><strong>Files:</strong> Create <code>tests/e2e/mobile-load-reliability.spec.js</code> (+ ensure a mobile project in <code>playwright.config.js</code>, e.g. devices['iPhone 13'])</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: scenarios</strong> (real browser, mobile viewport; reuse the existing e2e auth-token-injection helper for staff; anon for customer links):</div>
+  <ul>
+    <li><b>Normal:</b> open each link route on a seeded TEST fixture → data renders (no stuck skeleton).</li>
+    <li><b>offline→online mid-load:</b> <code>context.setOffline(true)</code> at nav, then <code>setOffline(false)</code> after 2s → data appears WITHOUT manual reload.</li>
+    <li><b>tab background→foreground:</b> dispatch visibilitychange hidden→visible → listeners re-sync (V17).</li>
+    <li><b>blocked/half-dead network:</b> route-abort the Firestore Listen/long-poll channel → after ~8s the LoadErrorRetry card appears (assert <code>data-testid="load-error-retry"</code>), NOT a permanent spinner/black screen; un-abort + click ลองใหม่ → recovers.</li>
+    <li><b>auth gate:</b> block identitytoolkit on a <code>?session=</code> link → after ~8s the gate shows LoadErrorRetry (no black-screen-forever); unblock + retry → form loads.</li>
+  </ul>
+  <div class="step"><input type="checkbox"> <strong>Step 2: run</strong> <code>npx playwright test tests/e2e/mobile-load-reliability.spec.js</code> → PASS (N) FAIL (0). <strong>Step 3: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 13: L2 client-SDK cold-start script (Rule Q L2)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-mobile-load-coldstart.mjs</code> (CLIENT SDK <code>@firebase/firestore</code> with autoDetectLongPolling, NOT admin)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1</strong> — initializeFirestore(client app, {experimentalAutoDetectLongPolling:true}); signInAnonymously (or staff custom-token for staff queries); from a COLD process issue the EXACT queries the pages issue (opd_sessions doc get, clinic_schedules doc, /api/patient-view fetch); assert data arrives within a timeout; print PASS/FAIL per query. Proves long-polling fallback works against real prod. Read-only; no writes (Rule R). Clean exit.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: run</strong> <code>node scripts/e2e-mobile-load-coldstart.mjs</code> → all PASS. <strong>Step 3: commit.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 14: Full verification + adversarial loop + commit</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>npx vitest run</code> (full suite) → 0 fail. Fix any V21 source-grep lock-ins.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>npm run build</code> → clean.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Playwright mobile e2e (Task 12) green + L2 cold-start (Task 13) green.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Adversarial bug-hunt (Workflow): fan out agents over the resilient-load surfaces hunting edge cases (double-retry, unmount-during-retry, branch-switch-during-retry, markReady-after-error, concurrent reconnect thrash, timer leak, doc-not-found mis-treated as failure). Verify each finding; fix; loop until a fresh hunt finds nothing.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 5:</strong> commit + update active.md / SESSION_HANDOFF / V-entry. Report to user. (No deploy without explicit "deploy".)</div>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> connection layer (T4) · resilient hook+card (T2,T3) · shared reconnect (T1) · customer links (T6,T7,T8) · AdminDashboard (T9) · backend tabs (T10) · Suspense (T11) · App.jsx black-screen (T5) · all 3 test layers + L2 (T12,T13) · acceptance #1-9 covered.</li>
+  <li><strong>No placeholders:</strong> full code for all new files + precise edit snippets per surface.</li>
+  <li><strong>Type consistency:</strong> hook API (loadStatus/retryKey/markReady/markError/retry) identical across T2 and every consumer (T5-T9); reconnectFirestore signature identical across T1/T2/T10; LoadErrorRetry props identical across consumers.</li>
+  <li><strong>doc-not-found:</strong> explicitly markReady() (not failure) at every consumer — locked in T6/T7/T8 steps.</li>
+</ul>
+
+</body>
+</html>
