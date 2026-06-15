@@ -299,7 +299,7 @@ export const calculateMRS = (d) => {
   return { score, text: 'ระดับรุนแรง', color: 'text-red-600 font-bold', bg: 'bg-red-950/50 border-red-600/50 shadow-[0_0_10px_rgba(220,38,38,0.3)]' };
 };
 
-export const generateClinicalSummary = (d, formType = 'intake', customTemplate = null, lang = 'en') => {
+export const generateClinicalSummary = (d, formType = 'intake', customTemplate = null, lang = 'en', includeScreening = true) => {
   const parts = [];
   const sep = '───';
   const isTh = lang === 'th';
@@ -402,7 +402,7 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
     const hasScreening = reasons.includes('สมรรถภาพทางเพศ')
       || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)')
       || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)');
-    if (hasScreening) {
+    if (hasScreening && includeScreening) {
       parts.push(sep);
       parts.push(`ผลการคัดกรองอาการ`);
       if (reasons.includes('สมรรถภาพทางเพศ')) {
@@ -464,7 +464,7 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
     const hasScreening = reasons.includes('สมรรถภาพทางเพศ')
       || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)')
       || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)');
-    if (hasScreening) {
+    if (hasScreening && includeScreening) {
       parts.push(sep);
       parts.push(`Clinical Screening Results`);
       if (reasons.includes('สมรรถภาพทางเพศ')) {

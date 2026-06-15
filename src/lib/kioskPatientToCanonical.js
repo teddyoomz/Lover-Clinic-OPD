@@ -92,7 +92,10 @@ export function kioskPatientToCanonical(d, opts = {}) {
 
   // ── Note — clinicalSummary only (Phase 24.0-nonies: emergency relation
   // promoted to canonical contact_1_relation field, no longer stuffed in note)
-  const summary = generateClinicalSummary(d, formType, customTemplate, summaryLanguage);
+  // ED Score (2026-06-15) — includeScreening:false: do NOT bake the ED screening
+  // block into the customer note. The ED Score box (CDV) + TFP หมายเหตุทั่วไป own
+  // those scores now. OPD print + intake-view keep the screening (default true).
+  const summary = generateClinicalSummary(d, formType, customTemplate, summaryLanguage, false);
   const noteStr = summary || '';
 
   // ── Gender: kiosk uses Thai labels ("ชาย"/"หญิง"/"LGBTQ+"); canonical
