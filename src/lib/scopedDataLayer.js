@@ -301,6 +301,7 @@ export const listenToCustomerAppointments = _makeUniversalListener('listenToCust
 export const listenToCustomerSales = _makeUniversalListener('listenToCustomerSales');
 export const listenToCustomerFinance = _makeUniversalListener('listenToCustomerFinance');
 export const listenToCourseChanges = _makeUniversalListener('listenToCourseChanges');
+export const listenToAssessments = _makeUniversalListener('listenToAssessments'); // ED Score — universal, customer-scoped
 export const listenToAudiences = _makeUniversalListener('listenToAudiences');
 export const listenToUserPermissions = _makeUniversalListener('listenToUserPermissions');
 
@@ -710,6 +711,10 @@ export const listRecallsForCustomer = (...args) => raw.listRecallsForCustomer(..
 listRecallsForCustomer.__universal__ = true;
 export const listenToRecallsForCustomer = (...args) => raw.listenToRecallsForCustomer(...args);
 listenToRecallsForCustomer.__universal__ = true;
+
+// ED Score writers — universal (be_assessments, no branchId)
+export const createAssessmentRound = (...args) => raw.createAssessmentRound(...args);
+export const deleteAssessmentRound = (...args) => raw.deleteAssessmentRound(...args);
 
 // Writers — branchId stamping handled inside raw via _resolveBranchIdForWrite
 export const createRecall = (...args) => raw.createRecall(...args);

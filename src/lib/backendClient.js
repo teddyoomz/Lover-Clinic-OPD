@@ -1049,6 +1049,55 @@ export function listenToCourseChanges(customerId, onChange, onError) {
   }, onError || (() => {}));
 }
 
+// ─── ED Assessment rounds (be_assessments) — UNIVERSAL, customer-scoped ──────
+// Mirrors be_course_changes (universal, customerId-scoped). Round# is DERIVED at
+// display time (assessmentRoundsCore) — never stored → deleting a round renumbers
+// (Q4 mis-fill recovery). Scores are materialized from the customer-filled
+// opd_session by the onPatientSubmit Cloud Function (survives session cleanup).
+const assessmentsCol = () => collection(db, ...basePath(), 'be_assessments');
+const assessmentDoc = (id) => doc(db, ...basePath(), 'be_assessments', String(id));
+
+/** Live listener for a customer's ED assessment rounds. UNIVERSAL (no branchId). */
+export function listenToAssessments(customerId, onChange, onError) {
+  if (!customerId) { onChange?.([]); return () => {}; }
+  const q = query(assessmentsCol(), where('customerId', '==', String(customerId)));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    items.sort((a, b) => String(a.assessmentDate || '').localeCompare(String(b.assessmentDate || '')));
+    onChange?.(items);
+  }, onError || (() => {}));
+}
+listenToAssessments.__universal__ = true;
+
+/** Create a pending ED assessment round (the link is minted separately). Returns roundId. */
+export async function createAssessmentRound({ customerId, types, linkedSessionId, expiresAt, createdBy } = {}) {
+  const sid = String(customerId ?? '').trim();
+  if (!sid) throw new Error('createAssessmentRound: customerId required');
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map((b) => b.toString(16).padStart(2, '0')).join(''); // Rule C2 — crypto, no Math.random
+  const id = `ASMT-${Date.now()}-${rand}`;
+  await setDoc(assessmentDoc(id), {
+    customerId: sid,
+    types: Array.isArray(types) ? types : [],
+    status: 'pending',
+    scores: {},
+    rawAnswers: {},
+    assessmentDate: '',
+    linkedSessionId: linkedSessionId || '',
+    expiresAt: expiresAt || null,
+    createdBy: createdBy || (auth?.currentUser?.uid || ''),
+    createdAt: serverTimestamp(),
+  });
+  return id;
+}
+
+/** Delete an ED assessment round (Q4 mis-fill recovery). Round# renumbers (derived). */
+export async function deleteAssessmentRound(id) {
+  const sid = String(id ?? '').trim();
+  if (!sid) throw new Error('deleteAssessmentRound: id required');
+  await deleteDoc(assessmentDoc(sid));
+}
+
 /** Get single treatment from be_treatments */
 export async function getTreatment(treatmentId) {
   const snap = await getDoc(treatmentDoc(treatmentId));

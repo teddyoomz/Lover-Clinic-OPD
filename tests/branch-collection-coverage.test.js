@@ -92,6 +92,7 @@ const COLLECTION_MATRIX = {
   'be_document_prints':    { scope: 'global',  reason: 'Print audit ledger (Phase 14.9 — append-only)' },
   'be_document_drafts':    { scope: 'global',  reason: 'Print form drafts (Phase 14.10 — caller-scoped via staffUid)' },
   'be_course_changes':     { scope: 'global',  reason: 'Course exchange + refund audit ledger (T4 / Phase 14.4 G5 — append-only, customer-scoped via field)' },
+  'be_assessments':        { scope: 'global',  reason: 'ED Score follow-up assessment rounds (2026-06-15 — universal, customer-scoped via customerId field, deletable; round# derived not stored). Mirror be_course_changes universal pattern.' },
   // V33.9 — be_customer_link_tokens removed (QR-token flow stripped).
   // Phase 29.22 (2026-05-14) — be_recall_cases UNIVERSAL collection. Decouples
   // recall preset data from per-product/per-course denormalization (Phase 29

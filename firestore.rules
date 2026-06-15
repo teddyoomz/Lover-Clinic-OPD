@@ -381,6 +381,20 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ── Backend: ED Score follow-up assessment rounds (2026-06-15) ──
+      // UNIVERSAL collection (customer-scoped via customerId field, no branchId).
+      // Unlike be_course_changes (append-only), rounds ARE deletable by staff
+      // (Q4 mis-fill recovery; round# is derived not stored → delete renumbers).
+      // update allowed: the onPatientSubmit Cloud Function (admin SDK, bypasses
+      // rules) patches pending→completed; staff client may also edit. Anon write
+      // → 403 (Probe-Deploy-Probe Rule B endpoint #17).
+      match /be_assessments/{assessmentId} {
+        allow read:   if isClinicStaff();
+        allow create: if isClinicStaff();
+        allow update: if isClinicStaff();
+        allow delete: if isClinicStaff();
+      }
+
       // ── Backend: AP1 (2026-05-04) Appointment slot reservation ──
       // Atomic collision guard for createBackendAppointment. Each slot doc
       // ID encodes `${date}_${doctorId}_${startTime}_${endTime}` so the
