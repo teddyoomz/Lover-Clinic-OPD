@@ -47,6 +47,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const [isEditing, setIsEditing] = useState(false);
   const [sessionType, setSessionType] = useState('intake');
   const [sessionTypes, setSessionTypes] = useState([]); // ED Score — followup session.types[] (multi-type, 2026-06-15)
+  const [confirmInfo, setConfirmInfo] = useState(null); // ED follow-up v2 (R1) — read-only identity snapshot {name,age,phoneMasked}
   const [customTemplate, setCustomTemplate] = useState(null);
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [countryFilter, setCountryFilter] = useState('');
@@ -80,6 +81,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       const currentFormType = data.formType || 'intake';
       setSessionType(currentFormType);
       setSessionTypes(Array.isArray(data.types) ? data.types : []); // ED Score multi-type
+      setConfirmInfo(data.confirmInfo || null); // R1 — read-only identity snapshot (follow-up only)
       
       if (currentFormType === 'custom' && data.customTemplate) {
         setCustomTemplate(data.customTemplate);
@@ -347,7 +349,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       }
     }
 
-    if (!formData.province) {
+    // 🔴 BUG-FIX (2026-06-15): province is an intake/deposit ADDRESS field — the
+    // follow-up + custom forms never render it. Without this `isIntake` gate the
+    // follow-up assessment submit was blocked with "กรุณาเลือกจังหวัด" (province=''),
+    // so a customer could NEVER submit a follow-up. Gate to intake/deposit only.
+    if (isIntake && !formData.province) {
       scrollToField('province', language === 'en' ? "Please select a province." : "กรุณาเลือกจังหวัด");
       return;
     }
@@ -678,13 +684,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
             <p style={{ color: isLightHero ? '#1d4ed8' : 'rgba(147,197,253,0.9)', fontSize: '13px', marginTop: '8px', maxWidth: '80%', margin: '8px auto 0' }}>{customTemplate.description}</p>
           )}
 
-          {/* Session pill */}
-          {!isCustom && (
-            <div className="pf-session-pill">
-              <span className="pf-session-dot" />
-              <span className="pf-session-id">{sessionId}</span>
-            </div>
-          )}
+          {/* R2 (2026-06-15) — session pill removed: the FW-ED-… token is meaningless
+              to a human (it's the doc-id secret used internally, not user-facing). */}
         </div>
 
         {/* ── Form body ── */}
@@ -696,6 +697,38 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               {language === 'en' ? 'Patient Information' : 'ข้อมูลผู้ป่วย'}
             </div>
             <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+              {/* R1 (2026-06-15) — follow-up WITH a confirmInfo snapshot → read-only
+                  identity card (we already know the customer; no re-typing). Falls
+                  back to the editable fields for intake/custom AND for follow-up links
+                  sent BEFORE this shipped (confirmInfo absent). Name/phone are NEUTRAL
+                  (var(--tx-secondary)) — never red (Thai culture). */}
+              {isFollowUp && confirmInfo && (
+                <div data-testid="pf-confirm-card" style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--tx-muted)', marginBottom: '8px' }}>
+                    {language === 'en' ? 'Please confirm this is you before assessing' : 'โปรดตรวจสอบว่านี่คือข้อมูลของคุณก่อนทำแบบประเมิน'}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--bd)' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--tx-muted)' }}>{language === 'en' ? 'Name' : 'ชื่อ-สกุล'}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx-secondary)' }}>{confirmInfo.name || '-'}</span>
+                  </div>
+                  {confirmInfo.age && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--bd)' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--tx-muted)' }}>{language === 'en' ? 'Age' : 'อายุ'}</span>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx-secondary)' }}>{confirmInfo.age} {language === 'en' ? 'yrs' : 'ปี'}</span>
+                    </div>
+                  )}
+                  {confirmInfo.phoneMasked && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--tx-muted)' }}>{language === 'en' ? 'Phone' : 'เบอร์โทร'}</span>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--tx-secondary)', fontFamily: 'monospace' }}>{confirmInfo.phoneMasked}</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: '11px', color: 'var(--tx-muted)', marginTop: '8px' }}>
+                    {language === 'en' ? 'Not you? Please contact the clinic.' : 'ไม่ใช่ข้อมูลของคุณ? กรุณาติดต่อคลินิก'}
+                  </div>
+                </div>
+              )}
+              {!(isFollowUp && confirmInfo) && (
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="w-full sm:w-1/3">
                   <label className={labelClass}>{language === 'en' ? 'Title' : 'คำนำหน้า'} <span className="pf-req">*</span></label>
@@ -713,7 +746,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'First Name (English only)' : 'ชื่อจริง (ภาษาไทยเท่านั้น)'} className={inputClass}/>
                 </div>
               </div>
-              
+              )}
+
               <div className="flex flex-col sm:flex-row gap-4">
                 {(!isFollowUp && !isCustom) && (
                   <div className="w-full sm:w-1/2">
@@ -722,13 +756,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </div>
                 )}
                 
-                {(isFollowUp || isCustom) && (
+                {((isFollowUp && !confirmInfo) || isCustom) && (
                   <div className="w-full sm:w-1/2">
                     <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="pf-req">*</span></label>
                     <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ปี'} className={`${inputClass} bg-blue-950/20 border-blue-900/50 text-blue-400 font-bold text-center text-xl`} />
                   </div>
                 )}
-                {(isFollowUp || isCustom) && (
+                {((isFollowUp && !confirmInfo) || isCustom) && (
                   <div className="w-full sm:w-1/2">
                     <label className={labelClass}>{language === 'en' ? 'Blood Type' : 'กรุ๊ปเลือด'}</label>
                     <select name="bloodType" value={formData.bloodType || ''} onChange={handleInputChange} className={inputClass}>
@@ -741,7 +775,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </div>
                 )}
                 
-                {(isFollowUp || isCustom) && (
+                {((isFollowUp && !confirmInfo) || isCustom) && (
                    <div className="w-full sm:w-1/2">
                     <label className={labelClass}>{language === 'en' ? 'Date' : 'วันที่บันทึก'} <span className="pf-req">*</span></label>
                     {/* UC3: use DateField (dd/mm/yyyy พ.ศ.) not native mm/dd/yyyy. */}
