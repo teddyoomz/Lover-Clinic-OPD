@@ -121,8 +121,8 @@ export default function EDScoreBox({ customerId, intakePerf, assessments, isDark
                   </span>
                   {r.deletable ? (
                     <button type="button" onClick={() => handleDelete(r.id)} disabled={busyId === r.id}
-                      data-testid={`ed-delete-${r.id}`} title="ลบผลการประเมินครั้งนี้"
-                      className="shrink-0 text-[var(--tx-muted)] hover:text-red-500 disabled:opacity-40">
+                      data-testid={`ed-delete-${r.id}`} title="ลบผลการประเมินครั้งนี้" aria-label={`ลบผลการประเมิน ครั้งที่ ${r.round}`}
+                      className="shrink-0 p-1 -m-0.5 text-[var(--tx-muted)] hover:text-red-500 disabled:opacity-40">
                       <Trash2 size={13} />
                     </button>
                   ) : (

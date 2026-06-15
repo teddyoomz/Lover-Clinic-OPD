@@ -64,10 +64,10 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
   // Full-screen QR — normal modal overlay (real app, position:fixed OK here).
   if (fullscreen && result) {
     return (
-      <div className="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center p-4" data-testid="ed-qr-fullscreen">
+      <div className="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center p-4" data-testid="ed-qr-fullscreen" role="dialog" aria-modal="true" aria-label="QR แบบประเมินติดตาม">
         <div className="flex items-center justify-between w-full max-w-md mb-4">
           <span className="text-white font-bold">แบบประเมิน ครั้งที่ {roundNumber}</span>
-          <button type="button" onClick={closeFullscreen} className="text-gray-400 hover:text-white" data-testid="ed-qr-fullscreen-close"><X size={24} /></button>
+          <button type="button" onClick={closeFullscreen} aria-label="ปิด" className="text-gray-400 hover:text-white p-2 -m-2" data-testid="ed-qr-fullscreen-close"><X size={24} /></button>
         </div>
         <img src={result.qr} alt="QR แบบประเมิน" className="w-full max-w-md aspect-square rounded-xl bg-white" />
         <div className="text-gray-300 text-sm mt-4 text-center">ให้ลูกค้าสแกนด้วยกล้องมือถือ</div>
@@ -77,11 +77,11 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
   }
 
   return (
-    <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" data-testid="ed-followup-modal">
+    <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" data-testid="ed-followup-modal" role="dialog" aria-modal="true" aria-labelledby="ed-followup-title">
       <div className={`w-full max-w-md rounded-xl border overflow-hidden ${panel}`}>
         <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center justify-between">
-          <span className="font-bold">ส่งแบบประเมินติดตาม — <span className="text-orange-500">ครั้งที่ {roundNumber}</span></span>
-          <button type="button" onClick={closeModal} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]" data-testid="ed-modal-close"><X size={18} /></button>
+          <span id="ed-followup-title" className="font-bold">ส่งแบบประเมินติดตาม — <span className="text-orange-500">ครั้งที่ {roundNumber}</span></span>
+          <button type="button" onClick={closeModal} aria-label="ปิด" className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)] p-2 -m-2" data-testid="ed-modal-close"><X size={18} /></button>
         </div>
 
         <div className="p-4">
