@@ -30,40 +30,28 @@ Script: [pre-compute git+tests+SHAs] → [propagate to checkpoint/active/handoff
 - Checkpoint (script-generated) ≤ 100 lines — capped by template
 - SESSION_HANDOFF entry (script-generated) ≤ 12 lines — capped by template
 - wiki/log.md entry (script-generated) ≤ 4 lines — capped by template
-- **`SESSION_HANDOFF.md` total file size ≤ 200 KB (HARD CAP, 2026-05-17 EOD+2)**
+- **`SESSION_HANDOFF.md` ≤ 10 `### Session` blocks + ≤ 10 Current State bullets (COUNT CAP, 2026-06-16 — supersedes the 200 KB byte cap)**
 
-### SESSION_HANDOFF.md 200 KB hard cap (NEW 2026-05-17 EOD+2)
+### SESSION_HANDOFF.md 10-session count cap (2026-06-16 — supersedes 200 KB byte cap)
 
-**Rule**: `SESSION_HANDOFF.md` MUST stay under 200 KB at all times. If `/session-end`
-surgery would push it over the cap, the maintainer MUST first archive the oldest
-session blocks BEFORE running `session-apply.mjs`.
+**Rule**: `SESSION_HANDOFF.md` carries the **newest 10 `### Session ...` blocks + the
+newest 10 `## Current State` one-line bullets — ALWAYS**. Trim EVERY turn (count-based,
+not "when it gets big").
 
-**Warning threshold**: > 180 KB → archive on this turn (don't wait for next turn).
+**Archive procedure** (run on every `/session-end`, after inserting today's block + bullet):
+just run `node scripts/trim-session-handoff.mjs`. It is idempotent — keeps the newest 10
+`### Session` blocks + 10 Current State bullets, moves the overflow into
+`.agents/sessions/session-handoff-archive.md` (prepends a dated `## Archived` batch at the
+TOP), preserves the Rule Q banner + Current State + footer pointer, and no-ops when already
+≤10+10. (Manual fallback if the script is absent: count blocks + bullets, move the oldest
+overflow to the archive newest-first, keep exactly 10+10.)
 
-**Archive procedure** (run BEFORE `session-apply.mjs`):
-
-1. Inspect: `powershell "(Get-Item SESSION_HANDOFF.md).Length / 1024"` → if > 180,
-   trigger archive.
-2. Identify the oldest 5–10 `### Session ...` blocks (the tail of the file).
-3. Use PowerShell to split: extract those blocks to a temp string, append to
-   `.agents/sessions/session-handoff-archive.md` (prepend at TOP — newest
-   archived first; existing archived blocks shift down).
-4. Rewrite `SESSION_HANDOFF.md` without the moved blocks; preserve the 200 KB
-   banner + Rule Q V66 banner + Current State + remaining session blocks + the
-   "📂 Older session blocks → archive" pointer at the end.
-5. Verify: new size < 150 KB (leaves headroom for the new session block that
-   `session-apply.mjs` will insert).
-6. THEN run `session-apply.mjs` as normal.
-
-**Why**: the file grew to 317.5 KB (150+ session blocks since 2026-04-26) and broke
-the `Read` tool's 256 KB limit during session boot. User directive 2026-05-17 EOD+2:
-"ทำ SESSION_HANDOFF.md ให้ไม่มีวันเกิน 200 KB". The first archive split everything
-older than V70/V71 saga (2026-05-16 EOD) to `.agents/sessions/session-handoff-archive.md`.
-This rule prevents the file from growing back.
-
-**Script enforcement**: `.agents/scripts/session-apply.mjs` aborts with
-`SESSION_HANDOFF_TOO_LARGE` error when the file would exceed 200 KB post-surgery.
-On abort, the LLM follows the manual archive procedure above, then re-runs apply.
+**Why**: the byte cap (180/200 KB) let the file accumulate 23 session blocks + 45
+Current-State bullets (~40k tokens) while sitting *under* the trigger — wasting boot
+tokens every session. User directive 2026-06-16: *"ให้มันเหลือแค่ 10 session ที่ carry
+ข้อมูลไว้ในไฟล์นี้ตลอด ... จะได้ไม่ต้องมานั่งเปลือง token อ่านไฟล์ใหญ่ๆ"*. The count cap
+(10+10) keeps the file ~10-12k tokens forever. Detail per session lives in
+`.agents/sessions/*.md` checkpoints + `v-log-archive.md`, so trimming loses nothing.
 
 ## Steps
 
@@ -181,7 +169,7 @@ Take the script's stdout (the final block after `[session-apply] done.`) and emi
 - NEVER rewrite existing wiki concept/entity pages from session-end — append-only at section level (use `/llm-wiki ingest` for revisions).
 - NEVER commit if `git diff --cached` is empty after writes — script aborts in that case; LLM must not retry blindly.
 - NEVER duplicate decisions across capsule + wiki page — capsule decisions show in checkpoint + Resume Prompt; wiki page describes the PATTERN, not this session's decisions.
-- NEVER let `SESSION_HANDOFF.md` exceed 200 KB — archive oldest blocks first (see "Hard caps" § above). Breaking the 256 KB `Read` tool limit at session boot = session can't bootstrap.
+- NEVER let `SESSION_HANDOFF.md` exceed 10 `### Session` blocks / 10 Current State bullets — trim the overflow to the archive EVERY turn (count cap; see "Hard caps" § above). Keeps the file ~10-12k tokens so it never wastes boot tokens.
 
 ## Migration from old skill (2026-05-06)
 
