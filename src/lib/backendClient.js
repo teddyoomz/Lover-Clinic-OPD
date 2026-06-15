@@ -682,7 +682,52 @@ export async function updateCustomerFromForm(customerId, form, opts = {}) {
   // remove it from the patch before writing.
   if ('branchId' in patch) delete patch.branchId;
 
-  await updateDoc(customerDoc(customerId), patch);
+  // 2026-06-16 Part A — identity-claim reclaim on edit. If the national-id /
+  // passport changed, atomically FREE the old claim + CLAIM the new one (so two
+  // customers can never end up sharing a guarded identity, and editing an id to
+  // a colliding one throws DUPLICATE_IDENTITY). Unchanged id → plain updateDoc
+  // (still heal the _identityClaimKey denorm). All tx reads precede all writes.
+  const newKey = deriveClaimKey(finalForm.citizen_id, finalForm.passport_id);
+  let oldKey = null;
+  try {
+    const curSnap = await getDoc(customerDoc(customerId));
+    if (curSnap.exists()) {
+      const cur = curSnap.data();
+      oldKey = deriveClaimKey(cur.citizen_id, cur.passport_id) || cur._identityClaimKey || null;
+    }
+  } catch { /* best-effort — fall through to plain update */ }
+  patch._identityClaimKey = newKey;  // heal/refresh the denorm
+
+  if (oldKey !== newKey) {
+    const editNowIso = new Date().toISOString();
+    await runTransaction(db, async (tx) => {
+      const oldRef = oldKey ? identityClaimDoc(oldKey) : null;
+      const newRef = newKey ? identityClaimDoc(newKey) : null;
+      // READS first (Firestore: all reads before all writes).
+      const oldSnap = oldRef ? await tx.get(oldRef) : null;
+      const newSnap = newRef ? await tx.get(newRef) : null;
+      if (newRef) {
+        const decision = resolveClaimAction({
+          claimExists: newSnap.exists(),
+          owner: newSnap.exists() ? newSnap.data().customerId : null,
+          customerId,
+        });
+        if (decision.action === 'throw') {
+          throw new DuplicateIdentityError(decision.existingCustomerId, newKey);
+        }
+        if (decision.action === 'set') {
+          tx.set(newRef, { customerId, linkedCustomerIds: [], claimedAt: editNowIso, claimedBy: updatedBy || null });
+        }
+        // 'noop' → already ours; nothing to write.
+      }
+      if (oldRef && oldSnap.exists() && oldSnap.data().customerId === customerId) {
+        tx.delete(oldRef);
+      }
+      tx.update(customerDoc(customerId), patch);
+    });
+  } else {
+    await updateDoc(customerDoc(customerId), patch);
+  }
   return { id: customerId };
 }
 
@@ -992,12 +1037,58 @@ export const CUSTOMER_CASCADE_COLLECTIONS = Object.freeze([
   'be_customer_link_tokens',
 ]);
 
+/**
+ * 2026-06-16 Part A — free a customer's identity claim on delete (closes the
+ * orphaned-claim HIGH finding from workflow w89gycg12). The claim is the global
+ * uniqueness guard keyed by the type-prefixed identity key (NOT customerId), so
+ * it isn't in CUSTOMER_CASCADE_COLLECTIONS — handle it explicitly:
+ *   - canonical owner deleted + linked dups exist → promote linked[0] to owner
+ *   - canonical owner deleted + no dups          → delete the claim
+ *   - an override-dup deleted                    → remove it from linkedCustomerIds
+ * Best-effort (a stuck claim is recoverable via backfill), but the common
+ * "delete a duplicate customer" path stays clean.
+ */
+async function _freeCustomerIdentityClaim(customerId) {
+  let claimKey = null;
+  try {
+    const cs = await getDoc(customerDoc(customerId));
+    if (cs.exists()) {
+      const d = cs.data();
+      claimKey = d._identityClaimKey || deriveClaimKey(d.citizen_id, d.passport_id) || null;
+    }
+  } catch { return; }
+  if (!claimKey) return;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = identityClaimDoc(claimKey);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const linked = Array.isArray(data.linkedCustomerIds) ? data.linkedCustomerIds : [];
+      if (data.customerId === customerId) {
+        if (linked.length > 0) {
+          tx.update(ref, { customerId: linked[0], linkedCustomerIds: linked.slice(1) });
+        } else {
+          tx.delete(ref);
+        }
+      } else if (linked.includes(customerId)) {
+        tx.update(ref, { linkedCustomerIds: linked.filter(id => id !== customerId) });
+      }
+    });
+  } catch (e) {
+    console.error('[freeCustomerIdentityClaim]', e);
+  }
+}
+
 export async function deleteCustomerCascade(proClinicId, opts = {}) {
   const cid = String(proClinicId);
   if (!cid) throw new Error('proClinicId required');
   if (!opts.confirm) {
     throw new Error('deleteCustomerCascade requires opts.confirm=true (destructive)');
   }
+  // Free the identity claim FIRST (before the customer doc is gone — we need to
+  // read its _identityClaimKey).
+  await _freeCustomerIdentityClaim(cid);
   // Phase 24.0 (2026-05-06) — cascade extended to 11 collections (was 8).
   // Order MUST match CUSTOMER_CASCADE_COLLECTIONS string list above so the
   // shared constant test can lock parity between client + server.

@@ -38,6 +38,7 @@ import {
 } from '../../src/lib/customerBackupCore.js';
 import { validateCustomerBackupFile, computeStorageManifestHash } from '../../src/lib/customerBackupSchema.js';
 import { computeBodyHash, jsonReviverForNonFinite } from '../../src/lib/branchBackupSchema.js';
+import { deriveClaimKey } from '../../src/lib/customerIdentity.js'; // 2026-06-16 Part A — free the identity claim on delete
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -175,6 +176,38 @@ export function normalizeAuthorizedBy(authorizedBy) {
 /** Pure helper: classify origin from customer doc's isManualEntry flag. */
 export function classifyOrigin(customer) {
   return customer?.isManualEntry === true ? 'manual' : 'proclinic-cloned';
+}
+
+/**
+ * 2026-06-16 Part A — free the customer's identity claim on delete (admin SDK
+ * mirror of client _freeCustomerIdentityClaim). Promote a linked dup if any,
+ * else delete; if the deleted customer was an override-dup, remove it from the
+ * canonical's linkedCustomerIds. Best-effort.
+ */
+export async function freeIdentityClaimAdmin(db, data, customerId, customer) {
+  const claimKey = customer?._identityClaimKey
+    || deriveClaimKey(customer?.citizen_id, customer?.passport_id)
+    || null;
+  if (!claimKey) return { freed: false };
+  const ref = data.collection('be_customer_identity').doc(claimKey);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const d = snap.data();
+      const linked = Array.isArray(d.linkedCustomerIds) ? d.linkedCustomerIds : [];
+      if (d.customerId === customerId) {
+        if (linked.length > 0) tx.update(ref, { customerId: linked[0], linkedCustomerIds: linked.slice(1) });
+        else tx.delete(ref);
+      } else if (linked.includes(customerId)) {
+        tx.update(ref, { linkedCustomerIds: linked.filter(id => id !== customerId) });
+      }
+    });
+    return { freed: true, claimKey };
+  } catch (e) {
+    console.error('[freeIdentityClaimAdmin]', e);
+    return { freed: false, claimKey, error: e.message };
+  }
 }
 
 /**
@@ -576,6 +609,11 @@ export default async function handler(req, res) {
     batchOp.set(auditRef, auditPayload);
     inBatch += 1;
     await batchOp.commit();
+
+    // 2026-06-16 Part A — free the identity claim (customer doc now deleted; use
+    // the in-memory snapshot's _identityClaimKey). Best-effort; does not fail the
+    // delete on a claim hiccup.
+    await freeIdentityClaimAdmin(db, data, customerId, customer);
 
     // V74 — Storage object deletion (separate from Firestore batch). Best-effort
     // parallel deletion. If any object fails, log + continue (the Firestore-side

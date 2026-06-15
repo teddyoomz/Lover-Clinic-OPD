@@ -143,6 +143,18 @@ service cloud.firestore {
       match /be_customer_counter/{docId} {
         allow read, write: if isClinicStaff();
       }
+      // 2026-06-16 Part A — identity-claim (Rule T bulletproof dup-prevention).
+      // doc-id = type-prefixed key (CITIZEN:{13d} | PASSPORT:{UPPER}). Read by id
+      // ONLY (get) — NO list (PII: prevents enumeration/scraping of national ids).
+      // create/update/delete required: the claim is set at create, appended on
+      // override, re-pointed on edit, and freed on customer delete (so create-only
+      // immutable was REJECTED — it would orphan claims). Probe-Deploy-Probe: anon
+      // write → 403.
+      match /be_customer_identity/{claimKey} {
+        allow get: if isClinicStaff();
+        allow list: if false;
+        allow create, update, delete: if isClinicStaff();
+      }
 
       // ── Backend: Treatments ──
       match /be_treatments/{treatmentId} {
@@ -203,7 +215,11 @@ service cloud.firestore {
         allow read: if isClinicStaff();
         allow create: if isClinicStaff();
         allow update: if isClinicStaff();
-        allow delete: if false;
+        // 2026-06-16 — hard-delete narrowed from `if false` to staff. SAFE:
+        // recalls snapshot the case name as a STRING (no FK to caseId), so
+        // deleting a master case never breaks historical recalls. Soft-archive
+        // (isHidden) coexists. Probe-Deploy-Probe: staff delete → 200.
+        allow delete: if isClinicStaff();
       }
 
       // ── Backend: Sales + Counter ──
