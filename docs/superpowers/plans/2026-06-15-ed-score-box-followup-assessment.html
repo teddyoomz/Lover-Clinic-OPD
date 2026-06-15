@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score Box + Follow-up Assessment Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.5em; transform: scale(1.15); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; font-size: 0.9em; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .phase { background:#fff3e0; border-left:4px solid #f97316; padding:0.6em 1em; border-radius:0 6px 6px 0; margin:1.5em 0 0.5em; font-weight:bold; }
+  </style>
+</head>
+<body>
+
+<h1>ED Score Box + Follow-up Assessment Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute INLINE (superpowers:executing-plans) — NOT subagent-driven: the touched files (CustomerDetailView 2300L, TreatmentFormPage 5700L, backendClient huge) thrash subagent context (V81/V86 lesson). TDD per task; commit per task; Rule N targeted tests during, full suite at batch end; Rule Q L1/L2 before any "verified" claim.
+  <br>Spec: <code>docs/superpowers/specs/2026-06-15-ed-score-box-followup-assessment-design.html</code>
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> A "สมรรถภาพ · ED Score" box in CustomerDetailView (latest round as hero + history + delete + follow-up sender with link/QR), a durable <code>be_assessments</code> collection (round# derived, survives session cleanup), a clean ED latest-2 display in the TFP "หมายเหตุทั่วไป", and a TFP layout polish (DX/Tx/Plan 2× + balanced columns).</p>
+  <p><strong>Architecture:</strong> Round-1 = virtual record read live from <code>be_customers.patientData</code> (zero migration for current customers). Follow-ups = <code>be_assessments</code> docs (deletable; round# = live date-rank). Doctor sends a per-round link/QR → customer fills via existing PatientForm follow-up render → an extended <code>onPatientSubmit</code> Cloud Function materializes the answers into the round (survives opd_session cleanup). Heavy reuse of <code>calculateADAM/IIEF/MRS</code>, <code>generateQrDataUrl</code>, patient-link pattern, <code>be_course_changes</code> blueprint.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite + Firebase (Firestore client SDK + admin/CF) + Tailwind 3.4 + Vitest. firebase-admin in functions/.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Full visual mockups (5 states: box loaded / follow-up modal / full-screen QR / empty / TFP หมายเหตุทั่วไป with ED latest-2) live in the spec — open <code>docs/superpowers/specs/2026-06-15-ed-score-box-followup-assessment-design.html</code> in a browser. Data shape:</p>
+<div class="mockup">
+  <div class="mockup-label">be_assessments/{roundId} — 1 doc = 1 follow-up round (deletable; NO frozen round#)</div>
+<pre><code>{
+  customerId: "LC-26000082",         // scope (UNIVERSAL — no branchId)
+  types: ["adam","iief"],            // doctor-picked this round
+  status: "pending" | "completed",
+  scores: { adam:{total,positive}, iief:{score}, mrs:{score}, pe:{present} },  // snapshot @ materialize
+  rawAnswers: { adam_1..10, iief_1..5, mrs_1..11, symp_pe },                   // snapshot (survives session delete)
+  assessmentDate: "2026-06-14",      // Thai ISO (answered date)
+  createdAt, createdBy,              // forensic
+  linkedSessionId: "FW-ED-9a3f…",    // the opd_session the customer filled
+  expiresAt                          // link expiry (+1 day) — pending only
+}</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Round number = derived live (delete renumbers)</div>
+  <table>
+    <tr><th>records (sort by date)</th><th>labels</th><th>next (button)</th></tr>
+    <tr><td>[intake-virtual, fuA, fuB]</td><td>1, 2, 3</td><td>ครั้งที่ 4</td></tr>
+    <tr><td>delete fuB → [intake-virtual, fuA]</td><td>1, 2</td><td><strong>ครั้งที่ 3</strong></td></tr>
+    <tr><td>no intake perf → [fuA]</td><td>1</td><td>ครั้งที่ 2</td></tr>
+  </table>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Send → fill → materialize</div>
+<pre><code>doctor clicks "ส่ง (ครั้งที่ N)"
+  → EDFollowupModal: pick types[] → createAssessmentRound(pending) + opd_session(formType=followup_ed, types[], expiresAt+1d) + QR
+  → customer opens ?session=FW-ED-… (anon) → PatientForm renders sections for types[] → submit → opd_session.patientData (anon write OK)
+  → onPatientSubmit CF: if session has linkedAssessmentRoundId → copy answers → be_assessments round (pending→completed, snapshot scores)
+  → listenToAssessments → EDScoreBox + TFP หมายเหตุทั่วไป update realtime</code></pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Create/Modify</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/assessmentRoundsCore.js</code></td><td>Create</td><td>Pure: deriveRounds / nextRoundNumber / latestPerType / latest-N. No Firestore, no React.</td></tr>
+  <tr><td><code>src/lib/edScoreDisplay.js</code></td><td>Create</td><td>Pure: TYPE meta (label/max/color), scoreForRound(type,raw), stripScreeningSection(note).</td></tr>
+  <tr><td><code>src/components/backend/EDScoreBox.jsx</code></td><td>Create</td><td>Hero latest + 4 chips + expandable history + delete. Presentational.</td></tr>
+  <tr><td><code>src/components/backend/EDFollowupModal.jsx</code></td><td>Create</td><td>Round N + type picker + create round + link + QR (+ full-screen QR).</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>Modify</td><td>listenToAssessments / createAssessmentRound / deleteAssessmentRound / assessmentsCol.</td></tr>
+  <tr><td><code>src/lib/scopedDataLayer.js</code></td><td>Modify</td><td>Layer-2 universal re-export (__universal__) of the 3 assessment fns.</td></tr>
+  <tr><td><code>src/components/backend/CustomerDetailView.jsx</code></td><td>Modify</td><td>Mount EDScoreBox below 4-tab box; listenToAssessments; strip ED from note display.</td></tr>
+  <tr><td><code>src/components/TreatmentFormPage.jsx</code></td><td>Modify</td><td>หมายเหตุทั่วไป: strip ED + ED latest-2 block; DX/Tx/Plan rows; health-info enlarge; PatientForm types[] gate is separate file.</td></tr>
+  <tr><td><code>src/pages/PatientForm.jsx</code></td><td>Modify</td><td>Read session <code>types[]</code> → render multiple assessment sections; expiresAt gate.</td></tr>
+  <tr><td><code>src/lib/kioskPatientToCanonical.js</code></td><td>Modify</td><td>Stop baking screening into the note (includeScreening:false path).</td></tr>
+  <tr><td><code>src/utils.js</code></td><td>Modify</td><td>generateClinicalSummary gains <code>includeScreening=true</code> param (default keeps print/intake behavior).</td></tr>
+  <tr><td><code>functions/index.js</code></td><td>Modify</td><td>onPatientSubmit: materialize completed follow-up session → be_assessments round.</td></tr>
+  <tr><td><code>firestore.rules</code></td><td>Modify</td><td>be_assessments read/create/delete = isClinicStaff().</td></tr>
+  <tr><td><code>tests/*</code></td><td>Create</td><td>assessment-rounds-core / ed-score-display / box RTL / flow-simulate / source-grep / e2e (real prod).</td></tr>
+</table>
+
+<div class="phase">PHASE A — ED data layer + box + modal + materialize</div>
+
+<div class="task">
+  <h3>Task 1: assessmentRoundsCore.js (pure round-derivation) — TDD</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/assessmentRoundsCore.js</code>; Test <code>tests/assessment-rounds-core.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: failing test</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { deriveRounds, nextRoundNumber, latestPerType } from '../src/lib/assessmentRoundsCore.js';
+
+// intakePerf = pickKioskAssessmentFields(customer.patientData) (may be {} if none)
+const intake = { adam_1:true, adam_2:true, adam_3:true, adam_6:true, assessmentDate:'2026-05-20' };
+const fuA = { id:'A', status:'completed', assessmentDate:'2026-06-14', types:['adam','iief'],
+              rawAnswers:{ adam_1:true, adam_3:true, adam_6:true, iief_1:'4',iief_2:'4',iief_3:'4',iief_4:'4',iief_5:'3' } };
+
+describe('deriveRounds', () => {
+  it('intake present → round 1 is virtual intake, sorted by date asc with derived round#', () => {
+    const rounds = deriveRounds(intake, [fuA]);
+    expect(rounds.length).toBe(2);
+    expect(rounds[0].round).toBe(1); expect(rounds[0].source).toBe('intake'); expect(rounds[0].deletable).toBe(false);
+    expect(rounds[1].round).toBe(2); expect(rounds[1].source).toBe('followup'); expect(rounds[1].deletable).toBe(true);
+  });
+  it('no intake perf → first followup is round 1', () => {
+    expect(deriveRounds({}, [fuA])[0].round).toBe(1);
+  });
+  it('delete renumbers: removing fuA leaves only intake → next is 2', () => {
+    expect(nextRoundNumber(intake, [])).toBe(2);
+    expect(nextRoundNumber(intake, [fuA])).toBe(3);
+    expect(nextRoundNumber({}, [])).toBe(1);
+  });
+});
+describe('latestPerType', () => {
+  it('each type → most-recent round that measured it (with its round#)', () => {
+    const lpt = latestPerType(intake, [fuA]);
+    expect(lpt.iief.round).toBe(2);          // only fuA has iief
+    expect(lpt.mrs).toBeNull();              // never measured
+    expect(lpt.adam.round).toBe(2);          // fuA newer than intake
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <p><code>npm test -- --run tests/assessment-rounds-core.test.js</code> → FAIL (module not found)</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: implement</strong></label></div>
+<pre><code class="language-js">// src/lib/assessmentRoundsCore.js — PURE. No Firestore, no React.
+// Round number is DERIVED (date-rank), never a stored field → delete renumbers.
+export const ED_TYPES = ['adam', 'iief', 'mrs', 'pe'];
+
+const perfKeys = (raw) => Object.keys(raw || {}).filter(
+  k => /^(adam_|iief_|mrs_)/.test(k) || k === 'symp_pe');
+const hasPerf = (raw) => perfKeys(raw).some(k => {
+  const v = raw[k]; return v === true || (typeof v === 'string' && v !== '') || (typeof v === 'number' && Number.isFinite(v));
+});
+const typesInRaw = (raw) => {
+  const t = [];
+  if (Object.keys(raw||{}).some(k => k.startsWith('adam_') && raw[k])) t.push('adam');
+  if (Object.keys(raw||{}).some(k => k.startsWith('iief_') && raw[k] !== '' && raw[k] != null)) t.push('iief');
+  if (Object.keys(raw||{}).some(k => k.startsWith('mrs_') && raw[k] !== '' && raw[k] != null)) t.push('mrs');
+  if (raw && raw.symp_pe) t.push('pe');
+  return t;
+};
+
+// intakePerf: pickKioskAssessmentFields(customer.patientData) — {} if none.
+// beAssessments: array of be_assessments docs (only status==='completed' counts as a round).
+export function deriveRounds(intakePerf, beAssessments) {
+  const list = [];
+  if (intakePerf && hasPerf(intakePerf)) {
+    list.push({ id: '__intake__', source: 'intake', deletable: false,
+      assessmentDate: intakePerf.assessmentDate || '', raw: intakePerf,
+      types: (intakePerf.__types__ || typesInRaw(intakePerf)) });
+  }
+  for (const a of (beAssessments || [])) {
+    if (a.status && a.status !== 'completed') continue;     // pending links not yet filled → not a round
+    list.push({ id: a.id, source: 'followup', deletable: true,
+      assessmentDate: a.assessmentDate || '', raw: a.rawAnswers || {},
+      types: a.types && a.types.length ? a.types : typesInRaw(a.rawAnswers || {}),
+      scores: a.scores, createdBy: a.createdBy });
+  }
+  // sort by date asc; blank dates last-stable; then assign derived round#
+  list.sort((x, y) => String(x.assessmentDate).localeCompare(String(y.assessmentDate)));
+  return list.map((r, i) => ({ ...r, round: i + 1 }));
+}
+
+export function nextRoundNumber(intakePerf, beAssessments) {
+  return deriveRounds(intakePerf, beAssessments).length + 1;
+}
+
+// each type → the most-recent round (by date) that measured it, or null.
+export function latestPerType(intakePerf, beAssessments) {
+  const rounds = deriveRounds(intakePerf, beAssessments);
+  const out = { adam: null, iief: null, mrs: null, pe: null };
+  for (const r of rounds) for (const t of r.types) out[t] = r; // later (newer) overwrites
+  return out;
+}
+
+// latest N rounds (newest first) for compact displays (TFP latest-2).
+export function latestRounds(intakePerf, beAssessments, n = 2) {
+  const rounds = deriveRounds(intakePerf, beAssessments);
+  return rounds.slice(-n).reverse();
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: run → PASS</strong></label></div>
+  <p><code>npm test -- --run tests/assessment-rounds-core.test.js</code> → PASS (add adversarial cases: empty, null, blank-date, snake-vs-camel, 50-round stress).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/assessmentRoundsCore.js tests/assessment-rounds-core.test.js
+git commit -m "feat(ed-score): assessmentRoundsCore — derived round# + latestPerType (pure)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: edScoreDisplay.js (type meta + score + stripScreeningSection) — TDD</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/edScoreDisplay.js</code>; Test <code>tests/ed-score-display.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: failing test</strong></label></div>
+<pre><code class="language-js">import { ED_TYPE_META, scoreForType, stripScreeningSection } from '../src/lib/edScoreDisplay.js';
+it('scoreForType reuses real calculators', () => {
+  const r = scoreForType('adam', { adam_1:true,adam_2:true,adam_3:true,adam_6:true });
+  expect(r.value).toBe(4); expect(r.max).toBe(10); expect(r.positive).toBe(true);
+});
+it('ED_TYPE_META has label+max for all 4', () => {
+  expect(ED_TYPE_META.adam.max).toBe(10); expect(ED_TYPE_META.iief.max).toBe(25);
+  expect(ED_TYPE_META.mrs.max).toBe(44); expect(ED_TYPE_META.pe.boolean).toBe(true);
+});
+it('stripScreeningSection removes the ED block but keeps the rest', () => {
+  const note = 'CC: ปวด\n────\nผลการคัดกรองอาการ\n  ภาวะพร่องฮอร์โมนเพศชาย (ADAM Scale) : 4/10 — เข้าข่าย\n  สมรรถภาพทางเพศ (IIEF-5 Scale)       : 14/25 — ปานกลาง\n────\nแผน: ติดตาม';
+  const out = stripScreeningSection(note);
+  expect(out).toContain('CC: ปวด'); expect(out).toContain('แผน: ติดตาม');
+  expect(out).not.toContain('ADAM Scale'); expect(out).not.toContain('ผลการคัดกรอง');
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: implement</strong></label></div>
+<pre><code class="language-js">// src/lib/edScoreDisplay.js
+import { calculateADAM, calculateIIEFScore, calculateMRS, getIIEFInterpretation } from '../utils.js';
+
+export const ED_TYPE_META = {
+  adam: { key:'adam', label:'ADAM', full:'พร่องฮอร์โมนเพศชาย', max:10, accent:'#f97316' },
+  iief: { key:'iief', label:'IIEF-5', full:'สมรรถภาพทางเพศ', max:25, accent:'#eab308' },
+  mrs:  { key:'mrs',  label:'MRS', full:'อาการวัยทอง', max:44, accent:'#ec4899' },
+  pe:   { key:'pe',   label:'PE', full:'หลั่งเร็ว', boolean:true, accent:'#94a3b8' },
+};
+export function scoreForType(type, raw) {
+  if (type === 'adam') { const r = calculateADAM(raw); return { value:r.total, max:10, positive:r.positive, text:r.text }; }
+  if (type === 'iief') { const s = calculateIIEFScore(raw); return { value:s, max:25, text:getIIEFInterpretation(s).text }; }
+  if (type === 'mrs')  { const r = calculateMRS(raw); return { value:r.score, max:44, text:r.text }; }
+  if (type === 'pe')   { return { boolean:true, present: !!raw.symp_pe, text: raw.symp_pe ? 'มีอาการ' : 'ไม่มีอาการ' }; }
+  return null;
+}
+// Removes the auto-generated "ผลการคัดกรองอาการ / Clinical Screening Results" block
+// (the generateClinicalSummary section, utils.js:407-422 TH / :469-483 EN) from a stored note.
+// Boundary = the screening header line → up to the next separator line / section / EOF.
+const SCREEN_HEADERS = ['ผลการคัดกรองอาการ', 'Clinical Screening Results'];
+const SEP_RE = /^[\s─=_-]{4,}\s*$/;
+export function stripScreeningSection(note) {
+  if (!note || typeof note !== 'string') return note || '';
+  const lines = note.split(/\r?\n/);
+  const out = []; let skipping = false;
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (!skipping && SCREEN_HEADERS.some(h => ln.trim().startsWith(h))) {
+      skipping = true;
+      // also drop a separator immediately preceding the header we already pushed
+      if (out.length && SEP_RE.test(out[out.length-1])) out.pop();
+      continue;
+    }
+    if (skipping) {
+      // stop skipping at the next separator OR a non-indented new section header
+      if (SEP_RE.test(ln)) { skipping = false; continue; } // consume the closing sep
+      if (ln.trim() === '' && i+1 < lines.length && !/^\s/.test(lines[i+1] || '')) { skipping = false; out.push(ln); }
+      continue;
+    }
+    out.push(ln);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: run → PASS</strong></label> (add EN-variant + no-screening-block + multi-block adversarial cases)</div>
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(ed-score): edScoreDisplay — type meta, scoreForType, stripScreeningSection"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 3: be_assessments CRUD + listeners (Layer 1 + Layer 2)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code>, <code>src/lib/scopedDataLayer.js</code>; Test <code>tests/be-assessments-crud.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: add Layer-1 (backendClient.js)</strong> — mirror be_course_changes (universal, customerId-scoped, customer-attached)</label></div>
+<pre><code class="language-js">// near courseChangesCol():
+const assessmentsCol = () => collection(db, ...basePathParts, 'be_assessments');
+export const assessmentDoc = (id) => doc(db, ...basePathParts, 'be_assessments', id);
+
+// UNIVERSAL — no branchId (customer-attached, like be_course_changes). Mark for Layer-2.
+export function listenToAssessments(customerId, onChange, onError) {
+  if (!customerId) { onChange?.([]); return () => {}; }
+  const q = query(assessmentsCol(), where('customerId', '==', String(customerId)));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));   // V38 spread order: docId wins
+    items.sort((a,b) => String(a.assessmentDate||'').localeCompare(String(b.assessmentDate||'')));
+    onChange?.(items);
+  }, (e) => onError?.(e));
+}
+listenToAssessments.__universal__ = true;
+
+export async function createAssessmentRound({ customerId, types, linkedSessionId, expiresAt, createdBy }) {
+  if (!customerId) throw new Error('createAssessmentRound: customerId required');
+  const id = `ASMT-${Date.now()}-${cryptoRandomHex(8)}`;   // reuse existing crypto id helper
+  await setDoc(assessmentDoc(id), {
+    customerId: String(customerId), types: types || [], status: 'pending',
+    scores: {}, rawAnswers: {}, assessmentDate: '',
+    linkedSessionId: linkedSessionId || '', expiresAt: expiresAt || null,
+    createdBy: createdBy || '', createdAt: serverTimestamp(),
+  });
+  return id;
+}
+export async function deleteAssessmentRound(id) {
+  if (!id) throw new Error('deleteAssessmentRound: id required');
+  await deleteDoc(assessmentDoc(id));
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Layer-2 (scopedDataLayer.js)</strong> — universal re-export (no branch injection)</label></div>
+<pre><code class="language-js">// in the universal re-export block (with listenToCustomer etc.):
+export const listenToAssessments = (...a) => raw.listenToAssessments(...a);
+listenToAssessments.__universal__ = true;
+export const createAssessmentRound = (...a) => raw.createAssessmentRound(...a);
+export const deleteAssessmentRound = (...a) => raw.deleteAssessmentRound(...a);</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: source-grep test</strong></label> — assert the 3 exports exist in both layers + <code>__universal__</code> marker + customerId where-clause + V38 spread order + BSA COLLECTION_MATRIX classifies <code>be_assessments</code> universal.</div>
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: run targeted</strong></label> <code>npm test -- --run tests/be-assessments-crud.test.js tests/audit-branch-scope.test.js</code> → PASS</div>
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(ed-score): be_assessments CRUD + universal listener (L1+L2)"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 4: firestore.rules — be_assessments + Probe</h3>
+  <p><strong>Files:</strong> Modify <code>firestore.rules</code>; Test <code>tests/be-assessments-rules.test.js</code> (source-grep)</p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: add rule</strong></label> (after be_course_changes; NOTE: delete ALLOWED, unlike append-only be_course_changes)</div>
+<pre><code>match /be_assessments/{assessmentId} {
+  allow read: if isClinicStaff();
+  allow create: if isClinicStaff();
+  allow update: if isClinicStaff();   // CF/admin patches pending→completed; staff edits
+  allow delete: if isClinicStaff();   // Q4 — rounds are deletable (mis-fill recovery)
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: source-grep test</strong></label> — be_assessments block present; delete = isClinicStaff (not <code>if false</code>); add anon-write probe #17 to the Rule B probe list in <code>.claude/rules/01-iron-clad.md</code>.</div>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: NO deploy</strong></label> — rules deploy is gated on explicit "deploy" + Probe-Deploy-Probe (Rule B). Plan documents it; do NOT deploy now.</div>
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: commit</strong></label> <code>git commit -m "feat(ed-score): firestore.rules be_assessments (deletable) + probe #17"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 5: EDScoreBox.jsx — hero latest + chips + history + delete</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/EDScoreBox.jsx</code>; Test <code>tests/ed-score-box-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: failing RTL test</strong></label></div>
+<pre><code class="language-jsx">// mounts EDScoreBox with intakePerf + 1 followup round, mocks scopedDataLayer.deleteAssessmentRound
+it('renders latest round as hero + 4 type chips + history + delete button', () => {
+  render(&lt;EDScoreBox customerId="LC-1" intakePerf={intake} assessments={[fuA]} isDark onSend={()=>{}} /&gt;);
+  expect(screen.getByText(/ครั้งล่าสุด/)).toBeInTheDocument();
+  expect(screen.getByText('ADAM')).toBeInTheDocument();
+  expect(screen.getByText(/ครั้งที่ 2/)).toBeInTheDocument();           // hero round = derived 2
+  expect(screen.getByTestId('ed-send-btn')).toHaveTextContent('ครั้งที่ 3'); // next derived
+  expect(screen.getByTestId('ed-delete-A')).toBeInTheDocument();        // followup deletable
+  expect(screen.queryByTestId('ed-delete-__intake__')).toBeNull();      // intake not deletable
+});
+it('empty state when no rounds', () => {
+  render(&lt;EDScoreBox customerId="LC-1" intakePerf={{}} assessments={[]} isDark onSend={()=>{}} /&gt;);
+  expect(screen.getByText(/ยังไม่มีการประเมิน/)).toBeInTheDocument();
+  expect(screen.getByTestId('ed-send-btn')).toHaveTextContent('ครั้งที่ 1');
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: implement</strong></label> — card <code>bg-[var(--bg-surface)] border-[var(--bd)] rounded-xl</code> (match CDV:1187). Header icon HeartPulse accent <code>#f97316</code>. Use <code>deriveRounds/latestPerType/latestRounds/nextRoundNumber</code> (Task 1) + <code>ED_TYPE_META/scoreForType</code> (Task 2). Hero = newest round; 4 chips (each = latestPerType[type], tag "(ครั้งที่ X)" if older than hero); collapsible history rows with delete (confirm) on followups only; <code>ed-send-btn</code> → <code>onSend(nextRoundNumber)</code>. NO name/HN in red (Thai). Light theme via CSS vars (chips use the spec's rgba accents which read in both themes; verify in audit).</div>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: run → PASS</strong></label></div>
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(ed-score): EDScoreBox component"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 6: EDFollowupModal.jsx — round N + type picker + link + QR (+ full-screen)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/EDFollowupModal.jsx</code>; Test <code>tests/ed-followup-modal-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: failing RTL test</strong></label> — shows "ครั้งที่ N"; type checkboxes default-checked = intake types; "สร้างลิงก์" calls createAssessmentRound + builds opd_session + sets qrDataUrl; "QR เต็มจอ" toggles full-screen overlay (normal-flow faux-viewport, not position:fixed).</div>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: implement</strong></label> — props <code>{customerId, roundNumber, intakeTypes, onClose, onCreated}</code>. type picker (ADAM/IIEF/MRS/PE, default-check intakeTypes). On confirm: create opd_session doc-id <code>FW-ED-{genShortId(32)}</code> (reuse the existing follow-up session creator in AdminDashboard:3360 — extract a shared helper <code>createFollowupAssessmentSession({customerId, types, expiresAt})</code> to <code>src/lib/backendClient.js</code> to avoid Rule-C1 dup) writing <code>{formType:'followup_ed', types, isPermanent:false, expiresAt:+1d, linkedCustomerId}</code>; call <code>createAssessmentRound({customerId, types, linkedSessionId, expiresAt, createdBy})</code>; build link <code>?session={sessionId}</code>; <code>generateQrDataUrl(link, {width:600})</code> (reuse documentPrintEngine). Full-screen QR = a normal-flow overlay div (per visualize: no position:fixed). Copy-link button.</div>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: run → PASS</strong></label></div>
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(ed-score): EDFollowupModal — round N + type picker + link/QR + fullscreen"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 7: wire EDScoreBox + modal into CustomerDetailView</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/CustomerDetailView.jsx</code>; Test <code>tests/cdv-ed-box-wire.test.jsx</code> (source-grep)</p>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1</strong></label> — add state <code>assessments</code> + <code>edModalRound</code>; <code>useEffect</code> (dep <code>[customerId]</code>) subscribing <code>listenToAssessments(customerId, setAssessments)</code> (mirror the V36-quinquies listener pattern at :245); compute <code>intakePerf = pickKioskAssessmentFields(liveCustomer.patientData)</code>.</div>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2</strong></label> — render <code>&lt;EDScoreBox .../&gt;</code> as 2nd child of the right-column <code>&lt;div className="space-y-3 min-w-0"&gt;</code> (after the 4-tab box closes, ~:1400) with <code>onSend={(n)=>setEdModalRound(n)}</code>; render <code>&lt;EDFollowupModal&gt;</code> when <code>edModalRound!=null</code>.</div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3</strong></label> — CDV note display: wrap the customerNote render with <code>stripScreeningSection(...)</code> (strip ED from the CDV หมายเหตุ — box owns it).</div>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: run targeted</strong></label> <code>npm test -- --run tests/cdv-ed-box-wire.test.jsx</code> + build clean</div>
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(ed-score): mount EDScoreBox + modal in CustomerDetailView; strip ED from CDV note"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 8: materialize — extend onPatientSubmit Cloud Function</h3>
+  <p><strong>Files:</strong> Modify <code>functions/index.js</code>; Test <code>tests/materialize-assessment.test.js</code> (pure helper extracted) + script <code>scripts/e2e-ed-assessment-materialize.mjs</code></p>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1</strong></label> — extract pure <code>buildAssessmentRoundPatch(sessionData)</code> (reads patientData perf → scores via the same ADAM/IIEF/MRS math, sets status:'completed', assessmentDate, rawAnswers snapshot). Unit-test it.</div>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2</strong></label> — in onPatientSubmit (fires on opd_sessions write): if <code>session.formType?.startsWith('followup')</code> AND <code>session.status==='completed'</code> AND <code>session.linkedAssessmentRoundId</code> → admin-SDK <code>be_assessments/{roundId}.update(buildAssessmentRoundPatch(session))</code>. (Store <code>linkedAssessmentRoundId</code> on the session at create time — Task 6.) Canonical path <code>artifacts/{APP_ID}/public/data/be_assessments</code> (Rule M / AV109 — never bare collection).</div>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3</strong></label> — NO deploy (functions deploy gated on explicit "deploy"). Plan documents <code>firebase deploy --only functions</code> as the ship step.</div>
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: run</strong></label> targeted unit + <code>node --check functions/index.js</code></div>
+  <div class="step"><input type="checkbox" id="t8s5"> <label for="t8s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(ed-score): materialize follow-up assessment into be_assessments via onPatientSubmit CF"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 9: PatientForm multi-type gate (types[]) + expiresAt</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/PatientForm.jsx</code>; Test <code>tests/patientform-types-gate.test.jsx</code> (source-grep + logic)</p>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1</strong></label> — read <code>session.types</code> (array). Extend the gating (lines 594-597): <code>showAdam = ... || types.includes('adam')</code>; <code>isPerfMode/showIief = ... || types.includes('iief')</code>; <code>showMrs = ... || types.includes('mrs')</code>; PE = <code>... || types.includes('pe')</code>. So one session renders multiple sections.</div>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2</strong></label> — expiry gate: if <code>session.expiresAt</code> and now &gt; expiresAt → render "ลิงก์หมดอายุ" (mirror the existing isExpired/isArchived gate). Submit still writes patientData (CF materializes).</div>
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: run targeted</strong></label> + build clean</div>
+  <div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><strong>Step 4: commit</strong></label> <code>git commit -m "feat(ed-score): PatientForm renders multiple assessment sections per session.types[] + expiresAt gate"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 10: Phase-A Rule I flow-simulate + Rule Q L2 e2e (real prod)</h3>
+  <p><strong>Files:</strong> Create <code>tests/ed-assessment-flow-simulate.test.js</code> + <code>scripts/e2e-ed-assessment.mjs</code></p>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1</strong></label> — flow-simulate: master patientData → deriveRounds → createRound(pending) → materialize patch → deriveRounds again (round completed) → delete → renumber. Chain the REAL pure helpers + buildAssessmentRoundPatch.</div>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Rule Q L2</strong></label> — <code>scripts/e2e-ed-assessment.mjs</code> (admin SDK, TEST-prefixed): write a be_assessments round on real prod → read back → verify scores snapshot → simulate materialize → verify survives a (simulated) session delete → delete round → cleanup zero orphans + audit doc.</div>
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: full suite</strong></label> <code>npm test -- --run</code> + <code>npm run build</code> (Rule N batch end). Fix any V21 lock-ins.</div>
+  <div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4: commit</strong></label> <code>git commit -m "test(ed-score): Phase-A flow-simulate + L2 e2e (real prod)"</code></div>
+</div>
+
+<div class="phase">PHASE B — TFP integration + layout + audit</div>
+
+<div class="task">
+  <h3>Task 11: utils.generateClinicalSummary gains includeScreening; stop baking into note</h3>
+  <p><strong>Files:</strong> Modify <code>src/utils.js</code>, <code>src/lib/kioskPatientToCanonical.js</code>; Test <code>tests/note-no-screening.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1</strong></label> — <code>generateClinicalSummary(d, formType, customTemplate, summaryLanguage, includeScreening=true)</code>; wrap the "ผลการคัดกรองอาการ/Clinical Screening Results" push blocks in <code>if (includeScreening)</code>. Default true → print + intake-view UNCHANGED.</div>
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2</strong></label> — <code>kioskPatientToCanonical.js:95</code>: call with <code>includeScreening:false</code> for the note → new customers' note has no ED block. (ED carried separately in patientData perf fields + be_assessments.)</div>
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: test</strong></label> — note built via kioskPatientToCanonical has no ADAM/IIEF/MRS lines; generateClinicalSummary(...,true) (print path) still has them. Source-grep both.</div>
+  <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: commit</strong></label> <code>git commit -m "feat(ed-score): stop baking ED screening into the customer note (print/intake unchanged)"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 12: TFP หมายเหตุทั่วไป — strip ED + clean ED latest-2 block</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/TreatmentFormPage.jsx</code> (:3705-3722); Test <code>tests/tfp-ed-note-block.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Step 1</strong></label> — TFP already needs the customer's assessments. Add a listener (mirror CDV Task 7) OR pass via prop. Compute <code>intakePerf</code> + <code>latestRounds(intakePerf, assessments, 2)</code>.</div>
+  <div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Step 2</strong></label> — render the amber "หมายเหตุทั่วไป" card (:3705) with <code>stripScreeningSection(customerNote)</code> for the <code>&lt;pre&gt;</code>, then below it a compact ED latest-2 block (date + per-type scores) using <code>scoreForType</code>. Card stays only if <code>customerNote</code> OR ED rounds exist. (Spec State 4 mockup is the target.)</div>
+  <div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Step 3: run targeted</strong></label> + build clean</div>
+  <div class="step"><input type="checkbox" id="t12s4"> <label for="t12s4"><strong>Step 4: commit</strong></label> <code>git commit -m "feat(ed-score): TFP หมายเหตุทั่วไป strips ED + shows clean ED latest-2"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 13: TFP layout — DX/Tx/Plan 2× + health-info enlarge + button row-align</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/TreatmentFormPage.jsx</code> (:3738-3749, :3802-3804); Test <code>tests/tfp-layout-fields.test.jsx</code> (source-grep) + preview (Rule Q-vis)</p>
+  <div class="step"><input type="checkbox" id="t13s1"> <label for="t13s1"><strong>Step 1</strong></label> — RIGHT field array (:3802-3804): <code>['diagnosis','DX — วินิจฉัยโรค (Diagnosis)',6]</code>, <code>['treatmentInfo','Tx — รักษา / Dr. Note',6]</code>, <code>['treatmentPlan','Plan — แผนการรักษา',4]</code> (was 3/3/2).</div>
+  <div class="step"><input type="checkbox" id="t13s2"> <label for="t13s2"><strong>Step 2</strong></label> — LEFT health-info (:3738-3747): the 3 textareas <code>rows={2}</code> → <code>rows={4}</code> (fill the void created by the taller right column). Keep the existing <code>mt-auto</code>/grid-stretch button mechanism (:3770).</div>
+  <div class="step"><input type="checkbox" id="t13s3"> <label for="t13s3"><strong>Step 3: source-grep test</strong></label> — assert rows 6/6/4 + health rows 4; assert the button-align mechanism intact (left <code>mt-auto</code>, right <code>flex-1</code>).</div>
+  <div class="step"><input type="checkbox" id="t13s4"> <label for="t13s4"><strong>Step 4: Rule Q-vis preview</strong></label> — run dev server, open TFP edit for a real customer, screenshot BOTH themes; CONFIRM the two save buttons share a row with no awkward void. Tune health-info rows / add a <code>flex-1</code> spacer if needed (pixel outcome — eyes, not source).</div>
+  <div class="step"><input type="checkbox" id="t13s5"> <label for="t13s5"><strong>Step 5: commit</strong></label> <code>git commit -m "feat(tfp): DX/Tx/Plan 2x taller + health-info enlarge + buttons row-aligned"</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 14: audit design skill + Rule Q L1 + full verification</h3>
+  <div class="step"><input type="checkbox" id="t14s1"> <label for="t14s1"><strong>Step 1: audit</strong></label> — run the <code>audit</code> design skill on the TFP + CDV ED box (a11y / theming both themes / responsive / alignment / contrast). Fix all P0/P1. Thai-culture: no red on name/HN.</div>
+  <div class="step"><input type="checkbox" id="t14s2"> <label for="t14s2"><strong>Step 2: Rule Q L1</strong></label> — real browser (Chrome MCP / preview): EDScoreBox renders for a real current customer (e.g. LC-26000082 → ครั้งที่ 1 ADAM 4/10); send modal → round N + QR; full-screen QR scannable; TFP หมายเหตุทั่วไป shows clean ED latest-2; both themes; buttons aligned. Screenshots.</div>
+  <div class="step"><input type="checkbox" id="t14s3"> <label for="t14s3"><strong>Step 3: full suite + build</strong></label> <code>npm test -- --run</code> + <code>npm run build</code> GREEN. Fix V21 lock-ins.</div>
+  <div class="step"><input type="checkbox" id="t14s4"> <label for="t14s4"><strong>Step 4: commit</strong></label> <code>git commit -m "test(ed-score): audit-design pass + Rule Q L1 verification"</code></div>
+</div>
+
+<h2>Ship (gated on explicit "deploy")</h2>
+<ul>
+  <li><code>firebase deploy --only firestore:rules</code> with Probe-Deploy-Probe (Rule B) — be_assessments anon-write → 403 (probe #17).</li>
+  <li><code>firebase deploy --only functions</code> — the materialize CF.</li>
+  <li><code>vercel --prod</code> — frontend.</li>
+  <li>Rule Q L1 user hands-on: doctor sends a real follow-up link → customer fills on a phone (scan the full-screen QR) → box updates with the new round.</li>
+</ul>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> box+hero+history+delete (T5), derived round# (T1), zero-migration intake-virtual (T1+T7), be_assessments deletable (T3+T4), modal+types+QR+fullscreen (T6), customer fill multi-type+expiry (T9), materialize durable (T8), CDV note strip (T7), TFP clean ED latest-2 (T11+T12), TFP layout 2x+align (T13), audit+L1+L2 (T10+T14). All spec sections mapped.</li>
+  <li><strong>Type consistency:</strong> <code>deriveRounds/nextRoundNumber/latestPerType/latestRounds</code> (T1) used identically in T5/T7/T12; <code>scoreForType/ED_TYPE_META/stripScreeningSection</code> (T2) in T5/T7/T12; <code>listenToAssessments/createAssessmentRound/deleteAssessmentRound</code> (T3) in T5/T6/T7.</li>
+  <li><strong>No placeholders:</strong> core modules (T1,T2,T3) have full code; edits cite exact lines; UI tasks reference the spec mockups as the visual target.</li>
+</ul>
+
+</body>
+</html>

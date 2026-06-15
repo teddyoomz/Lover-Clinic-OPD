@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score Box + Follow-up Assessment Link/QR — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.8em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    /* dark-theme app replica (primary theme the user sees) */
+    .app { background:#0a0a0a; border:1px solid #222; border-radius:12px; overflow:hidden; color:#e5e7eb; font-size:13px; }
+    .app-hd { padding:12px 14px; border-bottom:1px solid #222; display:flex; align-items:center; gap:8px; }
+    .chip { border-radius:8px; padding:8px 10px; }
+    .flowbox { display:inline-block; border:1px solid #cbd5e1; background:#fff; border-radius:6px; padding:8px 12px; margin:4px; font-size:0.85em; }
+    .flowarrow { color: var(--accent); font-weight:bold; margin:0 2px; }
+    .new { color:#fbbf24; }
+  </style>
+</head>
+<body>
+
+<h1>ED Score Box + Follow-up Assessment (Link/QR) — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-15 · <strong>Status:</strong> Pending user review of spec ·
+  <strong>Feature:</strong> A new "สมรรถภาพ · ED Score" box in CustomerDetailView (right column, below the 4-tab course box) that shows the customer's ED assessment scores (ADAM / IIEF-5 / MRS / PE) across rounds, with a button that opens a round-aware modal to generate a link + QR sending the customer a follow-up assessment to fill remotely. Implementation plan: TBD (writing-plans next).
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>ED/hormone patients are assessed at intake (PatientForm: ADAM/IIEF-5/MRS/PE) and the doctor wants to re-assess at follow-up visits to track progress over time. Today there is <strong>no longitudinal view</strong> and <strong>no round tracking</strong>: assessment answers live as a <em>singleton</em> on <code>be_customers.patientData</code>, and any follow-up submit <strong>overwrites</strong> the prior answers — round-1 is lost (this is the same class as the ภูดิท LC-26000151 incident: the source opd_session was deleted and history was unrecoverable).</p>
+<p>This feature adds (1) a display box showing every assessment round with the latest as the hero, and (2) a round-aware follow-up sender (link + QR) so the customer fills the next assessment remotely — with results stored durably so history survives session cleanup.</p>
+
+<h3>Must work immediately with CURRENT data (zero migration)</h3>
+<p>Every customer who already did the ED assessment at intake (perf fields present on <code>be_customers.patientData</code> — including the 28 AV194-backfilled + LC-26000082 + any future intake) MUST show as <strong>"ครั้งที่ 1"</strong> in the box <strong>instantly, with no backfill/migration</strong>. Achieved by deriving round-1 as a <em>virtual</em> record read live from <code>patientData</code> (no copy into the new collection required).</p>
+
+<h2>Mockup Design</h2>
+<p>App primary theme (dark fire/ember) shown; light theme maps automatically via the same CSS variables (<code>--bg-surface</code> / <code>--bd</code> / <code>--tx-*</code>) the existing cards already use. Card styling copied verbatim from the real 4-tab course box (<code>CustomerDetailView.jsx:1187</code>).</p>
+
+<div class="mockup">
+  <div class="mockup-label">State 1 · loaded with history (right column, below 4-tab course box)</div>
+  <div style="max-width:340px;">
+    <div class="app" style="margin-bottom:12px;">
+      <div style="display:flex;border-bottom:1px solid #222;font-size:12px;">
+        <div style="flex:1;text-align:center;padding:10px 2px;color:#2dd4bf;border-bottom:2px solid #2dd4bf;">คอร์สของฉัน</div>
+        <div style="flex:1;text-align:center;padding:10px 2px;color:#6b7280;">หมดอายุ</div>
+        <div style="flex:1;text-align:center;padding:10px 2px;color:#6b7280;">ประวัติซื้อ</div>
+        <div style="flex:1;text-align:center;padding:10px 2px;color:#6b7280;">การใช้</div>
+      </div>
+      <div style="padding:12px;color:#6b7280;font-size:12px;text-align:center;">… กล่องคอร์ส 4 แท็บ (เดิม — ไม่แตะ) …</div>
+    </div>
+
+    <div class="app" style="border-color:#2a2320;position:relative;">
+      <div style="position:absolute;top:9px;right:10px;font-size:10px;color:#fbbf24;background:rgba(251,191,36,0.12);padding:2px 8px;border-radius:6px;">กล่องใหม่</div>
+      <div class="app-hd"><span style="color:#f97316;">❤</span><span style="font-weight:500;color:#fff;">สมรรถภาพ · ED Score</span></div>
+      <div style="padding:12px 14px;">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">ครั้งล่าสุด: <span style="color:#9ca3af;">ครั้งที่ 2 · 14/06/2569</span> · <span>หมอมายด์ส่งประเมิน</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="chip" style="background:rgba(249,115,22,0.10);border:1px solid rgba(249,115,22,0.25);"><div style="font-size:10px;color:#9ca3af;">ADAM</div><div><span style="font-size:20px;font-weight:500;color:#fff;">3</span><span style="font-size:11px;color:#6b7280;">/10</span></div><div style="font-size:10px;color:#fb923c;">Positive</div></div>
+          <div class="chip" style="background:rgba(234,179,8,0.10);border:1px solid rgba(234,179,8,0.25);"><div style="font-size:10px;color:#9ca3af;">IIEF-5</div><div><span style="font-size:20px;font-weight:500;color:#fff;">19</span><span style="font-size:11px;color:#6b7280;">/25</span></div><div style="font-size:10px;color:#facc15;">ED เล็กน้อย ↑</div></div>
+          <div class="chip" style="background:rgba(236,72,153,0.10);border:1px solid rgba(236,72,153,0.25);"><div style="font-size:10px;color:#9ca3af;">MRS <span style="color:#6b7280;">(ครั้งที่ 1)</span></div><div><span style="font-size:20px;font-weight:500;color:#fff;">8</span><span style="font-size:11px;color:#6b7280;">/44</span></div><div style="font-size:10px;color:#f472b6;">เล็กน้อย</div></div>
+          <div class="chip" style="background:rgba(148,163,184,0.10);border:1px solid rgba(148,163,184,0.22);"><div style="font-size:10px;color:#9ca3af;">PE</div><div style="font-size:14px;font-weight:500;color:#fff;margin-top:4px;">มีอาการ</div></div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#9ca3af;border-top:1px solid #222;padding-top:8px;">▾ ประวัติทุกครั้ง (2)</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:6px;">
+            <span style="color:#9ca3af;">ครั้งที่ 2 · 14/06/2569 · ADAM 3/10 · IIEF 19/25</span>
+            <span style="color:#ef4444;cursor:pointer;">🗑 ลบ</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:6px;">
+            <span style="color:#9ca3af;">ครั้งที่ 1 · 20/05/2569 · ADAM 4/10 · IIEF 14/25 · MRS 8/44 · PE</span>
+            <span style="color:#4b5563;font-size:10px;">รับเข้า (ลบไม่ได้)</span>
+          </div>
+        </div>
+      </div>
+      <div style="padding:10px 14px 14px;">
+        <button style="width:100%;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.35);color:#fb923c;border-radius:8px;padding:9px;font-size:12px;font-weight:500;">▦ ส่งแบบประเมินติดตาม (ครั้งที่ 3)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 2 · follow-up modal (round-aware + type picker + QR)</div>
+  <div style="max-width:420px;background:#0a0a0a;border:1px solid #222;border-radius:12px;color:#e5e7eb;font-size:13px;overflow:hidden;">
+    <div class="app-hd" style="justify-content:space-between;"><span style="font-weight:500;color:#fff;">ส่งแบบประเมินติดตาม — <span style="color:#fb923c;">ครั้งที่ 3</span></span><span style="color:#6b7280;">✕</span></div>
+    <div style="padding:14px;">
+      <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">เลือกแบบประเมินที่จะส่ง</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+        <label style="display:flex;align-items:center;gap:8px;"><span style="color:#fb923c;">☑</span> ADAM (พร่องฮอร์โมนเพศชาย)</label>
+        <label style="display:flex;align-items:center;gap:8px;"><span style="color:#fb923c;">☑</span> IIEF-5 (สมรรถภาพทางเพศ)</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#6b7280;"><span>☐</span> MRS (วัยทอง)</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#6b7280;"><span>☐</span> PE (หลั่งเร็ว)</label>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:12px;align-items:center;">
+        <div style="width:120px;height:120px;background:#fff;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#000;font-size:10px;cursor:pointer;">[ QR ]<span style="color:#2563eb;margin-top:4px;">⛶ แตะขยายเต็มจอ</span></div>
+        <div style="flex:1;font-size:11px;">
+          <div style="color:#9ca3af;">ลิงก์ (หมดอายุใน 1 วัน หรือเมื่อกรอกเสร็จ)</div>
+          <div style="background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;color:#60a5fa;">…/?session=FW-ED-9a3f… </div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);color:#60a5fa;border-radius:6px;padding:6px 10px;font-size:11px;">⧉ คัดลอกลิงก์</button>
+            <button style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.35);color:#fb923c;border-radius:6px;padding:6px 10px;font-size:11px;">⛶ QR เต็มจอ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 2b · full-screen QR on mobile (staff holds phone up → customer scans)</div>
+  <div style="max-width:300px;margin:0 auto;background:#0a0a0a;border:1px solid #222;border-radius:24px;padding:14px;color:#e5e7eb;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:13px;">
+      <span style="font-weight:500;color:#fff;">แบบประเมิน ครั้งที่ 3</span>
+      <span style="color:#6b7280;">✕</span>
+    </div>
+    <div style="background:#fff;border-radius:12px;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;color:#000;font-size:14px;">[ QR — เต็มความกว้างจอ ]</div>
+    <div style="text-align:center;margin-top:14px;font-size:13px;color:#9ca3af;">ให้ลูกค้าสแกนด้วยกล้องมือถือ</div>
+    <div style="text-align:center;margin-top:4px;font-size:11px;color:#6b7280;">ลิงก์หมดอายุใน 1 วัน หรือเมื่อกรอกเสร็จ</div>
+  </div>
+  <p style="font-size:0.8em;color:#666;margin-top:0.8em;">QR สร้าง high-res (reuse <code>generateQrDataUrl</code> @ 600px — เหมือน SendCustomerLinkModal); แตะ QR ในกล่อง modal → ขยายเต็มจอแบบนี้ (เด่นบน mobile). desktop ก็แตะขยายได้.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 3 · empty (customer never assessed)</div>
+  <div style="max-width:340px;" class="app">
+    <div class="app-hd"><span style="color:#f97316;">❤</span><span style="font-weight:500;color:#fff;">สมรรถภาพ · ED Score</span></div>
+    <div style="padding:18px 14px;text-align:center;color:#6b7280;font-size:12px;">ยังไม่มีการประเมิน ED<br><span style="font-size:11px;">กดปุ่มเพื่อส่งแบบประเมินครั้งแรก</span></div>
+    <div style="padding:10px 14px 14px;"><button style="width:100%;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.35);color:#fb923c;border-radius:8px;padding:9px;font-size:12px;font-weight:500;">▦ ส่งแบบประเมิน (ครั้งที่ 1)</button></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 4 · TFP "หมายเหตุทั่วไป" — verbose ED stripped + clean ED latest-2 block (doctor sees while writing)</div>
+  <div style="max-width:460px;background:rgba(120,80,10,0.10);border:1px solid rgba(146,93,20,0.5);border-radius:12px;overflow:hidden;color:#e5e7eb;font-size:13px;">
+    <div style="padding:12px 14px;border-bottom:1px solid rgba(146,93,20,0.5);display:flex;align-items:center;gap:8px;color:#fcd34d;"><span>▤</span><span style="font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;">หมายเหตุทั่วไป</span></div>
+    <div style="padding:12px 14px;">
+      <div style="color:#9ca3af;font-size:12px;white-space:pre-wrap;line-height:1.6;">CC: ปรึกษาเรื่องสมรรถภาพ · ประวัติ: —<br><span style="color:#4b5563;font-size:11px;">(บล็อก ED screening เดิมถูกตัดออก — ไปอยู่ด้านล่างแบบ clean)</span></div>
+      <div style="margin-top:10px;border-top:1px dashed rgba(146,93,20,0.4);padding-top:10px;">
+        <div style="font-size:10px;color:#f97316;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">ED Score · 2 ครั้งล่าสุด</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px;">
+          <div style="display:flex;justify-content:space-between;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;"><span style="color:#9ca3af;">ครั้งที่ 2 · 14/06/2569</span><span style="color:#e5e7eb;">ADAM 3/10 · IIEF 19/25</span></div>
+          <div style="display:flex;justify-content:space-between;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;"><span style="color:#9ca3af;">ครั้งที่ 1 · 20/05/2569</span><span style="color:#e5e7eb;">ADAM 4/10 · IIEF 14/25 · MRS 8/44 · PE</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:0.8em;color:#666;margin-top:0.8em;">การ์ดจริง <code>bg-amber-950/10 border-amber-900/40</code> (TreatmentFormPage.jsx:3708). full box (4 chips + ส่งปุ่ม) อยู่ที่หน้าลูกค้า CDV; ใน TFP = สรุป 2 ครั้งล่าสุดให้หมออ่านตอนเขียน.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">End-to-end: send → customer fills → materialize → box updates</div>
+  <div style="font-size:0.9em;line-height:2.4;">
+    <span class="flowbox">หมอกดปุ่มในกล่อง</span><span class="flowarrow">→</span>
+    <span class="flowbox">modal: ครั้งที่ N + เลือกประเภท</span><span class="flowarrow">→</span>
+    <span class="flowbox new">สร้าง be_assessments round (status: pending)</span><span class="flowarrow">→</span>
+    <span class="flowbox">สร้าง opd_session (formType=followup_*, expiresAt +1d) + QR</span>
+    <br>
+    <span class="flowarrow">↓</span>
+    <br>
+    <span class="flowbox">ลูกค้าเปิดลิงก์ (anon)</span><span class="flowarrow">→</span>
+    <span class="flowbox">PatientForm follow-up render (เดิม)</span><span class="flowarrow">→</span>
+    <span class="flowbox">submit → opd_session.patientData (anon write OK)</span>
+    <br>
+    <span class="flowarrow">↓</span>
+    <br>
+    <span class="flowbox new">Cloud Function onPatientSubmit (ขยาย)</span><span class="flowarrow">→</span>
+    <span class="flowbox new">copy คำตอบ → be_assessments round (pending→completed, snapshot scores)</span><span class="flowarrow">→</span>
+    <span class="flowbox">listenToAssessments → กล่องอัปเดต realtime</span>
+  </div>
+  <p style="font-size:0.8em;color:#666;margin-top:1em;">เหตุที่ต้อง materialize เข้า be_assessments (ไม่อ่านสดจาก opd_session): opd_sessions ถูก cron กวาด/ลบ (เคส ภูดิท LC-151) → scores ต้องถูก copy ลง be_assessments จึงรอด.</p>
+</div>
+
+<h3>Round number = derived (delete renumbers automatically)</h3>
+<p>เลข "ครั้งที่ N" ไม่ใช่ field ที่เก็บแช่แข็ง — มันคือ <strong>ลำดับสด</strong> เมื่อ sort assessment records ตามวันที่. การลบ follow-up ทำให้ renumber อัตโนมัติ (ไม่มีการ skip เลข) — รองรับเคสลูกค้ากรอกผิด.</p>
+<table>
+  <tr><th>เหตุการณ์</th><th>records ที่มี (sort วันที่)</th><th>label ที่โชว์</th><th>ครั้งถัดไป (ปุ่ม)</th></tr>
+  <tr><td>เริ่ม: intake + 2 follow-ups</td><td>[intake-virtual, fu-A, fu-B]</td><td>1, 2, 3</td><td>ครั้งที่ 4</td></tr>
+  <tr><td>ลบ follow-up ล่าสุด (B = ครั้งที่ 3)</td><td>[intake-virtual, fu-A]</td><td>1, 2</td><td><strong>ครั้งที่ 3</strong> (ไม่ใช่ 4)</td></tr>
+  <tr><td>ลบ follow-up กลาง (A)</td><td>[intake-virtual, fu-B]</td><td>1, 2 (B กลายเป็น 2)</td><td>ครั้งที่ 3</td></tr>
+  <tr><td>ลูกค้าไม่ได้ประเมินตอน intake</td><td>[fu-A]</td><td>1</td><td>ครั้งที่ 2</td></tr>
+</table>
+<p style="font-size:0.9em;"><strong>กฎ:</strong> round 1 (intake-virtual) อ่านสดจาก <code>be_customers.patientData</code> — ลบผ่านกล่องนี้ไม่ได้ (เป็นข้อมูลรับเข้า). follow-ups (be_assessments docs) ลบได้.</p>
+
+<h2>Architecture</h2>
+
+<h3>Components (new) — minimize, reuse heavily</h3>
+<table>
+  <tr><th>สิ่งที่สร้างใหม่</th><th>ที่อยู่</th><th>หน้าที่</th></tr>
+  <tr><td><code>EDScoreBox</code> (helper render ใน CDV หรือไฟล์เล็ก)</td><td>CustomerDetailView right column</td><td>hero ครั้งล่าสุด (4 chips) + กางประวัติ + ลบ + ปุ่มส่ง</td></tr>
+  <tr><td><code>EDFollowupModal</code></td><td>backend/</td><td>"ครั้งที่ N" + type picker + สร้าง round/link + QR (reuse <code>generateQrDataUrl</code>)</td></tr>
+  <tr><td><code>be_assessments</code> collection</td><td>Firestore (universal, customer-scoped)</td><td>1 doc = 1 follow-up round (ลบได้)</td></tr>
+  <tr><td><code>assessmentRoundsCore.js</code> (pure)</td><td>src/lib/</td><td>merge intake-virtual + be_assessments → sorted list + derived round# + latest-per-type</td></tr>
+  <tr><td>materialize hook</td><td>functions/index.js (ขยาย onPatientSubmit)</td><td>copy opd_session perf → be_assessments round on completion</td></tr>
+  <tr><td>Layer1/2 listeners + writers</td><td>backendClient.js + scopedDataLayer.js</td><td><code>listenToAssessments</code> (universal) · <code>createAssessmentRound</code> · <code>deleteAssessmentRound</code></td></tr>
+</table>
+
+<h3>be_assessments doc shape</h3>
+<pre>be_assessments/{roundId}   (roundId = crypto-random, NOT a frozen round number)
+{
+  customerId,                  // scope (universal — no branchId, like be_course_changes)
+  types: ['adam','iief','mrs'],// which assessments this round includes (doctor pick)
+  status: 'pending'|'completed',
+  scores: { adam:{total,positive}, iief:{score}, mrs:{score}, pe:{present} }, // snapshot @ materialize
+  rawAnswers: { adam_1..10, iief_1..5, mrs_1..11, symp_pe },  // snapshot (survives session delete)
+  assessmentDate,              // the date answered (Thai ISO)
+  createdAt, createdBy,        // forensic
+  linkedSessionId,             // the opd_session the customer filled
+  expiresAt                    // link expiry (+1 day) — for pending only
+}
+// NO `round` field — round# is derived live by date-rank in assessmentRoundsCore.</pre>
+
+<h3>Reuse map (ponytail — what already exists)</h3>
+<ul>
+  <li><code>calculateADAM / calculateIIEFScore / calculateMRS / getIIEFInterpretation</code> (utils.js) — scores + color/bg/text</li>
+  <li><code>pickKioskAssessmentFields</code> (kioskAssessmentFields.js) — read perf fields from patientData (round-1 virtual)</li>
+  <li>PatientForm follow-up render (formType <code>followup_ed/adam/mrs</code> gating, lines 594-597 + sections 1152-1312) — customer fill UI, no change needed</li>
+  <li><code>generateQrDataUrl</code> (documentPrintEngine.js) + patient-link/QR modal pattern (CustomerPatientLinkModal / SendCustomerLinkModal)</li>
+  <li><code>be_course_changes</code> collection pattern (universal, customerId-scoped, listener) — blueprint for be_assessments</li>
+  <li><code>onPatientSubmit</code> Cloud Function (functions/index.js) — extend for materialize</li>
+  <li>firestore.rules: opd_sessions anon-update whitelist already includes <code>patientData</code> → <strong>no rule change for the customer fill path</strong></li>
+</ul>
+
+<h3>BSA / Rules / Security</h3>
+<ul>
+  <li><code>be_assessments</code> = UNIVERSAL (customer-attached, no branchId) — classify in COLLECTION_MATRIX; Layer-2 universal re-export (<code>__universal__</code>), no branch injection.</li>
+  <li>firestore.rules: <code>be_assessments</code> read/create/<strong>delete</strong> = <code>isClinicStaff()</code> (NOT append-only — delete allowed per Q4). No update needed (rounds are create-then-materialize via admin; or status patch by CF/admin SDK).</li>
+  <li>Probe-Deploy-Probe: add anon-write probe (→ 403) when rules ship.</li>
+  <li>Link token = the opd_session doc-id-as-secret (WS1 128-bit, existing pattern) + <code>expiresAt</code> checked client-side in PatientForm gate.</li>
+  <li>Rule E: customer (anon) writes opd_session only; be_assessments written by CF/admin (staff) — never anon.</li>
+</ul>
+
+<h2>ED Score in the หมายเหตุ — CDV strips, TFP shows a clean latest-2 (de-duplication + doctor context)</h2>
+<p>The ED Score box owns the scores. The verbose baked ED text must leave the หมายเหตุ — but the doctor still wants ED context while writing in TFP. So:</p>
+<ul>
+  <li><strong>CDV หมายเหตุ:</strong> strip the ED block entirely (the box right there owns it).</li>
+  <li><strong>TFP "หมายเหตุทั่วไป":</strong> strip the verbose baked ED text AND <strong>show a clean "ED Score — 2 ครั้งล่าสุด + วันที่"</strong> read-only block, so the doctor sees the trend while writing the OPD card. Sourced from the SAME assessment data the box uses (<code>assessmentRoundsCore</code>) — not the old baked note text.</li>
+</ul>
+
+<h3>Mechanism (grounded)</h3>
+<p>ED scores are <strong>baked into a stored string</strong>, not live-rendered: <code>kioskPatientToCanonical.js:95</code> → <code>generateClinicalSummary(...)</code> intake output includes "ผลการคัดกรองอาการ / Clinical Screening Results" (<code>utils.js:407-422</code> TH / <code>:469-483</code> EN) → stored at <code>be_customers.patientData.note</code> (<code>:185</code>). In TFP it renders as <code>customerNote</code> in the amber "หมายเหตุทั่วไป" card (<code>TreatmentFormPage.jsx:3705-3722</code>, a <code>&lt;pre&gt;</code>); CDV shows the same note. <strong>Existing customers already have the ED block baked in.</strong></p>
+
+<h3>Approach (non-destructive, zero migration)</h3>
+<ol>
+  <li><strong>Stop baking going forward:</strong> omit the screening section from the note-building path (<code>includeScreening:false</code> on <code>generateClinicalSummary</code> for the note, OR strip in <code>kioskPatientToCanonical</code>). New customers' note has no ED block. (OPD print + intake-view keep the screening section — <code>generateClinicalSummary</code> default unchanged for those callers.)</li>
+  <li><strong>Display-strip for existing data:</strong> a pure helper <code>stripScreeningSection(note)</code> removes the screening block (header → next separator) when <code>customerNote</code> renders in CDV + TFP. Zero migration; does NOT mutate the stored clinical record.</li>
+  <li><strong>TFP clean ED block (NEW):</strong> in the "หมายเหตุทั่วไป" card (<code>TreatmentFormPage.jsx:3705</code>), below the stripped note, render a compact read-only "ED Score" block = the latest 2 assessment rounds (date + ADAM/IIEF/MRS/PE per round) from <code>assessmentRoundsCore</code>. Doctor sees the trend inline while writing. (Empty if the customer has no ED data.)</li>
+</ol>
+
+<h2>TFP layout polish (column balance + taller fields)</h2>
+<p>Grounded in the real layout (<code>TreatmentFormPage.jsx:3644</code> = <code>grid grid-cols-1 lg:grid-cols-2 gap-4</code>; existing button-align mechanism at <code>:3766-3788</code>).</p>
+<table>
+  <tr><th>Change</th><th>Where</th><th>Detail</th></tr>
+  <tr><td>DX / Tx / Plan textareas 2× taller</td><td>RIGHT col field array <code>:3802-3804</code></td><td><code>diagnosis</code> rows 3→6 · <code>treatmentInfo</code> (Tx/Dr.Note) 3→6 · <code>treatmentPlan</code> 2→4</td></tr>
+  <tr><td>"ข้อมูลสุขภาพลูกค้า" taller (fill the void)</td><td>LEFT col <code>:3726-3749</code></td><td>เพิ่มความสูง 3 textareas (โรคประจำตัว/แพ้ยา/ประวัติการรักษา rows 2→4) และ/หรือ ให้ section absorb stretch → เติม void เหนือปุ่มซ้าย</td></tr>
+  <tr><td>2 save buttons row-aligned</td><td>LEFT <code>:3770</code> (mt-auto) ↔ RIGHT <code>:3862</code></td><td>กลไก grid-stretch + mt-auto/flex-1 มีอยู่แล้ว; ขยายซ้ายให้ content เติมความสูงที่ stretch → ปุ่มตรง row โดยไม่มีช่องว่างน่าเกลียด</td></tr>
+</table>
+<p style="font-size:0.9em;"><strong>Verify (Rule Q-vis):</strong> button alignment + no-awkward-void is a pixel outcome → must be confirmed by a real preview screenshot (both dark + light themes), not source-only. The <code>audit</code> design skill is run on the resulting TFP (alignment, theming both themes, responsive, a11y, contrast — P0-P3) per the user's request "ใช้ skill audit design".</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> NEW <code>be_assessments</code> collection (durable; round-1 virtual from patientData; survives session cleanup — fixes the LC-151 data-loss class).</li>
+  <li><strong>Q2 = A + refinement:</strong> <strong>latest round = hero (primary display)</strong>; full history expandable below.</li>
+  <li><strong>Q3 = A:</strong> button → modal shows "ครั้งที่ N" + doctor picks which assessment types → generate link + QR; customer fills remotely.</li>
+  <li><strong>Q3 refinement (QR):</strong> QR has a <strong>full-screen mode</strong> — tap the modal QR (or "QR เต็มจอ" button) → QR fills the screen width, optimized for the customer to scan from the staff's phone on mobile. Generated high-res (reuse <code>generateQrDataUrl</code> @600px).</li>
+  <li><strong>Q4 = A + refinements:</strong> per-round link, expires +1 day OR on submit; rounds are <strong>deletable</strong>; round# is <strong>derived</strong> (delete renumbers, no skip — for mis-fill recovery).</li>
+  <li><strong>Refinement (current data):</strong> works <strong>immediately, zero migration</strong> for all customers with intake ED data (round-1 read live from patientData).</li>
+  <li><strong>Default A (materialize):</strong> via extending the <code>onPatientSubmit</code> Cloud Function (deploy functions at ship).</li>
+  <li><strong>Default B (chip):</strong> if the latest round didn't include a type, the chip shows that type's most-recent prior value + "(ครั้งที่ X)" tag — no data hidden.</li>
+  <li><strong>ED in หมายเหตุ:</strong> CDV หมายเหตุ <strong>strips</strong> ED (box owns it). TFP "หมายเหตุทั่วไป" strips the verbose baked ED AND <strong>shows a clean "ED Score — 2 ครั้งล่าสุด + วันที่"</strong> (doctor sees while writing). Stop-baking forward + display-strip existing (non-destructive). Kept in OPD print + intake-view.</li>
+  <li><strong>Multi-type link:</strong> a follow-up session carries <code>types[]</code> so one link/QR can present several assessments (e.g. ADAM+IIEF) — PatientForm gate extended to read <code>types[]</code>.</li>
+  <li><strong>TFP layout:</strong> DX/Tx/Plan textareas 2× taller (rows 3/3/2 → 6/6/4); "ข้อมูลสุขภาพลูกค้า" enlarged to fill the void; the two save buttons stay row-aligned (existing grid-stretch + mt-auto/flex-1 mechanism, tuned). Pixel-verified via preview (both themes).</li>
+  <li><strong>Audit:</strong> run the <code>audit</code> design skill on the resulting TFP (a11y / theming both themes / responsive / alignment / contrast → fix P0-P3) per user request.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>A customer with intake perf fields shows "ครั้งที่ 1" in the box with correct ADAM/IIEF/MRS/PE scores — with NO migration run (read live from patientData). Verified against a real current customer (e.g. LC-26000082 → ADAM 4/10 Positive).</li>
+  <li>Doctor clicks "ส่งแบบประเมินติดตาม (ครั้งที่ N)" → modal shows the correct derived N → picks types → a be_assessments pending round + opd_session + scannable QR + copyable link are produced.</li>
+  <li>Customer opens the link (anon, real browser) → sees only the picked assessment sections → submits → within seconds the box shows the new round as the hero with computed scores (materialized into be_assessments, survives opd_session deletion).</li>
+  <li>Deleting the latest follow-up round renumbers so the next send is the same N again (no skip). Deleting a middle round re-ranks. Round-1 (intake) cannot be deleted via the box.</li>
+  <li>Link expires after 1 day or once the customer submits (a stale/used link shows expired, not a fillable form).</li>
+  <li>Box renders correctly in BOTH dark (fire/ember) and light themes; customer name/HN never rendered red (Thai culture).</li>
+  <li>On mobile, the QR can be enlarged to full screen-width and is verified scannable by a real phone camera held up to it (high-res, sufficient quiet-zone/contrast).</li>
+  <li>be_assessments anon-write → 403 (Probe). Branch switch does not hide/leak assessments (universal collection).</li>
+  <li>The verbose ED screening block no longer appears in the หมายเหตุ in CDV + TFP (NEW + existing customers, via display-strip); the rest of the note (chief complaint, history) is preserved intact. ED stays in OPD print + intake-view.</li>
+  <li>TFP "หมายเหตุทั่วไป" shows a clean "ED Score — 2 ครั้งล่าสุด + วันที่" block for a customer with ED data (e.g. LC-26000082 → ครั้งที่ 1 · 20/05/2569 · ADAM 4/10); empty for a customer with no ED data.</li>
+  <li>TFP DX/Tx/Plan textareas are visibly ~2× taller; "ข้อมูลสุขภาพลูกค้า" is enlarged; the teal "บันทึกข้อมูลซักประวัติ" and purple "บันทึกสำหรับแพทย์" buttons sit on the SAME row with no awkward empty gap — verified by a real preview screenshot in BOTH dark and light themes.</li>
+  <li>The <code>audit</code> design skill run on the resulting TFP reports no P0/P1 (a11y, theming, responsive, alignment, contrast); P2/P3 triaged.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Materialize timing — RESOLVED:</strong> via extending the <code>onPatientSubmit</code> Cloud Function (durable; survives session cleanup). Needs a functions deploy at ship. (Staff-side-on-CDV-open rejected: cron could sweep the session first → data loss.)</li>
+  <li><strong>PatientForm multi-type gating — RESOLVED:</strong> the follow-up session carries <code>types[]</code>; PatientForm reads it to render several sections (extends the existing <code>formType</code> gate at lines 594-597) → one link can present ADAM+IIEF together.</li>
+  <li><strong>Assessment question text duplication (Rule C1):</strong> question labels are embedded in PatientForm + AdminDashboard render sections. If the box's history detail re-renders answers, consider extracting to <code>lib/assessmentQuestions.js</code> (flagged tech-debt; not required for v1 — box shows scores, not per-answer).</li>
+  <li><strong>Chip "latest-per-type vs latest-round-only":</strong> default B (latest-per-type + tag) chosen; confirm it reads clearly for the clinician at spec review.</li>
+  <li><strong>Verification (Rule Q):</strong> ship requires L1 real-browser (customer fills link → box updates) + L2 (be_assessments round-trip on real prod, materialize survives session delete). Not mock-only.</li>
+  <li><strong>หมายเหตุ removal scope — RESOLVED:</strong> remove the ED screening section ONLY from the CDV + TFP หมายเหตุ note (display-strip); <strong>keep it in OPD print + intake-view</strong> for the doctor's records. Existing stored notes are NOT mutated (display-strip, not Rule M rewrite — confirmed).</li>
+</ul>
+
+</body>
+</html>
