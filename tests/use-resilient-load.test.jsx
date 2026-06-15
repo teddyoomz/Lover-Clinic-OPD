@@ -107,6 +107,21 @@ describe('useResilientLoad', () => {
     expect(result.current.loadStatus).toBe('error');
   });
 
+  it('resetKey change WHILE still loading reschedules the timer FROM THE SWITCH (no orphaned mount-timer)', () => {
+    // R3 regression: a branch switch during the first load must clear the stale
+    // mount-scheduled timer and start a fresh window from the switch — else a
+    // premature reconnect fires at the old 8s mark.
+    const { result, rerender } = renderHook(({ k }) => useResilientLoad({ resetKey: k, maxAutoRetries: 1 }), { initialProps: { k: 'A' } });
+    act(() => { vi.advanceTimersByTime(4000); }); // 4s into A's load, no markReady
+    expect(reconnectFirestore).not.toHaveBeenCalled();
+    act(() => { rerender({ k: 'B' }); });          // branch switch while still loading
+    act(() => { vi.advanceTimersByTime(4000); });  // t=8000 (A's original mark) — orphaned timer must be GONE
+    expect(reconnectFirestore).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(4000); });  // t=12000 = 8s after the switch — fresh timer fires
+    expect(reconnectFirestore).toHaveBeenCalledTimes(1);
+    expect(result.current.retryKey).toBe(1);
+  });
+
   it('a STABLE resetKey does NOT re-arm after ready (one-shot customer links stay settled)', () => {
     const { result, rerender } = renderHook(({ k }) => useResilientLoad({ resetKey: k }), { initialProps: { k: 'tokenX' } });
     act(() => { result.current.markReady(); });

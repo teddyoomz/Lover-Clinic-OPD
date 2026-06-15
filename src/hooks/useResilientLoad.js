@@ -71,9 +71,12 @@ export function useResilientLoad(opts = {}) {
 
   // Re-arm when the load CONTEXT changes (resetKey) — e.g. a branch switch
   // re-subscribes to different data, so a previous success must not suppress the
-  // new load's stuck-detection. Runs once on mount (no-op: already loading) then
-  // on every resetKey change. Does NOT bump retryKey — the consumer's own dep
-  // (resetKey) already re-runs its load effect; this only re-arms the resilience.
+  // new load's stuck-detection. Runs once on mount (no-op: refs already reset,
+  // loadStatus already 'loading') then on every resetKey change. Does NOT bump
+  // retryKey (that would re-fire the consumer's load effect a SECOND time — the
+  // consumer's own resetKey-derived dep already re-subscribes once). The timer
+  // effect below keys on resetKey too, so the stale timer is rescheduled from
+  // the switch even when loadStatus is already 'loading' (no-op state change).
   useEffect(() => {
     settledRef.current = false;
     attemptsRef.current = 0;
@@ -82,12 +85,15 @@ export function useResilientLoad(opts = {}) {
   }, [resetKey]);
 
   // Soft-timeout: while loading, if no markReady() within softTimeoutMs → fail path.
-  // retryKey in deps so each silent auto-retry restarts the timer.
+  // retryKey → each silent auto-retry restarts the timer. resetKey → a context
+  // change (branch switch) clears the stale timer + schedules a fresh window from
+  // the switch (else an orphaned mount-scheduled timer fires at the wrong time →
+  // premature reconnect for the new context; adversarial re-hunt R3 2026-06-16).
   useEffect(() => {
     if (loadStatus !== 'loading') return undefined;
     const id = setTimeout(() => handleFail(), softTimeoutMs);
     return () => clearTimeout(id);
-  }, [loadStatus, retryKey, softTimeoutMs, handleFail]);
+  }, [loadStatus, retryKey, softTimeoutMs, handleFail, resetKey]);
 
   return { loadStatus, retryKey, markReady, markError, retry };
 }

@@ -49,6 +49,14 @@ describe('ClinicSchedule resilient load (mounted flow)', () => {
     expect(screen.queryByTestId('load-error-retry')).toBeNull();
   });
 
+  it('a doc-NOT-FOUND snapshot counts as loaded (markReady) → notfound shown, NO error card (contract 1)', () => {
+    render(<ClinicSchedule {...props} />);
+    act(() => { snapCb({ exists: () => false, data: () => ({}) }); }); // doc absent / disabled
+    act(() => { vi.advanceTimersByTime(30000); });
+    expect(screen.getByText('ไม่พบตารางนัดหมาย')).toBeInTheDocument();
+    expect(screen.queryByTestId('load-error-retry')).toBeNull(); // not-found is a RESOLVED load, never the error card
+  });
+
   it('a transient onError does NOT instantly flash notfound — it routes through retry', () => {
     render(<ClinicSchedule {...props} />);
     act(() => { errCb(new Error('transient')); });            // markError → silent retry
