@@ -1098,6 +1098,17 @@ export async function deleteAssessmentRound(id) {
   await deleteDoc(assessmentDoc(sid));
 }
 
+/** Pure predicate (R3, 2026-06-15): is this an OLD pending follow-up to supersede
+ *  for customer+branch? Used by supersedePendingFollowups (below). Exported for
+ *  unit-test. status==='completed' rounds are already materialized → never touched. */
+export function shouldSupersedeSession(s, customerId, branchId) {
+  if (!s) return false;
+  return String(s.linkedCustomerId || '') === String(customerId || '')
+    && String(s.branchId || '') === String(branchId || '')
+    && String(s.formType || '').startsWith('followup')
+    && s.status !== 'completed';
+}
+
 /** Create a public opd_session for the customer to fill a follow-up ED assessment.
  *  Per-round, expires (default caller passes +1 day). Reuses the existing
  *  followup_* PatientForm render (gate extended for types[]). The onPatientSubmit

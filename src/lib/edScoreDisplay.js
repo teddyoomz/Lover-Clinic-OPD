@@ -3,6 +3,7 @@
 import {
   calculateADAM, calculateIIEFScore, calculateMRS, getIIEFInterpretation,
 } from '../utils.js';
+import { resolveCustomerDisplayName, resolveCustomerPhone } from './customerDisplayName.js';
 
 export const ED_TYPE_META = {
   adam: { key: 'adam', label: 'ADAM', full: 'พร่องฮอร์โมนเพศชาย', max: 10, accent: '#f97316' },
@@ -57,4 +58,41 @@ export function stripScreeningSection(note) {
     out.push(ln);
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ─── ED follow-up v2 (2026-06-15) — confirm-card + round-date helpers ───
+
+// Mask the middle of a phone for the public follow-up confirm card (R1).
+// '0812345678' → '081-•••-5678'. Graceful: short/intl/empty returned as-is/''.
+export function maskPhone(phone) {
+  const s = String(phone ?? '').replace(/[\s-]/g, '');
+  if (!s) return '';
+  if (s.length < 7) return s; // too short to mask meaningfully
+  return `${s.slice(0, 3)}-•••-${s.slice(-4)}`;
+}
+
+// Read-only identity snapshot for the follow-up confirm card (R1). Snapshotted
+// into the opd_session at generation so the anon link can render it WITHOUT
+// reading be_customers (staff-only). Name via the canonical resolver; phone masked.
+export function buildConfirmInfo(customer) {
+  const c = customer || {};
+  const pd = c.patientData || {};
+  const name = resolveCustomerDisplayName(c) || '';
+  const age = (pd.age != null && String(pd.age).trim() !== '')
+    ? String(pd.age)
+    : (c.age != null && String(c.age).trim() !== '' ? String(c.age) : '');
+  const phoneMasked = maskPhone(resolveCustomerPhone(c) || pd.phone || c.phone || '');
+  return { name, age, phoneMasked };
+}
+
+// Round assessmentDate (ISO 'YYYY-MM-DD' or full ISO) + todayISO →
+// { text: 'dd/mm/yyyy พ.ศ.', isToday } for the TFP ED-Score strip (R4).
+export function formatRoundDate(assessmentDate, todayISO) {
+  const raw = String(assessmentDate || '').trim();
+  const today = String(todayISO || '').slice(0, 10);
+  if (!raw) return { text: '', isToday: false };
+  const datePart = raw.slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+  if (!m) return { text: raw, isToday: datePart === today };
+  return { text: `${m[3]}/${m[2]}/${Number(m[1]) + 543}`, isToday: datePart === today };
 }
