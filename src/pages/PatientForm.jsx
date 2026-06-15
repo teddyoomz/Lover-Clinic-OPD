@@ -46,6 +46,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const [isSuccess, setIsSuccess] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [sessionType, setSessionType] = useState('intake');
+  const [sessionTypes, setSessionTypes] = useState([]); // ED Score — followup session.types[] (multi-type, 2026-06-15)
   const [customTemplate, setCustomTemplate] = useState(null);
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [countryFilter, setCountryFilter] = useState('');
@@ -78,6 +79,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       setSessionBranchId(data.branchId || '');
       const currentFormType = data.formType || 'intake';
       setSessionType(currentFormType);
+      setSessionTypes(Array.isArray(data.types) ? data.types : []); // ED Score multi-type
       
       if (currentFormType === 'custom' && data.customTemplate) {
         setCustomTemplate(data.customTemplate);
@@ -90,7 +92,10 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       // them — 2h security timeout + cron-archived sessions stay closed to customers.
       if (data.isArchived && !isSimulation) { setIsClosed(true); return; }
 
-      if (data.createdAt && !data.isPermanent && !isSimulation) {
+      // ED Score follow-up links carry an explicit expiresAt (ms epoch, +1 day) —
+      // honor it regardless of isPermanent; it supersedes the 2h intake timeout.
+      if (data.expiresAt && !isSimulation && Date.now() > Number(data.expiresAt)) { setIsExpired(true); return; }
+      if (data.createdAt && !data.isPermanent && !data.expiresAt && !isSimulation) {
         if (Date.now() - data.createdAt.toMillis() > SESSION_TIMEOUT_MS) { setIsExpired(true); return; }
       }
       
@@ -591,10 +596,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const isFollowUp = sessionType.startsWith('followup_');
   const isCustom = sessionType === 'custom';
   
-  const isPerfMode = isIntake ? selectedReasons.includes('สมรรถภาพทางเพศ') : sessionType === 'followup_ed';
+  // ED Score (2026-06-15) — a follow-up session may carry types[] (multi-type:
+  // one link can ask several assessments). Each section gate also honors types[].
+  const edTypes = Array.isArray(sessionTypes) ? sessionTypes : [];
+  const isPerfMode = (isIntake ? selectedReasons.includes('สมรรถภาพทางเพศ') : sessionType === 'followup_ed') || edTypes.includes('iief');
   const isHrtMode = isIntake ? selectedReasons.includes('เสริมฮอร์โมน') : (sessionType === 'followup_adam' || sessionType === 'followup_mrs');
-  const showAdam = (isIntake && (isPerfMode || selectedGoals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)'))) || sessionType === 'followup_adam';
-  const showMrs = (isIntake && selectedGoals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)')) || sessionType === 'followup_mrs';
+  const showAdam = (isIntake && (isPerfMode || selectedGoals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)'))) || sessionType === 'followup_adam' || edTypes.includes('adam');
+  const showMrs = (isIntake && selectedGoals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)')) || sessionType === 'followup_mrs' || edTypes.includes('mrs');
+  const showPe = edTypes.includes('pe');
 
   const getHeaderTitle = () => {
     if (isEditing) return language === 'en' ? 'Update Patient Data' : 'แก้ไขประวัติผู้ป่วย (Update)';
@@ -1165,7 +1174,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 </div>
               )}
 
-              {isPerfMode && isIntake && (
+              {((isPerfMode && isIntake) || showPe) && (
                 <section className="p-5 sm:p-6 rounded-2xl mb-6" style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.25)' : 'rgba(239,68,68,0.1)'}` }}>
                   <div className="mb-4 border-b border-[var(--bd)] pb-4">
                     <h3 className="text-base sm:text-lg font-black text-[var(--tx-primary)] tracking-wide flex items-center gap-3"><span className="w-2 h-2 bg-red-600 rounded-full shrink-0"></span> {language === 'en' ? 'Part 1: Primary Symptoms' : 'ส่วนที่ 1: การประเมินอาการเบื้องต้น'}</h3>
