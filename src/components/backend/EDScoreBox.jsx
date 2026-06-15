@@ -6,8 +6,9 @@
 import React, { useState } from 'react';
 import { HeartPulse, QrCode, Trash2, ChevronDown, ChevronRight, History } from 'lucide-react';
 import { deriveRounds, latestPerType, nextRoundNumber } from '../../lib/assessmentRoundsCore.js';
-import { ED_TYPE_META, scoreForType } from '../../lib/edScoreDisplay.js';
+import { ED_TYPE_META, scoreForType, formatRoundDate } from '../../lib/edScoreDisplay.js';
 import { deleteAssessmentRound } from '../../lib/scopedDataLayer.js';
+import { thaiTodayISO } from '../../utils.js';
 
 // Literal class strings (Tailwind JIT needs them spelled out — no dynamic interpolation).
 const CHIP = {
@@ -36,6 +37,10 @@ export default function EDScoreBox({ customerId, intakePerf, assessments, isDark
   const hero = rounds.length ? rounds[rounds.length - 1] : null;
   const lpt = latestPerType(intakePerf, assessments);
   const nextN = nextRoundNumber(intakePerf, assessments);
+  // R4 (2026-06-16) — readable date (dd/mm/yyyy พ.ศ.) + "วันนี้" badge, like the TFP note.
+  const today = thaiTodayISO();
+  const heroDate = hero ? formatRoundDate(hero.assessmentDate, today) : null;
+  const todayBadgeCls = `ml-1 inline-block align-middle rounded-full px-1.5 text-[9px] font-bold border ${isDark ? 'bg-orange-500/15 border-orange-500/40 text-orange-300' : 'bg-orange-100 border-orange-300 text-orange-700'}`;
 
   const handleDelete = async (roundId) => {
     if (!roundId || roundId === '__intake__') return;
@@ -60,8 +65,8 @@ export default function EDScoreBox({ customerId, intakePerf, assessments, isDark
         <div className="p-3">
           <div className="text-[11px] text-[var(--tx-muted)] mb-2">
             ครั้งล่าสุด: <span className="text-[var(--tx-secondary)] font-bold">ครั้งที่ {hero.round}</span>
-            {hero.assessmentDate ? ` · ${hero.assessmentDate}` : ''}
-            {hero.source === 'intake' ? ' · จาก PatientForm รับเข้า' : (hero.createdBy ? '' : '')}
+            {heroDate?.text ? <> · <span className="text-[var(--tx-secondary)]">{heroDate.text}</span>{heroDate.isToday && <span className={todayBadgeCls}>วันนี้</span>}</> : ''}
+            {hero.source === 'intake' ? ' · จาก PatientForm รับเข้า' : ''}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -112,12 +117,14 @@ export default function EDScoreBox({ customerId, intakePerf, assessments, isDark
 
           {expanded && (
             <div className="mt-2 flex flex-col gap-1.5">
-              {[...rounds].reverse().map((r) => (
+              {[...rounds].reverse().map((r) => {
+                const fd = formatRoundDate(r.assessmentDate, today);
+                return (
                 <div key={r.id} data-testid={`ed-history-${r.id}`}
                   className={`flex items-center justify-between gap-2 text-[11px] rounded-md px-2 py-1.5 ${isDark ? 'bg-white/[0.02]' : 'bg-black/[0.02]'}`}>
                   <span className="text-[var(--tx-secondary)] min-w-0 truncate">
                     <span className="font-bold">ครั้งที่ {r.round}</span>
-                    {r.assessmentDate ? ` · ${r.assessmentDate}` : ''} · {roundSummary(r) || '—'}
+                    {fd.text ? <> · {fd.text}{fd.isToday && <span className={todayBadgeCls}>วันนี้</span>}</> : ''} · {roundSummary(r) || '—'}
                   </span>
                   {r.deletable ? (
                     <button type="button" onClick={() => handleDelete(r.id)} disabled={busyId === r.id}
@@ -129,7 +136,8 @@ export default function EDScoreBox({ customerId, intakePerf, assessments, isDark
                     <span className="shrink-0 text-[10px] text-[var(--tx-muted)]">รับเข้า</span>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

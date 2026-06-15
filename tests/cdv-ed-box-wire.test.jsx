@@ -3,8 +3,19 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const cdv = readFileSync(path.resolve(process.cwd(), 'src/components/backend/CustomerDetailView.jsx'), 'utf8');
+const box = readFileSync(path.resolve(process.cwd(), 'src/components/backend/EDScoreBox.jsx'), 'utf8');
 
 describe('CustomerDetailView — ED Score wiring', () => {
+  it('R4 (2026-06-16): EDScoreBox formats round dates via formatRoundDate + วันนี้ badge', () => {
+    expect(box).toMatch(/import \{ ED_TYPE_META, scoreForType, formatRoundDate \} from '\.\.\/\.\.\/lib\/edScoreDisplay\.js'/);
+    expect(box).toMatch(/const heroDate = hero \? formatRoundDate\(hero\.assessmentDate, today\) : null/);
+    expect(box).toMatch(/const fd = formatRoundDate\(r\.assessmentDate, today\)/);
+    expect(box).toMatch(/วันนี้/);
+  });
+  it('R4: CDV captures customerCreatedISO as the intake-date fallback', () => {
+    expect(cdv).toMatch(/customerCreatedISO = useMemo/);
+    expect(cdv).toMatch(/timeZone: 'Asia\/Bangkok'/);
+  });
   it('imports the ED components + lib helpers from the correct layers', () => {
     expect(cdv).toMatch(/import EDScoreBox from '\.\/EDScoreBox\.jsx'/);
     expect(cdv).toMatch(/import EDFollowupModal from '\.\/EDFollowupModal\.jsx'/);
@@ -22,7 +33,9 @@ describe('CustomerDetailView — ED Score wiring', () => {
   });
 
   it('computes intakePerf + edTypesDone for the box + modal', () => {
-    expect(cdv).toMatch(/intakePerf = useMemo\(\(\) => pickKioskAssessmentFields\(pd\)/);
+    // 2026-06-16 (R4) — intakePerf now merges the intake date so the box's round-1
+    // shows it (pickKioskAssessmentFields drops assessmentDate). Mirrors TFP.
+    expect(cdv).toMatch(/intakePerf = useMemo\(\s*\(\) => \(\{ \.\.\.pickKioskAssessmentFields\(pd\), assessmentDate:/);
     expect(cdv).toMatch(/edTypesDone = ED_TYPES\.filter/);
   });
 

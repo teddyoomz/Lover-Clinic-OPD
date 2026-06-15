@@ -272,7 +272,18 @@ export default function CustomerDetailView({
     );
     return () => unsub();
   }, [customerId]);
-  const intakePerf = useMemo(() => pickKioskAssessmentFields(pd), [pd]);
+  // R4 (2026-06-16) — give the intake round (round 1) a date in the ED box, like TFP.
+  // pickKioskAssessmentFields drops assessmentDate; merge the preserved/back-filled
+  // patientData.assessmentDate, fall back to the customer's createdAt (admission day).
+  const customerCreatedISO = useMemo(() => {
+    const ca = customer?.createdAt;
+    const ms = ca?.toMillis?.() ?? (typeof ca === 'number' ? ca : (typeof ca === 'string' ? Date.parse(ca) : 0));
+    return ms && !Number.isNaN(ms) ? new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) : '';
+  }, [customer]);
+  const intakePerf = useMemo(
+    () => ({ ...pickKioskAssessmentFields(pd), assessmentDate: (pd?.assessmentDate || customerCreatedISO || '') }),
+    [pd, customerCreatedISO],
+  );
   const edLatestPerType = useMemo(() => latestPerType(intakePerf, assessments), [intakePerf, assessments]);
   const edTypesDone = ED_TYPES.filter((t) => edLatestPerType[t]);
   // หมายเหตุทั่วไป: strip the baked ED screening block — the ED Score box owns it now.
