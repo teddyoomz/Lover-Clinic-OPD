@@ -886,6 +886,19 @@ export default function CustomerDetailView({
                 />
               </h2>
 
+              {/* 2026-06-16 Part A — flagged-duplicate badge (created via the
+                  "บันทึกเป็นลูกค้าใหม่อยู่ดี" override; links to the canonical). */}
+              {customer?._duplicateOfCustomerId && (
+                <a
+                  href={`/?backend=1&customer=${encodeURIComponent(customer._duplicateOfCustomerId)}`}
+                  className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/40 hover:underline"
+                  data-testid="customer-duplicate-badge"
+                  title="ลูกค้านี้ถูกบันทึกเป็นลูกค้าซ้ำ (เลขบัตรตรงกับลูกค้าเดิม) — กดเพื่อเปิดลูกค้าต้นฉบับ"
+                >
+                  <AlertCircle size={12} /> บันทึกซ้ำกับ {customer._duplicateOfCustomerId}
+                </a>
+              )}
+
               {/* Clone status */}
               {customer?.cloneStatus && (
                 <div className="mt-2 flex items-center justify-center gap-2 text-xs">

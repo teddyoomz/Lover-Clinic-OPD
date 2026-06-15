@@ -336,6 +336,23 @@ async function findExistingCustomerByIdentity(patient) {
   return { ambiguous: true, candidates: matches };
 }
 
+// 2026-06-16 Part A — OPD/deposit create chokepoint. addCustomer now throws
+// DUPLICATE_IDENTITY (Rule T atomic claim) when a kiosk patient's national-id /
+// passport already belongs to a customer (a RETURNING patient re-submitting the
+// kiosk form). Instead of failing the OPD save (or creating a dup), LINK the
+// session to that existing customer. Conservative: link only — do NOT clobber
+// the existing record with the kiosk re-submit (admin data stays authoritative).
+async function addCustomerOrLinkExisting(patient, opts) {
+  try {
+    return await addCustomer(patient, opts);
+  } catch (e) {
+    if (e?.code === 'DUPLICATE_IDENTITY' && e.existingCustomerId) {
+      return { id: e.existingCustomerId, hn: '', linkedExisting: true };
+    }
+    throw e;
+  }
+}
+
 // Phase 20.0 Task 5c (2026-05-06) — pure mapper from Frontend kiosk
 // depositData shape → be_deposits createDeposit/updateDeposit shape.
 // Field rename:
@@ -3732,7 +3749,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           // CustomerCreatePage pattern. Pre-fix relied on implicit
           // resolveSelectedBranchId() fallback inside addCustomer; explicit
           // pass eliminates BranchContext-lag race condition.
-          const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+          const created = await addCustomerOrLinkExisting(patient, { strict: false, branchId: selectedBranchId || '' });
           result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
         }
         setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
@@ -3796,7 +3813,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             });
             showToast('ไม่พบลูกค้าซ้ำในระบบ — กำลังสร้างใหม่...');
             try {
-              const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+              const created = await addCustomerOrLinkExisting(patient, { strict: false, branchId: selectedBranchId || '' });
               await updateDoc(ref, {
                 opdRecordedAt: new Date().toISOString(),
                 brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
@@ -3998,7 +4015,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             : { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers (อาจถูกลบไปแล้ว)' };
         } else {
           // Phase 23.0 — explicit branchId stamp (handleResync create branch).
-          const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+          const created = await addCustomerOrLinkExisting(patient, { strict: false, branchId: selectedBranchId || '' });
           result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
         }
       } catch (innerErr) {
@@ -4118,7 +4135,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         showToast('กำลังสร้างลูกค้า...');
         // Phase 20.0 Task 5b — addCustomer (be_*) replaces broker.fillProClinic
         // Phase 23.0 — explicit branchId stamp ("สร้างรายการที่").
-        const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+        const created = await addCustomerOrLinkExisting(patient, { strict: false, branchId: selectedBranchId || '' });
         if (!created?.id) throw new Error('สร้างลูกค้าไม่สำเร็จ');
         proClinicId = created.id;
         proClinicHN = created.hn || '';
@@ -4136,7 +4153,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const upd = await tryUpdateExistingCustomer(proClinicId, patient);
         if (upd.notFound) {
           showToast('ลูกค้าเดิมถูกลบ — สร้างลูกค้าใหม่อัตโนมัติ...');
-          const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+          const created = await addCustomerOrLinkExisting(patient, { strict: false, branchId: selectedBranchId || '' });
           if (!created?.id) throw new Error('สร้างลูกค้าไม่สำเร็จ');
           proClinicId = created.id;
           proClinicHN = created.hn || '';

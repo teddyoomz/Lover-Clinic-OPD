@@ -29,7 +29,8 @@ import {
   GENDER_OPTIONS,
   RECEIPT_TYPE_OPTIONS,
 } from '../../lib/customerValidation.js';
-import { addCustomer, buildFormFromCustomer, updateCustomerFromForm } from '../../lib/scopedDataLayer.js';
+import { addCustomer, buildFormFromCustomer, updateCustomerFromForm, getCustomer, findCustomersByField } from '../../lib/scopedDataLayer.js';
+import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from '../../lib/customerDisplayName.js';
 import { scrollToFieldError } from '../../lib/scrollToFieldError.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DateField from '../DateField.jsx';
@@ -104,6 +105,10 @@ export default function CustomerCreatePage({
   // handleSubmit when the validator throws with err.field; cleared via setField.
   // Keys match data-field attrs so aria-describedby IDs stay deterministic.
   const [fieldErrors, setFieldErrors] = useState({});
+  // 2026-06-16 Part A — duplicate national-ID warn modal ({ existingId, existing, isEdit })
+  // + phone-only soft hint ({ name }).
+  const [dupWarn, setDupWarn] = useState(null);
+  const [phoneHint, setPhoneHint] = useState(null);
   const profileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
@@ -239,35 +244,47 @@ export default function CustomerCreatePage({
     setGalleryPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = async (e) => {
+  const runCreateOrUpdate = async (override) => {
+    if (isEdit) {
+      // Phase BS — DO NOT pass branchId on update (immutable after create).
+      return updateCustomerFromForm(customerIdForEdit, form, {
+        updatedBy: createdBy,
+        files: { profile: profileFile, gallery: galleryFiles },
+      });
+    }
+    // Phase BS — branchId from BranchContext stamps the new customer's "สาขาที่สร้าง".
+    return addCustomer(form, {
+      branchId,
+      createdBy,
+      files: { profile: profileFile, gallery: galleryFiles },
+      overrideDuplicate: !!override, // 2026-06-16 Part A — "บันทึกเป็นลูกค้าใหม่อยู่ดี"
+    });
+  };
+
+  const handleSubmit = async (e, override = false) => {
     e?.preventDefault?.();
     setError('');
     setSuccess('');
+    setDupWarn(null);
     setSaving(true);
     try {
-      let result;
-      if (isEdit) {
-        // Phase BS — DO NOT pass branchId on update (immutable after create).
-        result = await updateCustomerFromForm(customerIdForEdit, form, {
-          updatedBy: createdBy,
-          files: { profile: profileFile, gallery: galleryFiles },
-        });
-        setSuccess(`บันทึกการแก้ไขเรียบร้อย — HN: ${form.hn_no || customerIdForEdit}`);
-      } else {
-        // Phase BS — branchId from BranchContext stamps the new customer
-        // with the currently-selected branch as their "สาขาที่สร้าง".
-        result = await addCustomer(form, {
-          branchId,
-          createdBy,
-          files: { profile: profileFile, gallery: galleryFiles },
-        });
-        setSuccess(`บันทึกเรียบร้อย — HN: ${result.hn}`);
-      }
+      const result = await runCreateOrUpdate(override);
+      setSuccess(isEdit
+        ? `บันทึกการแก้ไขเรียบร้อย — HN: ${form.hn_no || customerIdForEdit}`
+        : `บันทึกเรียบร้อย — HN: ${result.hn}`);
       onSaved?.(result);
       // Brief delay so user sees the success message before BackendDashboard
       // tears down the page (creatingCustomer / editingCustomer = false).
       setTimeout(() => { onCancel?.(); }, 800);
     } catch (err) {
+      // 2026-06-16 Part A — duplicate national-id/passport (Rule T atomic claim).
+      // Warn + let admin choose (Q1): open existing OR save-anyway (override).
+      if (err?.code === 'DUPLICATE_IDENTITY') {
+        let existing = null;
+        try { existing = await getCustomer(err.existingCustomerId); } catch { /* show id only */ }
+        setDupWarn({ existingId: err.existingCustomerId, existing, isEdit });
+        return; // finally clears saving
+      }
       const field = err.field || 'firstname';
       const msg = err.message || 'บันทึกล้มเหลว';
       setError(msg);
@@ -280,8 +297,71 @@ export default function CustomerCreatePage({
     }
   };
 
+  // 2026-06-16 Part A (Q2) — phone-only soft hint (NOT a block; people share
+  // phones). Debounced lookup on the phone field; national-id collisions are
+  // handled by the atomic claim above (hard warn modal).
+  useEffect(() => {
+    const phone = String(form.telephone_number || '').trim();
+    if (isEdit || phone.length < 8) { setPhoneHint(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const matches = await findCustomersByField('telephone_number', phone);
+        if (cancelled || !Array.isArray(matches) || matches.length === 0) { setPhoneHint(null); return; }
+        const first = await getCustomer(matches[0].id);
+        if (!cancelled) setPhoneHint({ name: resolveCustomerDisplayName(first) || matches[0].id });
+      } catch { if (!cancelled) setPhoneHint(null); }
+    }, 600);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [form.telephone_number, isEdit]);
+
   return (
     <div className="space-y-4" data-testid="customer-create-page">
+      {/* 2026-06-16 Part A — phone-only soft hint (Q2: phone warns, never blocks). */}
+      {phoneHint && !dupWarn && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-[12px] text-amber-700 dark:text-amber-300 flex items-center gap-2" data-testid="customer-phone-hint">
+          <Phone size={14} /> เบอร์นี้ตรงกับลูกค้า <span className="font-bold">{phoneHint.name}</span> — ใช้ร่วมกันได้
+        </div>
+      )}
+      {/* 2026-06-16 Part A — national-id duplicate warn modal (Q1: warn + choose). */}
+      {dupWarn && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" data-testid="customer-dup-warn">
+          <div className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] overflow-hidden shadow-2xl">
+            <div className="bg-red-500/10 border-b border-red-500/30 px-4 py-3 font-bold text-red-600 dark:text-red-300 flex items-center gap-2">
+              <AlertCircle size={16} /> {dupWarn.isEdit ? 'แก้เป็นเลขบัตรนี้ไม่ได้ — มีลูกค้าอื่นใช้อยู่' : 'ลูกค้านี้มีอยู่แล้วในระบบ'}
+            </div>
+            <div className="p-4">
+              <p className="text-[12px] text-[var(--tx-muted)] mb-2">เลขบัตรประชาชน/พาสปอร์ตนี้ตรงกับลูกค้าเดิม:</p>
+              <div className="rounded-lg border border-[var(--bd)] px-3 py-2.5 bg-[var(--bg-surface)]">
+                <div className="font-bold text-[var(--tx-primary)]">{resolveCustomerDisplayName(dupWarn.existing) || dupWarn.existingId}</div>
+                <div className="text-[11px] text-[var(--tx-muted)] mt-0.5">
+                  {[resolveCustomerHN(dupWarn.existing), resolveCustomerPhone(dupWarn.existing)].filter(Boolean).join(' · ') || dupWarn.existingId}
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 mt-4 flex-wrap">
+                <button type="button" data-testid="customer-dup-open-existing"
+                  onClick={() => { window.location.href = '/?backend=1&customer=' + encodeURIComponent(dupWarn.existingId); }}
+                  className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[13px] font-bold">
+                  เปิดของเดิม
+                </button>
+                {!dupWarn.isEdit && (
+                  <button type="button" data-testid="customer-dup-override"
+                    onClick={() => handleSubmit(null, true)}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] text-[13px] disabled:opacity-50">
+                    บันทึกเป็นลูกค้าใหม่อยู่ดี
+                  </button>
+                )}
+                <button type="button" data-testid="customer-dup-cancel"
+                  onClick={() => setDupWarn(null)}
+                  className="px-3 py-2 rounded-lg text-[var(--tx-muted)] hover:text-[var(--tx-primary)] text-[13px]">
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Page header — back button + title */}
       <div className="bg-[var(--bg-surface)] rounded-2xl p-4 shadow-lg flex items-center justify-between gap-3 border border-[var(--bd)]">
         <div className="flex items-center gap-3">
