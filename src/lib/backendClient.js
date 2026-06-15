@@ -15,6 +15,7 @@ import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } fr
 // real-time redundant-0-lot auto-clear. Same plan the 03:45 cron runs.
 import { planLotCleanup } from './stockLotCleanupCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
+import { deriveClaimKey, DuplicateIdentityError, resolveClaimAction } from './customerIdentity.js'; // 2026-06-16 Part A — atomic identity-claim (Rule T dup-prevention)
 import { pickKioskAssessmentFields } from './kioskAssessmentFields.js'; // AV194 — carry kiosk perf/hormone assessment fields through the patientData projection
 import { roundTHB } from './financeUtils.js'; // V156 — defensive money rounding at the write boundary (closes M12 caveat)
 import { decideApptStatusServiceSync } from './appointmentDisplay.js';
@@ -699,6 +700,11 @@ export async function updateCustomerFromForm(customerId, form, opts = {}) {
 
 const customerCounterDoc = () => doc(db, ...basePath(), 'be_customer_counter', 'counter');
 
+// 2026-06-16 Part A — be_customer_identity claim doc. doc-id = the type-prefixed
+// claim key (CITIZEN:{13d} | PASSPORT:{UPPER}). Read-by-id (no index); guarded
+// atomically inside addCustomer/updateCustomerFromForm (Rule T).
+const identityClaimDoc = (key) => doc(db, ...basePath(), 'be_customer_identity', key);
+
 /** Generate next customer HN: `LC-YY{0000NNN}` (atomic counter, year-prefixed). */
 export async function generateCustomerHN() {
   const yearStr = String(new Date().getFullYear() % 100).padStart(2, '0');
@@ -738,7 +744,7 @@ export async function addCustomer(form, opts = {}) {
   // the legacy CustomerCreatePage callers that don't yet pass branchId
   // explicitly. resolveSelectedBranchId() returns the FALLBACK_ID 'main' in
   // pre-V20 single-branch deployments — preserves backward compat.
-  const { branchId, createdBy = null, files = null, strict = true } = opts;
+  const { branchId, createdBy = null, files = null, strict = true, overrideDuplicate = false } = opts;
   const resolvedBranchId = (typeof branchId === 'string' && branchId)
     ? branchId
     : (resolveSelectedBranchId() || null);
@@ -775,14 +781,32 @@ export async function addCustomer(form, opts = {}) {
     throw err;
   }
 
-  // Step 3 — HN counter (atomic).
+  // Step 3 — identity-claim key (type-prefixed; Rule T bulletproof dup-prevention).
+  // Walk-ins (no national-id/passport) → null → no claim (duplicates allowed by
+  // policy; the OPD session idempotency guards same-session double-clicks).
+  const claimKey = deriveClaimKey(preNormalized.citizen_id, preNormalized.passport_id);
+
+  // Pre-check (fail-fast, BEFORE uploads) so the COMMON duplicate case never
+  // wastes a Storage upload. The authoritative, race-safe check is the
+  // in-transaction read in Step 7 (this is just an optimization).
+  if (claimKey && !overrideDuplicate) {
+    const preSnap = await getDoc(identityClaimDoc(claimKey));
+    if (preSnap.exists()) {
+      throw new DuplicateIdentityError(preSnap.data().customerId, claimKey);
+    }
+  }
+
+  // Step 4 — HN counter (atomic, its own tx). A wasted HN on a rare race-dup is
+  // a harmless sequence gap.
   const hn = await generateCustomerHN();
   const customerId = hn;  // doc-id == HN (LC-prefixed; collision-free with ProClinic numeric ids)
 
-  // Step 4 — uploads (if any). Done BEFORE the Firestore write so a partial
-  // failure doesn't leave a doc with broken image refs.
+  // Step 5 — uploads (if any). Done BEFORE the Firestore write so a partial
+  // failure doesn't leave a doc with broken image refs. Track the storage paths
+  // so a rare tx-failure (race-dup) can clean up the orphaned objects.
   let profileUrl = safe.profile_image || '';
   let galleryUrls = Array.isArray(safe.gallery_upload) ? [...safe.gallery_upload] : [];
+  const uploadedPaths = [];
 
   if (files && (files.profile || (Array.isArray(files.gallery) && files.gallery.length > 0))) {
     const { uploadFile, buildStoragePath } = await import('./storageClient.js');
@@ -791,6 +815,7 @@ export async function addCustomer(form, opts = {}) {
       const path = buildStoragePath('be_customers', customerId, 'profile', files.profile.name);
       const { url } = await uploadFile(files.profile, path, { maxSizeMB: 1 });
       profileUrl = url;
+      uploadedPaths.push(path);
     }
 
     if (Array.isArray(files.gallery) && files.gallery.length > 0) {
@@ -801,6 +826,7 @@ export async function addCustomer(form, opts = {}) {
             : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
           const path = buildStoragePath('be_customers', customerId, `gallery_${uniqueId}`, file.name);
           const { url } = await uploadFile(file, path, { maxSizeMB: 5 });
+          uploadedPaths.push(path);
           return url;
         }),
       );
@@ -845,9 +871,60 @@ export async function addCustomer(form, opts = {}) {
     appointments: [],
     treatmentSummary: [],
     treatmentCount: 0,
+    _identityClaimKey: claimKey,   // null for walk-ins; denormalized for O(1) cascade/edit
   };
 
-  await setDoc(customerDoc(customerId), docPayload, { merge: false });
+  // Step 7 — write. WITH an identity → ONE runTransaction that claims the
+  // identity (race-safe — the claim-doc write is the serialization point;
+  // Firestore retries a concurrent loser whose retry then sees the claim taken)
+  // AND writes the customer doc atomically. WITHOUT an identity (walk-in) →
+  // plain setDoc (no uniqueness guard, per policy).
+  if (claimKey) {
+    try {
+      await runTransaction(db, async (tx) => {
+        const claimRef = identityClaimDoc(claimKey);
+        const claimSnap = await tx.get(claimRef);
+        const claimData = claimSnap.exists() ? claimSnap.data() : null;
+        const decision = resolveClaimAction({
+          claimExists: claimSnap.exists(),
+          owner: claimData ? claimData.customerId : null,
+          customerId,
+          overrideDuplicate,
+        });
+        if (decision.action === 'throw') {
+          throw new DuplicateIdentityError(decision.existingCustomerId, claimKey);
+        }
+        if (decision.action === 'set') {
+          tx.set(claimRef, { customerId, linkedCustomerIds: [], claimedAt: nowIso, claimedBy: createdBy || null });
+        } else if (decision.action === 'append') {
+          // Override ("บันทึกเป็นลูกค้าใหม่อยู่ดี") — a deliberate, auditable
+          // duplicate. The claim stays with the canonical owner; record this
+          // dup in linkedCustomerIds so identity lookups stay complete.
+          const linked = Array.isArray(claimData.linkedCustomerIds) ? claimData.linkedCustomerIds : [];
+          if (!linked.includes(customerId)) {
+            tx.update(claimRef, { linkedCustomerIds: [...linked, customerId] });
+          }
+          docPayload._duplicateOfCustomerId = claimData.customerId;
+          docPayload._duplicateAckBy = createdBy || null;
+          docPayload._duplicateAckAt = nowIso;
+        }
+        // 'noop' → claim already ours (re-entrant); just write the customer doc.
+        tx.set(customerDoc(customerId), docPayload);
+      });
+    } catch (e) {
+      // Rare race-dup (both passed the pre-check) → the loser's tx threw. Clean
+      // up the orphaned uploads best-effort (the orphan-cron is the backstop).
+      if (uploadedPaths.length) {
+        try {
+          const { deleteFile } = await import('./storageClient.js');
+          await Promise.allSettled(uploadedPaths.map(p => deleteFile(p)));
+        } catch { /* best-effort */ }
+      }
+      throw e;
+    }
+  } else {
+    await setDoc(customerDoc(customerId), docPayload, { merge: false });
+  }
   return { id: customerId, hn };
 }
 
