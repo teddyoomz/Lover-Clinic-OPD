@@ -12,6 +12,7 @@ import {
   getAllCustomers,
 } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
+import { resolveCustomerDisplayName } from '../../../lib/customerDisplayName.js'; // 2026-06-16 Part B — resolve ALL name shapes (kiosk firstNameTh, etc.)
 import PhoneLink from '../../PhoneLink.jsx';
 
 /**
@@ -119,7 +120,9 @@ export function RecallCreateModal({
     return allCustomers
       .filter((c) => {
         const pd = c?.patientData || {};
-        const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim().toLowerCase();
+        // 2026-06-16 — resolve ALL name shapes (kiosk firstNameTh/firstname) so
+        // search-by-name works for customers the old composition missed.
+        const name = (resolveCustomerDisplayName(c) || `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`).trim().toLowerCase();
         const hn = String(c?.proClinicHN || c?.hn || '').toLowerCase();
         const phone = String(pd.phone || c?.phone || '').toLowerCase();
         return name.includes(q) || hn.includes(q) || phone.includes(q);
@@ -129,7 +132,10 @@ export function RecallCreateModal({
 
   const _shapeCustomer = (c) => {
     const pd = c?.patientData || {};
-    const fullName = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim();
+    // 2026-06-16 Part B — resolve via the canonical resolver (handles kiosk
+    // firstNameTh / top-level firstname), so the picked customer's name + the
+    // snapshotted recall.customerName are correct at create time.
+    const fullName = resolveCustomerDisplayName(c) || `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim();
     return {
       id: c.id || c.proClinicId || '',
       displayName: fullName,
@@ -208,7 +214,9 @@ export function RecallCreateModal({
     try {
       const baseCustomerFields = {
         customerId: customer.id,
-        customerName: customer.displayName || customer.name || '',
+        // 2026-06-16 Part B — snapshot a resolved name going forward (live-resolve
+        // at render is still primary per V113; this keeps new snapshots correct).
+        customerName: resolveCustomerDisplayName(customer) || customer.displayName || customer.name || '',
         customerPhone: customer.phone || '',
         customerLineUserId: customer.lineUserId || null,
         customerHN: customer.hn || customer.HN || null,

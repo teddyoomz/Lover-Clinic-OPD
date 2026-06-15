@@ -7,6 +7,7 @@ import { RecallOutcomeModal } from './RecallOutcomeModal.jsx';
 import { RecallLineTemplateModal } from './RecallLineTemplateModal.jsx';
 import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
+import { useEnrichedRecalls } from '../../../hooks/useEnrichedRecalls.js';
 import { useRecallCases } from '../../../hooks/useRecallCases.js';
 import { deleteRecall } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
@@ -25,7 +26,9 @@ import { thaiTodayISO } from '../../../utils.js';
  */
 export function RecallFrontendView() {
   const todayISO = thaiTodayISO();
-  const { recalls, loading, error } = useRecallListener({ filters: {} });
+  const { recalls: rawRecalls, loading, error } = useRecallListener({ filters: {} });
+  // 2026-06-16 Part B — live-resolve customer names (rows + modal headers).
+  const recalls = useEnrichedRecalls(rawRecalls);
   // Phase 29.22 (2026-05-14) — be_recall_cases shared hook for typeahead.
   const { recallCases, onSaveAsRecallCase } = useRecallCases();
 

@@ -59,6 +59,25 @@ export function RecallRow({
   const over = isOverdue(recall, todayISO);
   const snoozed = !!recall.snoozedUntil && recall.status === 'pending';
 
+  // 2026-06-16 Part B (items 6/7) — surface the snooze/reschedule target date in
+  // the row. no-answer (auto-snoozed +3d) → "📞 โทรอีกครั้ง"; reschedule (admin
+  // picked a new date) → "📅 เลื่อนนัด"; other pending+snoozed → "📅 เลื่อนถึง".
+  // Date = dd/mm/yyyy พ.ศ. (Bangkok-local from the stored YYYY-MM-DD).
+  const recallDateChip = (() => {
+    const until = recall.snoozedUntil;
+    if (!until) return null;
+    const m = String(until).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const text = `${m[3]}/${m[2]}/${Number(m[1]) + 543}`;
+    if (recall.status === 'no-answer') return { icon: '📞', label: 'โทรอีกครั้ง', text, tone: 'sky' };
+    if (recall.outcome === 'reschedule') return { icon: '📅', label: 'เลื่อนนัด', text, tone: 'violet' };
+    if (recall.status === 'pending') return { icon: '📅', label: 'เลื่อนถึง', text, tone: 'sky' };
+    return null;
+  })();
+  const recallDateChipTone = recallDateChip && recallDateChip.tone === 'violet'
+    ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-500/30'
+    : 'bg-sky-500/10 text-sky-600 dark:text-sky-300 border-sky-500/30';
+
   // Format dd/mm from recallDate 'YYYY-MM-DD'
   const dateDisplay = recall.recallDate
     ? (() => {
@@ -180,6 +199,15 @@ export function RecallRow({
               <Phone className="w-3 h-3" /> {phoneRaw}
             </a>
           )}
+          {recallDateChip && (
+            <span
+              className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap ${recallDateChipTone}`}
+              data-testid={`recall-snooze-date-chip-mobile-${recall.id}`}
+              title={`${recallDateChip.label} ${recallDateChip.text}`}
+            >
+              {recallDateChip.icon} {recallDateChip.label} {recallDateChip.text}
+            </span>
+          )}
         </div>
         <span
           className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap"
@@ -246,6 +274,15 @@ export function RecallRow({
           >
             {statusLabel}
           </span>
+          {recallDateChip && (
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-md font-bold border whitespace-nowrap ${recallDateChipTone}`}
+              data-testid={`recall-snooze-date-chip-${recall.id}`}
+              title={`${recallDateChip.label} ${recallDateChip.text}`}
+            >
+              {recallDateChip.icon} {recallDateChip.label} {recallDateChip.text}
+            </span>
+          )}
           {recall.requiresManualReview && (
             <span
               className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-red-500/15 text-red-300 border border-red-500/30"

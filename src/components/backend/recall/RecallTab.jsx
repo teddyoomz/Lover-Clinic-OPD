@@ -8,6 +8,7 @@ import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
 import { RecallEditModal } from './RecallEditModal.jsx';
 import { RecallCasesAdminPanel } from './RecallCasesAdminPanel.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
+import { useEnrichedRecalls } from '../../../hooks/useEnrichedRecalls.js';
 import { useRecallCases } from '../../../hooks/useRecallCases.js';
 import { useTabAccess } from '../../../hooks/useTabAccess.js';
 import { deleteRecall } from '../../../lib/scopedDataLayer.js';
@@ -33,7 +34,10 @@ import { thaiTodayISO } from '../../../utils.js';
  */
 export function RecallTab() {
   const todayISO = thaiTodayISO();
-  const { recalls, loading, error } = useRecallListener({ filters: {} });
+  const { recalls: rawRecalls, loading, error } = useRecallListener({ filters: {} });
+  // 2026-06-16 Part B — live-resolve customer names at the load chokepoint, so
+  // the list rows AND every modal opened via findRecall show the real name.
+  const recalls = useEnrichedRecalls(rawRecalls);
   // Phase 29.22 (2026-05-14) — sub-pill access gating for "จัดการเคส".
   // Admin claim bypasses; non-admin staff need `recall_management` perm.
   const { isAdmin, hasPermission } = useTabAccess();
