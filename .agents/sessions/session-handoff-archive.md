@@ -5,6 +5,28 @@
 
 ---
 
+## Archived 2026-06-16 — SESSION_HANDOFF overflow: sessions `2026-06-04` → `2026-06-04` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-04 — Appointment-system looping bug-hunt (12 rounds) CONVERGED + DEPLOYED
+
+`/systematic-debugging` looping adversarial bug-hunt over the appointment Core + cross-system wiring, fix → re-hunt → until a fresh hunt finds nothing. **12 rounds, CONVERGED.** master/prod = `0e80af8d` (DEPLOYED — vercel-only, no rules → no Probe-Deploy-Probe; prod `bff0bde6` → `0e80af8d`).
+- **~12 real purpose-breaking bugs fixed (R5-R11), each L2 on REAL prod (shipped fns, no mock) + RED→GREEN**: R5 un-cancel/edit reserve HIJACK a slot taken in the cancelled window · R6 deposit-booking LINE reminder never fired (V67 notifyChannel drop) + non-atomic deposit cancel/delete → concurrent money lost-update (Rule T) + treatment-delete bricks appt + cron lost whole batch · R7 doctor-clear orphan slot (ghost-collision) + edit silently relocates cross-branch appt + refund leaks slot/ghost-appt + reschedule suppresses reminder · R8 slot guard ignored parent-appt status → orphan over-block + cancelled appt showed green "done" · R9 branch/customer restore dropped slot guard (rebuild) + blank AP1 msg + roomName↔roomId · R10 treatment-link FK not customer-validated → brick on customer-change + concurrent-edit phantom slot · R11 LINE confirm-postback resurrected a cancelled appt unguarded.
+- **No-regression (Rule A) — 3 layers**: happy-path e2e 29/0 (prod) + existing behavior/RTL/flow-simulate 122/0 + full vitest 16219/0. V21 fixups = legit contract updates (RTL/behavior tests pass unchanged → user-facing intent preserved).
+- **Deferred (sub-bar, documented; not damage vectors)**: C2 note-edit resurrection · B2 restore-dangling out-of-window link · hub future-tab cross-month staleness · recurring date math.
+- Artifacts: 8 `scripts/e2e-appt-r{5..10}-*.mjs` + happy-path + 7 `tests/appt-r{5..11}-*` + AVxx + V21 fixups. Detail: checkpoint `2026-06-04-appointment-loop-converged.md`.
+
+---
+
+📂 **Older sessions (`2026-06-03 EOD+5` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-09 EOD+1) — V162: TFP buy critical-path qty-multiply divergence + per-purchase rowId/remove collision (course+promo) — COMMITTED + PUSHED, NOT deployed**: master = `2d13c980` (ahead of prod `e56d2ac7`; **frontend-only, no firestore.rules → vercel-only when authorized, no Probe-Deploy-Probe**). `/systematic-debugging` + ultracode (user: *"จุดซื้อขายของ แม่งไม่น่าให้อภัย ... แก้ไม่ให้มีบั๊คแบบนี้หลงเหลือ"*). **Bug#1**: buy a course qty N → "ข้อมูลการใช้คอร์ส" showed 1× while the bill charged N× (`buildPurchasedCourseEntry` un-multiplied; sale + `resolvePurchasedCourseForAssign` multiplied → DISPLAY≠SALE≠PERSIST). **Bug#2**: same course bought twice → checkbox collision + delete-one-removed-both (per-purchase identity keyed off the MASTER `item.id`; `now` was only on courseId not rowId). **Fix (Rule P, course AND promo)**: per-purchase `purchaseUid` (confirmBuyModal counter ref) threaded through courseId + every rowId + grouping + `removePurchasedItem` targeting + promo consumables; PLUS `buildPurchasedCourseEntry` multiplies by `buyQty` → DISPLAY===SALE===PERSIST. SaleTab already correct. **Verified**: default vitest **16300/0** (+23 new bank incl. display===persist A6) + build clean + extended `treatmentBuyHelpers` 54/54 (+4 V21 BPCE fixups) + **Rule Q L1 real-browser of the actual Vite-served module** (display ×3 + `displayEqualsPersist:true` + distinct rowIds + checkbox-independent + targeted-remove). AV190 + V162. **Honest (Rule Q)**: assembled-UI click (login+customer) = user L1 post-deploy. **Pre-existing flagged**: `npm run test:extended` 283/4699 fail = V50-deleted AppointmentTab/MasterDataTab/CloneTab still imported by 46 stale RTL tests (opt-in; task spawned). Checkpoint `.agents/sessions/2026-06-09-tfp-buy-qty-and-rowid-collision.md`.
+
+---
+
 ## Archived 2026-06-16 — SESSION_HANDOFF overflow: sessions `2026-06-03 EOD+5` → `2026-05-27 EOD+13 → 2026-05-28` + Current-State index
 
 ### Session blocks (13)
