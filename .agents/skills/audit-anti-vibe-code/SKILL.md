@@ -2393,8 +2393,23 @@ new modal INSIDE a glow card requires portal (or this list extension) per Rule P
 hover-lift micro-interaction (2026-05-20) → fix at the modal layer (portal), not
 the glow layer. A future modal rendered inside a glow card MUST portal or regress.
 
+**2026-06-19 recurrence (ED modals)**: `EDScoreBox` (CustomerDetailView right
+column) is a NEW card component whose ROOT IS a `rounded-xl` card (`cardCls`) and it
+renders `<EDDetailModal/>` INSIDE that card → the 2-panel compare modal was confined
+to the box ("modal แค่ box ตัวเอง"). Same class as the recall bug; missed because the
+regression test above was RECALL-DIR-SCOPED. Fix: `EDDetailModal` + `EDFollowupModal`
+now `createPortal(..., document.body)`. **Census (/systematic-debugging, 2026-06-19):
+EDDetailModal was the LONE trapped instance** — every other overlay modal renders at a
+tab/panel/page ROOT as a SIBLING of (not descendant of) rounded cards (FinanceTab +
+panels root = `space-y-4`; OrderPanel / report-tab / TFP roots), confirming the
+sanctioned-safe rationale above. EDScoreBox is unique: a card-component that spawns a
+modal inside its own card. Guard: `tests/av98-ed-modal-portal.test.js` (A ED modals
+portal + B EDScoreBox nesting neutralized + C card-spawn registry + D universal walk:
+no rounded-card-root component may inline a non-portaled `fixed inset-0` overlay).
+
 **Cross-link**: tests `tests/recall-modal-portal-and-header-dedup.test.js`
-(A portal + B breadcrumb-dedup + C this invariant). Companion fix: BackendDashboard
+(A portal + B breadcrumb-dedup + C this invariant) + `tests/av98-ed-modal-portal.test.js`
+(2026-06-19 ED recurrence). Companion fix: BackendDashboard
 viewing-customer breadcrumbSlot controls gated `menuMode === 'classic'`
 (duplicate-header bug, same commit).
 

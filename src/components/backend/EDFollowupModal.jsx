@@ -4,6 +4,7 @@
 // expiry) and renders a link + QR (full-screen for the customer to scan on mobile).
 // AV78: backdrop click does NOT close — explicit close only (X / ปิด / ESC).
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { QrCode, X, Copy, Maximize2 } from 'lucide-react';
 import { ED_TYPE_META } from '../../lib/edScoreDisplay.js';
 import { createAssessmentRound, createAssessmentSession, supersedePendingFollowups } from '../../lib/scopedDataLayer.js';
@@ -66,9 +67,10 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
 
   const panel = isDark ? 'bg-[#0a0a0a] border-[#222] text-[var(--tx-primary)]' : 'bg-white border-gray-200 text-[var(--tx-primary)]';
 
-  // Full-screen QR — normal modal overlay (real app, position:fixed OK here).
+  // Full-screen QR — portaled to document.body (AV98) so a glow-card ancestor
+  // can't confine this fixed overlay.
   if (fullscreen && result) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center p-4" data-testid="ed-qr-fullscreen" role="dialog" aria-modal="true" aria-label="QR แบบประเมินติดตาม">
         <div className="flex items-center justify-between w-full max-w-md mb-4">
           <span className="text-white font-bold">แบบประเมิน ครั้งที่ {roundNumber}</span>
@@ -77,11 +79,13 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
         <img src={result.qr} alt="QR แบบประเมิน" className="w-full max-w-md aspect-square rounded-xl bg-white" />
         <div className="text-gray-300 text-sm mt-4 text-center">ให้ลูกค้าสแกนด้วยกล้องมือถือ</div>
         <div className="text-gray-500 text-xs mt-1 text-center">ลิงก์หมดอายุใน 1 วัน หรือเมื่อกรอกเสร็จ</div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 
-  return (
+  return createPortal(
+    // AV98: portal to document.body so a glow-card ancestor can't confine this fixed overlay.
     <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" data-testid="ed-followup-modal" role="dialog" aria-modal="true" aria-labelledby="ed-followup-title">
       <div className={`w-full max-w-md rounded-xl border overflow-hidden ${panel}`}>
         <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center justify-between">
@@ -129,6 +133,7 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

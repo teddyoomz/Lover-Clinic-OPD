@@ -6,6 +6,7 @@
 // side-by-side (no ดีขึ้น/แย่ลง trend — per user). Reuses buildEdAnswerRows / scoreForType
 // (no re-impl). AV78: backdrop click does NOT close — only ✕ / ESC. Pure display.
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { ED_TYPE_META, scoreForType, formatRoundDate } from '../../lib/edScoreDisplay.js';
 import { buildEdAnswerRows } from '../../lib/edQuestions.js';
@@ -164,7 +165,11 @@ export default function EDDetailModal({ type, round, rounds = [], hero, isDark, 
   ) : null;
   const ordered = isPrimaryLeft ? [pPanel, cPanel] : [cPanel, pPanel];
 
-  return (
+  return createPortal(
+    // AV98: portal to document.body — EDScoreBox renders this INSIDE its rounded-xl
+    // glow card, and the V86 auto-glow's :hover transform makes that card the
+    // containing block for this fixed overlay → confines it to the box. Portaling
+    // escapes the transformed ancestor. (User chose "keep V86 lift" → portal modals.)
     // AV78: backdrop has NO onClick → clicking outside does NOT close (✕ / ESC only).
     <div className="fixed inset-0 z-[110] bg-black/55 flex items-start justify-center p-4 overflow-y-auto"
       data-testid="ed-detail-backdrop" role="dialog" aria-modal="true" aria-labelledby="ed-detail-title">
@@ -214,6 +219,7 @@ export default function EDDetailModal({ type, round, rounds = [], hero, isDark, 
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
