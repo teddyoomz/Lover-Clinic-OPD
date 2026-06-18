@@ -1,34 +1,32 @@
 ---
-updated_at: "2026-06-18 — ED Score box (round-select + per-question detail modal + viewing-state-for-past-only) + follow-up push name+HN. SHIPPED local, NOT deployed."
-status: "COMMITTED + PUSHED, NOT deployed (user: session-end, ยังไม่ต้อง deploy). full vitest 16722/0; build clean."
+updated_at: "2026-06-18 EOD+1 — ED Score 2-panel round compare + be_assessments backup coverage (+ be_wallets phantom fix). SHIPPED + DEPLOYED LIVE."
+status: "COMMITTED + PUSHED + DEPLOYED (vercel + functions). full vitest 16756/0; build clean."
 branch: "master"
-last_commit: "92c5ab0b — feat(functions/push): follow-up assessment push shows customer name + HN"
+last_commit: "2e19ac01 — test(backup): real-prod L2 e2e be_assessments + be_customer_wallets round-trip (9/0)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "UNCHANGED — frontend lover-clinic-p4uawr0kx (HEAD 00da035d, mobile-load). Today's 3 features NOT deployed."
-firestore_rules_version: "UNCHANGED (no rules/api/data change this session)."
-tests: "full vitest 16722/0 (this session's last run) + build clean. NOT re-run at session-end."
+production_commit: "lover-clinic-a2f1vlim5 (vercel --prod, frontend) + firebase functions deployed (sendPushOnSubmit). aliased lover-clinic-app.vercel.app HTTP 200."
+firestore_rules_version: "UNCHANGED (no rules change this session → no Probe-Deploy-Probe)."
+tests: "full vitest 16756/0 (this session's last run) + build clean. NOT re-run at session-end."
 ---
 
-# Active — 2026-06-18 — ED box detail + follow-up push name+HN (SHIPPED local, NOT deployed)
+# Active — 2026-06-18 EOD+1 — ED 2-panel compare + be_assessments backup coverage (SHIPPED + DEPLOYED)
 
 ## State
-- master HEAD `92c5ab0b` (= origin, tree clean). prod UNCHANGED (`00da035d`) — 3 features today NOT deployed (user: "session end เลย ยังไม่ต้อง deploy").
-- full vitest **16722/0** + build clean (reused — not re-run at session-end).
-- 3 features, each /brainstorming or /systematic-debugging → spec → plan → inline impl → test → adversarial Workflow.
+- master HEAD `2e19ac01` (= origin, tree clean). prod DEPLOYED LIVE — `lover-clinic-a2f1vlim5` (vercel frontend) + functions (`sendPushOnSubmit`); aliased `lover-clinic-app.vercel.app` HTTP 200.
+- full vitest **16756/0** + build clean (reused — not re-run at session-end).
+- 2 features via /brainstorming → spec(html) → plan(html) → inline impl → test → adversarial Workflow → Rule R diag + Rule M cleanup + Rule Q L2 e2e → deploy.
 
-## What this session shipped (detail → checkpoint 2026-06-18-ed-box-detail-and-push.md)
-- **ED chip round-select** — click a history row → chips show that round's snapshot + "← ไปที่ครั้งล่าสุด"; default (no selection) = merged latestPerType UNCHANGED.
-- **ED chip → per-question detail modal** (EDDetailModal) — click ADAM/IIEF/MRS/PE → full question text + customer's answer (option label); AV78 explicit-close. NEW canonical `src/lib/edQuestions.js`.
-- **viewing-state for PAST rounds only** (/systematic-debugging) — selecting the latest (hero) = default home view; no redundant button, no stuck state. Derived `viewingPast`; robust to delete-renumber.
-- **Follow-up push name+HN** (Cloud Function) — pure CJS `notificationContent.js` + `customerDisplay.js`; `functions/index.js` reads be_customers live → body "🔔 {name} · HN {hn}"; intake+edit unchanged.
-- Verified: ed-score-round-select 15/0 · ed-detail-modal 10/0 · ed-questions 9/0 · notification-content 15/0 (incl ESM parity) · **Rule R real-prod 2/2** (real follow-ups → correct name+HN) · full 16722/0 · build clean.
-- Adversarial: notification WF (5 lenses; cf-wiring/parity/regression clean) → 5 defensive findings fixed (trim whitespace name/title + compose-either intake name). ED-detail WF stalled (no result; feature has RTL 10/0 + chip-click verified).
+## What this session shipped (detail → checkpoint 2026-06-18-ed-compare-and-backup-coverage.md)
+- **ED Score 2-panel round compare** (`303a85af`) — `EDDetailModal` reworked into side-by-side compare (left/right swap via `useLayoutPreference('ed-compare')`, per-panel round pickers, type tabs, latest "ล่าสุด"/"วันนี้" hero badges, changed-row highlight). REMOVED the better/worse trend (user). Badges no-squeeze (flex:none + centered + nowrap). NEW pure `src/lib/edCompare.js` (`autoPickCompareRound` + `markChangedRows`). AV78 backdrop no-close. Tests: ed-compare 11/0 + ed-detail-modal 16 RTL + 5 source-grep.
+- **be_assessments backup coverage** (`f9c4d36b`) — new ED `be_assessments` (2026-06-15) was missing from EVERY backup/cascade scope → V122-class drift. Added to `CUSTOMER_CASCADE_COLLECTIONS_FULL` (now 17), `CUSTOMER_ONLY_UNIVERSAL`, `branchBackupCore.UNIVERSAL`. **Single-source reconcile**: `backendClient.CUSTOMER_CASCADE_COLLECTIONS` = `…_FULL` (was a drifting inline 11) → client-delete + server-delete can't diverge. NEW drift-catcher test (D: every customerId-queried be_* ⊆ FULL ∪ allowlist). Whole-system FULL already dynamic (V122) → covered automatically.
+- **be_wallets phantom fix** (same commit) — the drift-catcher immediately surfaced it: cascade listed `be_wallets` (0 docs, no rule, no accessor); the real store is `be_customer_wallets` (composite id `customerId__walletTypeId`, money-adjacent). Renamed across cascade/delete/backup/scripts → customer delete no longer ORPHANS wallet balances.
+- **Rule M orphan cleanup (APPLIED)** — Rule R diag found 5 prod orphans (4 be_assessments for deleted LC-26000155 + 1 be_customer_wallets for deleted 2853). `cleanup-orphan-assessments.mjs --apply` deleted 5 + audit `cleanup-orphan-assessments-1781799289079-01e2d08b`; verified idempotent (0 left).
+- Verified: ed-compare 11/0 · ed-detail-modal 21/0 · be-assessments-backup-coverage (A–E incl. drift-catcher) · **Rule Q L2 e2e 9/0 real prod** (`e2e-be-assessments-backup-roundtrip.mjs` — seed→collect-by-customerId→restore→cleanup) · full **16756/0** · build clean.
 
 ## Next action
-- Idle / await. **To deploy (V18 — needs "deploy" THIS turn):** frontend 3 ED features → `vercel --prod`; notification → `firebase deploy --only functions` (needed for the push to take effect live). No firestore.rules change → no Probe-Deploy-Probe.
+- Idle / await. Both features DEPLOYED LIVE. (2 transient full-suite timeout flakes confirmed green on re-run — v85-glow / staff-chat; not real fails.)
 
 ## Outstanding (user-triggered)
 - ⚠ ROTATE LINE/FB secrets (AV195).
 - Pending chip: encode customer id in LINE OA message URL (task_1a3ac96c).
-- Honest gap (Rule Q): ED L1 pixel render (authed CDV) + notification L1 real-push = USER hands-on after deploy (no staff creds/device this session).
-- ED-detail adversarial Workflow stalled — optionally re-run for its 7-lens result.
+- Honest gap (Rule Q): ED-compare L1 pixel render on authed CDV (real ≥2-round customer) = USER hands-on; L2 + RTL + adversarial done.

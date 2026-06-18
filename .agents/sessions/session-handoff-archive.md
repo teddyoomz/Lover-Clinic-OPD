@@ -5,6 +5,24 @@
 
 ---
 
+## Archived 2026-06-18 — SESSION_HANDOFF overflow: sessions `2026-06-09 EOD+3` → `2026-06-09 EOD+3` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-09 EOD+3 — Deposit money in reports (reports-payment + reports-sale) — SHIPPED + DEPLOYED LIVE
+
+`/brainstorming`×2 + `/systematic-debugging`. Made reports reflect deposit money (was ฿0/invisible). reports-payment: per-channel `ยอดขาย|มัดจำ|ยอดรวม|ใบเสร็จ(clickable)|%` + refund footnote; กดใบเสร็จ → PaymentDocsModal (ใบขาย+ใบมัดจำ) → ใบขายเปิด SaleDetailModal / ใบมัดจำเด้งหน้ามัดจำ. reports-sale: "มัดจำคงเหลือในระบบ" chip + deposit rows interleaved into the ONE sale table, COLUMN-ALIGNED to the 18 real columns (teal `bg-teal-900/10` + badge "มัดจำรับเข้า" + amount→ยอดที่ชำระ + full details), NOT summed into footer. deposit deep-link → DepositPanel DetailModal. **No double-count proven on real prod** (SaleTab deducts deposit before channels; ฿19k now visible). 3 user asks: count deposits → "ใส่ตารางเดียวกัน" → "ทำให้เนียน". **TDZ crash (mergedRows before out — const not hoisted) caught by Rule Q L1, build missed it** → fixed + SG3 guard. Commits `fbf9a0fa`(core)→`c90fbf09`(UI)→`41024418`(verify)→`20776c40`(interleave+TDZ)→`68fefb77`(column-aligned). **DEPLOYED** `vercel --prod` (frontend-only, no rules; this deploy also caught up V162 + 4-fix). Verified: full vitest 16326/0 (exc 2 env-flakes bsa-task7/v85-glow, pass isolated) + build clean + Rule Q L2 real-prod diag (`scripts/diag-deposit-in-reports.mjs`) + L1 real browser. AV191. NEW: loadDepositsByDateRange · depositReportUtils · paymentSummaryAggregator rewrite · DepositReceiptRow · PaymentDocsModal · renderDepositCell. (SESSION_HANDOFF slightly over 200KB soft-cap — archival deferred to a maintenance turn; well under 256KB boot limit.) Detail: `.agents/sessions/2026-06-09-deposit-in-reports.md`.
+
+---
+
+📂 **Older sessions (`2026-06-09 EOD+1` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-09 EOD+3 LATE) — V163: "แก้คงเหลือ" (ลด/เพิ่มคงเหลือคอร์ส) PROD CRASH `parseQtyString is not defined` FIXED + DEPLOYED LIVE**: master = `cd11542d` (docs); **prod frontend = `7c5f4e0a` LIVE** @ lover-clinic-app.vercel.app (`vercel --prod` aliased, HTTP 200; **frontend-only — firestore.rules UNCHANGED → no Probe-Deploy-Probe**). `/systematic-debugging` + ultracode. **Root**: `adjustCourseRemainingQty` (the `b8351546` unified add/reduce refactor) used `parseQtyString` but the module-top static `import {…} from './courseUtils.js'` OMITTED it (had the other 5 — that's why `formatQtyString`/`reverseQty` worked in the same fn). Undefined identifier → global lookup → `npm run build` CLEAN → only threw at runtime on the ยืนยันลด/เพิ่ม save (V6/V11/V104 build-invisible class). **Fix (1 line, class-eliminating)**: add `parseQtyString` to that static import → module-scoped for every fn. **Why 16326-green missed it**: the default-suite C1.6–C1.13 are SOURCE-GREP only (never EXECUTE the fn) → can't catch a runtime ReferenceError (V66 lesson); the lone execution test was opt-in `tests/extended/`. NEW `tests/av192-courseutil-scope-execution-2026-06-09.test.js` EXECUTES the real fn (only the Firestore tx mocked; import resolution 100% real ESM) → RED 7 w/ the exact error on the reverted import, GREEN 8 on fix; AV192.8 = classifier over every backendClient courseUtils usage. **Rule P**: 5-agent adversarial workflow swept all courseUtils usages (13 files) + the sibling stockUtils per-fn-destructure class → SOLE instance, 0 siblings. **AV192**. **Verified**: full vitest **16332/2** (the 2 = PRE-EXISTING unrelated flakes — v55-1 derivePatientTreatmentHistory fast-check random-seed + 1 env-flake; v55-1 passes 296/0 isolated) + build clean + **Rule Q L1 real browser** (local Vite dev → real prod Firestore, TEST customer, exact flow `แก้คงเหลือ→ลด→ยืนยันลด -1/หมอมายด์` → no alert, 6/12→5/12 in UI, Firestore `courses[0].qty="5 / 12 ครั้ง"`; fixture cleaned). **Honest gap (Rule Q)**: L1 on LOCAL dev = IDENTICAL committed+deployed source vs real prod Firestore; the live deployed-URL re-drive was blocked (Chrome MCP not connected, Claude Preview localhost-only) → live smoke HTTP 200. Checkpoint `.agents/sessions/2026-06-09-v163-parseqtystring-crash.md`.
+
+---
+
 ## Archived 2026-06-18 — SESSION_HANDOFF overflow: sessions `2026-06-09 EOD+1` → `2026-06-09 EOD+1` + Current-State index
 
 ### Session blocks (1)
