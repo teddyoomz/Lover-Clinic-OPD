@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score chip → per-question answer detail — Implementation Plan</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; } .step input { margin-right: 0.5em; accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1em; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; } th,td { border:1px solid var(--bd); padding:0.5em 0.8em; text-align:left; font-size:0.9em; vertical-align:top; } th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>ED Score chip → per-question answer detail — Implementation Plan</h1>
+
+<blockquote><strong>Inline execution.</strong> Spec: <code>docs/superpowers/specs/2026-06-18-ed-score-answer-detail-design.html</code> (Q1=A Modal, Q2=A canonical+new-view-only).</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> กดช่อง ADAM/IIEF-5/MRS/PE ในกล่อง ED Score → เปิด modal แสดงคำถามทุกข้อของแบบทดสอบนั้น + คำตอบของลูกค้า (พร้อม label ตัวเลือก) ของครั้งที่ค่าบนช่องนั้นมาจาก.</p>
+  <p><strong>Architecture:</strong> NEW canonical <code>src/lib/edQuestions.js</code> (คำถาม + options + <code>buildEdAnswerRows</code>) + NEW <code>src/components/backend/EDDetailModal.jsx</code> + แก้ <code>EDScoreBox.jsx</code> (ช่องมีข้อมูล → role=button เปิด modal). re-use scoreForType/formatRoundDate/ED_TYPE_META. ไม่แตะ data/rules/API/AdminDashboard/PrintTemplates.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup"><div class="mockup-label">modal (IIEF-5) — score header + คำถามเต็ม + answer label; ✕/ESC ปิด, backdrop ไม่ปิด</div>
+  <div style="background:#0e0e0e;border:1px solid #2a2a2a;border-radius:14px;color:#e6e6e6;max-width:520px;padding:0;">
+    <div style="display:flex;justify-content:space-between;padding:12px 15px;border-bottom:1px solid #2a2a2a;"><div><div style="font-size:14px;font-weight:600;color:#f87171;">IIEF-5 · สมรรถภาพทางเพศ</div><div style="font-size:11px;color:#8a8a8a;">ครั้งที่ 2 · 18/06/2569</div></div><span style="color:#8a8a8a;">✕</span></div>
+    <div style="margin:13px 15px 4px;padding:10px 13px;border-radius:11px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);display:flex;justify-content:space-between;"><span style="color:#f87171;font-size:13px;font-weight:600;">เสื่อมระดับเล็กน้อยถึงปานกลาง</span><span><b style="font-size:22px;color:#fff;">13</b><span style="color:#8a8a8a;"> / 25</span></span></div>
+    <div style="padding:4px 15px 15px;"><div style="display:flex;justify-content:space-between;gap:12px;background:rgba(255,255,255,.02);border:1px solid #232323;border-radius:8px;padding:8px 11px;margin-top:7px;"><span style="font-size:12px;color:#cfcfcf;">1. ท่านมีความมั่นใจว่าสามารถมีอวัยวะเพศแข็งตัวและสอดใส่ได้ มากน้อยเพียงใด?</span><span style="font-size:12px;font-weight:600;color:#f87171;white-space:nowrap;">ปานกลาง (3)</span></div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<table>
+  <tr><th>Action</th><th>Result</th></tr>
+  <tr><td>กดช่อง (มี measured)</td><td><code>setDetail({type:t, round:measured})</code> → render <code>&lt;EDDetailModal&gt;</code></td></tr>
+  <tr><td>ช่อง "—"</td><td>เป็น <code>&lt;div&gt;</code> เฉยๆ — กดไม่ได้</td></tr>
+  <tr><td>✕ / ESC</td><td><code>onClose</code> → <code>setDetail(null)</code></td></tr>
+  <tr><td>backdrop click</td><td>ไม่ปิด (AV78 — ไม่มี onClick บน backdrop)</td></tr>
+  <tr><td>เลือกครั้งเก่าแล้วกดช่อง</td><td>measured = selectedRound → modal โชว์คำตอบครั้งที่เลือก</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: canonical <code>src/lib/edQuestions.js</code> + helper (TDD)</h3>
+  <p><strong>Create:</strong> <code>src/lib/edQuestions.js</code>, <code>tests/ed-questions.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: write failing helper tests</strong> — buildEdAnswerRows per type + edge (undefined→"—", mrs 0→"ไม่มีอาการ", iief out-of-range→"—", pe bool) + canonical counts (ADAM 10 / IIEF 5 each opts 5 / MRS 11 / labels 5).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: run → FAIL</strong> (<code>npx vitest run tests/ed-questions.test.js</code>).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: implement</strong></div>
+<pre><code class="language-js">// edQuestions.js — canonical ED questionnaire (Rule-of-3 source; from PatientForm:1251/1283/1324).
+// PURE, no React. buildEdAnswerRows(type, raw) → [{ n, question, answer, flagged }].
+export const ADAM_QUESTIONS = [
+  { key: 'adam_1', th: 'ความต้องการทางเพศลดลง' }, { key: 'adam_2', th: 'รู้สึกขาดพลังงาน' },
+  { key: 'adam_3', th: 'ความแข็งแรงหรือความทนทานลดลง' }, { key: 'adam_4', th: 'ส่วนสูงลดลง' },
+  { key: 'adam_5', th: 'ซึมเศร้า ความสุขในชีวิตลดลง' }, { key: 'adam_6', th: 'อารมณ์แปรปรวน หงุดหงิดง่าย' },
+  { key: 'adam_7', th: 'การแข็งตัวของอวัยวะเพศลดลง' }, { key: 'adam_8', th: 'ความสามารถในการเล่นกีฬาหรือออกกำลังกายลดลง' },
+  { key: 'adam_9', th: 'ง่วงนอนหลังทานอาหารเย็น' }, { key: 'adam_10', th: 'ประสิทธิภาพการทำงานลดลง' },
+];
+const FREQ = ['แทบไม่เคย / ไม่เคยเลย (1)', 'น้อยครั้ง (น้อยกว่าครึ่ง) (2)', 'บางครั้ง (ประมาณครึ่งหนึ่ง) (3)', 'บ่อยครั้ง (มากกว่าครึ่ง) (4)', 'เกือบทุกครั้ง / ทุกครั้ง (5)'];
+export const IIEF_QUESTIONS = [
+  { key: 'iief_1', th: 'ท่านมีความมั่นใจว่าสามารถมีอวัยวะเพศแข็งตัวและสอดใส่ได้ มากน้อยเพียงใด?', options: ['น้อยมาก / ไม่มีเลย (1)', 'น้อย (2)', 'ปานกลาง (3)', 'สูง (4)', 'สูงมาก (5)'] },
+  { key: 'iief_2', th: 'เมื่อมีการกระตุ้นทางเพศ อวัยวะเพศท่านแข็งตัวพอที่จะสอดใส่ได้บ่อยแค่ไหน?', options: FREQ },
+  { key: 'iief_3', th: 'เมื่อสอดใส่อวัยวะเพศเข้าไปแล้ว ท่านสามารถคงความแข็งตัวได้บ่อยเพียงใด?', options: FREQ },
+  { key: 'iief_4', th: 'ระหว่างการมีเพศสัมพันธ์ การคงความแข็งตัวจนเสร็จกิจ ยากมากน้อยแค่ไหน?', options: ['ยากมากที่สุด (1)', 'ยากมาก (2)', 'ยาก (3)', 'ค่อนข้างยาก (4)', 'ไม่ยากเลย (5)'] },
+  { key: 'iief_5', th: 'ท่านพึงพอใจกับการมีเพศสัมพันธ์บ่อยแค่ไหน?', options: FREQ },
+];
+export const MRS_QUESTIONS = [
+  { key: 'mrs_1', th: 'อาการร้อนวูบวาบ เหงื่อออก' }, { key: 'mrs_2', th: 'อาการทางหัวใจ (ใจสั่น หัวใจเต้นเร็ว)' },
+  { key: 'mrs_3', th: 'ปัญหาการนอนหลับ (นอนไม่หลับ ตื่นกลางดึก)' }, { key: 'mrs_4', th: 'อารมณ์ซึมเศร้า (เศร้าหมอง หดหู่)' },
+  { key: 'mrs_5', th: 'อารมณ์หงุดหงิดง่าย' }, { key: 'mrs_6', th: 'วิตกกังวล กระวนกระวาย' },
+  { key: 'mrs_7', th: 'อ่อนเพลียทั้งร่างกายและจิตใจ (ไม่มีแรง)' }, { key: 'mrs_8', th: 'ปัญหาทางเพศ (ความต้องการลดลง)' },
+  { key: 'mrs_9', th: 'ปัญหาทางเดินปัสสาวะ (ปัสสาวะบ่อย/แสบขัด)' }, { key: 'mrs_10', th: 'อาการช่องคลอดแห้ง' },
+  { key: 'mrs_11', th: 'อาการปวดข้อและกล้ามเนื้อ' },
+];
+export const MRS_OPTION_LABELS = ['ไม่มีอาการ', 'เล็กน้อย', 'ปานกลาง', 'รุนแรง', 'รุนแรงมากที่สุด'];
+export const PE_QUESTION = { key: 'symp_pe', th: 'มีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย' };
+
+export function buildEdAnswerRows(type, raw) {
+  const d = raw || {};
+  if (type === 'adam') return ADAM_QUESTIONS.map((q, i) => {
+    const yes = !!d[q.key];
+    return { n: i + 1, question: q.th, answer: yes ? 'มีอาการ' : 'ไม่มี', flagged: yes };
+  });
+  if (type === 'iief') return IIEF_QUESTIONS.map((q, i) => {
+    const v = Number(d[q.key]);
+    const ok = Number.isInteger(v) && v >= 1 && v <= 5;
+    return { n: i + 1, question: q.th, answer: ok ? q.options[v - 1] : '—', flagged: false };
+  });
+  if (type === 'mrs') return MRS_QUESTIONS.map((q, i) => {
+    const has = d[q.key] !== undefined && d[q.key] !== null && d[q.key] !== '';
+    const v = Number(d[q.key]);
+    const ok = has && Number.isInteger(v) && v >= 0 && v <= 4;
+    return { n: i + 1, question: q.th, answer: ok ? `ระดับ ${v} — ${MRS_OPTION_LABELS[v]}` : '—', flagged: false };
+  });
+  if (type === 'pe') return [{ n: 1, question: PE_QUESTION.th, answer: d.symp_pe ? 'มีอาการ' : 'ไม่มีอาการ', flagged: !!d.symp_pe }];
+  return [];
+}
+</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 4: run → PASS.</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: <code>EDDetailModal.jsx</code></h3>
+  <p><strong>Create:</strong> <code>src/components/backend/EDDetailModal.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: implement</strong> — props {type, round, isDark, onClose}; ESC via useEffect keydown; backdrop fixed overlay with NO onClick (AV78); ✕ button + per-question rows from buildEdAnswerRows; score banner via scoreForType (boolean → text only for PE); accent per type. <strong>z-index = match EDFollowupModal</strong> (grep its <code>z-[</code> first; use same so it stacks above CustomerDetailView).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: build</strong> (clean — new file imports resolve).</div>
+</div>
+
+<div class="task">
+  <h3>Task 3: wire <code>EDScoreBox.jsx</code> chips</h3>
+  <p><strong>Modify:</strong> <code>src/components/backend/EDScoreBox.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1</strong> import EDDetailModal; <code>const [detail, setDetail] = useState(null)</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2</strong> data chip (the <code>measured</code> branch, NOT the "—" empty branch) → <code>&lt;div role="button" tabIndex={0} aria-label={`ดูคำตอบรายข้อ ${meta.label}`} onClick={() =&gt; setDetail({ type: t, round: measured })} onKeyDown={Enter/Space} className={cls + ' cursor-pointer transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40'}&gt;</code>. Empty "—" chip stays plain <code>&lt;div&gt;</code>. data-testid <code>ed-chip-{t}</code> kept on both.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3</strong> before the card's closing <code>&lt;/div&gt;</code>: <code>{detail &amp;&amp; &lt;EDDetailModal type={detail.type} round={detail.round} isDark={isDark} onClose={() =&gt; setDetail(null)} /&gt;}</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4</strong> run <code>tests/ed-score-round-select.test.jsx</code> → still 14/14 (chips now role=button but content/testid unchanged).</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: RTL test bank <code>tests/ed-detail-modal.test.jsx</code></h3>
+  <p>Mount REAL EDScoreBox (mock only scopedDataLayer.deleteAssessmentRound). Cases: D1 click iief chip → modal + 5 rows + score 13 · D2 full question text + answer label correct · D3 adam chip → 10 rows, true→มีอาการ · D4 ✕ closes · D5 ESC closes · D6 backdrop click → stays open (AV78) · D7 "—" mrs chip → no modal · D8 select past round then click chip → modal "ครั้งที่ 1" · D9 PE chip (local fixture symp_pe:true) → 1 row "มีอาการ".</p>
+  <div class="step"><input type="checkbox"> run → PASS.</div>
+</div>
+
+<div class="task">
+  <h3>Task 5: Verify + adversarial</h3>
+  <div class="step"><input type="checkbox"> targeted (new 2 files + ed-score-round-select + ed-score-box-rtl + 10 ED files) → build → full vitest (Rule N).</div>
+  <div class="step"><input type="checkbox"> adversarial Workflow (lenses: helper-correctness/edge, modal a11y+AV78+ESC, chip clickability + "—" guard, round-source correctness, theme rule-04, contract/testid, test-quality). Adjudicate each (agents overstate).</div>
+  <div class="step"><input type="checkbox"> Rule Q honest gap: L2 = unit + RTL real component; L1 pixel = USER hands-on. NOT deployed (V18).</div>
+</div>
+
+</body>
+</html>

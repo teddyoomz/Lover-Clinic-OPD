@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score Box — กดดูรายละเอียดครั้งอื่น Design Spec</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    .edbox { background:#101010; border:1px solid #272727; border-radius:12px; overflow:hidden; color:#e6e6e6; font-size:12px; }
+    .edhdr { padding:10px 12px; border-bottom:1px solid #272727; color:#fff; font-weight:600; }
+    .chips { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .chip { border-radius:9px; padding:9px; }
+    .c-adam { background:rgba(249,115,22,.07); border:1px solid rgba(249,115,22,.28); }
+    .c-iief { background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.28); }
+    .c-mrs  { background:rgba(236,72,153,.07); border:1px solid rgba(236,72,153,.28); }
+    .c-pe   { background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.30); }
+    .num { font-size:19px; font-weight:600; color:#fff; } .den { color:#8a8a8a; font-size:11px; } .dash { color:#8a8a8a; font-size:13px; margin-top:2px; }
+    .row { background:rgba(255,255,255,.02); border-radius:7px; padding:7px 8px; display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+    .row.sel { background:rgba(249,115,22,.10); border:1px solid rgba(249,115,22,.5); }
+    .pill { background:rgba(249,115,22,.12); border:1px solid rgba(249,115,22,.35); color:#fdba74; border-radius:999px; padding:2px 8px; font-size:11px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>ED Score Box — กดดูรายละเอียดของครั้งอื่นๆ</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-18 · <strong>Status:</strong> Approved by user (Q1=A, Q2=A) ·
+  <strong>Scope:</strong> Frontend-only, ONE component (<code>src/components/backend/EDScoreBox.jsx</code>) · no data / no firestore.rules / no API ·
+  <strong>Plan:</strong> 2026-06-18-ed-score-round-select.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>ในหน้าข้อมูลผู้ป่วย (CustomerDetailView) กล่อง "สมรรถภาพ · ED Score" แสดงรายละเอียด (chips ADAM/IIEF-5/MRS/PE)
+ของ <strong>ครั้งล่าสุดอย่างเดียว</strong>. ครั้งก่อนๆ ปรากฏแค่ตัวเลขย่อในลิสต์ "ประวัติทุกครั้ง" และ <strong>กดไม่ได้</strong>.
+ผู้ใช้ต้องการกดแถวครั้งอื่นในลิสต์ แล้วให้ chips ด้านบนเปลี่ยนไปแสดงรายละเอียดเต็มของครั้งนั้น
+(ผู้ใช้: "กดครั้งอื่นๆแล้วแสดงรายละเอียดของครั้งๆอื่นๆลงบนช่องแสดงคะแนน ... เพราะครั้งอื่นๆมันแสดงแต่ตัวเลขใน list เฉยๆ").</p>
+
+<h2>Mockup Design</h2>
+
+<div class="section">
+  <div class="split">
+    <div>
+      <div class="mockup-label">ตอนนี้ (เดิม) — chips = ครั้งล่าสุด, ลิสต์กดไม่ได้</div>
+      <div class="edbox">
+        <div class="edhdr">💓 สมรรถภาพ · ED Score</div>
+        <div style="padding:12px;">
+          <div style="font-size:11px;color:#8a8a8a;margin-bottom:8px;">ครั้งล่าสุด: <b style="color:#cfcfcf;">ครั้งที่ 2</b> · 18/06/2569 <span class="pill">วันนี้</span></div>
+          <div class="chips">
+            <div class="chip c-adam"><div style="color:#fb923c;">ADAM</div><span class="num">4</span> <span class="den">/10</span><div style="color:#fb923c;font-size:11px;">เข้าข่ายภาวะพร่องฮอร์โมนเพศชาย</div></div>
+            <div class="chip c-iief"><div style="color:#fbbf24;">IIEF-5</div><span class="num">13</span> <span class="den">/25</span><div style="color:#fbbf24;font-size:11px;">เสื่อมระดับเล็กน้อยถึงปานกลาง</div></div>
+            <div class="chip c-mrs"><div style="color:#f472b6;">MRS</div><div class="dash">—</div></div>
+            <div class="chip c-pe"><div style="color:#94a3b8;">PE</div><div class="dash">—</div></div>
+          </div>
+          <div style="margin-top:10px;border-top:1px solid #272727;padding-top:7px;color:#8a8a8a;font-size:11px;">⌄ 🕐 ประวัติทุกครั้ง (2)</div>
+          <div class="row"><span style="color:#cfcfcf;"><b>ครั้งที่ 2</b> · 18/06/2569 · ADAM 4/10 · IIEF-5 13/25</span><span style="color:#8a8a8a;">🗑</span></div>
+          <div class="row"><span style="color:#cfcfcf;"><b>ครั้งที่ 1</b> · 13/05/2569 · ADAM 5/10 · IIEF-5 10/25</span><span style="color:#8a8a8a;font-size:11px;">รับเข้า</span></div>
+          <div style="margin-top:6px;font-size:11px;color:#71717a;font-style:italic;">↑ แถวอื่นกดไม่ได้</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="mockup-label">เสนอใหม่ — กด "ครั้งที่ 1" → chips เปลี่ยน + ปุ่มกลับ</div>
+      <div class="edbox">
+        <div class="edhdr">💓 สมรรถภาพ · ED Score</div>
+        <div style="padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;">
+            <span style="font-size:11px;color:#8a8a8a;">กำลังดู: <b style="color:#cfcfcf;">ครั้งที่ 1</b> · 13/05/2569 <span style="color:#8a8a8a;">· รับเข้า</span></span>
+            <span class="pill">← ไปที่ครั้งล่าสุด</span>
+          </div>
+          <div class="chips">
+            <div class="chip c-adam"><div style="color:#fb923c;">ADAM</div><span class="num">5</span> <span class="den">/10</span><div style="color:#fb923c;font-size:11px;">เข้าข่ายภาวะพร่องฮอร์โมนเพศชาย</div></div>
+            <div class="chip c-iief"><div style="color:#fbbf24;">IIEF-5</div><span class="num">10</span> <span class="den">/25</span><div style="color:#fbbf24;font-size:11px;">เสื่อมระดับเล็กน้อยถึงปานกลาง</div></div>
+            <div class="chip c-mrs"><div style="color:#f472b6;">MRS</div><div class="dash">—</div></div>
+            <div class="chip c-pe"><div style="color:#94a3b8;">PE</div><div class="dash">—</div></div>
+          </div>
+          <div style="margin-top:10px;border-top:1px solid #272727;padding-top:7px;color:#8a8a8a;font-size:11px;">⌄ 🕐 ประวัติทุกครั้ง (2)</div>
+          <div class="row"><span style="color:#cfcfcf;"><b>ครั้งที่ 2</b> · 18/06/2569 · ADAM 4/10 · IIEF-5 13/25</span><span style="color:#8a8a8a;">🗑</span></div>
+          <div class="row sel"><span style="color:#fff;">👁 <b>ครั้งที่ 1</b> · 13/05/2569 · ADAM 5/10 · IIEF-5 10/25</span><span style="color:#8a8a8a;font-size:11px;">รับเข้า</span></div>
+          <div style="margin-top:6px;font-size:11px;color:#86efac;">กดแถวไหน → chips ด้านบนเปลี่ยนเป็นครั้งนั้น</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted);">หมายเหตุ: ค่า ADAM/IIEF-5 ในตัวอย่างจากภาพจริงของลูกค้า (ครั้งที่ 2 = 4/13, ครั้งที่ 1 = 5/10).
+  ครั้งที่ 1+2 ที่นี่ทั้งคู่วัดแค่ ADAM+IIEF → MRS/PE = "—" ในทุกมุมมอง. สี/ขนาด/layout = ตรงกับ <code>EDScoreBox.jsx</code> ของจริง.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="section">
+  <div class="mockup-label">State machine — selectedRoundId (null = ค่าเริ่มต้น merged) → กดแถว → snapshot → ปุ่มกลับ</div>
+  <table>
+    <tr><th>State</th><th>Header line</th><th>Chips (ADAM/IIEF/MRS/PE)</th><th>Row highlight + pill</th></tr>
+    <tr>
+      <td><code>selectedRoundId === null</code><br>(ค่าเริ่มต้น)</td>
+      <td>"ครั้งล่าสุด: ครั้งที่ {hero.round} · {date} [วันนี้] [· จาก PatientForm รับเข้า]" <em>(เดิมไม่เปลี่ยน)</em></td>
+      <td><code>latestPerType[t]</code> — ค่าล่าสุดต่อ type รวมข้ามครั้ง + tag "(ครั้งที่ N)" เมื่อค่ามาจากครั้งเก่ากว่า hero <em>(เดิมไม่เปลี่ยน)</em></td>
+      <td>ไม่ highlight แถวใด · ไม่มี pill</td>
+    </tr>
+    <tr>
+      <td><code>selectedRoundId = r.id</code><br>(กดแถว r)</td>
+      <td>"กำลังดู: ครั้งที่ {r.round} · {date} [วันนี้] [· รับเข้า]"</td>
+      <td>เฉพาะ type ที่ r วัด (<code>r.types.includes(t)</code>) → <code>scoreForType(t, r.raw)</code>; type อื่น = "—". <strong>ไม่มี</strong> tag "(ครั้งที่ N)" (ครั้งเดียว)</td>
+      <td>แถว r highlight (วงส้ม) · มี pill "← ไปที่ครั้งล่าสุด"</td>
+    </tr>
+  </table>
+
+  <div class="mockup-label" style="margin-top:1em;">Interaction edges</div>
+  <table>
+    <tr><th>Action</th><th>Result</th></tr>
+    <tr><td>กดที่ <strong>ตัวแถว</strong> (ทุกแถว รวม "รับเข้า")</td><td><code>setSelectedRoundId(r.id)</code> → เข้า snapshot state</td></tr>
+    <tr><td>กดปุ่ม <strong>"← ไปที่ครั้งล่าสุด"</strong></td><td><code>setSelectedRoundId(null)</code> → กลับ merged default</td></tr>
+    <tr><td>กดไอคอน <strong>🗑 (ลบ)</strong> บนแถว</td><td><code>e.stopPropagation()</code> → เรียก <code>handleDelete</code> (ไม่ select). ถ้าลบครั้งที่กำลังดูอยู่ → <code>setSelectedRoundId(null)</code> ด้วย</td></tr>
+    <tr><td>listener re-fire / rounds เปลี่ยน แล้ว <code>selectedRoundId</code> หายไป</td><td>derived guard: ถ้าหาไม่เจอใน <code>rounds</code> → ถือเป็น null (merged) — กัน selection ค้าง</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong>ไฟล์เดียว:</strong> <code>src/components/backend/EDScoreBox.jsx</code>. ไม่มีไฟล์ใหม่, ไม่แตะ <code>assessmentRoundsCore.js</code> / <code>edScoreDisplay.js</code> (re-use <code>deriveRounds</code> / <code>latestPerType</code> / <code>scoreForType</code> / <code>formatRoundDate</code> ที่มีอยู่).</li>
+  <li><strong>State:</strong> เพิ่ม <code>const [selectedRoundId, setSelectedRoundId] = useState(null)</code>.</li>
+  <li><strong>Derived:</strong> <code>const selectedRound = selectedRoundId ? rounds.find(r =&gt; r.id === selectedRoundId) : null;</code> (ทำหน้าที่ guard ในตัว — ถ้าหาไม่เจอ → null).</li>
+  <li><strong>Chip source:</strong> เมื่อ <code>selectedRound</code> != null → render chips จาก <code>selectedRound</code> โดยตรง (per-type: วัด→<code>scoreForType</code>, ไม่วัด→"—"); เมื่อ null → <code>latestPerType</code> เดิมทุกอย่าง (รวม olderTag).</li>
+  <li><strong>Header:</strong> สลับข้อความตาม state ตามตาราง Flow + pill "← ไปที่ครั้งล่าสุด" โผล่เฉพาะ selected state.</li>
+  <li><strong>History rows → buttons:</strong> ทั้งแถวเป็น <code>&lt;button type="button" role="button" aria-pressed={selected} aria-label="ดูผลการประเมิน ครั้งที่ N"&gt;</code> onClick = select; ปุ่มลบ/badge "รับเข้า" เป็น nested element, ปุ่มลบมี <code>e.stopPropagation()</code>. แถวที่เลือก = วงส้ม (เหมือน mockup AFTER).</li>
+  <li><strong>ไม่แตะ:</strong> send button (always "ครั้งที่ {nextN}"), empty state, expand/collapse toggle, deleteAssessmentRound, theme classes (CHIP map), data-testid เดิม.</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> กดแถวในลิสต์เพื่อเลือก + ปุ่ม "← ไปที่ครั้งล่าสุด" กลับ; แถวที่เลือก highlight; ลิสต์ยังพับ/กางเหมือนเดิม (ไม่บังคับกางค้าง, ไม่ใช้ลูกศร prev/next).</li>
+  <li><strong>Q2 = A:</strong> ค่าเริ่มต้น (selectedRoundId === null) = คงพฤติกรรมเดิมทุกอย่าง (merged latestPerType "ครั้งล่าสุด" + olderTag). การกดดูครั้งเก่าเป็นการ <em>เพิ่ม</em> snapshot view — zero change ต่อ default. ไม่ทำให้ทุกมุมมองเป็น snapshot ครั้งเดียว.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>เปิดกล่อง (ยังไม่กดอะไร) → แสดงเหมือนเดิมเป๊ะ: header "ครั้งล่าสุด: ครั้งที่ {N}", chips = merged latestPerType (พร้อม olderTag ถ้ามี). ไม่มี regression.</li>
+  <li>กางลิสต์ → กดแถว "ครั้งที่ 1" → chips ด้านบนเปลี่ยนเป็นค่า ADAM/IIEF/MRS/PE ของครั้งที่ 1 (type ที่ครั้งนั้นไม่ได้วัด = "—"); header เป็น "กำลังดู: ครั้งที่ 1 · {date}"; แถวที่ 1 highlight; ปรากฏปุ่ม "← ไปที่ครั้งล่าสุด".</li>
+  <li>กดปุ่ม "← ไปที่ครั้งล่าสุด" → กลับสู่ค่าเริ่มต้น merged เดิม (selectedRoundId = null), ไม่มี highlight.</li>
+  <li>กดไอคอนลบบนแถว → ลบได้ตามเดิม (ไม่ select แถว); ถ้าลบแถวที่กำลังดูอยู่ → เด้งกลับ merged default.</li>
+  <li>กดแถว "ครั้งที่ 2" (intake "รับเข้า" หรือ followup) → เลือกได้เหมือนกันทุกแถว.</li>
+  <li>คีย์บอร์ด: แถวเป็นปุ่มจริง (focusable, Enter/Space เลือกได้); aria-pressed ตรงสถานะ; ปุ่มกลับมี aria-label.</li>
+  <li>ดาร์ก + ไลท์ธีม: highlight วงส้ม + pill อ่านออกทั้งสองธีม; ไม่ใช้แดงกับชื่อ/HN (rule 04).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>ความสม่ำเสมอของ default vs selected:</strong> default = merged, selected = round-only. ในข้อมูลลูกค้าปัจจุบันเหมือนกัน; เมื่อครั้งล่าสุดวัด type น้อยกว่าครั้งเก่า ค่าจะต่างกันได้ — ตั้งใจตาม Q2=A (default โชว์ค่าล่าสุดที่รู้, selected โชว์ snapshot จริงของวันนั้น). header แยกชัด ("ครั้งล่าสุด:" vs "กำลังดู:") กันสับสน.</li>
+  <li><strong>Verify (Rule Q):</strong> L2 = unit/RTL บน EDScoreBox จริง (mount, click row → chip text เปลี่ยน, click back → กลับ merged, stopPropagation บน delete). L1/pixel = USER hands-on บน authed CustomerDetailView (ไม่มี staff creds สำหรับ automated backend L1 ใน session นี้ — honest gap).</li>
+  <li>ไม่มี data migration / firestore.rules / API → ไม่ต้อง Probe-Deploy-Probe; deploy = vercel frontend-only เมื่อสั่ง.</li>
+</ul>
+
+</body>
+</html>

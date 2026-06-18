@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score Box — Round-Select Implementation Plan</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.9em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>ED Score Box — Round-Select Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Inline execution this session (ONE coupled component — subagents thrash on this baseline per V81/V86). Spec: <code>docs/superpowers/specs/2026-06-18-ed-score-round-select-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ในกล่อง ED Score (CustomerDetailView) ให้กดแถวครั้งใดก็ได้ในลิสต์ประวัติ แล้ว chips ด้านบนแสดง snapshot ของครั้งนั้น + ปุ่ม "← ไปที่ครั้งล่าสุด" กลับสู่ค่าเริ่มต้น.</p>
+  <p><strong>Architecture:</strong> Frontend-only, ไฟล์เดียว <code>src/components/backend/EDScoreBox.jsx</code>. เพิ่ม <code>useState(selectedRoundId)</code>; derived <code>selectedRound</code> (guard ในตัว); chips อ่านจาก selectedRound เมื่อมี ไม่งั้น latestPerType เดิม; แถวประวัติเป็น <code>role="button"</code> (กันnested-button invalid). re-use pure cores ทั้งหมด (deriveRounds/latestPerType/scoreForType/formatRoundDate) — ไม่แตะ.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Tailwind + lucide-react. Test: Vitest + @testing-library/react (mount EDScoreBox จริง, mock เฉพาะ scopedDataLayer.deleteAssessmentRound).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>ดู before→after ที่ render ได้ใน spec (<code>...specs/2026-06-18-ed-score-round-select-design.html</code>). สรุป AFTER (selected = ครั้งที่ 1):</p>
+<div class="mockup">
+  <div class="mockup-label">selected state — header "กำลังดู:" + pill "← ไปที่ครั้งล่าสุด" + แถวที่เลือก highlight ส้ม</div>
+  <div style="background:#101010;border:1px solid #272727;border-radius:12px;padding:12px;color:#e6e6e6;font-size:12px;max-width:380px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:11px;color:#8a8a8a;">กำลังดู: <b style="color:#cfcfcf;">ครั้งที่ 1</b> · 13/05/2569 · รับเข้า</span>
+      <span style="background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35);color:#fdba74;border-radius:999px;padding:2px 8px;font-size:11px;">← ไปที่ครั้งล่าสุด</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+      <div style="background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.28);border-radius:9px;padding:9px;"><div style="color:#fb923c;">ADAM</div><span style="font-size:19px;font-weight:600;color:#fff;">5</span> <span style="color:#8a8a8a;font-size:11px;">/10</span></div>
+      <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.28);border-radius:9px;padding:9px;"><div style="color:#fbbf24;">IIEF-5</div><span style="font-size:19px;font-weight:600;color:#fff;">10</span> <span style="color:#8a8a8a;font-size:11px;">/25</span></div>
+      <div style="background:rgba(236,72,153,.07);border:1px solid rgba(236,72,153,.28);border-radius:9px;padding:9px;"><div style="color:#f472b6;">MRS</div><div style="color:#8a8a8a;margin-top:2px;">—</div></div>
+      <div style="background:rgba(148,163,184,.10);border:1px solid rgba(148,163,184,.30);border-radius:9px;padding:9px;"><div style="color:#94a3b8;">PE</div><div style="color:#8a8a8a;margin-top:2px;">—</div></div>
+    </div>
+    <div style="margin-top:10px;border-top:1px solid #272727;padding-top:7px;color:#8a8a8a;font-size:11px;">⌄ 🕐 ประวัติทุกครั้ง (2)</div>
+    <div style="background:rgba(255,255,255,.02);border-radius:7px;padding:7px 8px;margin-top:6px;display:flex;justify-content:space-between;"><span style="color:#cfcfcf;"><b>ครั้งที่ 2</b> · 18/06/2569 · ADAM 4/10 · IIEF-5 13/25</span><span style="color:#8a8a8a;">🗑</span></div>
+    <div style="background:rgba(249,115,22,.10);border:1px solid rgba(249,115,22,.5);border-radius:7px;padding:7px 8px;margin-top:6px;display:flex;justify-content:space-between;"><span style="color:#fff;">👁 <b>ครั้งที่ 1</b> · 13/05/2569 · ADAM 5/10 · IIEF-5 10/25</span><span style="color:#8a8a8a;font-size:11px;">รับเข้า</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<table>
+  <tr><th>selectedRoundId</th><th>Header</th><th>Chips source</th><th>Pill / highlight</th></tr>
+  <tr><td><code>null</code> (default)</td><td>"ครั้งล่าสุด: ครั้งที่ {hero.round} ..." (เดิม)</td><td><code>latestPerType[t]</code> + olderTag (เดิม)</td><td>ไม่มี pill, ไม่ highlight แถว</td></tr>
+  <tr><td><code>= r.id</code></td><td>"กำลังดู: ครั้งที่ {r.round} · {date} [วันนี้] [· รับเข้า]"</td><td><code>r.types.includes(t) ? scoreForType(t,r.raw) : "—"</code> (ไม่มี olderTag)</td><td>pill "← ไปที่ครั้งล่าสุด"; แถว r วงส้ม</td></tr>
+</table>
+<table>
+  <tr><th>Action</th><th>Result</th></tr>
+  <tr><td>กดตัวแถว (role=button, Enter/Space ได้)</td><td><code>setSelectedRoundId(r.id)</code></td></tr>
+  <tr><td>กดปุ่ม "← ไปที่ครั้งล่าสุด"</td><td><code>setSelectedRoundId(null)</code></td></tr>
+  <tr><td>กด 🗑 บนแถว</td><td><code>e.stopPropagation()</code> → handleDelete; ถ้าลบครั้งที่กำลังดู → <code>setSelectedRoundId(null)</code></td></tr>
+  <tr><td>round หาย (listener re-fire)</td><td>derived <code>selectedRound = rounds.find(...) || null</code> → กลับ merged view เอง (guard)</td></tr>
+</table>
+
+<h2>File Structure</h2>
+<ul>
+  <li><strong>Modify:</strong> <code>src/components/backend/EDScoreBox.jsx</code> — เพิ่ม state + selectedRound + header branch + chip source branch + rows→role=button + delete stopPropagation/reset. ใช้ icon <code>Eye</code>, <code>ArrowLeft</code> จาก lucide-react.</li>
+  <li><strong>Create test:</strong> <code>tests/ed-score-round-select.test.jsx</code> — RTL บน EDScoreBox จริง.</li>
+  <li><strong>Untouched:</strong> assessmentRoundsCore.js, edScoreDisplay.js, scopedDataLayer.js, CustomerDetailView.jsx (props ไม่เปลี่ยน), send button, empty state, expand toggle, CHIP map.</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: RTL test bank (failing first)</h3>
+  <p><strong>Files:</strong> Create <code>tests/ed-score-round-select.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing tests</strong></label></div>
+  <p>Fixture = 2 rounds (intake ADAM5/IIEF10 dated 2026-05-13 + followup ADAM4/IIEF13 dated 2026-06-18). Mock <code>../src/lib/scopedDataLayer.js</code> → <code>{ deleteAssessmentRound: vi.fn() }</code> (the ONLY external; assessmentRoundsCore + edScoreDisplay imported REAL → no mock-shadow). Cases:</p>
+<pre><code class="language-jsx">import { render, screen, fireEvent, within } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import EDScoreBox from '../src/components/backend/EDScoreBox.jsx';
+
+const mockDelete = vi.fn(() =&gt; Promise.resolve());
+vi.mock('../src/lib/scopedDataLayer.js', () =&gt; ({ deleteAssessmentRound: (...a) =&gt; mockDelete(...a) }));
+
+// intake round = ADAM(positive)+IIEF, followup round = ADAM+IIEF. (matches the user screenshot)
+const intakePerf = { assessmentDate: '2026-05-13', adam_q1: true, iief_q1: 2, iief_q2: 2, iief_q3: 2, iief_q4: 2, iief_q5: 2 };
+const assessments = [{ id: 'A2', status: 'completed', assessmentDate: '2026-06-18',
+  types: ['adam','iief'], rawAnswers: { adam_q1: true, iief_q1: 3, iief_q2: 3, iief_q3: 3, iief_q4: 2, iief_q5: 2 } }];
+
+const setup = (props = {}) =&gt; render(&lt;EDScoreBox customerId="C1" intakePerf={intakePerf} assessments={assessments} isDark={true} onSend={vi.fn()} {...props} /&gt;);
+
+describe('EDScoreBox round-select', () =&gt; {
+  beforeEach(() =&gt; mockDelete.mockClear());
+
+  it('R1 default view: header "ครั้งล่าสุด", no back pill', () =&gt; {
+    setup();
+    expect(screen.getByText(/ครั้งล่าสุด:/)).toBeInTheDocument();
+    expect(screen.queryByTestId('ed-back-to-latest')).toBeNull();
+  });
+
+  it('R2 click round-1 row → header "กำลังดู: ครั้งที่ 1" + back pill appears', () =&gt; {
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    fireEvent.click(screen.getByTestId('ed-history-__intake__'));
+    expect(screen.getByText(/กำลังดู:/)).toBeInTheDocument();
+    expect(screen.getByText(/ครั้งที่ 1/)).toBeInTheDocument();
+    expect(screen.getByTestId('ed-back-to-latest')).toBeInTheDocument();
+  });
+
+  it('R3 selected round-1 chips show that round only (ADAM present, MRS/PE dash)', () =&gt; {
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    fireEvent.click(screen.getByTestId('ed-history-__intake__'));
+    const mrs = screen.getByTestId('ed-chip-mrs');
+    expect(within(mrs).getByText('—')).toBeInTheDocument();
+    const adam = screen.getByTestId('ed-chip-adam');
+    expect(within(adam).queryByText(/\(ครั้งที่/)).toBeNull(); // no olderTag in single-round view
+  });
+
+  it('R4 back pill → returns to default (header ครั้งล่าสุด, pill gone)', () =&gt; {
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    fireEvent.click(screen.getByTestId('ed-history-__intake__'));
+    fireEvent.click(screen.getByTestId('ed-back-to-latest'));
+    expect(screen.getByText(/ครั้งล่าสุด:/)).toBeInTheDocument();
+    expect(screen.queryByTestId('ed-back-to-latest')).toBeNull();
+  });
+
+  it('R5 delete icon does NOT select the row (stopPropagation)', () =&gt; {
+    window.confirm = vi.fn(() =&gt; true);
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    fireEvent.click(screen.getByTestId('ed-delete-A2'));
+    expect(mockDelete).toHaveBeenCalledWith('A2');
+    expect(screen.queryByText(/กำลังดู:/)).toBeNull(); // delete didn't switch to "viewing"
+  });
+
+  it('R6 selecting then deleting that round resets to default', async () =&gt; {
+    window.confirm = vi.fn(() =&gt; true);
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    fireEvent.click(screen.getByTestId('ed-history-A2')); // select followup
+    expect(screen.getByText(/กำลังดู:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ed-delete-A2'));
+    await screen.findByText(/ครั้งล่าสุด:/); // back to default after delete resolves
+    expect(screen.queryByTestId('ed-back-to-latest')).toBeNull();
+  });
+
+  it('R7 row is a real button-like control (aria-pressed reflects selection + keyboard)', () =&gt; {
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    const row = screen.getByTestId('ed-history-__intake__');
+    expect(row).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(screen.getByTestId('ed-history-__intake__')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('R8 intake row (รับเข้า, not deletable) is still selectable', () =&gt; {
+    setup();
+    fireEvent.click(screen.getByTestId('ed-history-toggle'));
+    fireEvent.click(screen.getByTestId('ed-history-__intake__'));
+    expect(screen.getByText(/· รับเข้า/)).toBeInTheDocument();
+  });
+});
+</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → expect FAIL</strong></label></div>
+  <p>Run: <code>npx vitest run tests/ed-score-round-select.test.jsx</code> · Expected: FAIL (no ed-back-to-latest / no aria-pressed / row click no-op).</p>
+</div>
+
+<div class="task">
+  <h3>Task 2: Implement EDScoreBox round-select</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/EDScoreBox.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: import Eye + ArrowLeft</strong></label></div>
+  <pre><code class="language-jsx">import { HeartPulse, QrCode, Trash2, ChevronDown, ChevronRight, History, Eye, ArrowLeft } from 'lucide-react';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: state + derived selectedRound + selDate</strong></label></div>
+  <pre><code class="language-jsx">const [selectedRoundId, setSelectedRoundId] = useState(null);
+// ... after `const rounds = deriveRounds(...)`:
+const selectedRound = selectedRoundId ? (rounds.find((r) =&gt; r.id === selectedRoundId) || null) : null; // also guards stale id
+const selDate = selectedRound ? formatRoundDate(selectedRound.assessmentDate, today) : null;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: reset selection if its round is deleted</strong></label></div>
+  <pre><code class="language-jsx">// inside handleDelete try{}, after `await deleteAssessmentRound(roundId);`
+if (roundId === selectedRoundId) setSelectedRoundId(null);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: header branch (default vs viewing) + back pill</strong></label></div>
+  <p>Replace the <code>&lt;div className="text-[11px] ... mb-2"&gt;ครั้งล่าสุด: ...&lt;/div&gt;</code> block with a flex row:</p>
+<pre><code class="language-jsx">&lt;div className="flex items-center justify-between gap-2 mb-2"&gt;
+  {selectedRound ? (
+    &lt;span className="text-[11px] text-[var(--tx-muted)] min-w-0 truncate"&gt;
+      กำลังดู: &lt;span className="text-[var(--tx-secondary)] font-bold"&gt;ครั้งที่ {selectedRound.round}&lt;/span&gt;
+      {selDate?.text ? &lt;&gt; · &lt;span className="text-[var(--tx-secondary)]"&gt;{selDate.text}&lt;/span&gt;{selDate.isToday &amp;&amp; &lt;span className={todayBadgeCls}&gt;วันนี้&lt;/span&gt;}&lt;/&gt; : ''}
+      {selectedRound.source === 'intake' ? ' · รับเข้า' : ''}
+    &lt;/span&gt;
+  ) : (
+    &lt;span className="text-[11px] text-[var(--tx-muted)] min-w-0 truncate"&gt;
+      ครั้งล่าสุด: &lt;span className="text-[var(--tx-secondary)] font-bold"&gt;ครั้งที่ {hero.round}&lt;/span&gt;
+      {heroDate?.text ? &lt;&gt; · &lt;span className="text-[var(--tx-secondary)]"&gt;{heroDate.text}&lt;/span&gt;{heroDate.isToday &amp;&amp; &lt;span className={todayBadgeCls}&gt;วันนี้&lt;/span&gt;}&lt;/&gt; : ''}
+      {hero.source === 'intake' ? ' · จาก PatientForm รับเข้า' : ''}
+    &lt;/span&gt;
+  )}
+  {selectedRound &amp;&amp; (
+    &lt;button type="button" onClick={() =&gt; setSelectedRoundId(null)} data-testid="ed-back-to-latest"
+      aria-label="ไปที่ครั้งล่าสุด"
+      className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold border ${isDark ? 'bg-orange-500/12 border-orange-500/40 text-orange-300 hover:bg-orange-500/20' : 'bg-orange-100 border-orange-300 text-orange-700 hover:bg-orange-200'}`}&gt;
+      &lt;ArrowLeft size={11} /&gt; ไปที่ครั้งล่าสุด
+    &lt;/button&gt;
+  )}
+&lt;/div&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: chip source branch (DRY — one map)</strong></label></div>
+  <p>Inside the <code>ED_ORDER.map</code>, replace <code>const r = lpt[t];</code> and the olderTag line:</p>
+<pre><code class="language-jsx">// was: const r = lpt[t];
+const measured = selectedRound ? (selectedRound.types.includes(t) ? selectedRound : null) : lpt[t];
+// ... use `measured` everywhere `r` was used (the !r empty-chip guard + scoreForType(t, measured.raw)):
+//   if (!measured) { ...empty dash chip... }
+//   const s = scoreForType(t, measured.raw);
+//   const olderTag = (!selectedRound &amp;&amp; measured.round !== hero.round) ? ` (ครั้งที่ ${measured.round})` : '';</code></pre>
+  <p>(Rename the local <code>r</code> → <code>measured</code> in the 3 references; olderTag suppressed in single-round view.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: history rows → role="button" (keyboard + select), keep delete a real nested button</strong></label></div>
+  <p>Replace the history row <code>&lt;div&gt;</code> with a clickable <code>role="button"</code> div (NOT a real &lt;button&gt; — it nests the delete &lt;button&gt;, which would be invalid HTML). Selected row = orange ring; delete button stops propagation:</p>
+<pre><code class="language-jsx">const isSel = selectedRoundId === r.id;
+const rowCls = `w-full text-left flex items-center justify-between gap-2 text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors ${
+  isSel ? (isDark ? 'bg-orange-900/15 border border-orange-900/50' : 'bg-orange-50 border border-orange-300')
+        : (isDark ? 'bg-white/[0.02] hover:bg-white/[0.06] border border-transparent' : 'bg-black/[0.02] hover:bg-black/[0.05] border border-transparent')}`;
+return (
+  &lt;div key={r.id} data-testid={`ed-history-${r.id}`} role="button" tabIndex={0}
+    aria-pressed={isSel} aria-label={`ดูผลการประเมิน ครั้งที่ ${r.round}`}
+    onClick={() =&gt; setSelectedRoundId(r.id)}
+    onKeyDown={(e) =&gt; { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedRoundId(r.id); } }}
+    className={rowCls}&gt;
+    &lt;span className="text-[var(--tx-secondary)] min-w-0 truncate flex items-center gap-1"&gt;
+      {isSel &amp;&amp; &lt;Eye size={12} className="shrink-0 text-orange-400" /&gt;}
+      &lt;span className="min-w-0 truncate"&gt;
+        &lt;span className="font-bold"&gt;ครั้งที่ {r.round}&lt;/span&gt;
+        {fd.text ? &lt;&gt; · {fd.text}{fd.isToday &amp;&amp; &lt;span className={todayBadgeCls}&gt;วันนี้&lt;/span&gt;}&lt;/&gt; : ''} · {roundSummary(r) || '—'}
+      &lt;/span&gt;
+    &lt;/span&gt;
+    {r.deletable ? (
+      &lt;button type="button" onClick={(e) =&gt; { e.stopPropagation(); handleDelete(r.id); }} disabled={busyId === r.id}
+        data-testid={`ed-delete-${r.id}`} title="ลบผลการประเมินครั้งนี้" aria-label={`ลบผลการประเมิน ครั้งที่ ${r.round}`}
+        className="shrink-0 p-1 -m-0.5 text-[var(--tx-muted)] hover:text-red-500 disabled:opacity-40"&gt;
+        &lt;Trash2 size={13} /&gt;
+      &lt;/button&gt;
+    ) : (
+      &lt;span className="shrink-0 text-[10px] text-[var(--tx-muted)]"&gt;รับเข้า&lt;/span&gt;
+    )}
+  &lt;/div&gt;
+);</code></pre>
+  <p>(Delete-button keyboard activation also stops propagation — already covered because it's a real &lt;button&gt; whose onClick stops propagation; Enter on the focused delete button fires its own onClick, not the row's.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 7: run the Task-1 tests → expect PASS</strong></label></div>
+  <p>Run: <code>npx vitest run tests/ed-score-round-select.test.jsx</code> · Expected: 8/8 PASS.</p>
+</div>
+
+<div class="task">
+  <h3>Task 3: Verify — targeted + build + full suite</h3>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: targeted (touched-area) tests</strong></label></div>
+  <p>Run new file + any existing EDScoreBox/edScore/assessment test files (grep importers).</p>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: build</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean (catches import/JSX errors RTL can't — V11 lesson).</p>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: full vitest (Rule N — touches a shipped component's render)</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> · Expected: ≥16673 pass / 0 fail (baseline 16673 + 8 new). Investigate any new red (not "flake"-dismiss — Rule Q).</p>
+</div>
+
+<div class="task">
+  <h3>Task 4: Adversarial verification (Rule Q L2 + Workflow)</h3>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: adversarial Workflow over the diff</strong></label></div>
+  <p>Fan out finders against the diff + spec hunting: default-view regression (merged latestPerType + olderTag intact), nested-button invalid HTML, delete-while-selected, listener-refire stale selection, single-round-only chip semantic, intake-row selectable, keyboard a11y, theme contrast (no red on names — rule 04), data-testid preserved. Adjudicate every finding myself (agents overstate — V162). Loop until a fresh hunt finds nothing.</p>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: fix + re-verify any real finding; re-run full suite</strong></label></div>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: honest Rule Q gap note</strong></label></div>
+  <p>L2 = RTL on the REAL EDScoreBox (real cores, only deleteAssessmentRound mocked — the component has NO Firestore query of its own → no mock-shadow). L1 pixel render on authed CustomerDetailView = USER hands-on (no staff creds for automated backend L1 this session). NOT deployed (V18 — await explicit "deploy").</p>
+</div>
+
+</body>
+</html>

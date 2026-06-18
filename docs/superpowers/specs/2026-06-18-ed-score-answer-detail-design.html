@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score chip → per-question answer detail Design Spec</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    .edmodal { background:#0e0e0e; border:1px solid #2a2a2a; border-radius:14px; overflow:hidden; color:#e6e6e6; max-width:560px; }
+    .qrow { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; background:rgba(255,255,255,.02); border:1px solid #232323; border-radius:8px; padding:9px 11px; margin-top:7px; }
+    .ans { flex-shrink:0; font-size:12px; font-weight:600; white-space:nowrap; }
+  </style>
+</head>
+<body>
+
+<h1>ED Score chip → per-question answer detail</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-18 · <strong>Status:</strong> Approved by user (Q1=A Modal, Q2=A canonical+new-view-only) ·
+  <strong>Scope:</strong> Frontend-only · no data / no firestore.rules / no API ·
+  <strong>Plan:</strong> 2026-06-18-ed-score-answer-detail.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>ในกล่อง "สมรรถภาพ · ED Score" (CustomerDetailView) แต่ละช่อง (ADAM / IIEF-5 / MRS / PE) ตอนนี้แสดงแค่คะแนนรวม.
+แพทย์อยากกดเข้าไปดูว่า <strong>ลูกค้าตอบแต่ละคำถามว่าอะไร</strong> เพื่อรายละเอียดเชิงคลินิกที่มากขึ้น
+"เหมือนกับ box บันทึกข้อมูลรับเข้าใน frontend ที่แสดงรายละเอียดครบ" (= modal ดูข้อมูลคิวใน AdminDashboard ที่ render
+<code>renderAdamSection/renderMrsSection/renderIiefSection</code>). ทำให้แต่ละช่องกดได้ → เปิด modal คำถาม+คำตอบรายข้อ.</p>
+
+<h2>Mockup Design</h2>
+<div class="section">
+  <div class="mockup-label">กดช่อง IIEF-5 → modal (คำถามเต็ม + คำตอบพร้อม label ตัวเลือก) — สไตล์อิง AdminDashboard renderIiefSection, เนื้อหาละเอียดกว่า (คำถามเต็ม + option label)</div>
+  <div style="background:rgba(0,0,0,0.5); border-radius:12px; padding:16px; display:flex; justify-content:center;">
+    <div class="edmodal">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 16px; border-bottom:1px solid #2a2a2a;">
+        <div><div style="font-size:14px; font-weight:600; color:#fff;">🔥 IIEF-5 · ความเสื่อมสมรรถภาพทางเพศ</div>
+          <div style="font-size:11px; color:#8a8a8a;">ครั้งที่ 2 · 18/06/2569</div></div>
+        <span style="color:#8a8a8a; font-size:18px;">✕</span>
+      </div>
+      <div style="margin:14px 16px 6px; padding:11px 14px; border-radius:10px; background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.3); display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#f87171; font-size:13px; font-weight:600;">เสื่อมระดับเล็กน้อยถึงปานกลาง</span>
+        <span><span style="font-size:24px; font-weight:600; color:#fff;">13</span><span style="color:#8a8a8a;"> / 25</span></span>
+      </div>
+      <div style="padding:6px 16px 16px;">
+        <div class="qrow"><span style="font-size:12px; color:#cfcfcf; line-height:1.5;">1. ท่านมีความมั่นใจว่าสามารถมีอวัยวะเพศแข็งตัวและสอดใส่ได้ มากน้อยเพียงใด?</span><span class="ans" style="color:#f87171;">ปานกลาง (3)</span></div>
+        <div class="qrow"><span style="font-size:12px; color:#cfcfcf; line-height:1.5;">2. เมื่อมีการกระตุ้นทางเพศ อวัยวะเพศท่านแข็งตัวพอที่จะสอดใส่ได้บ่อยแค่ไหน?</span><span class="ans" style="color:#f87171;">บางครั้ง (3)</span></div>
+        <div class="qrow"><span style="font-size:12px; color:#cfcfcf; line-height:1.5;">4. ระหว่างการมีเพศสัมพันธ์ การคงความแข็งตัวจนเสร็จกิจ ยากมากน้อยแค่ไหน?</span><span class="ans" style="color:#f87171;">ยากมาก (2)</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup-label" style="margin-top:1em;">รูปแบบคำตอบต่อแบบทดสอบ</div>
+  <table>
+    <tr><th>Test</th><th>คำตอบที่แสดงต่อข้อ</th><th>สี accent</th></tr>
+    <tr><td>ADAM (bool ×10)</td><td><code>true → "มีอาการ"</code> (เน้นส้ม) · <code>false/absent → "ไม่มี"</code> (จาง)</td><td>orange</td></tr>
+    <tr><td>IIEF-5 (1-5 ×5)</td><td>option label ของข้อนั้น เช่น <code>"ปานกลาง (3)"</code> · ไม่มีค่า → "—"</td><td>red</td></tr>
+    <tr><td>MRS (0-4 ×11)</td><td><code>"ระดับ N — &lt;label&gt;"</code> เช่น <code>"ระดับ 2 — ปานกลาง"</code> (0 = "ระดับ 0 — ไม่มีอาการ") · undefined → "—"</td><td>pink</td></tr>
+    <tr><td>PE (bool ×1)</td><td><code>"มีอาการ" / "ไม่มีอาการ"</code> (ข้อเดียว)</td><td>slate</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="section">
+  <table>
+    <tr><th>Action</th><th>Result</th></tr>
+    <tr><td>กดช่องที่มีข้อมูล (ADAM/IIEF/MRS/PE)</td><td><code>setDetail({ type, round: measured })</code> → render <code>&lt;EDDetailModal&gt;</code>. <code>measured</code> = ครั้งที่ค่าบนช่องนั้นมาจาก (selectedRound ถ้าเลือกอยู่ ไม่งั้น latestPerType[type])</td></tr>
+    <tr><td>ช่องที่เป็น "—" (ไม่มีข้อมูล)</td><td>ไม่ clickable (เป็น <code>&lt;div&gt;</code> เฉยๆ เหมือนเดิม)</td></tr>
+    <tr><td>modal: กด ✕ / ESC</td><td><code>onClose()</code> → <code>setDetail(null)</code></td></tr>
+    <tr><td>modal: กด backdrop รอบๆ</td><td><strong>ไม่ปิด</strong> (AV78 — explicit close only)</td></tr>
+    <tr><td>modal render</td><td>header (icon+ชื่อ+ครั้งที่ N+date) → score banner (<code>scoreForType</code>) → rows จาก <code>buildEdAnswerRows(type, round.raw)</code></td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong>NEW <code>src/lib/edQuestions.js</code></strong> (pure, no React) — canonical source สำหรับคำถาม ED ทั้ง 4 (ปัจจุบัน inline 3 ที่: PatientForm + AdminDashboard×3fn + PrintTemplates = Rule of 3):
+    <ul>
+      <li><code>ADAM_QUESTIONS</code> = [{key:'adam_1', th:'ความต้องการทางเพศลดลง'}, … ×10] (จาก PatientForm:1251)</li>
+      <li><code>IIEF_QUESTIONS</code> = [{key:'iief_1', th:'1. …?', options:['น้อยมาก / ไม่มีเลย (1)','น้อย (2)','ปานกลาง (3)','สูง (4)','สูงมาก (5)']}, … ×5] — options ต่างกันต่อข้อ (Q1 ความมั่นใจ / Q2,3,5 ความถี่ / Q4 ความยาก) จาก PatientForm:1324</li>
+      <li><code>MRS_QUESTIONS</code> = [{key:'mrs_1', th:'1. อาการร้อนวูบวาบ เหงื่อออก'}, … ×11] + <code>MRS_OPTION_LABELS</code> = ['ไม่มีอาการ','เล็กน้อย','ปานกลาง','รุนแรง','รุนแรงมากที่สุด'] (index 0-4, จาก PatientForm:1283/1300)</li>
+      <li><code>PE_QUESTION</code> = {key:'symp_pe', th:'มีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย'}</li>
+      <li><code>buildEdAnswerRows(type, raw)</code> → <code>[{ n:number, question:string, answer:string, flagged:boolean }]</code>. flagged=true เฉพาะ ADAM "มีอาการ" (สำหรับ accent). undefined/empty → answer "—".</li>
+    </ul>
+  </li>
+  <li><strong>NEW <code>src/components/backend/EDDetailModal.jsx</code></strong> — props <code>{ type, round, isDark, onClose }</code>. Header + score banner (<code>scoreForType</code> + interpretation, สีตาม ED_TYPE_META) + rows (<code>buildEdAnswerRows</code>). ESC → onClose (useEffect keydown); backdrop onClick = no-op (AV78); ✕ + ปุ่มปิด = onClose. PE = score banner เป็น "มีอาการ/ไม่มีอาการ" + 1 row. ไม่ใช้แดงกับชื่อ/HN (rule 04 — ที่นี่ไม่มีชื่อผู้ป่วย; แดงใช้กับ IIEF accent ได้).</li>
+  <li><strong>MODIFY <code>src/components/backend/EDScoreBox.jsx</code></strong> — เพิ่ม state <code>const [detail, setDetail] = useState(null)</code>. ช่องที่มี <code>measured</code> เปลี่ยนจาก <code>&lt;div&gt;</code> → <code>&lt;button type="button"&gt;</code> (focusable/Enter/Space ฟรี, ไม่มี nested interactive) onClick <code>setDetail({ type: t, round: measured })</code> + cursor-pointer + hover ring. ช่อง "—" คง <code>&lt;div&gt;</code>. Render <code>{detail &amp;&amp; &lt;EDDetailModal …/&gt;}</code>. data-testid เดิมคงไว้ (ed-chip-{t}); เพิ่ม <code>ed-detail-modal</code> + <code>ed-detail-close</code> + <code>ed-detail-row-{n}</code>.</li>
+  <li><strong>UNTOUCHED:</strong> assessmentRoundsCore.js, edScoreDisplay.js, scopedDataLayer.js, CustomerDetailView (props เดิม), round-select (selectedRoundId), AdminDashboard/PrintTemplates inliners (follow-up debt — flag ใน plan).</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Modal (chip click → centered modal, full Q&A + score header, ✕/ESC close, backdrop no-close AV78).</li>
+  <li><strong>Q2 = A:</strong> สร้าง canonical <code>edQuestions.js</code> + wire เฉพาะ view ใหม่; ไม่ migrate AdminDashboard/PrintTemplates ใน feature นี้ (low blast-radius; flag เป็น follow-up debt).</li>
+  <li>(defaulted) ช่อง "—" กดไม่ได้; modal โชว์คำตอบของ "ครั้ง" ที่ค่าบนช่องนั้นมาจาก; คำถามแสดงครบทุกข้อของแบบทดสอบ (รวมข้อที่ตอบ "ไม่มี"/0); รายละเอียดกว่า AdminDashboard (คำถามเต็ม + option label).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>กดช่อง IIEF-5 ที่มีค่า → เปิด modal แสดง 5 คำถามเต็ม + คำตอบเป็น option label (เช่น iief_1=3 → "ปานกลาง (3)") + score banner 13/25 + interpretation.</li>
+  <li>กดช่อง ADAM → 10 คำถาม, ข้อที่ true → "มีอาการ" (ส้ม), ข้อ false/ไม่มี → "ไม่มี".</li>
+  <li>กดช่อง MRS → 11 คำถาม, ค่า → "ระดับ N — &lt;label&gt;" (0 = "ระดับ 0 — ไม่มีอาการ").</li>
+  <li>กดช่อง PE (เมื่อมีอาการ) → modal 1 ข้อ "มีอาการ".</li>
+  <li>ช่องที่เป็น "—" (ไม่มีข้อมูล) กดไม่ได้ (ไม่เปิด modal).</li>
+  <li>เลือกครั้งเก่า (round-select) แล้วกดช่อง → modal โชว์คำตอบของครั้งที่เลือก (ไม่ใช่ครั้งล่าสุด).</li>
+  <li>ปิด modal ด้วย ✕ และ ESC ได้; กด backdrop รอบๆ → modal ไม่ปิด (AV78).</li>
+  <li>ช่องเป็นปุ่มจริง (focusable, Enter/Space เปิด modal ได้); ดาร์ก+ไลท์ธีม modal อ่านออกทั้งคู่.</li>
+  <li><code>buildEdAnswerRows</code> map ค่า adam/iief/mrs/pe ถูกต้อง + edge (undefined → "—", mrs 0 → "ไม่มีอาการ", iief out-of-range → "—").</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Rule-of-3 follow-up debt:</strong> AdminDashboard renderAdam/Mrs/Iief + PrintTemplates ยัง inline คำถามเดิม — ไม่ migrate ใน feature นี้ (Q2=A). flag ใน plan ให้ทำรอบหน้า (เลี่ยง V21 churn บน intake view ที่ใช้งานจริง).</li>
+  <li><strong>Verify (Rule Q):</strong> L2 = unit (buildEdAnswerRows) + RTL บน EDScoreBox+EDDetailModal จริง (chip click → modal เปิด → คำถาม/คำตอบจริง → ✕/ESC/backdrop). L1 pixel บน authed CustomerDetailView = USER hands-on (ไม่มี staff creds รัน backend L1 อัตโนมัติ).</li>
+  <li>ไม่มี data/rules/API → ไม่ต้อง Probe-Deploy-Probe; deploy = vercel frontend-only เมื่อสั่ง (V18).</li>
+</ul>
+
+</body>
+</html>
