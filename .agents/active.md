@@ -1,31 +1,34 @@
 ---
-updated_at: "2026-06-16 EOD+2 — Mobile-load reliability (autoDetectLongPolling + useResilientLoad + LoadErrorRetry) SHIPPED + DEPLOYED + L1-verified LIVE."
-status: "DEPLOYED to prod (frontend-only, vercel). No firestore.rules change → no Probe-Deploy-Probe. Adversarial bug-hunt loop CONVERGED (R1→R4, R4 clean). full vitest 16673/0; L1 3/0 (live build); L2 7/0 (real prod)."
+updated_at: "2026-06-18 — ED Score box (round-select + per-question detail modal + viewing-state-for-past-only) + follow-up push name+HN. SHIPPED local, NOT deployed."
+status: "COMMITTED + PUSHED, NOT deployed (user: session-end, ยังไม่ต้อง deploy). full vitest 16722/0; build clean."
 branch: "master"
-last_commit: "d54d58c4 — fix(useResilientLoad): R3 resetKey in timer-effect deps (orphaned-timer); adversarial loop converged"
+last_commit: "92c5ab0b — feat(functions/push): follow-up assessment push shows customer name + HN"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "frontend = lover-clinic-p4uawr0kx (HEAD d54d58c4) — DEPLOYED 2026-06-16, aliased lover-clinic-app.vercel.app, HTTP 200. firestore.rules UNCHANGED."
-firestore_rules_version: "UNCHANGED (this batch = frontend-only). Last rules deploy = dup-customer prevention (be_customer_identity + be_recall_cases) 2026-06-16."
-tests: "full vitest 16673/0 (+~65: 61 new mobile-reliability + 4 fix tests) + build clean + L1 Playwright 3/0 (live deployed build, iPhone-13) + L2 cold-start 7/0 (real prod, both transports)."
+production_commit: "UNCHANGED — frontend lover-clinic-p4uawr0kx (HEAD 00da035d, mobile-load). Today's 3 features NOT deployed."
+firestore_rules_version: "UNCHANGED (no rules/api/data change this session)."
+tests: "full vitest 16722/0 (this session's last run) + build clean. NOT re-run at session-end."
 ---
 
-# Active — 2026-06-16 EOD+2 — Mobile-load reliability (✅ DEPLOYED + L1-verified LIVE)
+# Active — 2026-06-18 — ED box detail + follow-up push name+HN (SHIPPED local, NOT deployed)
 
 ## State
-- master HEAD `d54d58c4` (=origin), tree clean. prod = `lover-clinic-p4uawr0kx` @ lover-clinic-app.vercel.app (HTTP 200).
-- Adversarial bug-hunt LOOP **CONVERGED**: R1 (6-finder) → 1 race fixed; R2 → resetKey gap fixed; R3 → orphaned-timer (my own R2 fix) fixed; **R4 → 0 findings (clean)**.
-- full vitest **16673/0** + build clean + **Rule Q L1 3/0 on the LIVE deployed build** + **Rule Q L2 7/0 real prod**.
+- master HEAD `92c5ab0b` (= origin, tree clean). prod UNCHANGED (`00da035d`) — 3 features today NOT deployed (user: "session end เลย ยังไม่ต้อง deploy").
+- full vitest **16722/0** + build clean (reused — not re-run at session-end).
+- 3 features, each /brainstorming or /systematic-debugging → spec → plan → inline impl → test → adversarial Workflow.
 
-## What shipped (`/brainstorming`→spec→`/writing-plans`→inline impl→adversarial hunt)
-- **Connection layer (the big lever):** `firebase.js` `getFirestore`→`initializeFirestore({experimentalAutoDetectLongPolling:true})` — heals half-dead WebSocket on flaky mobile (no persistence, Q1 fresh-always).
-- **Shared:** `firestoreReconnect.js` (module-debounced disableNetwork→enableNetwork) · `useResilientLoad.js` (loading/ready/error + 8s soft-timeout → 1 auto-retry → error; sync settledRef guard; resetKey re-arm) · `LoadErrorRetry.jsx` (error+retry card, theme-aware).
-- **Wired:** App.jsx (V17→shared reconnect + resilient anon-auth gate = kills black-screen-forever) · PatientForm / ClinicSchedule / PatientDashboard (resilient load + error+retry escape; PatientDashboard retry-budget widened) · AdminDashboard (resilient queue banner, resetKey:selectedBranchId) · useBranchAwareListener (silent auto-heal for backend tabs) · BackendDashboard (Suspense chunk-load retry).
-- Headline proof (captured live): half-dead Firestore that hung the OLD code forever now auto-recovers at 8s WITHOUT refresh (t3s กำลังโหลด → t10s resolved via reconnect→fromCache); blocked anon-auth → ลองใหม่ card instead of permanent black screen.
+## What this session shipped (detail → checkpoint 2026-06-18-ed-box-detail-and-push.md)
+- **ED chip round-select** — click a history row → chips show that round's snapshot + "← ไปที่ครั้งล่าสุด"; default (no selection) = merged latestPerType UNCHANGED.
+- **ED chip → per-question detail modal** (EDDetailModal) — click ADAM/IIEF/MRS/PE → full question text + customer's answer (option label); AV78 explicit-close. NEW canonical `src/lib/edQuestions.js`.
+- **viewing-state for PAST rounds only** (/systematic-debugging) — selecting the latest (hero) = default home view; no redundant button, no stuck state. Derived `viewingPast`; robust to delete-renumber.
+- **Follow-up push name+HN** (Cloud Function) — pure CJS `notificationContent.js` + `customerDisplay.js`; `functions/index.js` reads be_customers live → body "🔔 {name} · HN {hn}"; intake+edit unchanged.
+- Verified: ed-score-round-select 15/0 · ed-detail-modal 10/0 · ed-questions 9/0 · notification-content 15/0 (incl ESM parity) · **Rule R real-prod 2/2** (real follow-ups → correct name+HN) · full 16722/0 · build clean.
+- Adversarial: notification WF (5 lenses; cf-wiring/parity/regression clean) → 5 defensive findings fixed (trim whitespace name/title + compose-either intake name). ED-detail WF stalled (no result; feature has RTL 10/0 + chip-click verified).
 
 ## Next action
-- Idle / await next task. (USER hands-on optional: the staff-app AdminDashboard queue banner + backend-tab auto-heal aren't in the automated L1 — covered by unit + L2; verify in real use if desired.)
+- Idle / await. **To deploy (V18 — needs "deploy" THIS turn):** frontend 3 ED features → `vercel --prod`; notification → `firebase deploy --only functions` (needed for the push to take effect live). No firestore.rules change → no Probe-Deploy-Probe.
 
-## Outstanding (carried)
+## Outstanding (user-triggered)
 - ⚠ ROTATE LINE/FB secrets (AV195).
-- Pending chip: encode customer id in the LINE OA message URL (`task_1a3ac96c`).
-- Honest gap (Rule Q): customer-link L1 (auth-gate + half-dead-firestore + normal) PROVEN on the live build. AdminDashboard queue banner + backend useBranchAwareListener auto-heal = unit + L2 proven; real-staff-browser hands-on optional. PatientDashboard `/api/patient-view` resilience = L2 (vite dev doesn't serve /api) + source; live behaviour same wiring.
+- Pending chip: encode customer id in LINE OA message URL (task_1a3ac96c).
+- Honest gap (Rule Q): ED L1 pixel render (authed CDV) + notification L1 real-push = USER hands-on after deploy (no staff creds/device this session).
+- ED-detail adversarial Workflow stalled — optionally re-run for its 7-lens result.

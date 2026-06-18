@@ -5,6 +5,24 @@
 
 ---
 
+## Archived 2026-06-18 — SESSION_HANDOFF overflow: sessions `2026-06-09 EOD+1` → `2026-06-09 EOD+1` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-09 EOD+1 — V162: TFP buy critical-path qty-multiply + per-purchase rowId/remove collision (course+promo) — COMMITTED, NOT deployed
+
+`/systematic-debugging` + ultracode on the buy/sale critical path (user: *"จุดซื้อขายของ แม่งไม่น่าให้อภัยจริงๆ ... แก้ไขให้ไม่มีบั๊คแบบนี้หลงเหลืออยู่อีก"*). **Bug#1**: buy a course qty N → "ข้อมูลการใช้คอร์ส" panel showed 1× while the bill charged N× (`buildPurchasedCourseEntry` didn't multiply; sale + `resolvePurchasedCourseForAssign` did → DISPLAY≠SALE≠PERSIST). **Bug#2**: same course bought twice → checkbox collision + delete-one-removed-both (per-purchase identity keyed off the MASTER `item.id`; `now` was on courseId not rowId). **Fix (Rule P class-wide)**: per-purchase `purchaseUid` threaded through courseId + every rowId + grouping + `removePurchasedItem` targeting + promo consumables, PLUS `buildPurchasedCourseEntry` multiplies by `buyQty` → DISPLAY===SALE===PERSIST. Promo path fixed identically. **Verified**: default vitest **16300/0** (+23 new bank incl. display===persist invariant) + build clean + extended `treatmentBuyHelpers` 54/54 (+4 V21 BPCE fixups) + **Rule Q L1 real-browser of the actual Vite-served module** (display ×3, `displayEqualsPersist:true`, distinct rowIds, checkbox-independent, targeted-remove). AV190. **NOT deployed** (V18 — frontend-only → vercel-only when authorized; no rules). Full detail: `.agents/sessions/2026-06-09-tfp-buy-qty-and-rowid-collision.md` + V162 in `00-session-start.md`. **Pre-existing flagged (NOT V162)**: `npm run test:extended` 283/4699 fail = V50-deleted AppointmentTab/MasterDataTab/CloneTab still imported by 46 stale RTL tests (opt-in suite, not the tracked baseline; task spawned).
+
+---
+
+📂 **Older sessions (`2026-06-04` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-09 EOD+3) — DEPOSIT MONEY IN REPORTS SHIPPED + DEPLOYED LIVE**: prod = master HEAD `999fae66` LIVE @ lover-clinic-app.vercel.app (`vercel --prod` aliased; frontend-only, NO firestore.rules → no Probe-Deploy-Probe). **This deploy ALSO caught up V162 + the EOD 4-fix — the two "NOT deployed" bullets below are now SUPERSEDED (all LIVE).** `/brainstorming`×2 + `/systematic-debugging`. reports-payment: per-channel `ยอดขาย|มัดจำ|ยอดรวม|ใบเสร็จ(กดได้)|%` + footnote; กดใบเสร็จ → PaymentDocsModal (ใบขาย→SaleDetailModal / ใบมัดจำ→deep-link). reports-sale: "มัดจำคงเหลือในระบบ" chip + deposit rows **column-aligned into the 18 real columns** (teal `bg-teal-900/10` + badge "มัดจำรับเข้า", amount→ยอดที่ชำระ, full details, —=N/A), interleaved by date, **NOT summed into the footer**. deposit deep-link `?...&deposit=DEP-x` → DepositPanel DetailModal. **No double-count PROVEN on real prod** (SaleTab deducts deposit before channels → sale channels never carry มัดจำ; ฿19,000 deposit now visible, was ฿0). **TDZ crash caught by Rule Q L1** (`mergedRows` before `out` → const TDZ; build missed it) → fixed + SG3 guard. New: `loadDepositsByDateRange` · `depositReportUtils` · `paymentSummaryAggregator` rewrite · `DepositReceiptRow` · `PaymentDocsModal` · `renderDepositCell`. **AV191**. Verified: full vitest **16326/0** (exc 2 pre-existing env-flakes bsa-task7/v85-glow — pass isolated) + build clean + **Rule Q L2 real-prod diag** + **L1 real browser** (login, 18-cell teal deposit row, drill-down, chip, deep-link). Checkpoint `.agents/sessions/2026-06-09-deposit-in-reports.md`.
+
+---
+
 ## Archived 2026-06-16 — SESSION_HANDOFF overflow: sessions `2026-06-04` → `2026-06-04` + Current-State index
 
 ### Session blocks (1)
