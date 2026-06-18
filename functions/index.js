@@ -5,6 +5,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { buildAssessmentRoundPatch, isMaterializableAssessment } = require('./assessmentMaterialize');
+const { buildNotificationContent } = require('./notificationContent');
 
 initializeApp();
 
@@ -62,26 +63,16 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
   const tokenEntries = tokensDoc.data().tokens || [];
   if (tokenEntries.length === 0) { res.status(200).json({ ok: false, reason: 'no tokens' }); return; }
 
-  // สร้างข้อความ notification
-  const pd = session.patientData;
-  const patientName = pd?.firstName
-    ? `${pd.firstName} ${pd.lastName || ''}`.trim()
-    : null;
-  const rawName = session.sessionName || sessionId;
-  const sessionName = rawName.length > 28 ? rawName.substring(0, 27) + '…' : rawName;
-  const isEdit = !!session.updatedAt;
-
-  let title, body;
-  if (isEdit) {
-    title = sessionName;
-    const sections = changedSections.length > 0
-      ? changedSections.join(' · ')
-      : 'ข้อมูลผู้ป่วย';
-    body = `✏️ แก้ไขแล้ว · ${sections}`;
-  } else {
-    title = sessionName;
-    body = patientName ? `🔔 ข้อมูลใหม่ · ${patientName}` : '🔔 ได้รับข้อมูลผู้ป่วยแล้ว';
+  // สร้างข้อความ notification — follow-up (linkedCustomerId) แสดงชื่อ + HN ของลูกค้า.
+  // อ่าน be_customers แบบ live (V113) เพื่อชื่อ+HN จริง; non-fatal — push ต้องส่งได้แม้อ่านไม่ได้.
+  let customer = null;
+  if (session.linkedCustomerId) {
+    try {
+      const cdoc = await db.doc(`${BASE_PATH}/be_customers/${session.linkedCustomerId}`).get();
+      if (cdoc.exists) customer = cdoc.data();
+    } catch (e) { console.warn(`[${sessionId}] be_customers read failed:`, e?.message); }
   }
+  const { title, body } = buildNotificationContent({ session, sessionId, customer, changedSections });
 
   const tokenStrings = tokenEntries
     .map(t => (typeof t === 'string' ? t : t.token))

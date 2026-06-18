@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Follow-up push notification — show customer name + HN Design Spec</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; } th,td { border:1px solid var(--bd); padding:0.5em 0.8em; text-align:left; vertical-align:top; font-size:0.92em; } th { background: var(--bg-meta); }
+    .noti { background:#1c1c1e; border-radius:16px; padding:12px 14px; display:flex; gap:11px; max-width:520px; }
+    .ico { width:40px;height:40px;border-radius:9px;background:#4a1212;display:flex;align-items:center;justify-content:center;color:#e88;font-size:9px;font-weight:bold;flex-shrink:0; }
+  </style>
+</head>
+<body>
+
+<h1>Follow-up push notification — แสดงชื่อ + HN ลูกค้า</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-18 · <strong>Status:</strong> Approved by user (Q1=A) ·
+  <strong>Scope:</strong> Cloud Function <code>functions/sendPushOnSubmit</code> + 2 new pure CJS helpers · no firestore.rules / no API / no vercel ·
+  <strong>Deploy:</strong> <code>firebase deploy --only functions</code> (NOT vercel) · <strong>Plan:</strong> 2026-06-18-followup-push-name-hn.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>เมื่อลูกค้าส่งแบบประเมินติดตาม (ED follow-up) FCM push ที่เด้งหาแอดมินแสดง body แบบ generic
+<code>"🔔 ได้รับข้อมูลผู้ป่วยแล้ว"</code> — ไม่บอกว่าใครส่ง. แพทย์/แอดมินอยากรู้ทันทีว่า
+<strong>ชื่ออะไร · HN อะไร</strong>. สาเหตุ: follow-up opd_session เก็บ assessment answers ใน <code>patientData</code>
+(ไม่มี <code>firstName</code>) → <code>patientName</code> เป็น null → ตกไป body generic.</p>
+
+<h2>Mockup Design</h2>
+<div class="section">
+  <div class="mockup-label">เดิม (generic) → A (chosen): title=แบบประเมิน, body="🔔 ชื่อ · HN xxx"</div>
+  <div class="noti" style="margin-bottom:10px;"><div class="ico">LOVER</div><div><div style="color:#fff;font-weight:bold;font-size:14px;">แบบประเมินติดตาม</div><div style="color:#d0d0d0;font-size:13px;">from LoverClinic OPD System</div><div style="color:#999;font-size:13px;">🔔 ได้รับข้อมูลผู้ป่วยแล้ว <em>(เดิม)</em></div></div></div>
+  <div class="noti"><div class="ico">LOVER</div><div><div style="color:#fff;font-weight:bold;font-size:14px;">แบบประเมินติดตาม</div><div style="color:#d0d0d0;font-size:13px;">from LoverClinic OPD System</div><div style="color:#fff;font-size:13px;">🔔 นางสาว แพรพร พรแพร · HN LC-26000082 <em>(ใหม่)</em></div></div></div>
+  <table>
+    <tr><th>เคส</th><th>title</th><th>body</th></tr>
+    <tr><td>follow-up submit (มี linkedCustomerId)</td><td>sessionName ("แบบประเมินติดตาม", ตัด ≤28)</td><td><code>🔔 {name} · HN {hn}</code> (ไม่มีชื่อ → <code>🔔 HN {hn}</code>)</td></tr>
+    <tr><td>intake (เดินเข้าใหม่, มี pd.firstName, ยังไม่มีลูกค้า)</td><td>sessionName</td><td><code>🔔 ข้อมูลใหม่ · {name}</code> <em>(คงเดิม — ยังไม่มี HN เพราะลูกค้ายังไม่ถูกสร้าง)</em></td></tr>
+    <tr><td>edit (updatedAt set)</td><td>sessionName</td><td><code>✏️ แก้ไขแล้ว · {sections}</code> <em>(คงเดิม)</em></td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="section">
+  <table>
+    <tr><th>#</th><th>CF step (sendPushOnSubmit)</th></tr>
+    <tr><td>1</td><td>read opd_session (เดิม) → materialize be_assessments (เดิม) → isUnread/mute/tokens gate (เดิม)</td></tr>
+    <tr><td>2 NEW</td><td>ถ้า <code>session.linkedCustomerId</code> มีค่า → <code>read be_customers/{linkedCustomerId}</code> (admin SDK, canonical BASE_PATH). ถ้าไม่มี/อ่านไม่ได้ → customer = null</td></tr>
+    <tr><td>3 NEW</td><td><code>{title, body} = buildNotificationContent({ session, sessionId, customer, changedSections })</code> (pure) แทน inline title/body เดิม</td></tr>
+    <tr><td>4</td><td>sendEachForMulticast (เดิม) — ไม่แตะ token-cleanup/CORS/response</td></tr>
+  </table>
+  <div class="mockup-label" style="margin-top:1em;">buildNotificationContent branch order</div>
+  <pre><code>isEdit (updatedAt)            → "✏️ แก้ไขแล้ว · {sections}"            (เดิม)
+else if linkedCustomerId      → "🔔 {name} · HN {hn}"                  (ใหม่)
+                                 name = resolveCustomerName(customer) || session.confirmInfo?.name || ''
+                                 hn   = resolveCustomerHN(customer)   || String(linkedCustomerId)
+else (intake)                 → "🔔 ข้อมูลใหม่ · {pd.firstName ...}"  (เดิม)</code></pre>
+</div>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong>NEW <code>functions/customerDisplay.js</code></strong> (PURE CJS, no firebase) — CJS mirror of the ESM canonical <code>src/lib/customerDisplayName.js</code>: <code>resolveCustomerName(customer)</code> (walk patientData.firstNameTh/firstName → top-level firstname → customerName/name → nickname) + <code>resolveCustomerHN(customer)</code> (proClinicHN → pd.hn/HN → hn/HN/<strong>hn_no</strong> — V131: real HN lives in hn_no). The CF is a SEPARATE deploy package (Cloud Run, CJS) → cannot import the ESM <code>src/lib</code>; this mirror is the sanctioned duplicate (cross-link comment + a test asserting parity on key shapes). Drift risk acknowledged (resolvers rarely change).</li>
+  <li><strong>NEW <code>functions/notificationContent.js</code></strong> (PURE CJS, no firebase) — <code>buildNotificationContent({ session, sessionId, customer, changedSections })</code> → <code>{ title, body }</code>. Holds ALL the title/body branch logic (edit / follow-up / intake). Mirrors the pure-CJS-testable pattern of <code>functions/assessmentMaterialize.js</code>.</li>
+  <li><strong>MODIFY <code>functions/index.js</code></strong> — after the gates, read be_customers when linkedCustomerId present; replace the inline title/body block (lines ~66-84) with <code>buildNotificationContent(...)</code>. Everything else (materialize, tokens, multicast, cleanup) UNCHANGED.</li>
+  <li><strong>UNTOUCHED:</strong> firestore.rules, vercel, src/, createAssessmentSession (no session-shape change — uses existing linkedCustomerId + confirmInfo), intake + edit notification behavior.</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> title = sessionName (form, เช่น "แบบประเมินติดตาม"); body = "🔔 {name} · HN {hn}". (ไม่ใช่ B ที่เอาชื่อขึ้น title.)</li>
+  <li>(defaulted) name = live-resolve จาก be_customers (V113) fallback confirmInfo.name snapshot; HN = resolveCustomerHN (hn_no จริง) fallback linkedCustomerId (รหัส LC-xxx = เลขลูกค้าที่ staff รู้จัก); intake คงเดิม (ไม่มี HN — ลูกค้ายังไม่ถูกสร้างตอน submit); edit คงเดิม.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>follow-up submit (linkedCustomerId + be_customers มี name+hn_no) → body = "🔔 {ชื่อจริง} · HN {hn_no}".</li>
+  <li>customer ไม่มี hn_no (LC-customer) → HN = linkedCustomerId (เช่น "HN LC-26000082").</li>
+  <li>อ่าน be_customers ไม่เจอ (ลูกค้าถูกลบ) → name = confirmInfo.name, HN = linkedCustomerId; ไม่ throw (push ยังส่ง).</li>
+  <li>intake (pd.firstName, ไม่มี linkedCustomerId) → "🔔 ข้อมูลใหม่ · {name}" (เดิม, ไม่ regress).</li>
+  <li>edit (updatedAt) → "✏️ แก้ไขแล้ว · {sections}" (เดิม, ไม่ regress).</li>
+  <li>buildNotificationContent เป็น pure → unit-test ได้ทุก branch + edge (no name / no customer / long sessionName ตัด ≤28).</li>
+  <li>resolveCustomerName/HN (CJS) ให้ผลตรงกับ ESM canonical บน shape ตัวอย่าง (parity test).</li>
+  <li>be_customers อ่านด้วย canonical BASE_PATH (artifacts/{APP_ID}/public/data/be_customers) — Rule M path.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>CJS/ESM resolver duplication:</strong> <code>functions/customerDisplay.js</code> mirrors <code>src/lib/customerDisplayName.js</code> — unavoidable (separate deploy package). Mitigate: cross-link comment + parity test on key shapes. Low drift (resolvers stable since V105/V131).</li>
+  <li><strong>Verify (Rule Q):</strong> L2 = vitest on the pure modules (all branches/edge) + a <strong>Rule R diag</strong> reading a REAL follow-up opd_session (FW-ED-*) + its linkedCustomerId be_customers doc on prod → confirm name+HN resolve to real values. L1 = a real follow-up submit → real push showing name+HN = USER hands-on AFTER <code>firebase deploy --only functions</code> (CF can't be L1'd without deploy + a device).</li>
+  <li><strong>Deploy:</strong> Cloud Function → <code>firebase deploy --only functions</code> (NOT vercel; NOT firestore.rules → no Probe-Deploy-Probe). Gated on explicit "deploy" (V18).</li>
+</ul>
+
+</body>
+</html>

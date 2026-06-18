@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Follow-up push name+HN — Implementation Plan</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; } h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; } code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; } .step input { margin-right: 0.5em; accent-color: var(--accent); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1em; margin:1em 0; } .mockup-label { font-size:0.75em; text-transform:uppercase; color:var(--tx-muted); margin-bottom:0.5em; }
+    table { border-collapse: collapse; width: 100%; } th,td { border:1px solid var(--bd); padding:0.5em 0.8em; text-align:left; font-size:0.9em; vertical-align:top; } th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Follow-up push name+HN — Implementation Plan</h1>
+<blockquote><strong>Inline execution.</strong> Spec: <code>docs/superpowers/specs/2026-06-18-followup-push-name-hn-design.html</code> (Q1=A).</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> follow-up FCM push body แสดง "🔔 {ชื่อ} · HN {hn}" แทน generic. แยก logic เป็น pure CJS ให้ test ได้; CF อ่าน be_customers ด้วย admin SDK.</p>
+  <p><strong>Deploy:</strong> <code>firebase deploy --only functions</code> (NOT vercel). Gated on "deploy" (V18).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup"><div class="mockup-label">A (chosen) — body ใหม่</div>
+  <div style="background:#1c1c1e;border-radius:14px;padding:11px 13px;display:flex;gap:10px;max-width:480px;"><div style="width:38px;height:38px;border-radius:8px;background:#4a1212;display:flex;align-items:center;justify-content:center;color:#e88;font-size:8px;font-weight:bold;">LOVER</div><div><div style="color:#fff;font-weight:bold;font-size:13px;">แบบประเมินติดตาม</div><div style="color:#bbb;font-size:12px;">from LoverClinic OPD System</div><div style="color:#fff;font-size:12px;">🔔 นางสาว แพรพร พรแพร · HN LC-26000082</div></div></div>
+</div>
+
+<h2>Flow</h2>
+<table>
+  <tr><th>CF step</th><th>change</th></tr>
+  <tr><td>session read + materialize + gates</td><td>unchanged</td></tr>
+  <tr><td>NEW: if session.linkedCustomerId → read be_customers/{id} (canonical BASE_PATH)</td><td>customer doc or null (try/catch → null, non-fatal)</td></tr>
+  <tr><td>NEW: title/body</td><td><code>buildNotificationContent({ session, sessionId, customer, changedSections })</code></td></tr>
+  <tr><td>multicast + token cleanup</td><td>unchanged</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>functions/customerDisplay.js</code> (pure CJS resolver) + parity test</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1</strong> implement resolveCustomerName + resolveCustomerHN (CJS mirror of src/lib/customerDisplayName.js — name walk + HN walk incl. hn_no). Cross-link comment.</div>
+<pre><code class="language-js">// functions/customerDisplay.js — PURE CJS mirror of src/lib/customerDisplayName.js
+// (CF is a separate CJS deploy package → cannot import the ESM src/lib).
+// Keep in sync with the canonical ESM resolver; parity covered by tests.
+function resolveCustomerName(customer) {
+  if (!customer || typeof customer !== 'object') return '';
+  const pd = customer.patientData || {};
+  const prefix = String(pd.prefix || customer.prefix || '').trim();
+  const compose = (f, l) => {
+    const a = String(f || '').trim(), b = String(l || '').trim();
+    if (!a && !b) return '';
+    const full = [a, b].filter(Boolean).join(' ');
+    return prefix ? `${prefix} ${full}`.trim() : full;
+  };
+  let n = compose(pd.firstNameTh, pd.lastNameTh);
+  if (!n) n = compose(pd.firstName, pd.lastName);
+  if (!n) n = compose(customer.firstname, customer.lastname);
+  if (!n) n = String(customer.customerName || '').trim();
+  if (!n) n = String(customer.name || '').trim();
+  if (!n) n = String(pd.nicknameTh || pd.nickname || customer.nickname || '').trim();
+  return n;
+}
+function resolveCustomerHN(customer) {
+  if (!customer || typeof customer !== 'object') return '';
+  const pd = customer.patientData || {};
+  return String(
+    customer.proClinicHN || pd.hn || pd.HN || pd.proClinicHN
+    || customer.hn || customer.HN || customer.hn_no || ''
+  ).trim();
+}
+module.exports = { resolveCustomerName, resolveCustomerHN };
+</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2</strong> parity test in Task 4 (compare to ESM on key shapes).</div>
+</div>
+
+<div class="task">
+  <h3>Task 2: <code>functions/notificationContent.js</code> (pure CJS body builder)</h3>
+<pre><code class="language-js">// functions/notificationContent.js — PURE CJS. Builds {title, body} for the FCM push.
+const { resolveCustomerName, resolveCustomerHN } = require('./customerDisplay');
+
+function buildNotificationContent({ session, sessionId, customer, changedSections = [] } = {}) {
+  const s = session || {};
+  const pd = s.patientData || {};
+  const rawName = s.sessionName || sessionId || 'OPD';
+  const title = rawName.length > 28 ? rawName.substring(0, 27) + '…' : rawName;
+  const isEdit = !!s.updatedAt;
+
+  if (isEdit) {
+    const sections = (changedSections && changedSections.length > 0) ? changedSections.join(' · ') : 'ข้อมูลผู้ป่วย';
+    return { title, body: `✏️ แก้ไขแล้ว · ${sections}` };
+  }
+  if (s.linkedCustomerId) {
+    const name = resolveCustomerName(customer) || (s.confirmInfo && s.confirmInfo.name) || '';
+    const hn = resolveCustomerHN(customer) || String(s.linkedCustomerId);
+    return { title, body: name ? `🔔 ${name} · HN ${hn}` : `🔔 HN ${hn}` };
+  }
+  const patientName = pd.firstName ? `${pd.firstName} ${pd.lastName || ''}`.trim() : null;
+  return { title, body: patientName ? `🔔 ข้อมูลใหม่ · ${patientName}` : '🔔 ได้รับข้อมูลผู้ป่วยแล้ว' };
+}
+module.exports = { buildNotificationContent };
+</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: wire <code>functions/index.js</code></h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1</strong> require the 2 modules at top.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2</strong> after the tokens gate, before building the message: read be_customers when linkedCustomerId present:</div>
+<pre><code class="language-js">let customer = null;
+if (session.linkedCustomerId) {
+  try {
+    const cdoc = await db.doc(`${BASE_PATH}/be_customers/${session.linkedCustomerId}`).get();
+    if (cdoc.exists) customer = cdoc.data();
+  } catch (e) { console.warn(`[${sessionId}] be_customers read failed:`, e?.message); }
+}
+const { title, body } = buildNotificationContent({ session, sessionId, customer, changedSections });
+</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3</strong> DELETE the old inline block (the <code>const pd = ...patientName... let title, body; if (isEdit) {...} else {...}</code> lines ~66-84). Keep the <code>message</code> object + multicast unchanged.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4</strong> <code>node --check functions/index.js</code> → clean.</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: <code>tests/notification-content.test.js</code> (vitest, imports CJS)</h3>
+  <p>Mirror the <code>tests/materialize-assessment.test.js</code> pattern (vitest importing functions/ CJS). Cases:</p>
+  <ul>
+    <li>N1 follow-up + customer(name+hn_no) → "🔔 {name} · HN {hn_no}"</li>
+    <li>N2 follow-up + customer no hn_no (LC) → "🔔 {name} · HN {linkedCustomerId}"</li>
+    <li>N3 follow-up + customer null + confirmInfo.name → "🔔 {confirmInfo.name} · HN {linkedCustomerId}"</li>
+    <li>N4 follow-up + no name anywhere → "🔔 HN {linkedCustomerId}"</li>
+    <li>N5 intake (pd.firstName, no linkedCustomerId) → "🔔 ข้อมูลใหม่ · {name}" (unchanged)</li>
+    <li>N6 intake no name → "🔔 ได้รับข้อมูลผู้ป่วยแล้ว" (unchanged)</li>
+    <li>N7 edit (updatedAt) → "✏️ แก้ไขแล้ว · {sections}" / default "ข้อมูลผู้ป่วย"</li>
+    <li>N8 long sessionName (&gt;28) → title truncated + "…"</li>
+    <li>N9 resolveCustomerName/HN parity vs ESM src/lib/customerDisplayName.js on 4 shapes (Thai patientData / top-level firstname / customerName / hn_no vs proClinicHN)</li>
+    <li>N10 edit takes precedence over linkedCustomerId (a follow-up that is also an edit → edit branch)</li>
+  </ul>
+  <div class="step"><input type="checkbox"> run <code>npx vitest run tests/notification-content.test.js</code> → PASS.</div>
+</div>
+
+<div class="task">
+  <h3>Task 5: Verify + adversarial</h3>
+  <div class="step"><input type="checkbox"> <code>node --check</code> functions/*.js + targeted vitest + full vitest (Rule N — touches push pipeline shared by intake).</div>
+  <div class="step"><input type="checkbox"> <strong>Rule R diag</strong> (real prod, read-only): <code>scripts/diag-followup-push-name-hn.mjs</code> — read a real FW-ED-* opd_session + its linkedCustomerId be_customers doc → run resolveCustomerName/HN → confirm REAL name+HN resolve (L2 against real data shape).</div>
+  <div class="step"><input type="checkbox"> adversarial Workflow (lenses: branch-correctness, resolver parity/HN-shape incl. hn_no, CF wiring + non-fatal read + canonical path, regression intake/edit, test-quality). Adjudicate each.</div>
+  <div class="step"><input type="checkbox"> Rule Q honest gap: L2 = pure-unit + Rule R real-data diag; L1 = real push after <code>firebase deploy --only functions</code> = USER hands-on. NOT deployed (V18).</div>
+</div>
+
+</body>
+</html>
