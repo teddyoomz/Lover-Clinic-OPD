@@ -112,7 +112,7 @@ describe('Phase 24.0 / S4 — endpoint surface (source-grep guards)', () => {
     const keyMap = SERVER_TXT.match(/COL_TO_RESPONSE_KEY\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
     expect(keyMap).toBeTruthy();
     const keyEntries = keyMap[1].match(/be_[a-z_]+\s*:/g) || [];
-    expect(keyEntries.length).toBe(16); // 11 Phase 24.0 + 5 V74 CG
+    expect(keyEntries.length).toBe(17); // 11 Phase 24.0 + 5 V74 CG + be_assessments (2026-06-18)
   });
 
   it('S4.3 endpoint writes audit doc with prefix customer-delete-', () => {
@@ -130,32 +130,26 @@ describe('Phase 24.0 / S4 — endpoint surface (source-grep guards)', () => {
 });
 
 describe('Phase 24.0 / S5 — shared CUSTOMER_CASCADE_COLLECTIONS parity (client + server)', () => {
-  it('S5.1 V74 server cascade aliased to canonical CUSTOMER_CASCADE_COLLECTIONS_FULL; client list = Phase 24.0 (11 entries) subset', () => {
-    // V74 (2026-05-16): server endpoint uses the V74 canonical 16-entry list.
-    // Client-side backendClient.js still uses the Phase 24.0 11-entry list
-    // for its inline cascade (e.g. UI optimistic deletes). The 11 must be a
-    // STRICT SUBSET of the 16 — V74 only ADDS to the cascade, never removes.
+  it('S5.1 client cascade reconciled to canonical CUSTOMER_CASCADE_COLLECTIONS_FULL (single source; 17 entries)', () => {
+    // 2026-06-18: the client (backendClient.js) used its OWN inline 11-entry
+    // Object.freeze list, drifting from V74's FULL (orphaning the +5 on a
+    // client-side delete) + missing be_assessments. Now re-exported → client
+    // === server === FULL (no drift possible). FULL = 17 (16 + be_assessments);
+    // the wallet entry is be_customer_wallets (was the be_wallets phantom).
     const clientTxt = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
     const coreTxt = fs.readFileSync('src/lib/customerBackupCore.js', 'utf-8');
-    function parseInlineList(src) {
-      const m = src.match(/CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-      if (!m) return null;
-      return (m[1].match(/'(be_[a-z_]+)'/g) || []).map(s => s.slice(1, -1));
-    }
+    expect(clientTxt).toMatch(/import\s*\{\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*\}\s*from\s*['"]\.\/customerBackupCore\.js['"]/);
+    expect(clientTxt).toMatch(/export const CUSTOMER_CASCADE_COLLECTIONS\s*=\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*;/);
     function parseFullList(src) {
       const m = src.match(/CUSTOMER_CASCADE_COLLECTIONS_FULL\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
       if (!m) throw new Error('CUSTOMER_CASCADE_COLLECTIONS_FULL not found in customerBackupCore.js');
       return (m[1].match(/'(be_[a-z_]+)'/g) || []).map(s => s.slice(1, -1));
     }
-    const clientList = parseInlineList(clientTxt);
     const v74Full = parseFullList(coreTxt);
-    expect(v74Full.length).toBe(16); // V74: 11 Phase 24.0 + 5 CG
-    if (clientList) {
-      // Subset invariant: every client cascade entry must be in V74 full list.
-      for (const c of clientList) {
-        expect(v74Full).toContain(c);
-      }
-    }
+    expect(v74Full.length).toBe(17);
+    expect(v74Full).toContain('be_assessments');
+    expect(v74Full).toContain('be_customer_wallets'); // real wallet store
+    expect(v74Full).not.toContain('be_wallets');       // phantom removed
   });
 });
 

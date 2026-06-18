@@ -56,7 +56,7 @@ const COL_TO_RESPONSE_KEY = Object.freeze({
   be_treatments: 'treatments',
   be_sales: 'sales',
   be_deposits: 'deposits',
-  be_wallets: 'wallets',
+  be_customer_wallets: 'wallets', // 2026-06-18 — was be_wallets (Phase-24.0 phantom)
   be_wallet_transactions: 'walletTransactions',
   be_memberships: 'memberships',
   be_point_transactions: 'pointTransactions',
@@ -64,6 +64,15 @@ const COL_TO_RESPONSE_KEY = Object.freeze({
   be_course_changes: 'courseChanges',
   be_link_requests: 'linkRequests',
   be_customer_link_tokens: 'customerLinkTokens',
+  // 2026-06-18 — reconciled to the single-source 17-collection cascade list
+  // (CUSTOMER_CASCADE_COLLECTIONS now === CUSTOMER_CASCADE_COLLECTIONS_FULL).
+  // Keys MUST match api/admin/delete-customer-cascade.js COL_TO_RESPONSE_KEY.
+  be_quotations: 'quotations',
+  be_vendor_sales: 'vendorSales',
+  be_online_sales: 'onlineSales',
+  be_sale_insurance_claims: 'saleInsuranceClaims',
+  be_recalls: 'recalls',
+  be_assessments: 'assessments',
 });
 
 // Phase 24.0-quater (2026-05-06 evening) — client-side cascade incompleteness.

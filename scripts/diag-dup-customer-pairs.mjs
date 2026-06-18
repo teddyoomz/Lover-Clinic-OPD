@@ -19,7 +19,7 @@ const PAIRS = [
   { key: 'CITIZEN:1309900766135', a: 'LC-26000143', b: 'LC-26000155' },
 ];
 // EVERY customer-attached collection (V74 cascade-FULL 16 + be_recalls).
-const COLS = ['be_treatments', 'be_sales', 'be_deposits', 'be_wallets', 'be_wallet_transactions', 'be_memberships', 'be_point_transactions', 'be_appointments', 'be_course_changes', 'be_link_requests', 'be_customer_link_tokens', 'be_quotations', 'be_vendor_sales', 'be_online_sales', 'be_sale_insurance_claims', 'be_recalls'];
+const COLS = ['be_treatments', 'be_sales', 'be_deposits', 'be_customer_wallets', 'be_wallet_transactions', 'be_memberships', 'be_point_transactions', 'be_appointments', 'be_course_changes', 'be_link_requests', 'be_customer_link_tokens', 'be_quotations', 'be_vendor_sales', 'be_online_sales', 'be_sale_insurance_claims', 'be_recalls'];
 
 async function footprint(cid) {
   const doc = await data().collection('be_customers').doc(cid).get();

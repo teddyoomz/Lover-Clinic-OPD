@@ -40,24 +40,26 @@ describe('Phase 24.0 / F1 — HN counter monotonic-forward (no reuse)', () => {
 });
 
 describe('Phase 24.0 / F2 — cascade scope contract', () => {
-  it('F2.1 client cascade list = 11 entries', () => {
-    const m = CLIENT.match(/CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-    expect(m).toBeTruthy();
-    const entries = m[1].match(/'be_[a-z_]+'/g) || [];
-    expect(entries.length).toBe(11);
+  it('F2.1 client cascade list reconciled to the single-source FULL (was a stale 11-item drift)', () => {
+    // 2026-06-18 — the client used to keep its OWN 11-item Object.freeze list,
+    // drifting from V74's 16-item FULL (orphaning be_quotations/vendor_sales/
+    // online_sales/insurance_claims/recalls on a client-side delete) + missing
+    // be_assessments. Now a re-export of the single source → no drift possible.
+    expect(CLIENT).toMatch(/import\s*\{\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*\}\s*from\s*['"]\.\/customerBackupCore\.js['"]/);
+    expect(CLIENT).toMatch(/export const CUSTOMER_CASCADE_COLLECTIONS\s*=\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*;/);
   });
 
-  it('F2.2 server cascade aliased to V74 CUSTOMER_CASCADE_COLLECTIONS_FULL (16 entries via canonical helper)', () => {
-    // V74 (2026-05-16): server endpoint imports the canonical 16-entry list
-    // from src/lib/customerBackupCore.js (CUSTOMER_CASCADE_COLLECTIONS_FULL)
-    // and re-aliases it as CUSTOMER_CASCADE_COLLECTIONS. The COL_TO_RESPONSE_KEY
-    // map carries the canonical 16-key mapping.
+  it('F2.2 server cascade aliased to V74 CUSTOMER_CASCADE_COLLECTIONS_FULL (17 entries via canonical helper)', () => {
+    // V74 (2026-05-16): server endpoint imports the canonical list from
+    // src/lib/customerBackupCore.js (CUSTOMER_CASCADE_COLLECTIONS_FULL) and
+    // re-aliases it. 2026-06-18: now 17 (16 + be_assessments); the wallet entry
+    // is be_customer_wallets (was the be_wallets phantom).
     expect(SERVER).toMatch(/import\s*\{[\s\S]*?CUSTOMER_CASCADE_COLLECTIONS_FULL[\s\S]*?\}\s*from\s*['"]\.\.\/\.\.\/src\/lib\/customerBackupCore\.js['"]/);
     expect(SERVER).toMatch(/const\s+CUSTOMER_CASCADE_COLLECTIONS\s*=\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*;/);
     const keyMap = SERVER.match(/COL_TO_RESPONSE_KEY\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
     expect(keyMap).toBeTruthy();
     const keyEntries = keyMap[1].match(/be_[a-z_]+\s*:/g) || [];
-    expect(keyEntries.length).toBe(16);
+    expect(keyEntries.length).toBe(17);
   });
 
   it('F2.3 cascade includes V36-quinquies be_course_changes (was missing pre-Phase-24)', () => {
@@ -73,8 +75,9 @@ describe('Phase 24.0 / F2 — cascade scope contract', () => {
   });
 
   it('F2.5 cascade does NOT include opd_sessions (out-of-scope per spec §10)', () => {
-    const m = CLIENT.match(/CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-    expect(m[1]).not.toMatch(/opd_sessions/);
+    // client is now a re-export of the single source → check the canonical map.
+    const keyMap = SERVER.match(/COL_TO_RESPONSE_KEY\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
+    expect(keyMap[1]).not.toMatch(/opd_sessions/);
   });
 });
 

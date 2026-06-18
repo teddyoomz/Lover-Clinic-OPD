@@ -55,7 +55,7 @@ const COL_TO_RESPONSE_KEY = Object.freeze({
   be_treatments: 'treatments',
   be_sales: 'sales',
   be_deposits: 'deposits',
-  be_wallets: 'wallets',
+  be_customer_wallets: 'wallets', // 2026-06-18 — was be_wallets (Phase-24.0 phantom)
   be_wallet_transactions: 'walletTransactions',
   be_memberships: 'memberships',
   be_point_transactions: 'pointTransactions',
@@ -69,6 +69,7 @@ const COL_TO_RESPONSE_KEY = Object.freeze({
   be_online_sales: 'onlineSales',
   be_sale_insurance_claims: 'saleInsuranceClaims',
   be_recalls: 'recalls',
+  be_assessments: 'assessments', // 2026-06-18 — ED Score follow-up rounds
 });
 
 let cachedDb = null, cachedBucket = null;

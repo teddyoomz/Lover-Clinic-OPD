@@ -5,10 +5,10 @@
 // extends with CG (5 gap collections), CS (subcollections), AI (immutable).
 
 /**
- * 16 top-level collections that hold customer-referenced docs (filterable by
+ * 17 top-level collections that hold customer-referenced docs (filterable by
  * `where('customerId', '==', X)`). Extends Phase 24.0's 11-collection
- * CUSTOMER_CASCADE_COLLECTIONS with 5 gap collections that reference
- * customerId but were missed by Phase 24.0.
+ * CUSTOMER_CASCADE_COLLECTIONS with 5 gap collections (V74) + be_assessments
+ * (2026-06-18) that reference customerId but were missed when added.
  *
  * Wipe action: delete all docs where customerId == X
  * Restore action: recreate all docs at same docIds
@@ -18,7 +18,11 @@ export const CUSTOMER_CASCADE_COLLECTIONS_FULL = Object.freeze([
   'be_treatments',
   'be_sales',
   'be_deposits',
-  'be_wallets',
+  // 2026-06-18 — was be_wallets (a Phase-24.0 PHANTOM: 0 docs, no rule, no
+  // accessor). The real wallet-balance store is be_customer_wallets (backendClient
+  // walletsCol; composite id customerId__walletTypeId). Renamed so customer delete
+  // no longer ORPHANS wallet balances + per-customer backup captures them.
+  'be_customer_wallets',
   'be_wallet_transactions',
   'be_memberships',
   'be_point_transactions',
@@ -32,6 +36,9 @@ export const CUSTOMER_CASCADE_COLLECTIONS_FULL = Object.freeze([
   'be_online_sales',
   'be_sale_insurance_claims',
   'be_recalls',
+  // 2026-06-18 — ED Score follow-up assessment rounds (be_assessments, added
+  // 2026-06-15). Universal, customerId-keyed; mirrors be_course_changes.
+  'be_assessments',
 ]);
 
 /**

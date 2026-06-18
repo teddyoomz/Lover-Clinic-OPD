@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>be_assessments Backup Coverage — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; }
+    .step input { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; } th,td{border:1px solid var(--bd);padding:0.4em 0.7em;font-size:0.9em;text-align:left;vertical-align:top;} th{background:var(--bg-meta);}
+  </style>
+</head>
+<body>
+
+<h1>be_assessments Backup Coverage — Implementation Plan</h1>
+
+<blockquote>Spec: docs/superpowers/specs/2026-06-18-be-assessments-backup-coverage-design.html · Execution: inline · Q1=A (comprehensive + client-drift) · Q2=A (diag + Rule-M clean). Deploy + session-end after (combined with the ED-compare commit, per user).</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make every backup/restore/cascade/merge path cover <code>be_assessments</code> (ED Score), reconcile the stale client delete-list to the single source, add a drift-prevention guard test, and Rule-M-clean any prod orphans.</p>
+  <p><strong>Architecture:</strong> Extend 4 hardcoded scope constants + re-point the client cascade list at the single source + extend 2 response-key maps + 1 merge script; add a classifier-driven guard test + a Rule R orphan diag.</p>
+  <p><strong>Tech:</strong> pure ESM constants, Vitest, firebase-admin (diag/cleanup scripts).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Scope constants — before/after (data shape)</div>
+  <table>
+    <tr><th>Constant (file)</th><th>Before</th><th>After</th></tr>
+    <tr><td><code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (customerBackupCore.js)</td><td>16</td><td>17 (+be_assessments)</td></tr>
+    <tr><td><code>CUSTOMER_CASCADE_COLLECTIONS</code> (backendClient.js)</td><td>own 11</td><td>= FULL (re-export, 17)</td></tr>
+    <tr><td><code>CUSTOMER_ONLY_UNIVERSAL</code> (wholeSystemBackupCore.js)</td><td>5</td><td>6</td></tr>
+    <tr><td><code>UNIVERSAL</code> (branchBackupCore.js)</td><td>18</td><td>19</td></tr>
+    <tr><td><code>COL_TO_RESPONSE_KEY</code> client (customerDeleteClient.js)</td><td>11</td><td>17</td></tr>
+    <tr><td><code>COL_TO_RESPONSE_KEY</code> server (delete-customer-cascade.js)</td><td>16</td><td>17</td></tr>
+    <tr><td>COLS (fix-dup-customer-pairs.mjs)</td><td>16, recalls-move only</td><td>17, +assessments-move</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">be_assessments now flows through delete + backup + merge</div>
+  <pre>customer delete → CUSTOMER_CASCADE_COLLECTIONS_FULL(17) → query customerId==X → delete refs → be_assessments gone (no orphan)
+customer backup → same 17 → collect docs by customerId → file → restore recreates at same docId (customerId preserved)
+customer merge  → move be_assessments (set customerId = keeper) like moveRecalls
+guard test      → classifier: customer-scoped-universal collection ∉ list → RED build</pre>
+</div>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Guard test FIRST (TDD red) + add to CUSTOMER_CASCADE_COLLECTIONS_FULL</h3>
+  <p>Files: Create <code>tests/be-assessments-backup-coverage.test.js</code> · Modify <code>src/lib/customerBackupCore.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>1. Write failing tests</strong> — assert be_assessments ∈ FULL list + the lockstep + per-list inclusion (will be expanded in Task 6).</div>
+<pre><code>import { CUSTOMER_CASCADE_COLLECTIONS_FULL } from '../src/lib/customerBackupCore.js';
+it('be_assessments in CUSTOMER_CASCADE_COLLECTIONS_FULL', () =>
+  expect(CUSTOMER_CASCADE_COLLECTIONS_FULL).toContain('be_assessments'));</code></pre>
+  <div class="step"><input type="checkbox"> <strong>2. Run → FAIL</strong> (<code>npx vitest run tests/be-assessments-backup-coverage.test.js</code>)</div>
+  <div class="step"><input type="checkbox"> <strong>3. Add</strong> <code>'be_assessments',</code> after <code>'be_recalls',</code> (line 34) in CUSTOMER_CASCADE_COLLECTIONS_FULL, with a comment "ED Score follow-up rounds (2026-06-15); universal customerId-keyed, mirrors be_course_changes". Update the JSDoc count 16→17.</div>
+  <div class="step"><input type="checkbox"> <strong>4. Run → PASS</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: Reconcile client cascade list to the single source</h3>
+  <p>Files: Modify <code>src/lib/backendClient.js</code> (CUSTOMER_CASCADE_COLLECTIONS, ~1032)</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Replace the hardcoded 11-item <code>CUSTOMER_CASCADE_COLLECTIONS</code> with a re-export of the single source. Import at the file's import block: <code>import { CUSTOMER_CASCADE_COLLECTIONS_FULL } from './customerBackupCore.js';</code> then <code>export const CUSTOMER_CASCADE_COLLECTIONS = CUSTOMER_CASCADE_COLLECTIONS_FULL;</code> Keep the explanatory comment (note it now reconciles to the V74 full list incl. be_assessments).</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Verify no circular import (customerBackupCore is pure ESM, no backendClient import) — <code>npm run build</code> clean.</div>
+</div>
+
+<div class="task">
+  <h3>Task 3: Extend response-key maps (client + server) — all 17</h3>
+  <p>Files: <code>src/lib/customerDeleteClient.js</code> (COL_TO_RESPONSE_KEY ~55) · <code>api/admin/delete-customer-cascade.js</code> (its COL_TO_RESPONSE_KEY). First READ the server map to see which of the 16 are already keyed.</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Client map: add the 6 missing keys: <code>be_quotations:'quotations', be_vendor_sales:'vendorSales', be_online_sales:'onlineSales', be_sale_insurance_claims:'saleInsuranceClaims', be_recalls:'recalls', be_assessments:'assessments'</code>. (Match the server's existing camelCase keys for the V74 +5 — read them first to stay in lockstep.)</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Server map: add <code>be_assessments:'assessments'</code> (the +5 already keyed). Confirm CLIENT_DELETE_BLOCKED/READ_BLOCKED need NO new entries (all 6 are <code>isClinicStaff()</code> read+write → deletable).</div>
+  <div class="step"><input type="checkbox"> <strong>3.</strong> Update module comments in customerDeleteClient (the "11 collections" / "all 11 cascaded" references → 17).</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: Whole-system customer-only + branch UNIVERSAL</h3>
+  <p>Files: <code>src/lib/wholeSystemBackupCore.js</code> (CUSTOMER_ONLY_UNIVERSAL ~195) · <code>src/lib/branchBackupCore.js</code> (UNIVERSAL set ~82)</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Add <code>'be_assessments'</code> to <code>CUSTOMER_ONLY_UNIVERSAL</code> (after chat_history).</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> Add <code>'be_assessments'</code> to <code>branchBackupCore.UNIVERSAL</code> set (after be_admin_audit). NOT to branchBackupBuckets (no branchId → not branch-scoped).</div>
+</div>
+
+<div class="task">
+  <h3>Task 5: Merge script (move-on-merge)</h3>
+  <p>Files: <code>scripts/fix-dup-customer-pairs.mjs</code> (COLS ~23 + moveRecalls ~25-34)</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> Add <code>'be_assessments'</code> to the COLS array. Add a <code>moveAssessments(fromId, toId)</code> mirroring <code>moveRecalls</code> (query where customerId==fromId → set customerId=toId, two-phase). Keep dry-run/--apply discipline.</div>
+</div>
+
+<div class="task">
+  <h3>Task 6: Full test bank (guard + lockstep + flow-simulate)</h3>
+  <p>Files: expand <code>tests/be-assessments-backup-coverage.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>1. Inclusion:</strong> be_assessments ∈ CUSTOMER_CASCADE_COLLECTIONS_FULL, CUSTOMER_ONLY_UNIVERSAL, branchBackupCore.UNIVERSAL; NOT in any branchBackupBuckets BUCKET.collections.</div>
+  <div class="step"><input type="checkbox"> <strong>2. Lockstep:</strong> <code>CUSTOMER_CASCADE_COLLECTIONS === CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (same ref); client COL_TO_RESPONSE_KEY (source-grep) + server COL_TO_RESPONSE_KEY cover all 17 (no undefined key).</div>
+  <div class="step"><input type="checkbox"> <strong>3. Guard (drift prevention, Rule P):</strong> read the classifier in <code>tests/branch-collection-coverage.test.js</code> (or its source-of-truth); for every collection classified customer-scoped-universal (flat + customerId field), assert it is in the 3 lists. A future new collection that's customer-scoped → must be added or the build goes red.</div>
+  <div class="step"><input type="checkbox"> <strong>4. Flow-simulate (Rule I):</strong> a pure mirror of "collect docs where customerId==X across the 17" → assert be_assessments docs included in backup; restore mirror recreates them; delete mirror collects+deletes; merge mirror re-stamps customerId.</div>
+  <div class="step"><input type="checkbox"> <strong>5. Run → PASS</strong></div>
+</div>
+
+<div class="task">
+  <h3>Task 7: Full suite + build</h3>
+  <div class="step"><input type="checkbox"> <code>npx vitest run</code> (full) green + <code>npm run build</code> clean. Re-run once if a transient timeout flake appears (documented).</div>
+</div>
+
+<div class="task">
+  <h3>Task 8: Rule R orphan diag (+ Rule-M cleanup if found)</h3>
+  <p>Files: Create <code>scripts/diag-orphan-assessments.mjs</code> (read-only). Conditionally <code>scripts/cleanup-orphan-assessments.mjs</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>1.</strong> <code>vercel env pull</code> (Rule R) → admin-SDK read be_assessments + be_customers (canonical path); report be_assessments docs whose customerId has no be_customers doc (orphans from deletes since 2026-06-15).</div>
+  <div class="step"><input type="checkbox"> <strong>2.</strong> If orphans &gt; 0: write a Rule-M two-phase cleanup (dry-run default, --apply gated, audit doc, idempotent, forensic). Run dry-run; present to user; --apply only on explicit OK.</div>
+</div>
+
+<div class="task">
+  <h3>Task 9: Commit (deploy + session-end after, per user)</h3>
+  <div class="step"><input type="checkbox"> Commit the code + spec + plan + tests + diag script. Then — per user "Deploy และ session end" — combined deploy (vercel frontend for the ED-compare + this; the backup constants are frontend/serverless shared libs → vercel; firestore.rules UNCHANGED → no Probe-Deploy-Probe) + session-end.</div>
+</div>
+
+<h2>Self-Review (plan vs spec)</h2>
+<ul>
+  <li>Coverage: AC1 → T1+T4 · AC2 → T2+T3+T6 · AC3 → T1 (FULL list drives backup) + T6 flow-sim · AC4 → T2+T3 + T6 · AC5 → T5 · AC6 → T6 guard · AC7 → T8 · AC8 → T7.</li>
+  <li>No placeholders; exact files + constants named. Types consistent (single constant <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> drives all).</li>
+  <li>Honest Rule Q: code + guard + flow-sim are L2/source; the live backup-restore round-trip + orphan diag are real-prod (Rule R/L2 with TEST- fixtures); live customer-delete on real data = not run (TEST fixtures + isolated namespace).</li>
+</ul>
+
+</body>
+</html>

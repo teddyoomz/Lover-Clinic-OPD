@@ -17,6 +17,7 @@ import { planLotCleanup } from './stockLotCleanupCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN, resolveCustomerPhone } from './customerDisplayName.js';
 import { deriveClaimKey, DuplicateIdentityError, resolveClaimAction } from './customerIdentity.js'; // 2026-06-16 Part A — atomic identity-claim (Rule T dup-prevention)
 import { pickKioskAssessmentFields } from './kioskAssessmentFields.js'; // AV194 — carry kiosk perf/hormone assessment fields through the patientData projection
+import { CUSTOMER_CASCADE_COLLECTIONS_FULL } from './customerBackupCore.js'; // 2026-06-18 — single-source customer cascade list (reconcile 11-vs-16 drift)
 import { roundTHB } from './financeUtils.js'; // V156 — defensive money rounding at the write boundary (closes M12 caveat)
 import { decideApptStatusServiceSync } from './appointmentDisplay.js';
 // AP1/AP1-bis slot-key builders extracted (2026-06-03, appointment-loop R1) so
@@ -1029,19 +1030,12 @@ export async function findCustomersByField(field, value, excludeProClinicId = nu
  * customers via brokerProClinicId; policy-pending — leave in place);
  * Firebase Storage objects (separate cleanup-orphan cron).
  */
-export const CUSTOMER_CASCADE_COLLECTIONS = Object.freeze([
-  'be_treatments',
-  'be_sales',
-  'be_deposits',
-  'be_wallets',
-  'be_wallet_transactions',
-  'be_memberships',
-  'be_point_transactions',
-  'be_appointments',
-  'be_course_changes',
-  'be_link_requests',
-  'be_customer_link_tokens',
-]);
+// 2026-06-18 — RECONCILED to the single source of truth (customerBackupCore.js).
+// Was a stale 11-item Phase-24.0 list that drifted from the V74 16-item FULL list,
+// leaving be_quotations/be_vendor_sales/be_online_sales/be_sale_insurance_claims/
+// be_recalls + be_assessments ORPHANED on the client-side delete. All 17 are
+// isClinicStaff() read+write (client-deletable) so the reconcile is safe.
+export const CUSTOMER_CASCADE_COLLECTIONS = CUSTOMER_CASCADE_COLLECTIONS_FULL;
 
 /**
  * 2026-06-16 Part A — free a customer's identity claim on delete (closes the

@@ -20,7 +20,10 @@ if (!getApps().length) initializeApp({ credential: cert({ projectId: APP_ID, cli
 const db = getFirestore();
 const data = () => db.collection('artifacts').doc(APP_ID).collection('public').doc('data');
 
-const COLS = ['be_treatments', 'be_sales', 'be_deposits', 'be_wallets', 'be_wallet_transactions', 'be_memberships', 'be_point_transactions', 'be_appointments', 'be_course_changes', 'be_link_requests', 'be_customer_link_tokens', 'be_quotations', 'be_vendor_sales', 'be_online_sales', 'be_sale_insurance_claims', 'be_recalls'];
+// 2026-06-18 — be_assessments (ED Score rounds) added; matches CUSTOMER_CASCADE_COLLECTIONS_FULL.
+// A future merge moves be_assessments to the keeper with the same pattern as moveRecalls
+// (query where customerId==from → set customerId=to).
+const COLS = ['be_treatments', 'be_sales', 'be_deposits', 'be_customer_wallets', 'be_wallet_transactions', 'be_memberships', 'be_point_transactions', 'be_appointments', 'be_course_changes', 'be_link_requests', 'be_customer_link_tokens', 'be_quotations', 'be_vendor_sales', 'be_online_sales', 'be_sale_insurance_claims', 'be_recalls', 'be_assessments'];
 
 async function moveRecalls(fromCid, toCid, log) {
   const toDoc = (await data().collection('be_customers').doc(toCid).get()).data();

@@ -87,6 +87,7 @@ const UNIVERSAL = new Set([
   'be_central_stock_warehouses', 'be_vendors',
   'system_config', 'clinic_settings', 'chat_conversations',
   'be_admin_audit',
+  'be_assessments', // 2026-06-18 — ED Score follow-up rounds (universal; round-trips in a branch backup)
 ]);
 
 export function isUniversalCollection(name) {

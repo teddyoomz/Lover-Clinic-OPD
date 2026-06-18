@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>be_assessments Backup Coverage — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#15803d; --bad:#b91c1c; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    .ok { color: var(--ok); font-weight: bold; }
+    .bad { color: var(--bad); font-weight: bold; }
+    .add { background:#dcfce7; }
+  </style>
+</head>
+<body>
+
+<h1>be_assessments Backup Coverage — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-18 · <strong>Status:</strong> Approved by user (Q1=A comprehensive+drift, Q2=A diag+clean) · <strong>Scope:</strong> backend constants + guard test + Rule-M orphan cleanup. <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-18-be-assessments-backup-coverage.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The <code>be_assessments</code> collection (ED Score / follow-up assessment rounds — a flat, UNIVERSAL collection keyed by a <code>customerId</code> field, added 2026-06-15) is <strong>omitted from every hardcoded backup / restore / cascade list</strong>. The whole-system FULL backup (the 03:00 daily cron + manual button) DOES capture it (V122 dynamic <code>listCollections()</code> + empty DENYLIST) — <strong>so no ED data is lost in the daily backup</strong> — but every <em>customer-scoped</em> and <em>branch</em> path misses it:</p>
+<ul>
+  <li>Per-customer backup/restore (V74) + whole-fleet (V75): ED rounds NOT backed up → a restored customer loses ED history.</li>
+  <li>Customer DELETE cascade (server <em>and</em> the active client path): ED rounds <strong>orphaned</strong> after delete.</li>
+  <li>Customer MERGE (dup-resolution): ED rounds NOT moved to the keeper.</li>
+  <li>Branch backup/restore (V40): the universal be_assessments not round-tripped.</li>
+  <li>Whole-system customer-only backup: omitted.</li>
+</ul>
+<p>This is the <strong>V122/V196 class-of-bug</strong> (a new collection added without updating the hardcoded lists — same as the V196 "missed be_recalls" lesson). A <strong>related drift</strong> surfaced: the <em>active client-side</em> customer-delete (<code>customerDeleteClient.js</code>) uses an 11-collection list (Phase 24.0 baseline) while the server uses the 16-collection <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> — so V74's +5 gap-closure collections (be_quotations / be_vendor_sales / be_online_sales / be_sale_insurance_claims / be_recalls) are ALSO orphaned on a client-side delete. All 6 new collections are <code>read, write: if isClinicStaff()</code> in firestore.rules → fully client-deletable → the reconcile is safe (no rules changes, no CLIENT_DELETE_BLOCKED additions).</p>
+
+<h2>Mockup Design</h2>
+<p><em>(Backend / data feature — the "mockup" is the data-shape of the scope constants + the coverage matrix.)</em></p>
+
+<div class="mockup">
+  <div class="mockup-label">Coverage matrix — be_assessments (BEFORE → AFTER)</div>
+  <table>
+    <tr><th>Backup path</th><th>Mechanism</th><th>Before</th><th>After</th><th>List touched</th></tr>
+    <tr><td>Whole-system FULL (daily cron + manual)</td><td>dynamic <code>listCollections()</code></td><td class="ok">✅ covered</td><td class="ok">✅</td><td>— (no change)</td></tr>
+    <tr><td>Per-customer backup / restore (V74)</td><td>hardcoded list</td><td class="bad">❌</td><td class="ok">✅</td><td><code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code></td></tr>
+    <tr><td>Whole-fleet customer (V75)</td><td>same list</td><td class="bad">❌</td><td class="ok">✅</td><td>↑ (shared)</td></tr>
+    <tr><td>Customer DELETE — server endpoint</td><td>same list</td><td class="bad">❌ orphan</td><td class="ok">✅ cascade</td><td>↑ (shared) + server COL_TO_RESPONSE_KEY</td></tr>
+    <tr><td>Customer DELETE — client (active UI)</td><td>own 11-list</td><td class="bad">❌ orphan (+V74's 5)</td><td class="ok">✅ cascade</td><td><code>CUSTOMER_CASCADE_COLLECTIONS</code> → re-export FULL + client COL_TO_RESPONSE_KEY</td></tr>
+    <tr><td>Customer MERGE (dup script)</td><td>own COLS</td><td class="bad">❌ not moved</td><td class="ok">✅ moved</td><td><code>fix-dup-customer-pairs.mjs</code></td></tr>
+    <tr><td>Branch backup / restore (V40)</td><td>UNIVERSAL set</td><td class="bad">❌</td><td class="ok">✅</td><td><code>branchBackupCore.UNIVERSAL</code></td></tr>
+    <tr><td>Branch make-fresh (buckets)</td><td>branchId-filtered buckets</td><td class="bad">n/a</td><td class="bad">n/a (correct)</td><td>— be_assessments has NO branchId → not a branch bucket</td></tr>
+    <tr><td>Whole-system customer-only</td><td>hardcoded list</td><td class="bad">❌</td><td class="ok">✅</td><td><code>CUSTOMER_ONLY_UNIVERSAL</code></td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Single source of truth — CUSTOMER_CASCADE_COLLECTIONS_FULL (customerBackupCore.js)</div>
+  <pre>// BEFORE: 16 collections (be_assessments absent)
+export const CUSTOMER_CASCADE_COLLECTIONS_FULL = Object.freeze([
+  be_treatments, be_sales, be_deposits, be_wallets, be_wallet_transactions,
+  be_memberships, be_point_transactions, be_appointments, be_course_changes,
+  be_link_requests, be_customer_link_tokens,
+  be_quotations, be_vendor_sales, be_online_sales, be_sale_insurance_claims, be_recalls,
+]);
+
+// AFTER: + be_assessments (universal, customerId-keyed; mirrors be_course_changes)
+<span class="add">  'be_assessments',  // ED Score follow-up rounds (2026-06-15)</span>
+
+// + RECONCILE the 11-item client list to this single source:
+// backendClient.js  →  export const CUSTOMER_CASCADE_COLLECTIONS = CUSTOMER_CASCADE_COLLECTIONS_FULL;
+// (was its own stale 11 — fixes V74's +5 client-orphan AND be_assessments in one move;
+//  all 6 are client-deletable → no CLIENT_DELETE_BLOCKED change)</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Customer delete-cascade + per-customer backup data-flow (after fix)</div>
+  <pre>deleteCustomerViaApi(customerId)               backup/export(customerId)
+        │                                              │
+        ▼                                              ▼
+  for col in CUSTOMER_CASCADE_COLLECTIONS_FULL (17 — single source, incl. be_assessments)
+        │                                              │
+        ├─ query where customerId == X                 ├─ query where customerId == X
+        ├─ (client) skip if CLIENT_DELETE_BLOCKED       ├─ collect docs → backup file
+        │     (wallet_tx/point_tx/course_changes/…)     │
+        ▼                                              ▼
+  writeBatch.delete(refs) + customerDoc            file.collections[col] = docs[]
+        │                                              │
+   be_assessments docs DELETED (no orphan)         be_assessments docs CAPTURED
+                                                        │
+                                              restore → recreate at same docId
+                                              (customerId preserved → re-links)</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Guard: future-collection drift prevention (Rule P)</div>
+  <table>
+    <tr><th>Stage</th><th>Action</th></tr>
+    <tr><td>1. classify</td><td><code>branch-collection-coverage.test.js</code> already classifies every collection's scope (be_assessments = 'global', customer-scoped).</td></tr>
+    <tr><td>2. NEW guard test</td><td>assert: every collection classified customer-scoped-universal (a flat collection queried by <code>customerId</code>) appears in <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> AND <code>CUSTOMER_ONLY_UNIVERSAL</code> AND <code>branchBackupCore.UNIVERSAL</code>. A future omission → red build.</td></tr>
+    <tr><td>3. lockstep</td><td>assert client <code>CUSTOMER_CASCADE_COLLECTIONS === CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (single source); assert client + server <code>COL_TO_RESPONSE_KEY</code> cover all 17.</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/lib/customerBackupCore.js</code></td><td>+ <code>'be_assessments'</code> in <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (16→17). Single source → propagates to per-customer + whole-fleet + server-delete.</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>Reconcile: <code>CUSTOMER_CASCADE_COLLECTIONS</code> = re-export <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (11→17). Kills the client-orphan drift.</td></tr>
+  <tr><td><code>src/lib/customerDeleteClient.js</code></td><td>Extend <code>COL_TO_RESPONSE_KEY</code> with 6 keys (quotations, vendorSales, onlineSales, saleInsuranceClaims, recalls, assessments). No CLIENT_DELETE_BLOCKED change (all 6 client-deletable).</td></tr>
+  <tr><td><code>api/admin/delete-customer-cascade.js</code></td><td>Extend its <code>COL_TO_RESPONSE_KEY</code> with <code>assessments</code> (server had 16; the V74 +5 already mapped).</td></tr>
+  <tr><td><code>src/lib/wholeSystemBackupCore.js</code></td><td>+ <code>'be_assessments'</code> in <code>CUSTOMER_ONLY_UNIVERSAL</code> (5→6).</td></tr>
+  <tr><td><code>src/lib/branchBackupCore.js</code></td><td>+ <code>'be_assessments'</code> in the <code>UNIVERSAL</code> set (18→19). (NOT in buckets — no branchId.)</td></tr>
+  <tr><td><code>scripts/fix-dup-customer-pairs.mjs</code></td><td>+ <code>'be_assessments'</code> in COLS + a move-on-merge pass (mirror <code>moveRecalls</code>). Re-point COLS to the shared constant where possible.</td></tr>
+  <tr><td><code>tests/be-assessments-backup-coverage.test.js</code> (NEW)</td><td>Guard test (drift prevention) + lockstep + per-list inclusion + flow simulate.</td></tr>
+  <tr><td><code>scripts/diag-orphan-assessments.mjs</code> (NEW, Rule R)</td><td>Read-only: be_assessments docs whose <code>customerId</code> has no be_customers doc. Report. (Rule-M cleanup script only if orphans found + user --apply.)</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A (comprehensive + drift):</strong> add be_assessments to every list AND reconcile the client delete to the single-source FULL list (also closes V74's +5 client-orphan). All 6 collections are <code>isClinicStaff()</code> read+write → client-deletable → no rules changes.</li>
+  <li><strong>Q2 = A (diag + clean):</strong> Rule R env-pull (read-only) to find orphaned be_assessments; if found, Rule-M two-phase cleanup (dry-run → user-authorized <code>--apply</code> + audit doc). Code fix ships regardless.</li>
+  <li><strong>Branch buckets excluded:</strong> be_assessments is universal (no branchId) — it does NOT belong in the branchId-filtered make-fresh buckets; only the branch <em>backup UNIVERSAL set</em> round-trips it.</li>
+  <li><strong>be_customer_identity + be_recall_cases NOT added:</strong> verified not customer-data (identity = a global uniqueness index freed/promoted by <code>_freeCustomerIdentityClaim</code>; recall_cases = clinic-wide presets). Correctly excluded.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><code>be_assessments</code> ∈ <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code>, <code>CUSTOMER_ONLY_UNIVERSAL</code>, <code>branchBackupCore.UNIVERSAL</code>.</li>
+  <li>Client <code>CUSTOMER_CASCADE_COLLECTIONS</code> equals <code>CUSTOMER_CASCADE_COLLECTIONS_FULL</code> (single source; 17 items); client + server <code>COL_TO_RESPONSE_KEY</code> map all 17.</li>
+  <li>A per-customer backup of a customer with ED rounds includes them; restore re-creates them at the same docIds with customerId preserved.</li>
+  <li>A customer delete (client + server path) removes that customer's be_assessments docs (no orphan); the auto-pre-backup captures them first.</li>
+  <li>The dup-merge script moves a customer's be_assessments to the keeper.</li>
+  <li>Guard test: any customer-scoped-universal collection missing from the 3 lists → red build (drift prevention).</li>
+  <li>Rule R diag reports orphan count; if &gt;0, a Rule-M cleanup script exists (two-phase, audit doc, idempotent) and is run only on explicit authorization.</li>
+  <li>Full vitest green + build clean.</li>
+</ol>
+
+<h2>Testing</h2>
+<ul>
+  <li><strong>Unit/source-grep (<code>tests/be-assessments-backup-coverage.test.js</code>):</strong> be_assessments in each list; client≡full lockstep; COL_TO_RESPONSE_KEY completeness (client + server); guard test (classifier-driven drift catch); branch-buckets correctly EXCLUDE be_assessments.</li>
+  <li><strong>Flow-simulate (Rule I):</strong> chain customerId → backup (collect by customerId) → file shape → restore (recreate) → assert be_assessments round-trips; delete-cascade collects + deletes be_assessments refs; merge moves them.</li>
+  <li><strong>Rule Q L2 (real prod, read-only diag):</strong> the orphan diag IS a real-prod client/admin-SDK read; the backup/restore round-trip can be e2e-verified against a TEST- customer with seeded be_assessments (mirror the V74/V122 e2e templates) — backup → restore into an isolated namespace → assert ED rounds present.</li>
+  <li><strong>Honest gap (Rule Q):</strong> destructive paths (real customer delete / make-fresh) verified via TEST-prefixed fixtures + isolated-namespace round-trip, not live customer data.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Client reconcile changes the delete surface</strong> (11→17): mitigated — all 6 added collections are <code>isClinicStaff()</code> read+write (client-deletable; verified in firestore.rules) → no PERMISSION_DENIED, no CLIENT_DELETE_BLOCKED additions. The audit-immutable trio stays blocked as before.</li>
+  <li><strong>COL_TO_RESPONSE_KEY drift</strong>: client + server maps must both cover 17 — locked by the guard test (else cascadeCounts[undefined] collision).</li>
+  <li><strong>Restore FK</strong>: be_assessments docs are keyed by their own assessmentId + carry customerId; overwrite-mode restore preserves both → re-links cleanly (same pattern as be_course_changes which already works). Clone-mode (re-mint customerId) is out of per-customer-restore scope (T1-only).</li>
+  <li><strong>No open questions</strong> — scope locked via Q1/Q2.</li>
+</ul>
+
+</body>
+</html>

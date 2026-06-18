@@ -198,6 +198,7 @@ export const CUSTOMER_ONLY_UNIVERSAL = Object.freeze([
   'be_link_requests',
   'chat_conversations',
   'chat_history',
+  'be_assessments', // 2026-06-18 — ED Score follow-up rounds (universal, customerId-keyed)
 ]);
 export const CUSTOMER_ONLY_BRANCH_SCOPED = Object.freeze([
   'be_treatments',

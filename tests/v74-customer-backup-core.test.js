@@ -9,7 +9,8 @@ import {
 describe('CUSTOMER_CASCADE_COLLECTIONS_FULL', () => {
   it('C1.1 includes all 11 Phase 24.0 cascade collections', () => {
     const phase24 = [
-      'be_treatments', 'be_sales', 'be_deposits', 'be_wallets',
+      // 2026-06-18 — be_wallets → be_customer_wallets (Phase-24.0 phantom rename)
+      'be_treatments', 'be_sales', 'be_deposits', 'be_customer_wallets',
       'be_wallet_transactions', 'be_memberships', 'be_point_transactions',
       'be_appointments', 'be_course_changes', 'be_link_requests',
       'be_customer_link_tokens',
@@ -27,8 +28,9 @@ describe('CUSTOMER_CASCADE_COLLECTIONS_FULL', () => {
       expect(CUSTOMER_CASCADE_COLLECTIONS_FULL).toContain(col);
     }
   });
-  it('C1.3 total of 16 collections', () => {
-    expect(CUSTOMER_CASCADE_COLLECTIONS_FULL).toHaveLength(16);
+  it('C1.3 total of 17 collections (16 + be_assessments 2026-06-18)', () => {
+    expect(CUSTOMER_CASCADE_COLLECTIONS_FULL).toHaveLength(17);
+    expect(CUSTOMER_CASCADE_COLLECTIONS_FULL).toContain('be_assessments');
   });
 });
 
