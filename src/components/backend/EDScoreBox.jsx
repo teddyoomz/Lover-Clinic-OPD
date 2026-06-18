@@ -221,7 +221,8 @@ export default function EDScoreBox({ customerId, intakePerf, assessments, isDark
       </div>
 
       {detail && (
-        <EDDetailModal type={detail.type} round={detail.round} isDark={isDark} onClose={() => setDetail(null)} />
+        <EDDetailModal type={detail.type} round={detail.round} rounds={rounds} hero={hero}
+          isDark={isDark} onClose={() => setDetail(null)} />
       )}
     </div>
   );

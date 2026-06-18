@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score 2-Panel Round Compare — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>ED Score 2-Panel Round Compare — Implementation Plan</h1>
+
+<blockquote>
+  <strong>Spec:</strong> docs/superpowers/specs/2026-06-18-ed-score-compare-2panel-design.html (rev 2 — trend removed) · <strong>Execution:</strong> inline (subagents thrash on this baseline — prior ED sessions). <strong>No deploy</strong> (frontend-only; V18 — needs explicit "deploy").
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Upgrade <code>EDDetailModal</code> from a single-round answer view into a side-by-side 2-panel compare (left/right) of the same assessment across two rounds, with type tabs, per-panel round pickers, swap, and changed-row highlighting.</p>
+  <p><strong>Architecture:</strong> 1 NEW pure lib (<code>edCompare.js</code>) + REWORK <code>EDDetailModal.jsx</code> into a compare shell with a local <code>RoundPanel</code> + 1-line wire in <code>EDScoreBox.jsx</code>; REUSE <code>useLayoutPreference('ed-compare')</code>. No new data path — reads rounds the box already derived. No trend (ดีขึ้น/แย่ลง) asserted.</p>
+  <p><strong>Tech Stack:</strong> React 19, Tailwind (dark theme vars), lucide-react, Vitest + RTL.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">2-panel compare (desktop, loaded) — full mockup in the spec; compact here</div>
+  <div style="background:#101010;border:1px solid #272727;border-radius:14px;color:#e6e6e6;padding:12px;font-size:11px">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #232323;padding-bottom:9px;margin-bottom:10px">
+      <div style="display:flex;gap:5px">
+        <span style="padding:3px 11px;border-radius:999px;background:rgba(249,115,22,.14);color:#fb923c;border:1px solid rgba(249,115,22,.4)">ADAM</span>
+        <span style="padding:3px 11px;border-radius:999px;border:1px solid #2c2c2c;color:#9a9a9a">IIEF</span>
+        <span style="padding:3px 11px;border-radius:999px;border:1px solid #2c2c2c;color:#9a9a9a">MRS</span>
+        <span style="padding:3px 11px;border-radius:999px;border:1px solid #2c2c2c;color:#9a9a9a">PE</span>
+      </div>
+      <span style="display:flex;gap:10px;align-items:center"><span style="border:1px solid #2c2c2c;border-radius:8px;padding:3px 9px;color:#9a9a9a">&#8646; สลับ</span><span style="color:#8a8a8a">&#10005;</span></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:#0e0e0e;border:1px solid #2a2a2a;border-radius:12px;padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="background:#161616;border:1px solid #2f2f2f;border-radius:8px;padding:3px 9px;font-weight:700;color:#cfcfcf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ครั้งที่ 3 · 18/06/2569 &#9662;</span>
+          <span style="display:flex;gap:4px;flex:none"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);color:#fdba74;border-radius:999px;padding:1px 7px;font-size:9px;font-weight:700">ล่าสุด</span><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);color:#fdba74;border-radius:999px;padding:1px 7px;font-size:9px;font-weight:700">วันนี้</span></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;background:rgba(124,45,18,.18);border:1px solid rgba(124,45,18,.5);border-radius:11px;padding:8px 12px;margin:9px 0"><span style="font-weight:700;color:#fb923c">เข้าเกณฑ์</span><span><b style="font-size:18px">8</b><span style="color:#8a8a8a"> / 10</span></span></div>
+        <div style="display:flex;justify-content:space-between;background:rgba(2,132,199,.14);border:1px solid rgba(2,132,199,.4);border-radius:9px;padding:7px 10px"><span style="color:#bdbdbd">1. พลังงานลดลง?</span><b style="color:#fb923c">มีอาการ</b></div>
+      </div>
+      <div style="background:#0e0e0e;border:1px solid #2a2a2a;border-radius:12px;padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="background:#161616;border:1px solid #2f2f2f;border-radius:8px;padding:3px 9px;font-weight:700;color:#cfcfcf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ครั้งที่ 1 · 20/05/2569 &#9662;</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:8px 12px;margin:9px 0"><span style="font-weight:700;color:#a8a8a8">เข้าเกณฑ์</span><span><b style="font-size:18px;color:#bdbdbd">10</b><span style="color:#8a8a8a"> / 10</span></span></div>
+        <div style="display:flex;justify-content:space-between;background:rgba(2,132,199,.14);border:1px solid rgba(2,132,199,.4);border-radius:9px;padding:7px 10px"><span style="color:#bdbdbd">1. พลังงานลดลง?</span><b style="color:#8a8a8a">ไม่มี</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p>States B (single fallback), C (empty-type panel), D (mobile stacked) — see spec § Mockup Design.</p>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Open → render → interactions (UI state flow)</div>
+  <table>
+    <tr><th>Trigger</th><th>State change</th><th>Render</th></tr>
+    <tr><td>chip click in EDScoreBox</td><td><code>setDetail({type, round})</code>; modal inits <code>activeType=type</code>, <code>primaryId=round.id</code>, <code>compareId=autoPick(rounds,round,type)?.id</code></td><td>2 panels if compare≠null else single + hint</td></tr>
+    <tr><td>type tab</td><td><code>setActiveType</code> (+ effect: re-autoPick compare if current compare lacks new type)</td><td>both panels switch type; per-panel empty-state if round lacks it</td></tr>
+    <tr><td>panel round <code>&lt;select&gt;</code></td><td><code>setPrimaryId</code> / <code>setCompareId</code></td><td>that panel re-renders the chosen round</td></tr>
+    <tr><td>swap <code>&#8646;</code></td><td><code>swap()</code> (useLayoutPreference, persisted)</td><td>panel order flips (lg: L↔R, mobile: top↔bottom)</td></tr>
+    <tr><td>✕ / ESC</td><td><code>onClose()</code></td><td>modal unmounts (AV78: backdrop no-close)</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/edCompare.js</code></td><td>NEW</td><td>Pure: <code>autoPickCompareRound</code>, <code>markChangedRows</code></td></tr>
+  <tr><td><code>tests/ed-compare.test.js</code></td><td>NEW</td><td>Unit for the two helpers</td></tr>
+  <tr><td><code>src/components/backend/EDDetailModal.jsx</code></td><td>REWORK</td><td>Compare shell: tabs + swap + 1/2 <code>RoundPanel</code> (local)</td></tr>
+  <tr><td><code>src/components/backend/EDScoreBox.jsx</code></td><td>1-LINE</td><td>Pass <code>rounds</code> + <code>hero</code> to the modal</td></tr>
+  <tr><td><code>tests/ed-detail-modal.test.jsx</code></td><td>REWORK</td><td>RTL for the compare contract</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>edCompare.js</code> pure helpers (TDD)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/edCompare.js</code> · Test <code>tests/ed-compare.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: failing tests</strong></label></div>
+<pre><code>import { describe, it, expect } from 'vitest';
+import { autoPickCompareRound, markChangedRows } from '../src/lib/edCompare.js';
+
+const R = (id, date, types) => ({ id, assessmentDate: date, types, raw: {} });
+const rounds = [
+  R('r1', '2026-05-01', ['adam','iief']),
+  R('r2', '2026-05-15', ['adam']),
+  R('r3', '2026-06-01', ['adam','mrs']),
+];
+
+describe('autoPickCompareRound', () => {
+  it('picks nearest PRIOR round measuring type', () => {
+    expect(autoPickCompareRound(rounds, rounds[2], 'adam')?.id).toBe('r2');
+  });
+  it('falls back to nearest LATER when no prior measures type', () => {
+    expect(autoPickCompareRound(rounds, rounds[0], 'adam')?.id).toBe('r2');
+  });
+  it('returns null when no OTHER round measures type', () => {
+    expect(autoPickCompareRound(rounds, rounds[2], 'mrs')).toBeNull();
+  });
+  it('excludes the primary itself + handles single round', () => {
+    expect(autoPickCompareRound([rounds[2]], rounds[2], 'adam')).toBeNull();
+    expect(autoPickCompareRound(null, rounds[2], 'adam')).toBeNull();
+  });
+});
+
+describe('markChangedRows', () => {
+  const a = [{n:1,answer:'มีอาการ'},{n:2,answer:'ไม่มี'},{n:3,answer:'—'}];
+  const b = [{n:1,answer:'ไม่มี'},{n:2,answer:'ไม่มี'},{n:3,answer:'มีอาการ'}];
+  it('flags differing rows (both present), aligned by n', () => {
+    const { primary } = markChangedRows(a, b);
+    expect(primary.find(r=>r.n===1).changed).toBe(true);
+    expect(primary.find(r=>r.n===2).changed).toBe(false);
+  });
+  it('does NOT flag when one side is "—"', () => {
+    const { primary } = markChangedRows(a, b);
+    expect(primary.find(r=>r.n===3).changed).toBe(false);
+  });
+  it('handles empty / different-length arrays', () => {
+    expect(markChangedRows([], b).primary).toEqual([]);
+    expect(markChangedRows(a, []).primary.every(r=>r.changed===false)).toBe(true);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <p><code>npm test -- --run tests/ed-compare.test.js</code> → fails (module not found)</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: implement</strong></label></div>
+<pre><code>// src/lib/edCompare.js — pure compare helpers for the ED 2-panel modal. No React.
+export function autoPickCompareRound(rounds, primaryRound, type) {
+  if (!Array.isArray(rounds) || !primaryRound) return null;
+  const pd = primaryRound.assessmentDate || '';
+  const others = rounds.filter(
+    (r) => r &amp;&amp; r.id !== primaryRound.id &amp;&amp; Array.isArray(r.types) &amp;&amp; r.types.includes(type)
+  );
+  if (!others.length) return null;
+  const byDate = (a, b) => (a.assessmentDate || '').localeCompare(b.assessmentDate || '');
+  const prior = others.filter((r) => (r.assessmentDate || '') &lt; pd).sort(byDate);
+  if (prior.length) return prior[prior.length - 1];     // closest before
+  const later = others.filter((r) => (r.assessmentDate || '') &gt;= pd).sort(byDate);
+  return later.length ? later[0] : null;                // earliest after
+}
+
+export function markChangedRows(rowsPrimary, rowsCompare) {
+  const a = Array.isArray(rowsPrimary) ? rowsPrimary : [];
+  const b = Array.isArray(rowsCompare) ? rowsCompare : [];
+  const map = (rows) => new Map(rows.map((r) => [r.n, r]));
+  const other = (rows) => rows === a ? map(b) : map(a);
+  const mark = (rows, o) => rows.map((r) => {
+    const x = o.get(r.n);
+    const changed = !!x &amp;&amp; r.answer !== x.answer &amp;&amp; r.answer !== '—' &amp;&amp; x.answer !== '—';
+    return { ...r, changed };
+  });
+  return { primary: mark(a, map(b)), compare: mark(b, map(a)) };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: run → PASS</strong></label></div>
+  <p><code>npm test -- --run tests/ed-compare.test.js</code> → all green</p>
+</div>
+
+<div class="task">
+  <h3>Task 2: REWORK <code>EDDetailModal.jsx</code> → compare shell</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/EDDetailModal.jsx</code> (full rewrite). First read <code>src/hooks/useLayoutPreference.js</code> to confirm export shape (default vs named, return keys).</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: confirm hook contract</strong></label></div>
+  <p>Read <code>src/hooks/useLayoutPreference.js</code> → expect <code>{ isPrimaryLeft, swap }</code> from <code>useLayoutPreference('ed-compare','left')</code>. Match the real import (default export).</p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: write the compare shell</strong></label></div>
+  <p>Key structure (assemble full file during impl; preserve TONE + AV78 + role=dialog):</p>
+<pre><code>export default function EDDetailModal({ type, round, rounds = [], hero, isDark, onClose }) {
+  const [activeType, setActiveType] = useState(type);
+  const [primaryId, setPrimaryId] = useState(round?.id);
+  const [compareId, setCompareId] =
+    useState(() => autoPickCompareRound(rounds, round, type)?.id ?? null);
+
+  useEffect(() => {  // ESC close (AV78 keeps backdrop non-closing)
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const { isPrimaryLeft, swap } = useLayoutPreference('ed-compare', 'left');
+
+  const find = (id) => rounds.find((r) => r.id === id) || null;
+  const primary = find(primaryId) || round;
+  let compare = compareId ? find(compareId) : null;
+
+  // keep compare meaningful when the type changes (re-pick if current compare lacks it)
+  useEffect(() => {
+    if (!compare || !compare.types?.includes(activeType)) {
+      setCompareId(autoPickCompareRound(rounds, primary, activeType)?.id ?? null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeType]);
+  compare = compareId ? find(compareId) : null;
+
+  if (!primary || !ED_TYPE_META[activeType]) return null;
+  const tabs = ED_ORDER.filter((t) => rounds.some((r) => r.types?.includes(t)));
+  const canCompare = !!compare;
+
+  // rows + changed flags (only when both panels show the type)
+  const pHas = primary.types?.includes(activeType);
+  const cHas = compare?.types?.includes(activeType);
+  let pRows = pHas ? buildEdAnswerRows(activeType, primary.raw) : null;
+  let cRows = cHas ? buildEdAnswerRows(activeType, compare.raw) : null;
+  if (pRows &amp;&amp; cRows) { const m = markChangedRows(pRows, cRows); pRows = m.primary; cRows = m.compare; }
+
+  const pPanel = &lt;RoundPanel key="p" round={primary} hero={hero} isDark={isDark}
+      activeType={activeType} rounds={rounds} rows={pRows}
+      onPick={setPrimaryId} /&gt;;
+  const cPanel = canCompare ? &lt;RoundPanel key="c" round={compare} hero={hero} isDark={isDark}
+      activeType={activeType} rounds={rounds} rows={cRows}
+      onPick={setCompareId} muted /&gt; : null;
+  const order = isPrimaryLeft ? [pPanel, cPanel] : [cPanel, pPanel];
+
+  return ( /* backdrop NO onClick (AV78); shell max-w-3xl if canCompare else max-w-xl;
+             header: tabs (left) + swap btn (if canCompare) + ✕ (right);
+             body: canCompare ? grid grid-cols-1 lg:grid-cols-2 gap-3 {order}
+                              : pPanel + hint "ยังไม่มีครั้งอื่นให้เทียบ" */ );
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: local <code>RoundPanel</code></strong></label></div>
+<pre><code>function RoundPanel({ round, hero, isDark, activeType, rounds, rows, onPick, muted }) {
+  const tone = TONE[activeType] || TONE.pe;
+  const accent = isDark ? tone.d : tone.l;
+  const dateInfo = formatRoundDate(round.assessmentDate, thaiTodayISO());
+  const isHero = hero &amp;&amp; round.id === hero.id;
+  const s = rows ? scoreForType(activeType, round.raw) : null;
+  // header: round &lt;select&gt; (min-w-0 truncate) + badges group (flex-none):
+  //   {isHero &amp;&amp; &lt;Badge&gt;ล่าสุด&lt;/Badge&gt;}{dateInfo.isToday &amp;&amp; &lt;Badge&gt;วันนี้&lt;/Badge&gt;}
+  //   Badge = "shrink-0 inline-flex items-center justify-center whitespace-nowrap ..." (NO squeeze)
+  // body: rows === null
+  //   ? empty: "ไม่ได้ประเมิน {ED_TYPE_META[activeType].label} ในครั้งนี้"
+  //   : banner (muted ? grey : accent tone) + rows.map(r =&gt; row with r.changed ? sky highlight)
+}</code></pre>
+  <p>Reuse the existing TONE map, score-banner markup, and row markup verbatim from the old modal (question left / answer right; <code>r.flagged</code> → accent). Add <code>r.changed</code> → <code>bg-sky-900/15 border-sky-800/40</code> (dark) / <code>bg-sky-50 border-sky-200</code> (light). Imports add: <code>ChevronDown, ArrowLeftRight</code> from lucide-react, <code>autoPickCompareRound, markChangedRows</code> from edCompare, <code>useLayoutPreference</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: build clean</strong></label></div>
+  <p><code>npm run build</code> → clean (catches import/JSX errors)</p>
+</div>
+
+<div class="task">
+  <h3>Task 3: wire <code>EDScoreBox.jsx</code></h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/EDScoreBox.jsx</code> (the <code>&lt;EDDetailModal&gt;</code> render line ~224)</p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: pass rounds + hero</strong></label></div>
+<pre><code>{detail &amp;&amp; (
+  &lt;EDDetailModal type={detail.type} round={detail.round}
+    rounds={rounds} hero={hero}
+    isDark={isDark} onClose={() =&gt; setDetail(null)} /&gt;
+)}</code></pre>
+  <p><code>rounds</code> + <code>hero</code> already exist in the component (lines 39-40). No other change.</p>
+</div>
+
+<div class="task">
+  <h3>Task 4: REWORK <code>tests/ed-detail-modal.test.jsx</code> (RTL)</h3>
+  <p><strong>Files:</strong> Modify <code>tests/ed-detail-modal.test.jsx</code>. First read the current file to preserve the fixtures/render harness style; mock <code>useLayoutPreference</code> for swap-persist tests.</p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: new test cases</strong></label></div>
+  <ul>
+    <li>≥2 rounds w/ type → 2 panels (both round#s + both scores visible)</li>
+    <li>1 round → single panel + "ยังไม่มีครั้งอื่นให้เทียบ"; no swap button</li>
+    <li>no other round measures type → single panel + hint</li>
+    <li>type tab click → both panels switch (assert new type's question text)</li>
+    <li>per-panel <code>&lt;select&gt;</code> change → that panel re-renders chosen round</li>
+    <li>swap button present when canCompare; calls hook swap (mock)</li>
+    <li>changed rows carry the sky highlight class; identical rows don't</li>
+    <li>"ล่าสุด" badge only on hero panel; "วันนี้" badge when today</li>
+    <li>badge element classes include <code>whitespace-nowrap</code> + <code>shrink-0</code> (no-squeeze)</li>
+    <li>compare round lacks type → that panel shows "ไม่ได้ประเมิน ..."</li>
+    <li>AV78: backdrop click does NOT call onClose; ✕ does; ESC does</li>
+    <li>keyboard: tab Enter/Space activates</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: run → PASS</strong></label></div>
+  <p><code>npm test -- --run tests/ed-detail-modal.test.jsx</code> → green</p>
+</div>
+
+<div class="task">
+  <h3>Task 5: source-grep regression + full suite + build</h3>
+  <p><strong>Files:</strong> append source-grep locks to <code>tests/ed-detail-modal.test.jsx</code> (or a small block in <code>tests/ed-compare.test.js</code>)</p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: regression locks</strong></label></div>
+  <ul>
+    <li>EDDetailModal source: backdrop div has NO <code>onClick</code> (AV78); uses <code>useLayoutPreference('ed-compare'</code>; calls <code>buildEdAnswerRows</code> + <code>scoreForType</code> (no re-impl); imports <code>autoPickCompareRound</code> + <code>markChangedRows</code>.</li>
+    <li>Badge class string contains <code>whitespace-nowrap</code> + <code>shrink-0</code>.</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: targeted then full</strong></label></div>
+  <p><code>npm test -- --run tests/ed-compare.test.js tests/ed-detail-modal.test.jsx tests/ed-score-round-select.test.jsx tests/ed-questions.test.js</code> → green, then full <code>npm test -- --run</code> + <code>npm run build</code>.</p>
+</div>
+
+<div class="task">
+  <h3>Task 6: commit + push (NO deploy)</h3>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: commit</strong></label></div>
+<pre><code>git add src/lib/edCompare.js src/components/backend/EDDetailModal.jsx \
+  src/components/backend/EDScoreBox.jsx tests/ed-compare.test.js \
+  tests/ed-detail-modal.test.jsx docs/superpowers/specs/2026-06-18-ed-score-compare-2panel-design.html \
+  docs/superpowers/plans/2026-06-18-ed-score-compare-2panel.html
+git commit -m "feat(ed-score-box): EDDetailModal → 2-panel round compare (tabs + swap + pickers + changed-row highlight)"
+git push origin master</code></pre>
+  <p>V18: NO <code>vercel --prod</code> / <code>firebase deploy</code> unless user says "deploy". Frontend-only → no Probe-Deploy-Probe.</p>
+</div>
+
+<h2>Self-Review (plan vs spec)</h2>
+<ul>
+  <li><strong>Coverage:</strong> AC1-2 → Task 2 (canCompare branch) · AC3 (badges) → Task 2 RoundPanel + Task 4 · AC4 (tabs+empty) → Task 2 effect + Task 4 · AC5 (pickers) → Task 2 · AC6 (swap persist) → Task 2 + Task 4 · AC7 (changed) → Task 1 + Task 2 · AC8 (no-squeeze) → Task 2 badge classes + Task 4/5 · AC9 (no trend) → omitted by design · AC10 (AV78/a11y/no-red) → Task 2 + Task 5 · AC11 (green/build) → Task 5.</li>
+  <li><strong>Adversarial verify (Ultracode):</strong> after Task 5 green, run a parallel adversarial review workflow over the diff (lenses: AV78/a11y, badge-squeeze edge, type-tab×missing-type matrix, swap persistence, changed-row "—" edge, score-banner correctness) → adjudicate + fix each real finding before commit.</li>
+  <li><strong>Type consistency:</strong> <code>autoPickCompareRound(rounds, primary, type)</code>, <code>markChangedRows(rowsPrimary, rowsCompare)→{primary,compare}</code>, modal props <code>{type, round, rounds, hero, isDark, onClose}</code> — consistent across tasks.</li>
+  <li><strong>Rule Q honest gap:</strong> pure-display, no new query/rules → L2 N/A; logic unit/RTL-covered; L1 pixel = user hands-on after merge.</li>
+</ul>
+
+</body>
+</html>

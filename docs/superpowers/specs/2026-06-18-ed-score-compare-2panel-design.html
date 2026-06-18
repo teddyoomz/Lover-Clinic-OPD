@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ED Score — 2-Panel Round Compare Design Spec</title>
+  <style>
+    :root { --accent: #f97316; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1040px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+
+    /* grounded dark-modal mockup tokens (the real CDV ED box / detail modal theme) */
+    .dk { background:#101010; border:1px solid #272727; border-radius:14px; color:#e6e6e6; padding:14px; }
+    .dk-sub { background:#0e0e0e; border:1px solid #2a2a2a; border-radius:12px; padding:10px 11px; }
+    .dk-hd { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-bottom:10px; border-bottom:1px solid #232323; margin-bottom:12px; }
+    .tabs { display:flex; gap:6px; }
+    .tab { font-size:11px; padding:3px 11px; border-radius:999px; border:1px solid #2c2c2c; color:#9a9a9a; }
+    .tab.on { background:rgba(249,115,22,.14); color:#fb923c; border-color:rgba(249,115,22,.4); }
+    .hbtn { font-size:11px; color:#9a9a9a; border:1px solid #2c2c2c; border-radius:8px; padding:3px 9px; display:inline-flex; gap:5px; align-items:center; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .phd { display:flex; justify-content:space-between; align-items:center; gap:6px; }
+    .pick { font-size:11px; font-weight:700; color:#cfcfcf; background:#161616; border:1px solid #2f2f2f; border-radius:8px; padding:3px 9px; display:inline-flex; gap:6px; align-items:center; min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .badges { display:flex; gap:4px; flex:none; }
+    /* badge: NEVER squeezed — flex:none + centered + nowrap so the label stays centered when the header is tight */
+    .badge { flex:none; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; font-size:9px; font-weight:700; line-height:1.4; border-radius:999px; padding:1px 7px; border:1px solid; }
+    .b-latest, .b-today { background:rgba(249,115,22,.15); border-color:rgba(249,115,22,.4); color:#fdba74; }
+    .banner { display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:11px; border:1px solid; padding:8px 12px; margin:9px 0 8px; }
+    .ban-adam { background:rgba(124,45,18,.18); border-color:rgba(124,45,18,.5); }
+    .ban-mut { background:rgba(255,255,255,.03); border-color:rgba(255,255,255,.08); }
+    .sc { font-size:22px; font-weight:800; }
+    .scm { font-size:12px; color:#8a8a8a; }
+    .row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,.02); border-radius:9px; padding:7px 10px; font-size:11px; margin-top:6px; }
+    .row.chg { background:rgba(2,132,199,.14); border-color:rgba(2,132,199,.4); }
+    .q { color:#bdbdbd; line-height:1.45; }
+    .a { font-weight:700; white-space:nowrap; }
+    .a-flag { color:#fb923c; }
+    .a-mut { color:#8a8a8a; }
+    .empty { font-size:11px; color:#8a8a8a; text-align:center; padding:18px 8px; border:1px dashed #2f2f2f; border-radius:9px; margin-top:8px; }
+    .small { font-size: 0.82em; color: var(--tx-muted); }
+  </style>
+</head>
+<body>
+
+<h1>ED Score — 2-Panel Round Compare Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-18 (rev 2 — trend removed) · <strong>Status:</strong> Approved by user (design + 4 Q&amp;A; rev: drop ดีขึ้น/แย่ลง trend, badge-no-squeeze) · <strong>Scope:</strong> frontend-only, pure display (no Firestore query / rules / data change) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-18-ed-score-compare-2panel.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The ED Score box on CustomerDetailView already lets staff click a chip (ADAM / IIEF / MRS / PE) to open <code>EDDetailModal</code> — a per-question answer view for <strong>one</strong> round. Clinically, the value of repeat assessment is the change over time. Today staff must open the modal for round N, memorise it, close, re-open for round M, and eyeball the difference.</p>
+<p>This feature upgrades the detail modal into a <strong>side-by-side two-panel compare</strong> (left / right), each panel showing one round's answers for the same assessment type, with a swap-left/right control, per-panel round pickers, a type switcher, and changed-row highlighting. Both rounds' scores are shown side-by-side so the clinician reads the change directly — <strong>the app does NOT assert "ดีขึ้น/แย่ลง"</strong> (removed per user; avoids a clinically risky direction call). It mirrors the proven TFP split-screen compare (<code>useLayoutPreference</code> + swap). Pure display — it reads the rounds already derived in the box; no new data path.</p>
+
+<h2>Mockup Design</h2>
+<p class="small">Grounded in the real <code>EDDetailModal</code> / ED box theme: dark surface <code>#101010</code>, TONE accents (adam=orange-400, iief=red-400, mrs=pink-400, pe=slate-300), score banner + answer rows (question left / answer right). Changed rows tint sky-blue. Badges ("ล่าสุด" / "วันนี้") are <code>flex:none</code> + centered + nowrap so they never squeeze — the round picker truncates instead.</p>
+
+<div class="mockup">
+  <div class="mockup-label">State A · Desktop · loaded · 2-panel compare (the default when ≥2 rounds)</div>
+  <div class="dk">
+    <div class="dk-hd">
+      <div class="tabs">
+        <span class="tab on">ADAM</span><span class="tab">IIEF</span><span class="tab">MRS</span><span class="tab">PE</span>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span class="hbtn">&#8646; สลับซ้ายขวา</span>
+        <span style="color:#8a8a8a; font-size:16px;">&#10005;</span>
+      </div>
+    </div>
+    <div class="grid2">
+      <!-- LEFT = primary (latest) -->
+      <div class="dk-sub">
+        <div class="phd">
+          <span class="pick">ครั้งที่ 3 · 18/06/2569 &#9662;</span>
+          <span class="badges"><span class="badge b-latest">ล่าสุด</span><span class="badge b-today">วันนี้</span></span>
+        </div>
+        <div class="banner ban-adam">
+          <span style="font-size:13px; font-weight:700; color:#fb923c;">เข้าเกณฑ์พร่องฮอร์โมน</span>
+          <span><span class="sc" style="color:#e6e6e6;">8</span><span class="scm"> / 10</span></span>
+        </div>
+        <div class="row chg"><span class="q">1. รู้สึกพลังงานหรือความกระฉับกระเฉงลดลง?</span><span class="a a-flag">มีอาการ</span></div>
+        <div class="row"><span class="q">2. รู้สึกกำลังหรือความแข็งแรงของกล้ามเนื้อลดลง?</span><span class="a a-mut">ไม่มี</span></div>
+        <div class="row chg"><span class="q">7. รู้สึกว่าการแข็งตัวขององคชาตแข็งน้อยลง?</span><span class="a a-flag">มีอาการ</span></div>
+      </div>
+      <!-- RIGHT = compare (previous) -->
+      <div class="dk-sub">
+        <div class="phd">
+          <span class="pick">ครั้งที่ 1 · 20/05/2569 &#9662;</span>
+        </div>
+        <div class="banner ban-mut">
+          <span style="font-size:13px; font-weight:700; color:#a8a8a8;">เข้าเกณฑ์พร่องฮอร์โมน</span>
+          <span><span class="sc" style="color:#bdbdbd;">10</span><span class="scm"> / 10</span></span>
+        </div>
+        <div class="row chg"><span class="q">1. รู้สึกพลังงานหรือความกระฉับกระเฉงลดลง?</span><span class="a a-mut">ไม่มี</span></div>
+        <div class="row"><span class="q">2. รู้สึกกำลังหรือความแข็งแรงของกล้ามเนื้อลดลง?</span><span class="a a-mut">ไม่มี</span></div>
+        <div class="row chg"><span class="q">7. รู้สึกว่าการแข็งตัวขององคชาตแข็งน้อยลง?</span><span class="a a-mut">ไม่มี</span></div>
+      </div>
+    </div>
+    <div class="small" style="color:#7a7a7a; margin-top:10px;">แถวที่คำตอบต่างกัน = ไฮไลต์ฟ้า · คะแนนทั้ง 2 ครั้งแสดงคู่กันให้แพทย์ดูเอง (ไม่บอกดีขึ้น/แย่ลง)</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State B · only ONE round exists → single panel + hint (no compare possible)</div>
+  <div class="dk" style="max-width:380px;">
+    <div class="dk-hd">
+      <div class="tabs"><span class="tab on">ADAM</span><span class="tab">IIEF</span><span class="tab">MRS</span><span class="tab">PE</span></div>
+      <span style="color:#8a8a8a; font-size:16px;">&#10005;</span>
+    </div>
+    <div class="dk-sub">
+      <div class="phd">
+        <span class="pick">ครั้งที่ 1 · 20/05/2569 &#9662;</span>
+        <span class="badges"><span class="badge b-latest">ล่าสุด</span></span>
+      </div>
+      <div class="banner ban-adam"><span style="font-size:13px; font-weight:700; color:#fb923c;">เข้าเกณฑ์</span><span><span class="sc">10</span><span class="scm"> / 10</span></span></div>
+      <div class="row"><span class="q">1. รู้สึกพลังงานลดลง?</span><span class="a a-flag">มีอาการ</span></div>
+    </div>
+    <div class="empty">ยังไม่มีครั้งอื่นให้เทียบ — ส่งแบบประเมินติดตามเพื่อดูการเปลี่ยนแปลง</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State C · one panel's chosen round did NOT measure this type → per-panel empty state</div>
+  <div class="dk">
+    <div class="dk-hd">
+      <div class="tabs"><span class="tab">ADAM</span><span class="tab on" style="background:rgba(190,24,93,.14); color:#f472b6; border-color:rgba(190,24,93,.4);">MRS</span><span class="tab">IIEF</span><span class="tab">PE</span></div>
+      <span style="display:flex; gap:10px; align-items:center;"><span class="hbtn">&#8646; สลับ</span><span style="color:#8a8a8a; font-size:16px;">&#10005;</span></span>
+    </div>
+    <div class="grid2">
+      <div class="dk-sub">
+        <div class="phd"><span class="pick">ครั้งที่ 3 · 18/06/2569 &#9662;</span><span class="badges"><span class="badge b-latest">ล่าสุด</span></span></div>
+        <div class="banner" style="background:rgba(190,24,93,.14); border-color:rgba(190,24,93,.4);"><span style="font-size:13px; font-weight:700; color:#f472b6;">อาการระดับปานกลาง</span><span><span class="sc">21</span><span class="scm"> / 44</span></span></div>
+        <div class="row"><span class="q">1. อาการร้อนวูบวาบ เหงื่อออก</span><span class="a a-mut">ระดับ 2 — ปานกลาง</span></div>
+      </div>
+      <div class="dk-sub">
+        <div class="phd"><span class="pick">ครั้งที่ 2 · 02/06/2569 &#9662;</span></div>
+        <div class="empty" style="margin-top:14px;">ครั้งนี้ไม่ได้ประเมิน MRS<br><span style="font-size:10px;">(ประเมินเฉพาะ ADAM · IIEF)</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State D · Mobile (&lt; lg) · stacked top / bottom (swap = flip top↔bottom)</div>
+  <div class="dk" style="max-width:330px;">
+    <div class="dk-hd">
+      <div class="tabs" style="flex-wrap:wrap;"><span class="tab on">ADAM</span><span class="tab">IIEF</span><span class="tab">MRS</span><span class="tab">PE</span></div>
+      <span style="display:flex; gap:8px; align-items:center;"><span class="hbtn" style="padding:3px 7px;">&#8645;</span><span style="color:#8a8a8a; font-size:15px;">&#10005;</span></span>
+    </div>
+    <div class="dk-sub" style="margin-bottom:10px;">
+      <div class="phd"><span class="pick">ครั้งที่ 3 · 18/06 &#9662;</span><span class="badges"><span class="badge b-latest">ล่าสุด</span><span class="badge b-today">วันนี้</span></span></div>
+      <div class="banner ban-adam"><span style="font-size:12px; font-weight:700; color:#fb923c;">เข้าเกณฑ์</span><span><span class="sc" style="font-size:18px;">8</span><span class="scm"> / 10</span></span></div>
+      <div class="row chg"><span class="q">1. พลังงานลดลง?</span><span class="a a-flag">มีอาการ</span></div>
+    </div>
+    <div style="text-align:center; color:#5a5a5a; font-size:11px; margin:2px 0 8px;">เทียบกับ &#8595;</div>
+    <div class="dk-sub">
+      <div class="phd"><span class="pick">ครั้งที่ 1 · 20/05 &#9662;</span></div>
+      <div class="banner ban-mut"><span style="font-size:12px; font-weight:700; color:#a8a8a8;">เข้าเกณฑ์</span><span><span class="sc" style="font-size:18px; color:#bdbdbd;">10</span><span class="scm"> / 10</span></span></div>
+      <div class="row chg"><span class="q">1. พลังงานลดลง?</span><span class="a a-mut">ไม่มี</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Open + state-transition flow</div>
+  <table>
+    <tr><th>#</th><th>Trigger</th><th>What happens</th></tr>
+    <tr>
+      <td>1</td>
+      <td>Click an ED chip in <code>EDScoreBox</code> (already passes <code>{type, round: measured}</code>)</td>
+      <td>Box opens <code>EDDetailModal</code> with <code>type</code>, the clicked <code>round</code> (= <strong>primary</strong>), and the full <code>rounds[]</code>. Modal computes <code>compareId = autoPickCompareRound(rounds, primary, type)</code> (nearest prior round by date that measured <code>type</code>; fallback nearest later; else <code>null</code>).</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>Render</td>
+      <td>If <code>compare === null</code> OR <code>rounds.length === 1</code> → <strong>single panel</strong> + hint "ยังไม่มีครั้งอื่นให้เทียบ". Else → <strong>2 panels</strong>. Position from <code>useLayoutPreference('ed-compare','left')</code> (<code>isPrimaryLeft</code>). Each panel shows badges: "ล่าสุด" iff <code>panelRound.id === hero.id</code>, "วันนี้" iff <code>formatRoundDate(...).isToday</code>.</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>Type tab (ADAM/IIEF/MRS/PE)</td>
+      <td><code>setActiveType</code>. Both panels re-render that type for their <em>currently selected rounds</em> (round selections unchanged — predictable). A panel whose round lacks the type → "ไม่ได้ประเมิน {type} ในครั้งนี้".</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>Per-panel round dropdown</td>
+      <td><code>setPrimaryId</code> / <code>setCompareId</code> to any round in <code>rounds[]</code>. Each side independent ("เลือกครั้งไหนก็ได้").</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>Swap button <code>&#8646;</code></td>
+      <td><code>swap()</code> from the layout hook flips <code>isPrimaryLeft</code> (persisted per-device, like TFP). Pure visual reorder of the two panels (desktop: left↔right; mobile: top↔bottom). Logical primary/compare unchanged.</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>Close: <code>&#10005;</code> button OR ESC</td>
+      <td><code>onClose()</code> → <code>setDetail(null)</code> in box. <strong>AV78: backdrop click does NOT close.</strong></td>
+    </tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data flow (pure — no new fetch)</div>
+  <pre>EDScoreBox
+  rounds = deriveRounds(intakePerf, assessments)          // already computed
+  hero   = rounds[last]
+  onClick chip → setDetail({ type, round: measured })
+  &lt;EDDetailModal type round rounds={rounds} hero={hero} isDark onClose /&gt;
+        │
+        ▼
+EDDetailModal  (compare shell)
+  state: activeType(=type) , primaryId(=round.id) , compareId(=autoPick) , useLayoutPreference('ed-compare')
+  primary = rounds.find(id===primaryId)   compare = rounds.find(id===compareId)
+        │
+        ├─ src/lib/edCompare.js  (PURE, unit-tested)
+        │     autoPickCompareRound(rounds, primary, type) → Round|null
+        │     markChangedRows(rowsPrimary, rowsCompare)     → flags differing rows (aligned by n)
+        │
+        ▼
+  RoundPanel × (1 or 2)   ← local component
+     buildEdAnswerRows(activeType, panelRound.raw)   // existing
+     scoreForType(activeType, panelRound.raw)        // existing
+     formatRoundDate(panelRound.assessmentDate)      // existing → badges</pre>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Components / files (minimal, DRY)</h3>
+<table>
+  <tr><th>File</th><th>Change</th><th>Purpose</th></tr>
+  <tr><td><code>src/lib/edCompare.js</code></td><td>NEW</td><td>Pure helpers (no React): <code>autoPickCompareRound</code>, <code>markChangedRows</code>. Fully unit-testable.</td></tr>
+  <tr><td><code>src/components/backend/EDDetailModal.jsx</code></td><td>REWORK</td><td>From single-round view → compare shell: type tabs + swap + 1-or-2 panels. Local <code>RoundPanel</code> sub-component (header badges + banner + rows; reused by both sides + the single fallback — Rule of 3, kept in-file to minimise file count).</td></tr>
+  <tr><td><code>src/components/backend/EDScoreBox.jsx</code></td><td>1-LINE</td><td>Pass <code>rounds={rounds}</code> and <code>hero={hero}</code> to <code>&lt;EDDetailModal&gt;</code> (it already has them).</td></tr>
+  <tr><td><code>src/hooks/useLayoutPreference.js</code></td><td>REUSE</td><td>Existing TFP hook — call with key <code>'ed-compare'</code>. No change.</td></tr>
+</table>
+
+<h3>Helper contracts (<code>src/lib/edCompare.js</code>)</h3>
+<pre>// nearest prior round (by assessmentDate) that measured `type`; fallback nearest later; else null
+autoPickCompareRound(rounds, primaryRound, type) → Round | null
+
+// align two answer-row arrays by `n`; return { primary:[{...,changed}], compare:[{...,changed}] }
+// changed = both present AND primary.answer !== compare.answer (string compare of rendered label)
+markChangedRows(rowsPrimary, rowsCompare) → { primary, compare }</pre>
+
+<h3>EDDetailModal new prop shape</h3>
+<pre>EDDetailModal({ type, round, rounds, hero, isDark, onClose })
+  // type   : active assessment ('adam'|'iief'|'mrs'|'pe') — initial tab
+  // round  : the clicked round = initial PRIMARY (guaranteed to carry `type`)
+  // rounds : Round[] (all, for pickers + auto-compare)  — NEW
+  // hero   : latest round (for the "ล่าสุด" badge)        — NEW
+  // isDark, onClose : unchanged
+  // AV78 preserved: backdrop no onClick; ESC + ✕ close. role=dialog/aria-modal kept.</pre>
+
+<h3>Badge layout rule (no-squeeze)</h3>
+<pre>// the "ล่าสุด"/"วันนี้" badges must NEVER compress — when the panel header is tight
+// (long date, mobile, both badges showing) the round picker truncates, not the badges.
+badge  : flex:none; display:inline-flex; align-items:center; justify-content:center;
+         white-space:nowrap;   // → centered label even when squeezed
+picker : min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+container: flex justify-between; badges wrapped in a flex:none group</pre>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A (entry):</strong> click chip → open in 2-panel compare directly when ≥2 rounds (left = clicked round, right = previous auto). <strong>+ enrichment:</strong> each panel shows a "ล่าสุด" badge when it is the hero round AND a "วันนี้" badge when its date is today, so staff can't misread which is which. 1 round → single panel + hint.</li>
+  <li><strong>Q2 = A (type scope):</strong> both panels always show the SAME assessment type; a type-tab switcher (ADAM/IIEF/MRS/PE) switches both at once.</li>
+  <li><strong>Q3 = A, revised (delta):</strong> highlight rows whose answer changed (sky-blue tint). <strong>No ดีขึ้น/แย่ลง trend is asserted</strong> (removed per user 2026-06-18 — avoids a clinically risky direction call); both rounds' scores are shown side-by-side for the clinician to read.</li>
+  <li><strong>Q4 = A (mobile):</strong> on &lt; lg, stack panels top/bottom; swap flips top↔bottom; swap control visible on mobile too.</li>
+  <li><strong>Round pickers:</strong> per-panel dropdown listing all rounds (date + round#) — each side independently re-selectable.</li>
+  <li><strong>Swap persistence:</strong> reuse <code>useLayoutPreference('ed-compare')</code> (per-device localStorage), same mechanism as TFP.</li>
+  <li><strong>Compare auto-derives per (primary, type):</strong> the compare side is the nearest OTHER round measuring the active type (a manual compare pick sticks while it still has that type). The PRIMARY round is the anchor you clicked and stays put — if it lacks the active type, its panel shows the empty state ("ไม่ได้ประเมิน {type} ในครั้งนี้"); the compare side, being auto-derived to a round that HAS the type, never empties.</li>
+  <li><strong>Badges never squeeze:</strong> <code>flex:none</code> + centered + nowrap; the picker truncates instead.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Clicking an ED chip with ≥2 rounds opens a 2-panel modal: left = clicked round, right = the nearest prior round that measured the same type.</li>
+  <li>Clicking an ED chip with exactly 1 round (or no other round measured the type) opens a single panel + the "ยังไม่มีครั้งอื่นให้เทียบ" hint; no swap control, no compare picker.</li>
+  <li>Each panel shows the round#, date, a "ล่าสุด" badge iff it is the hero round, and a "วันนี้" badge iff its date is today.</li>
+  <li>Type tabs switch BOTH panels to the chosen assessment; each panel's selected round is unchanged; a panel whose round lacks the type shows "ไม่ได้ประเมิน {type} ในครั้งนี้".</li>
+  <li>Each panel's dropdown can select any round; the two sides are independent.</li>
+  <li>The swap button flips panel positions and the choice persists across reloads (localStorage <code>layout_pref:ed-compare</code>).</li>
+  <li>Rows whose rendered answer differs between the two shown rounds are highlighted; identical rows are not.</li>
+  <li><strong>Badges stay centered + uncompressed</strong> when the header is tight: "ล่าสุด"/"วันนี้" are <code>flex:none</code> + <code>inline-flex items-center justify-center</code> + <code>whitespace-nowrap</code>; the round picker truncates instead (verify on mobile + when both badges show).</li>
+  <li>No ดีขึ้น/แย่ลง trend asserted; both rounds' scores shown side-by-side for the clinician to judge.</li>
+  <li>AV78 holds: clicking the backdrop does NOT close; only ✕ or ESC closes. <code>role="dialog"</code> / <code>aria-modal</code> preserved; chips/tabs/pickers keyboard-operable. No red on any patient name/HN (rule 04).</li>
+  <li>Full vitest green + build clean. No Firestore/rules/api/data change → frontend-only.</li>
+</ol>
+
+<h2>Testing</h2>
+<ul>
+  <li><strong>Unit (<code>tests/ed-compare.test.js</code>):</strong> <code>autoPickCompareRound</code> (prior preferred, later fallback, none → null, type-filtered, single-round, primary excluded); <code>markChangedRows</code> (aligned-by-n, present-both-only, Thai text / identical / missing / different-length).</li>
+  <li><strong>RTL (<code>tests/ed-detail-modal.test.jsx</code>, reworked):</strong> 2-panel vs single-panel vs empty-type; type tab switches both; per-panel picker; swap flips + persists; changed-row highlight; ล่าสุด/วันนี้ badges present + not-squeezed (whitespace-nowrap, flex:none); AV78 (backdrop no-close, ✕/ESC close); keyboard.</li>
+  <li><strong>Source-grep regression:</strong> lock the AV78 no-backdrop-onClick contract, the <code>useLayoutPreference('ed-compare')</code> wiring, and reuse of <code>buildEdAnswerRows</code>/<code>scoreForType</code> (no re-implementation).</li>
+  <li><strong>Rule Q honest gap:</strong> pure-display UI over already-loaded data → no new compound query / rules → L2 client-SDK N/A. L1 rendered-pixel on the authed CDV (the modal on a real customer, theme, swap, mobile stack, badge layout) = USER hands-on after merge, consistent with prior ED sessions. All logic is unit/RTL-covered.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Reworking <code>EDDetailModal</code> breaks its current test contract</strong> (single-round props). Expected — the rework rewrites <code>ed-detail-modal.test.jsx</code> to the new compare contract; the single-round path is preserved as the 1-panel fallback (its assertions carry forward).</li>
+  <li><strong>Trend direction REMOVED per user (2026-06-18)</strong> — the modal no longer asserts ดีขึ้น/แย่ลง (which risked a wrong-direction clinical call). It shows both scores + highlights changed answers; the clinician judges. This removes what was the highest-risk piece.</li>
+  <li><strong>Badge squeeze</strong> — explicitly handled: badges are <code>flex:none</code> + centered + nowrap; the long round-date picker truncates. Verified by mockup State A/D + an RTL assertion.</li>
+  <li><strong>Modal width</strong>: 2 panels need more than the current <code>max-w-xl</code>. Widen to <code>max-w-3xl</code> (≈768px) on desktop; single-panel keeps <code>max-w-xl</code>. Mobile stacks regardless.</li>
+  <li><strong>No open scope questions</strong> — all four design forks locked via Q&amp;A; round-picker style + swap mechanism chosen by recommendation.</li>
+</ul>
+
+</body>
+</html>
