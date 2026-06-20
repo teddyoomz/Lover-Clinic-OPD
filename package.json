@@ -15,7 +15,11 @@
     "test:all": "vitest run && vitest run --config vitest.extended.config.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "dead-code": "knip"
+    "dead-code": "knip",
+    "build:filler": "vite build --config vite.filler.config.js",
+    "build:filler-og": "node scripts/build-filler-og.mjs",
+    "verify:filler": "node scripts/verify-filler-bundle.mjs",
+    "deploy:filler": "node scripts/deploy-filler.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
