@@ -512,7 +512,7 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
   });
 });
 
-describe('filler-simulator v5.6→v7 — red dashed: BOLD + ALWAYS-visible + pulsing glow (was too faint) + fainter baseline', () => {
+describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, NO glow (glow tinted the model) + fainter baseline', () => {
   const g2d = read('src/components/FillerGraphic2D.jsx');
 
   it('V5.6-1: red outline animates as its OWN fill:none element (side + cross) — NOT the skin body', () => {
@@ -526,16 +526,17 @@ describe('filler-simulator v5.6→v7 — red dashed: BOLD + ALWAYS-visible + pul
     expect(g2d).toMatch(/fill="url\(#fg-cs\)" \/>/);
   });
 
-  it('V7.1-2: breathing has a FULL-disappear (opacity→0 + glow→none) for the before↔after contrast; visible peak still BOLD', () => {
-    // v7.1 (2026-06-20): user wants the red line to fully VANISH for a beat (so the before↔after
-    // difference reads clearly), while the VISIBLE state stays bold (strokeOpacity 1 + width 2.6,
-    // locked by V7-4). 3.4s loop: bold-hold → fade-out → GONE-hold → fade-in → bold-hold.
+  it('V7.2-2: breathing keeps the FULL-disappear; GLOW REMOVED (the red drop-shadow tinted the 2D model colors)', () => {
+    // v7.2 (2026-06-20): user — the red drop-shadow glow bled onto the warm skin-tone model
+    // ("เอา glow ออกไป มันทำให้สีโมเดล 2D เพี้ยน เหลือแค่กระพริบ breathing"). Keep ONLY the
+    // opacity breathe (bold → GONE → bold); remove the glow entirely.
     expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%,40%\{opacity:1\} 56%\{opacity:0\} 68%\{opacity:0\} 84%,100%\{opacity:1\} \}/);
     expect(g2d).toMatch(/56%\{opacity:0\}/);                        // line FULLY disappears (the requested beat)
-    expect(g2d).toMatch(/@keyframes fgRevGlow \{ 0%,40%\{filter:drop-shadow/);  // strong glow when visible
-    expect(g2d).toMatch(/52%\{filter:none\} 68%\{filter:none\}/);   // glow fully OFF during the disappear
-    expect(g2d).toMatch(/84%,100%\{filter:drop-shadow/);           // glow returns strong
-    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.4s ease-in-out infinite, fgRevGlow 3\.4s ease-in-out infinite; \}/);
+    // ANTI-REGRESSION: no glow keyframes, no drop-shadow filter anywhere in the 2D model
+    expect(g2d).not.toMatch(/fgRevGlow/);
+    expect(g2d).not.toMatch(/drop-shadow/);
+    // .fg-revBreathe runs ONLY the opacity breathe (no second glow animation)
+    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.4s ease-in-out infinite; \}/);
   });
 
   it('V5.6-3: prefers-reduced-motion guard disables the animation (a11y — static = original look)', () => {
@@ -585,7 +586,7 @@ describe('filler-simulator v5.7 — condom size extends past XXL 64 (+2mm steps)
   });
 });
 
-describe('filler-simulator v6 — 2D dash toggles (double as legend) + stronger glow + auto-scale', () => {
+describe('filler-simulator v6 — 2D dash toggles (double as legend) + auto-scale', () => {
   const g2d = read('src/components/FillerGraphic2D.jsx');
   const strings = read('src/lib/fillerStrings.js');
 
