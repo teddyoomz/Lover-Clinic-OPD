@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><meta charset="UTF-8"><title>Filler Simulator v2 — Implementation Plan</title>
+<style>
+  :root{--accent:#dc2626;--bd:#e5e5e5;--bg-meta:#f0f4f8;--bg-task:#fafafa;}
+  body{font-family:-apple-system,'Segoe UI',sans-serif;max-width:960px;margin:2em auto;padding:1em;line-height:1.6;color:#222;}
+  h1{border-bottom:2px solid var(--accent);padding-bottom:.3em;}h2{border-bottom:1px solid var(--bd);margin-top:1.8em;}
+  pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;font-size:.85em;}code{font-family:Menlo,Consolas,monospace;}
+  blockquote{border-left:4px solid var(--accent);background:var(--bg-meta);padding:.5em 1em;border-radius:0 6px 6px 0;color:#666;}
+  .task{border-left:4px solid var(--accent);padding:.7em 1.1em;margin:1em 0;background:var(--bg-task);border-radius:0 6px 6px 0;}
+  .mockup{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:1em;margin:1em 0;}
+  .mockup-label{font-size:.75em;text-transform:uppercase;color:#666;margin-bottom:.4em;}
+  table{border-collapse:collapse;width:100%;font-size:.9em;}th,td{border:1px solid var(--bd);padding:.4em .7em;text-align:left;}th{background:var(--bg-meta);}
+</style></head>
+<body>
+<h1>Filler Simulator v2 — Implementation Plan</h1>
+<blockquote>Delta on v1 (shipped). Spec: <code>2026-06-20-penile-filler-simulator-v2-design.html</code> (glans math research-verified). Execute inline, TDD where math; full vitest + build + Rule Q L1 at end.</blockquote>
+
+<h2>Mockup Design</h2>
+<div class="mockup"><div class="mockup-label">v2 layout (see spec for full dark+light mockup)</div>
+<p>หัว+ปุ่ม TH/EN+☀/🌙 → การ์ดฟิลเลอร์ (cc รวม slider + glans% slider + แถบ stacked ลำตัวแดง|หัวส้ม) → การ์ดภาพ (mushroom 2D/3D, ไม่มี gate) → การ์ดผล 4 ใบ (รอบวง/Ø/ถุงยาง=ลำตัว · ขนาดหัว=glans "ไม่มีผลถุงยาง") เดิม→ใหม่ → disclaimer. Light = clinic palette.</p></div>
+
+<h2>Flow</h2>
+<div class="mockup"><div class="mockup-label">data flow</div>
+<table><tr><th>#</th><th>step</th></tr>
+<tr><td>1</td><td>total cc + glans% → shaftCc / glansCc</td></tr>
+<tr><td>2</td><td>estimate({lengthCm,baseGirthCm,shaftCc,glansCc}) → shaft band + glans band</td></tr>
+<tr><td>3</td><td>2D/3D: shaft scale←shaft Ø, glans bulb←glans Ø (แยก); cards เดิม→ใหม่</td></tr>
+<tr><td>4</td><td>lang/theme swap; no gate; no Firestore</td></tr></table></div>
+
+<h2>Tasks</h2>
+
+<div class="task"><h3>T1 — fillerMath v2 (glans + length range) [TDD]</h3>
+<p>Modify <code>src/lib/fillerMath.js</code>; tests <code>tests/filler-math.test.js</code>.</p>
+<pre>RANGES.lengthCm = [6.35, 25.4]
+GLANS_DIAM_PER_CC = { low:0.25, high:0.32 }   // cm Ø per cc (research 2.5mm/mL ±30%)
+GLANS_CC = { min:0.5, max:4, step:0.5, default:2 }
+estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc=0, baseGlansDiameterCm }):
+  V = shaftCc ?? fillerCc ?? 0        // back-compat alias
+  ...existing shaft...
+  dg0 = baseGlansDiameterCm>0 ? baseGlansDiameterCm : diameterFromGirth(C0)
+  glans = { dg0, dgLow: dg0+0.25*gc, dgHigh: dg0+0.32*gc, deltaLow, deltaHigh }
+  return { ...shaft, glans }</pre>
+<p>Tests: glans anchor (dg0 3.1 + 2cc → 3.6 ±0.05), band low≤high, 0cc no-change, monotonic, glans cc does NOT change c1/condom, length range new bounds. Run targeted → PASS. Commit.</p></div>
+
+<div class="task"><h3>T2 — fillerStrings.js (i18n)</h3>
+<p>Create <code>src/lib/fillerStrings.js</code>: <code>STRINGS={th:{...},en:{...}}</code> + <code>makeT(lang)=(k)=>STRINGS[lang][k]??STRINGS.th[k]</code>. Keys: title, sub, length, total, splitLabel, shaft, glans, baseSize, condomMode, diaMode, resGirth, resDia, resCondom, resGlans, oldLabel, sizesUp, noCondomEffect, noteGirthNotLength, noteDuration, noteApprox, disclaimer, units(cm/in), etc. Commit.</p></div>
+
+<div class="task"><h3>T3 — FillerGraphic2D mushroom + glans-separate</h3>
+<p>Modify <code>src/components/FillerGraphic2D.jsx</code>: mushroom path (shaft → sub-coronal sulcus → corona flare → glans bulb → tip); shaft half-thickness ← <code>est.d1Low</code>; glans bulb ← <code>est.glans.dgLow</code> (separate scale); before dashed; cross-section (shaft). Stroke/labels via theme (accept <code>theme</code> prop or CSS var). Commit.</p></div>
+
+<div class="task"><h3>T4 — Filler3D mushroom mesh + glans sphere</h3>
+<p>Modify <code>src/components/Filler3D.jsx</code>: buildModel → shaft cylinder (r=girthToRadiusCm(c1Low)) + sub-coronal narrowing + corona torus (prominent) + glans sphere (r=est.glans.dgLow/2, separate) at tip + rounded base. Rebuild on est change. Keep lazy/dispose/WebGL-fallback. Commit.</p></div>
+
+<div class="task"><h3>T5 — FillerSimulator v2 (split + no-gate + length + i18n + theme + glans card)</h3>
+<p>Modify <code>src/pages/FillerSimulator.jsx</code>:</p>
+<ul>
+<li>state: lengthCm(12.7) lengthUnit('inch') baseMode condomIdx baseDiameterCm totalCc(12) glansPct(15) view lang('th') theme('dark'); REMOVE revealed.</li>
+<li>shaftCc=totalCc*(1-glansPct/100), glansCc=totalCc*glansPct/100; est=estimate({...,shaftCc,glansCc}).</li>
+<li>split-bar: total slider (0–50) + glans% slider (0–50,step5) + stacked bar (ลำตัวแดง|หัวส้ม widths).</li>
+<li>length: inch default display, step 0.1in / max 10in (cm step 0.5 / max 25.4), default 5in=12.7cm.</li>
+<li>REMOVE reveal-gate/blur/overlay → graphic shown directly.</li>
+<li>TH/EN toggle (lang state + t=makeT(lang)); ALL strings via t().</li>
+<li>theme toggle ☀/🌙: TH = theme==='light'?LIGHT:DARK palette (add LIGHT = clinic light vars).</li>
+<li>4th result card "ขนาดหัว/Glans size" เดิม→ใหม่ + "ไม่มีผลต่อไซส์ถุงยาง".</li>
+<li>polish spacing/hierarchy/on-theme.</li>
+</ul>
+<p>Commit.</p></div>
+
+<div class="task"><h3>T6 — tests + full verify</h3>
+<p>Update <code>tests/filler-simulator-flow-simulate.test.js</code>: split chain (total+%→shaft/glans), glans-cc-doesn't-change-condom, EN strings file present + keys, source-grep no reveal-gate, purity. Run <code>npm test -- --run</code> GREEN + <code>npm run build</code> clean (three still lazy). Commit.</p></div>
+
+<div class="task"><h3>T7 — Rule Q L1 + /audit polish</h3>
+<p>Claude Preview <code>?play=filler</code>: split→ลำตัว/หัวโตแยก + cards; glans cc → condom unchanged; TH/EN; light/dark; length 0.1in/ตัน10; 2D+3D mushroom. Run <code>/audit</code> on design, apply P0/P1 polish. (pure client → no Rule Q gap; screenshot may time out → user sees.)</p></div>
+
+<h2>Self-review</h2>
+<p>Covers all 8 round-2 items: glans(T1/T3/T4/T5)·split(T5)·mushroom(T3/T4)·no-gate(T5)·length(T1/T5)·EN(T2/T5)·light(T5)·polish(T7). Glans math verified (T1 anchor). Back-compat alias keeps v1 shaft tests green. No placeholders.</p>
+</body></html>
