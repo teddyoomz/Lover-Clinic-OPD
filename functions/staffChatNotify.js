@@ -30,8 +30,14 @@ function buildStaffChatNotification({ kind, session = {}, sessionId, customer, b
   const customerId = isFollow ? (String(s.linkedCustomerId || '') || null) : null;
   const hn = isFollow ? (resolveCustomerHN(customer) || customerId || null) : null;
   const headline = isFollow ? 'กรอกแบบประเมินติดตามเสร็จแล้ว' : 'กรอกข้อมูลรับเข้าเสร็จแล้ว';
+  // Idempotent card id per session: a re-invoke of sendPushOnSubmit for the same
+  // session (double-click submit / a retried call — both still have only
+  // submittedAt, so isEdit stays false) re-writes the SAME doc instead of
+  // creating a duplicate card. One session = one card. (Tests pass idFactory.)
   return {
-    id: (typeof idFactory === 'function' ? idFactory() : newId()),
+    id: (typeof idFactory === 'function'
+      ? idFactory()
+      : (sessionId ? `CHAT-SYS-${String(sessionId)}` : newId())),
     branchId: String(branchId || ''),
     deviceId: 'system',
     displayName: 'ระบบ',

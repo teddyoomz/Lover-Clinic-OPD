@@ -257,6 +257,10 @@ export function parseMessageBody(text) {
 // content descriptor for attachments / stickers so the quote is never blank.
 export function buildReplySnapshot(msg) {
   if (!msg || !msg.id) return null;
+  // AV198 — "ระบบ" system notification cards are read-only: they can't be quoted
+  // or replied to (the UI renders no reply button for them; this locks the
+  // contract at the function layer too — defense in depth).
+  if (msg.system) return null;
   const snap = {
     msgId: String(msg.id),
     snippet: String(msg.text || '').slice(0, 80),

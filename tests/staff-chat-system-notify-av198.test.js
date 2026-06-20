@@ -32,6 +32,13 @@ describe('AV198 — staff-chat System notification card invariants', () => {
     // writer skips when there is no branch to route to
     expect(s).toMatch(/if \(!doc \|\| !doc\.branchId\) return false/);
     expect(s).toMatch(/be_staff_chat_messages/);
+    // round-3 fix #2: deterministic id per session → idempotent (no duplicate on retry)
+    expect(s).toMatch(/CHAT-SYS-\$\{String\(sessionId\)\}/);
+  });
+
+  it('A8 system cards are read-only — buildReplySnapshot refuses a system message', () => {
+    const s = read('src/lib/staffChatClient.js');
+    expect(s).toMatch(/if \(msg\.system\) return null/);
   });
 
   it('A3 the customer NAME link is sky, NEVER red (Thai culture); fire-red only on icon/border', () => {

@@ -57,6 +57,15 @@ describe('buildStaffChatNotification', () => {
     expect(() => buildStaffChatNotification({ kind: 'followup', session: null, customer: null, idFactory: () => 'x' })).not.toThrow();
   });
 
+  it('B8 deterministic id per session (idempotent — no duplicate card on retry/double-submit)', () => {
+    const mk = () => buildStaffChatNotification({ kind: 'intake', sessionId: 'SESS-X', branchId: 'BR', session: { patientData: { firstName: 'a' } } });
+    const a = mk(); const b = mk();
+    expect(a.id).toBe(b.id);            // same session → same id → setDoc overwrites (no dup)
+    expect(a.id).toBe('CHAT-SYS-SESS-X');
+    const c = buildStaffChatNotification({ kind: 'followup', sessionId: 'SESS-Y', branchId: 'BR', session: { linkedCustomerId: 'LC-1' }, customer: {} });
+    expect(c.id).toBe('CHAT-SYS-SESS-Y'); // different session → different id
+  });
+
   it('B7 adversarial — Thai/emoji/long names + snake-vs-camel customer fields', () => {
     const longName = 'ก'.repeat(300);
     const doc = buildStaffChatNotification({

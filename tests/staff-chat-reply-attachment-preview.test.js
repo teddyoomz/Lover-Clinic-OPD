@@ -27,6 +27,10 @@ function walkNoUndefined(obj, path = 'replyTo') {
 }
 
 describe('AV174 buildReplySnapshot', () => {
+  it('AV198 — system "ระบบ" card is NOT snapshottable (read-only contract)', () => {
+    expect(buildReplySnapshot({ id: 'm1', system: { kind: 'intake' }, text: '🔔 x' })).toBeNull();
+    expect(buildReplySnapshot({ id: 'm2', text: 'hi', displayName: 'A', deviceId: 'd' })).not.toBeNull();
+  });
   it('text-only → snippet, no attachment descriptor', () => {
     const s = buildReplySnapshot({ id: 'CHAT-1', text: 'รอลูกค้า 5 นาที', displayName: 'ดร.วี', deviceId: 'd1' });
     expect(s).toMatchObject({ msgId: 'CHAT-1', snippet: 'รอลูกค้า 5 นาที', displayName: 'ดร.วี', deviceId: 'd1' });
