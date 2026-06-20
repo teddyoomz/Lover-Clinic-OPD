@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Standalone Public Site Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .gate { background: #fff5f5; border: 1px solid #f1c7c0; border-radius: 6px; padding: 0.6em 1em; margin: 0.6em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Standalone Public Site Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:executing-plans (inline — recommended for this repo; subagents thrash on the large baseline per V81/V86 and the filler files are tightly coupled). Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-06-20-filler-standalone-public-site-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Serve the existing <code>?play=filler</code> simulator from a separate Vercel project at <code>loverclinic.vercel.app</code> whose bundle contains ZERO firebase/OPD code — single source, two build targets, one deploy command.</p>
+  <p><strong>Architecture:</strong> Same repo. NEW thin entry (<code>filler.html</code> → <code>src/filler-main.jsx</code> → <code>&lt;FillerSimulator/&gt;</code>) + a separate vite config (<code>vite.filler.config.js</code> → <code>dist-filler/</code>) that tree-shakes away all OPD/firebase code. A build-bundle verifier is the Rule Q L2 proof of the security boundary. og:image generated from the REAL logo via Playwright (already a devDep). Deploy both projects with one <code>npm run deploy:filler</code>.</p>
+  <p><strong>Tech Stack:</strong> Vite 8 · React 19 · vite-plugin-javascript-obfuscator (existing, same scope) · Playwright (existing devDep, for og:image) · Vercel CLI (2 projects via <code>--local-config</code> + <code>VERCEL_PROJECT_ID</code> override).</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">dist-filler/ — public bundle contents (data shape)</div>
+  <table>
+    <tr><th>IN the bundle ✓</th><th>NOT in the bundle ✗ (build-guard grep = 0)</th></tr>
+    <tr>
+      <td>React/ReactDOM · fillerMath (obfuscated) · fillerStrings · FillerSimulator · FillerGraphic2D · Filler3D (lazy three chunk) · 2 logo PNGs · favicon.svg · og-image.png</td>
+      <td><code>firebaseConfig</code> · <code>getFirestore</code> · <code>firebase/app</code> · <code>firebase/firestore</code> · <code>signInWith*</code> · <code>AdminDashboard</code> · <code>BackendDashboard</code> · <code>backendClient</code> · index.css/Tailwind · any /api or Firestore path</td>
+    </tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">og:image 1200×630 (Task 4) — REAL logo only, no AI/fake photo</div>
+  <div style="width:480px;height:252px;margin:auto;background:radial-gradient(120% 100% at 50% 0%,#1a0d0c 0%,#050505 62%);border:1px solid #3a201c;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#ededed;font-family:system-ui;">
+    <div style="font-size:30px;font-weight:800;">LO<span style="color:#ef4444;">V</span>ER <span style="font-size:11px;letter-spacing:.4em;color:#cbd5e1;">CLINIC</span></div>
+    <div style="font-size:18px;color:#cbd5e1;">จำลองผลการฉีดเพิ่มขนาด</div>
+    <div style="font-size:12px;color:#8b9099;">ประเมินรอบวง · ขนาดถุงยาง · ภาพจำลองเสมือนจริง</div>
+  </div>
+  <p style="font-size:.82em;color:#666;">โลโก้กลาง = <code>public/lover-clinic-logo-dark.png</code> (ของจริง). พื้น+ข้อความ = brand color. <code>src/assets/hero.png</code> ไม่ใช่รูปคลินิก → ไม่ใช้.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">หน้า standalone @ loverclinic.vercel.app — render เหมือน ?play=filler เป๊ะ (โทน/โลโก้/3D/i18n/contact). ต่างแค่ root URL + own meta.</div>
+  <div style="background:#050505;color:#ededed;border-radius:10px;padding:14px;font-family:system-ui;max-width:560px;margin:auto;">
+    <div style="text-align:center;margin-bottom:10px;"><b style="font-size:18px;">LO<span style="color:#ef4444;">V</span>ER</b> <span style="font-size:8px;letter-spacing:.4em;color:#cbd5e1;">CLINIC</span></div>
+    <div style="display:grid;grid-template-columns:2fr 3fr;gap:10px;font-size:11px;color:#8b9099;">
+      <div style="background:#0f0f0f;border:1px solid #262626;border-radius:8px;padding:9px;">ปริมาณ cc · ความยาว · glans% · TH/EN · ☀/🌙</div>
+      <div style="background:#0f0f0f;border:1px solid #262626;border-radius:8px;padding:9px;text-align:center;">2D/3D + watermark โลโก้</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;"><span style="flex:1;background:linear-gradient(90deg,#dc2626,#ef4444);color:#fff;border-radius:8px;padding:8px 0;text-align:center;font-size:11px;font-weight:800;">📞 โทร</span><span style="flex:1;background:#06C755;color:#fff;border-radius:8px;padding:8px 0;text-align:center;font-size:11px;font-weight:800;">LINE</span><span style="flex:1;background:#1877F2;color:#fff;border-radius:8px;padding:8px 0;text-align:center;font-size:11px;font-weight:800;">Facebook</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Single source → 2 builds → 2 Vercel projects → 2 URLs</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>Detail</th></tr>
+    <tr><td>1</td><td>Edit source once</td><td>แก้ไฟล์ filler ชุดเดียว (fillerMath / FillerSimulator / FillerGraphic2D / Filler3D / fillerStrings)</td></tr>
+    <tr><td>2a</td><td>Build OPD</td><td><code>vite build</code> → <code>dist/</code> (whole app; <code>?play=filler</code> uses the same source)</td></tr>
+    <tr><td>2b</td><td>Build standalone</td><td><code>vite build --config vite.filler.config.js</code> → <code>dist-filler/</code> (entry <code>filler.html</code>; tree-shake drops firebase/OPD)</td></tr>
+    <tr><td>2c</td><td>Verify boundary</td><td><code>node scripts/verify-filler-bundle.mjs</code> → grep dist-filler = 0 firebase/OPD + formula obfuscated → exit 1 on any hit</td></tr>
+    <tr><td>3</td><td>Deploy both (1 cmd)</td><td><code>npm run deploy:filler</code> → verify → <code>vercel --prod</code> (lover-clinic-app) → <code>vercel --prod --local-config vercel.filler.json</code> (loverclinic, via VERCEL_PROJECT_ID)</td></tr>
+    <tr><td>4</td><td>2 URLs live</td><td><code>lover-clinic-app.vercel.app/?play=filler</code> (internal) + <code>loverclinic.vercel.app</code> (public root)</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Security boundary — why customers can't reach OPD</div>
+  <pre>filler-main.jsx → import FillerSimulator
+   └─ fillerMath / fillerStrings / FillerGraphic2D / Filler3D / 2 logos
+        └─ (NO import of firebase.js / App.jsx / backendClient / any OPD module)
+
+Rollup tree-shake → dist-filler has no code path to OPD/Firestore.
+filler CSP: connect-src 'self' (NO firebase domains) — page makes ZERO network calls.
+verify-filler-bundle.mjs → 0 matches for firebase/OPD tokens, else build FAILS.</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td>Create <code>filler.html</code> (repo root)</td><td>standalone entry: title/favicon/og meta + module script → filler-main. No inline JS (clean CSP). data-theme="dark" + dark body bg (no flash).</td></tr>
+  <tr><td>Create <code>src/filler-main.jsx</code></td><td>mounts ONLY <code>&lt;FillerSimulator/&gt;</code>. No App/firebase/index.css import → tree-shake boundary.</td></tr>
+  <tr><td>Create <code>vite.filler.config.js</code></td><td>build → dist-filler; input filler.html; publicDir public-filler; SAME obfuscator scope.</td></tr>
+  <tr><td>Create <code>public-filler/</code></td><td>logos (copy) + favicon (copy) + og-image.png (generated). Only what the public page needs.</td></tr>
+  <tr><td>Create <code>tests/filler-standalone-entry.test.js</code></td><td>source-grep lock (entry isolation + config scope + html meta) — runs in <code>npm test</code>.</td></tr>
+  <tr><td>Create <code>scripts/verify-filler-bundle.mjs</code></td><td>Rule Q L2: build dist-filler + assert no firebase/OPD + formula obfuscated.</td></tr>
+  <tr><td>Create <code>scripts/build-filler-og.mjs</code></td><td>Playwright render real-logo card → public-filler/og-image.png.</td></tr>
+  <tr><td>Create <code>vercel.filler.json</code></td><td>filler project config: buildCommand/outputDir + tight CSP (connect-src 'self') + SPA rewrite → /filler.html. No crons/functions.</td></tr>
+  <tr><td>Create <code>scripts/deploy-filler.mjs</code> + <code>package.json</code> script</td><td>verify → deploy OPD → deploy standalone (one command).</td></tr>
+  <tr><td>Modify <code>.gitignore</code></td><td>add <code>dist-filler</code>.</td></tr>
+  <tr><td>Modify <code>.claude/rules/02-workflow.md</code> + handoff/active</td><td>document the dual-deploy convention.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Standalone entry + isolated vite build</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>filler.html</code>, <code>src/filler-main.jsx</code>, <code>vite.filler.config.js</code></li>
+    <li>Create: <code>public-filler/lover-clinic-logo-dark.png</code>, <code>public-filler/lover-clinic-logo-light.png</code>, <code>public-filler/favicon.svg</code> (copies)</li>
+    <li>Modify: <code>.gitignore</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Copy the public assets the standalone needs</strong></label></div>
+<pre><code class="language-bash">mkdir -p public-filler
+cp public/lover-clinic-logo-dark.png public/lover-clinic-logo-light.png public-filler/
+cp public/favicon.svg public-filler/favicon.svg</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Write <code>src/filler-main.jsx</code></strong></label></div>
+<pre><code class="language-jsx">import React from 'react';
+import ReactDOM from 'react-dom/client';
+import FillerSimulator from './pages/FillerSimulator.jsx';
+
+// Standalone PUBLIC entry — mounts ONLY the filler simulator at the root URL.
+// Imports NOTHING from App.jsx / firebase / index.css → the build tree-shakes
+// to a bundle with zero OPD/firebase code (proven by scripts/verify-filler-bundle.mjs).
+ReactDOM.createRoot(document.getElementById('root')).render(
+  &lt;React.StrictMode&gt;
+    &lt;FillerSimulator /&gt;
+  &lt;/React.StrictMode&gt;,
+);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Write <code>filler.html</code> (repo root)</strong></label></div>
+<pre><code class="language-html">&lt;!doctype html&gt;
+&lt;html lang="th" data-theme="dark"&gt;
+  &lt;head&gt;
+    &lt;meta charset="UTF-8" /&gt;
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" /&gt;
+    &lt;title&gt;Lover Clinic — จำลองผลการฉีดเพิ่มขนาด&lt;/title&gt;
+    &lt;link rel="icon" href="/favicon.svg" /&gt;
+    &lt;meta property="og:type" content="website" /&gt;
+    &lt;meta property="og:title" content="Lover Clinic — จำลองผลการฉีดเพิ่มขนาด" /&gt;
+    &lt;meta property="og:description" content="ประเมินรอบวง ขนาดถุงยาง และภาพจำลองเสมือนจริงจากปริมาณฟิลเลอร์ — โดย Lover Clinic" /&gt;
+    &lt;meta property="og:image" content="/og-image.png" /&gt;
+    &lt;meta property="og:image:width" content="1200" /&gt;
+    &lt;meta property="og:image:height" content="630" /&gt;
+    &lt;meta name="twitter:card" content="summary_large_image" /&gt;
+    &lt;style&gt;html,body{margin:0;padding:0;min-height:100%;background:#050505;}&lt;/style&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;div id="root"&gt;&lt;/div&gt;
+    &lt;script type="module" src="/src/filler-main.jsx"&gt;&lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</code></pre>
+  <p>NO inline JS (theme defaults dark via <code>FillerSimulator useState('dark')</code>) → keeps CSP <code>script-src 'self'</code> with no sha256. Dark body bg = no first-paint flash behind the 100vh themed wrapper.</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Write <code>vite.filler.config.js</code></strong></label></div>
+<pre><code class="language-js">import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import obfuscator from 'vite-plugin-javascript-obfuscator'
+
+// Standalone PUBLIC build of the filler simulator → dist-filler/.
+// Entry = filler.html → src/filler-main.jsx → &lt;FillerSimulator/&gt; ONLY.
+// SAME obfuscator scope as vite.config.js (the 4 filler files). publicDir =
+// public-filler (only the assets the public page needs — no OPD chart/stickers).
+export default defineConfig(({ command }) =&gt; ({
+  plugins: [
+    react(),
+    ...(command === 'build' ? [obfuscator({
+      include: ['**/fillerMath.js', '**/FillerSimulator.jsx', '**/FillerGraphic2D.jsx', '**/Filler3D.jsx'],
+      exclude: ['node_modules/**', 'tests/**'],
+      options: {
+        compact: true, identifierNamesGenerator: 'hexadecimal', numbersToExpressions: true,
+        simplify: true, transformObjectKeys: true, controlFlowFlattening: true,
+        controlFlowFlatteningThreshold: 0.75, stringArray: true, stringArrayThreshold: 1,
+        stringArrayEncoding: ['base64'], stringArrayCallsTransform: true, splitStrings: true,
+        splitStringsChunkLength: 6,
+      },
+    })] : []),
+  ],
+  publicDir: 'public-filler',
+  build: {
+    outDir: 'dist-filler',
+    emptyOutDir: true,
+    rollupOptions: { input: 'filler.html' },
+  },
+}))</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Build + verify output exists</strong></label></div>
+<pre><code class="language-bash">npx vite build --config vite.filler.config.js
+ls dist-filler/        # expect: filler.html  assets/  lover-clinic-logo-*.png  favicon.svg</code></pre>
+  <p>Expected: build exits 0; <code>dist-filler/filler.html</code> present; an <code>assets/</code> dir with JS chunks; NO <code>vendor-firebase</code> chunk.</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Gitignore the build output</strong></label></div>
+<pre><code class="language-bash">grep -q '^dist-filler' .gitignore || printf '\ndist-filler\n' &gt;&gt; .gitignore</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s7"> <label for="t1s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add filler.html src/filler-main.jsx vite.filler.config.js public-filler/ .gitignore
+git commit -m "feat(filler-standalone): isolated entry + vite build -&gt; dist-filler (zero OPD/firebase)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Source-grep isolation lock (runs in npm test)</h3>
+  <p><strong>Files:</strong> Create <code>tests/filler-standalone-entry.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the lock test</strong></label></div>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+
+const main = readFileSync('src/filler-main.jsx', 'utf8');
+const cfg = readFileSync('vite.filler.config.js', 'utf8');
+const html = readFileSync('filler.html', 'utf8');
+
+describe('filler standalone — isolation contract', () =&gt; {
+  it('filler-main imports ONLY FillerSimulator (no App/firebase/index.css)', () =&gt; {
+    expect(main).toMatch(/from '\.\/pages\/FillerSimulator\.jsx'/);
+    expect(main).not.toMatch(/App\.jsx/);
+    expect(main).not.toMatch(/firebase/i);
+    expect(main).not.toMatch(/index\.css/);
+  });
+  it('vite.filler.config obfuscates the same 4 filler files -&gt; dist-filler', () =&gt; {
+    for (const f of ['fillerMath.js', 'FillerSimulator.jsx', 'FillerGraphic2D.jsx', 'Filler3D.jsx']) {
+      expect(cfg).toContain(f);
+    }
+    expect(cfg).toMatch(/outDir:\s*'dist-filler'/);
+    expect(cfg).toMatch(/input:\s*'filler\.html'/);
+    expect(cfg).toMatch(/publicDir:\s*'public-filler'/);
+  });
+  it('filler.html has share meta + favicon, and NO inline JS (clean CSP)', () =&gt; {
+    expect(html).toMatch(/og:image/);
+    expect(html).toMatch(/og:title/);
+    expect(html).toMatch(/og:description/);
+    expect(html).toMatch(/&lt;link rel="icon"/);
+    // the only &lt;script&gt; is the module entry (has attributes); no bare inline &lt;script&gt;JS
+    expect(html).not.toMatch(/&lt;script&gt;[^&lt;]/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run it (passes — Task 1 already created the files)</strong></label></div>
+<pre><code class="language-bash">npx vitest run tests/filler-standalone-entry.test.js</code></pre>
+  <p>Expected: 3 passed. (If any fails, the Task-1 file diverged from the contract — fix the file.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/filler-standalone-entry.test.js
+git commit -m "test(filler-standalone): lock entry isolation + config scope + html meta"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Build-bundle security verifier (Rule Q L2 proof)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/verify-filler-bundle.mjs</code></p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write the verifier</strong></label></div>
+<pre><code class="language-js">// Rule Q L2 proof for the standalone security boundary.
+// Builds dist-filler then asserts the public bundle has ZERO firebase/OPD code,
+// and that the filler formula constants are obfuscated away (R9 parity).
+// Exit 1 on any violation. Run manually + as the pre-deploy gate in deploy:filler.
+import { execSync } from 'node:child_process';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+execSync('npx vite build --config vite.filler.config.js', { stdio: 'inherit' });
+
+const walk = (d) =&gt; readdirSync(d).flatMap((f) =&gt; {
+  const p = join(d, f);
+  return statSync(p).isDirectory() ? walk(p) : [p];
+});
+const files = walk('dist-filler').filter((f) =&gt; f.endsWith('.js') || f.endsWith('.html'));
+const blob = files.map((f) =&gt; readFileSync(f, 'utf8')).join('\n');
+
+const FORBIDDEN = [
+  /firebaseConfig/, /getFirestore/, /signInWith/, /firebase\/app/, /firebase\/firestore/,
+  /AdminDashboard/, /BackendDashboard/, /backendClient/,
+];
+const FORMULA = [/K_REALISTIC/, /K_OPTIMISTIC/, /condomIndexForGirth/, /dCgeo/];
+
+const hits = [];
+for (const re of FORBIDDEN) if (re.test(blob)) hits.push('FORBIDDEN OPD/firebase token: ' + re);
+for (const re of FORMULA) if (re.test(blob)) hits.push('Formula constant NOT obfuscated: ' + re);
+
+if (hits.length) { console.error('❌ filler bundle FAILED:\n' + hits.join('\n')); process.exit(1); }
+console.log(`✅ dist-filler verified: ${files.length} files, no firebase/OPD, formula obfuscated.`);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run it</strong></label></div>
+<pre><code class="language-bash">node scripts/verify-filler-bundle.mjs</code></pre>
+  <p>Expected: ends with <code>✅ dist-filler verified: N files, no firebase/OPD, formula obfuscated.</code> (exit 0). If it lists FORBIDDEN tokens, an OPD import leaked into the filler graph — find + remove it.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add scripts/verify-filler-bundle.mjs
+git commit -m "feat(filler-standalone): build-bundle verifier (no firebase/OPD + obfuscated)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: og:image from the REAL logo (Playwright)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/build-filler-og.mjs</code> → generates + commits <code>public-filler/og-image.png</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write the og generator (real logo, no AI)</strong></label></div>
+<pre><code class="language-js">// Generate public-filler/og-image.png (1200x630) for the public filler site.
+// REAL clinic logo (public/lover-clinic-logo-dark.png) on the brand-dark bg +
+// Thai title. No AI, no fake photo. One-time build artifact, committed.
+// Uses Playwright (already a devDep) so Thai text + logo render correctly.
+import { chromium } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const logo = readFileSync('public/lover-clinic-logo-dark.png').toString('base64');
+const html = `&lt;!doctype html&gt;&lt;meta charset="utf8"&gt;&lt;style&gt;
+  html,body{margin:0} *{box-sizing:border-box;font-family:system-ui,'Segoe UI',sans-serif}
+  .card{width:1200px;height:630px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:26px;color:#ededed;
+    background:radial-gradient(120% 100% at 50% 0%,#1a0d0c 0%,#050505 62%)}
+  .logo{height:150px} .t{font-size:46px;font-weight:800} .s{font-size:24px;color:#cbd5e1}
+  .k{font-size:17px;color:#8b9099;letter-spacing:.02em}
+&lt;/style&gt;&lt;div class="card"&gt;
+  &lt;img class="logo" src="data:image/png;base64,${logo}" alt="Lover Clinic"/&gt;
+  &lt;div class="t"&gt;จำลองผลการฉีดเพิ่มขนาด&lt;/div&gt;
+  &lt;div class="s"&gt;ประเมินรอบวง · ขนาดถุงยาง · ภาพจำลองเสมือนจริง&lt;/div&gt;
+  &lt;div class="k"&gt;โดย Lover Clinic&lt;/div&gt;
+&lt;/div&gt;`;
+
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
+await page.setContent(html, { waitUntil: 'networkidle' });
+await page.locator('.card').screenshot({ path: 'public-filler/og-image.png' });
+await browser.close();
+console.log('✅ public-filler/og-image.png written (1200x630, real logo).');</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Generate + eyeball the image</strong></label></div>
+<pre><code class="language-bash">node scripts/build-filler-og.mjs</code></pre>
+  <p>Then OPEN <code>public-filler/og-image.png</code> (Read tool renders it) — confirm: real logo centered + crisp, Thai title not clipped, dark brand bg, 1200×630. (If Playwright's chromium isn't installed: <code>npx playwright install chromium</code> once.)</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Commit (script + generated png)</strong></label></div>
+<pre><code class="language-bash">git add scripts/build-filler-og.mjs public-filler/og-image.png
+git commit -m "feat(filler-standalone): og:image from real clinic logo (Playwright render)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Filler Vercel config + one-command dual deploy</h3>
+  <p><strong>Files:</strong> Create <code>vercel.filler.json</code>, <code>scripts/deploy-filler.mjs</code>; Modify <code>package.json</code> (add <code>deploy:filler</code> script)</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Write <code>vercel.filler.json</code> (tight public CSP, SPA rewrite, no crons/functions)</strong></label></div>
+<pre><code class="language-json">{
+  "buildCommand": "vite build --config vite.filler.config.js",
+  "outputDirectory": "dist-filler",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/filler.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'self'; form-action 'self'; upgrade-insecure-requests" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}</code></pre>
+  <p><code>connect-src 'self'</code> = NO firebase/googleapis domains (the public page makes zero firebase calls — tighter than the OPD CSP). Static assets (assets/*, og-image.png) are served by the filesystem before the catch-all rewrite; <code>/</code> falls to <code>/filler.html</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Write <code>scripts/deploy-filler.mjs</code></strong></label></div>
+<pre><code class="language-js">// Dual-deploy: OPD project + standalone filler project, one command.
+// Gate: verify the public bundle (no firebase/OPD) BEFORE deploying.
+// Needs vercel CLI authed + (for the standalone) VERCEL_ORG_ID +
+// VERCEL_FILLER_PROJECT_ID in the env (set after Task 6 creates the project).
+import { execSync } from 'node:child_process';
+const run = (cmd, env) =&gt; execSync(cmd, { stdio: 'inherit', env: { ...process.env, ...env } });
+
+console.log('▶ 1/3  verify public bundle (no firebase/OPD)…');
+run('node scripts/verify-filler-bundle.mjs');
+
+console.log('▶ 2/3  deploy OPD project (lover-clinic-app)…');
+run('vercel --prod --yes');   // uses .vercel/project.json (lover-clinic-app)
+
+console.log('▶ 3/3  deploy standalone (loverclinic)…');
+const { VERCEL_ORG_ID, VERCEL_FILLER_PROJECT_ID } = process.env;
+if (!VERCEL_ORG_ID || !VERCEL_FILLER_PROJECT_ID) {
+  console.error('Set VERCEL_ORG_ID + VERCEL_FILLER_PROJECT_ID (from Task 6) before deploying the standalone.');
+  process.exit(1);
+}
+run('vercel --prod --yes --local-config vercel.filler.json',
+    { VERCEL_ORG_ID, VERCEL_PROJECT_ID: VERCEL_FILLER_PROJECT_ID });
+console.log('✅ both deployed.');</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Add the npm script</strong></label></div>
+  <p>In <code>package.json</code> <code>"scripts"</code>, add: <code>"deploy:filler": "node scripts/deploy-filler.mjs"</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit (config + script only — do NOT run deploy)</strong></label></div>
+<pre><code class="language-bash">git add vercel.filler.json scripts/deploy-filler.mjs package.json
+git commit -m "feat(filler-standalone): vercel.filler.json + deploy:filler dual-deploy command"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Create the Vercel <code>loverclinic</code> project — GATED (Q4 + auth)</h3>
+  <div class="gate">⚠ <strong>Run with the user present.</strong> Touches the cloud account. Two hard gates below — STOP and ask rather than improvise.</div>
+  <p><strong>Files:</strong> Create <code>.env.filler-deploy</code> (gitignored — holds VERCEL_ORG_ID + VERCEL_FILLER_PROJECT_ID)</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Auth gate</strong></label></div>
+<pre><code class="language-bash">vercel whoami</code></pre>
+  <div class="gate">If NOT logged in / no token → <strong>STOP</strong>, ask the user to <code>vercel login</code> (or provide a <code>VERCEL_TOKEN</code>). Do not proceed.</div>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Create the project</strong></label></div>
+<pre><code class="language-bash"># Create a project named loverclinic (Vercel auto-assigns &lt;name&gt;.vercel.app if free).
+vercel project add loverclinic</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Q4 hard gate — confirm the assigned URL is EXACTLY loverclinic.vercel.app</strong></label></div>
+  <p>Check the project's production domain (Vercel dashboard, or <code>vercel project inspect loverclinic</code> / first deploy URL).</p>
+  <div class="gate">If the assigned domain is NOT <code>loverclinic.vercel.app</code> (taken globally → Vercel appended a suffix like <code>loverclinic-xxxx.vercel.app</code>) → <strong>STOP and ask the user</strong> (Q4=B). Do not silently ship a different URL.</div>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Capture org + project ids for the deploy script (do NOT touch the OPD <code>.vercel</code> link)</strong></label></div>
+<pre><code class="language-bash"># Get the IDs from `vercel project ls` / the add output. Write them to a gitignored env file.
+printf 'VERCEL_ORG_ID=&lt;org id&gt;\nVERCEL_FILLER_PROJECT_ID=&lt;loverclinic project id&gt;\n' &gt; .env.filler-deploy
+grep -q '^.env.filler-deploy' .gitignore || printf '\n.env.filler-deploy\n' &gt;&gt; .gitignore</code></pre>
+  <p>No dashboard build config needed — <code>deploy:filler</code> passes <code>--local-config vercel.filler.json</code> which sets buildCommand + outputDirectory per-deploy.</p>
+  <p>(<code>.env.filler-deploy</code> is loaded into the shell when running <code>deploy:filler</code>, e.g. <code>set -a; . ./.env.filler-deploy; set +a; npm run deploy:filler</code> — or export the two vars in the deploy turn.)</p>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule Q verification</h3>
+  <p>Pre-deploy is fully local. Post-deploy runs after Task 6 + an explicit "deploy".</p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Build + preview the standalone locally</strong></label></div>
+<pre><code class="language-bash">npx vite build --config vite.filler.config.js
+npx vite preview --outDir dist-filler --port 4173</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Rule Q L1 — real browser parity (Chrome MCP / Claude Preview)</strong></label></div>
+  <p>Load <code>http://localhost:4173/</code> and confirm, comparing to OPD <code>?play=filler</code>:</p>
+  <ul>
+    <li>Real logo renders; dark default; ☀/🌙 toggles light/dark; TH/EN toggles</li>
+    <li>cc / length / glans sliders move + numbers update; result cards เดิม→ใหม่</li>
+    <li>2D illustration + watermark; 3D renders + rotates; contact buttons (tel/line/fb) correct href + target/rel</li>
+    <li>Mobile 375px: no horizontal overflow, tap targets ≥44px</li>
+    <li>Console clean; DevTools Network/Sources → <strong>no firebase</strong> request/chunk</li>
+  </ul>
+  <p>(<code>preview_screenshot</code> may time out in this env — verify rendered DOM text + behavior + live CSS, per the session's Rule Q-vis note.)</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Bundle guard</strong></label></div>
+<pre><code class="language-bash">node scripts/verify-filler-bundle.mjs   # ✅ no firebase/OPD + obfuscated</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Full test suite unchanged</strong></label></div>
+<pre><code class="language-bash">npx vitest run tests/filler-standalone-entry.test.js tests/filler-math.test.js tests/filler-simulator-flow-simulate.test.js
+# then the full suite at batch end:
+npx vitest run</code></pre>
+  <p>Expected: filler tests green; full vitest unchanged (vitest runs <code>serve</code> → the new config/obfuscation don't touch it).</p>
+
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: POST-DEPLOY (after Task 6 + explicit "deploy") — live L1</strong></label></div>
+  <ul>
+    <li>Load <code>https://loverclinic.vercel.app</code> → repeat Step-2 checks on the LIVE build</li>
+    <li>Verify OPD unaffected: <code>lover-clinic-app.vercel.app</code> 200 + <code>?play=filler</code> works</li>
+    <li>og preview: check <code>&lt;meta og:image&gt;</code> resolves + the share card shows logo + title</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>Task 8: Docs + dual-deploy convention + handoff</h3>
+  <p><strong>Files:</strong> Modify <code>.claude/rules/02-workflow.md</code>; update <code>SESSION_HANDOFF.md</code> + <code>.agents/active.md</code></p>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Document the convention in rule 02</strong></label></div>
+  <p>Add to the Deploy section: a filler-page change → <code>npm run deploy:filler</code> deploys BOTH (OPD <code>vercel --prod</code> + standalone <code>loverclinic</code>); pure-client/frontend-only → NO firestore.rules → NO Probe-Deploy-Probe; still requires an explicit "deploy" each turn (V18).</p>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Update handoff + active.md</strong></label></div>
+  <p>Note: standalone filler site exists (<code>filler.html</code> / <code>vite.filler.config.js</code> / <code>dist-filler</code>); deploy both via <code>deploy:filler</code>; loverclinic.vercel.app status.</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit + push</strong></label></div>
+<pre><code class="language-bash">git add .claude/rules/02-workflow.md SESSION_HANDOFF.md .agents/active.md
+git commit -m "docs(filler-standalone): dual-deploy convention + handoff"
+git push origin master</code></pre>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> Q1 repo-single/2-builds → Task 1+vite.filler.config. Q2 one deploy cmd → Task 5. Q3 og meta+favicon+title → Task 1 (meta) + Task 4 (image). Q4 stop-if-URL-taken → Task 6 Step 3 hard gate. Security boundary → Task 3 verifier + Task 7 L1. og real-logo-only → Task 4. ✓ no gaps.</li>
+  <li><strong>Placeholder scan:</strong> only intentional human-supplied values are <code>&lt;org id&gt;</code>/<code>&lt;loverclinic project id&gt;</code> in Task 6 (captured at create time) — not code placeholders. No "TBD/handle-edge-cases".</li>
+  <li><strong>Type consistency:</strong> file/config names consistent everywhere (<code>vite.filler.config.js</code>, <code>dist-filler</code>, <code>public-filler</code>, <code>verify-filler-bundle.mjs</code>, <code>VERCEL_FILLER_PROJECT_ID</code>). Obfuscator <code>include</code> globs identical to <code>vite.config.js</code>.</li>
+  <li><strong>Risks:</strong> (a) <code>--local-config</code> + <code>VERCEL_PROJECT_ID</code> compose — verified by Task 7 Step 5 (live render + OPD-unaffected); if it doesn't, fallback = set buildCommand/outputDir in the loverclinic dashboard. (b) Playwright chromium may need <code>npx playwright install chromium</code> (Task 4). (c) First <code>deploy:filler</code> also pushes filler live into OPD via <code>?play=filler</code> — intended (both exist).</li>
+</ul>
+
+</body>
+</html>
