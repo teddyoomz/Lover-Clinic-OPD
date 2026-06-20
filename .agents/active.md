@@ -1,35 +1,31 @@
 ---
-updated_at: "2026-06-20 (cont.3) — Filler standalone public site (loverclinic.vercel.app) — built + L1-verified local, NOT deployed; Vercel project NOT yet created."
-status: "Tasks 1–5 + 7-pre + 8 DONE (local). Task 6 (create Vercel project) + deploy PENDING user. filler 102/0; full vitest 16869/0."
+updated_at: "2026-06-20 (cont.3) — Filler standalone public site SHIPPED + DEPLOYED LIVE (loverclinic.vercel.app) + OPD redeployed."
+status: "DONE + DEPLOYED. loverclinic.vercel.app LIVE (isolated). OPD redeployed (filler + 3D fix live). filler 102/0; full vitest 16869/0."
 branch: "master"
-last_commit: "6c40a5d6 — fix(filler): OPD vite.config obfuscator broke the 3D lazy chunk — narrow to formula files (+ docs commit after)"
-production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "UNCHANGED — neither filler-sim nor the standalone deployed"
-firestore_rules_version: "UNCHANGED (filler is pure-client, no rules)"
-tests: "filler 102/0 (98 + 4 standalone); full vitest 16869/0 @ post-OPD-fix. Not re-run after docs commit (docs only)."
+last_commit: "deploy-script fix + handoff (after 6c40a5d6 OPD 3D fix)"
+production_url: "https://loverclinic.vercel.app (standalone) + https://lover-clinic-app.vercel.app (OPD)"
+production_commit: "lover-clinic-app: lover-clinic-o5gogdbfp · loverclinic: loverclinic-jwk0jef67 (alias loverclinic.vercel.app)"
+firestore_rules_version: "UNCHANGED (filler pure-client; OPD deploy was vercel-only, no rules)"
+tests: "filler 102/0; full vitest 16869/0. Not re-run after deploy (no source change)."
 ---
 
-# Active — 2026-06-20 (cont.3) — Filler standalone public site
+# Active — 2026-06-20 (cont.3) — Filler standalone SHIPPED + DEPLOYED
 
-## State
-- Separating `?play=filler` into a SECOND Vercel project `loverclinic.vercel.app` — single source, 2 build targets, one `deploy:filler`. Goal: public link to customers with ZERO access to OPD (max security).
-- Built + Rule Q L1-verified LOCAL. **NOT deployed. Vercel project NOT yet created.**
-- master HEAD ~`6c40a5d6` (+ docs commit). prod UNCHANGED.
+## State — DONE + LIVE
+- **`loverclinic.vercel.app`** = public filler simulator, SEPARATE Vercel project (`loverclinic`, team `teddyoomz-4523s-projects`). Prebuilt STATIC dist-filler → zero firebase/api/OPD code. LIVE + Rule Q L1-verified on prod.
+- **`lover-clinic-app.vercel.app/?play=filler`** = OPD copy, redeployed (3D fix + filler work now live).
+- master pushed. Both deploys frontend-only → no firestore.rules → no Probe-Deploy-Probe.
 
-## Shipped this session (Tasks 1–5, 7-pre, 8 — detail → plan + checkpoint)
-- NEW `filler.html` → `src/filler-main.jsx` → `<FillerSimulator/>` (root URL, own title/favicon/og meta).
-- NEW `vite.filler.config.js` → `dist-filler` (emits `index.html`). Obfuscator scope = **formula files only** (`fillerMath.js` + `FillerGraphic2D.jsx`) — `FillerSimulator.jsx`/`Filler3D.jsx` EXCLUDED (obfuscating the dynamic-import host broke the 3D lazy chunk).
-- NEW `scripts/verify-filler-bundle.mjs` (Rule Q L2: no firebase/OPD + formula obfuscated + 3D present), `scripts/build-filler-og.mjs` (og:image from REAL logo, Playwright), `public-filler/{logos,favicon,og-image}`.
-- NEW `vercel.filler.json` (tight CSP: `connect-src 'self'`, no firebase domains; rewrite → /index.html) + `scripts/deploy-filler.mjs` + npm `deploy:filler`/`build:filler`/`verify:filler`/`build:filler-og`.
-- 🐛 **Found + fixed: OPD `vite.config.js` had the SAME 3D-obfuscation bug** → narrowed its include too (R9-8 updated). OPD build now emits `Filler3D-*.js` 524.9K.
-- Rule Q L1 (Playwright, real obfuscated build): renders + math + real logo + **3D lazy chunk loads** + **zero firebase network** + mobile no-overflow. verify:filler ✅. full vitest 16869/0.
-- Docs: rule 02 item 11 (dual-deploy convention).
+## Verified (Rule Q)
+- LIVE L1 (Playwright, real prod): loverclinic.vercel.app renders + math + real logo + 3D (`canvasCount:1` + `filler3dChunkLoaded:true`) + **`offHostRequests:[]` + `firebaseRequests:[]`** (talks to nothing but its own host) + mobile no-overflow + console clean.
+- Security: live `/api/*` = `text/html` md5-identical to homepage (SPA fallback, NOT a function) + tight CSP `connect-src 'self'`. No OPD serverless on the public site.
+- OPD `?play=filler` LIVE L1: 3D chunk loads (`filler3dChunkLoaded:true`) — OPD obfuscator fix works.
+- filler 102/0 · full vitest 16869/0 · build clean.
 
-## Next action
-- **Task 6 (user-authorized): create Vercel project `loverclinic`** — needs `vercel` CLI auth + Q4 hard-gate (if `loverclinic.vercel.app` is taken → STOP + ask). Then capture VERCEL_ORG_ID + VERCEL_FILLER_PROJECT_ID → `.env.filler-deploy`.
-- **Deploy on explicit "deploy"** → `npm run deploy:filler` (both OPD + standalone; frontend-only, no Probe-Deploy-Probe).
+## Edit-once → deploy-both (convention, rule 02 item 11)
+- Edit any filler file → `npm run deploy:filler` (verify → `vercel --prod` OPD → `vercel deploy dist-filler --prod --local-config vercel.filler.json` standalone). Needs `.env.filler-deploy` (VERCEL_ORG_ID/FILLER_PROJECT_ID/SCOPE — gitignored). Still requires explicit "deploy" (V18).
+- Obfuscator scope = formula files only (`fillerMath.js` + `FillerGraphic2D.jsx`) — NEVER add FillerSimulator/Filler3D (breaks 3D).
 
 ## Outstanding (user-triggered)
-- Create Vercel project + deploy filler (both).
 - ⚠ Rotate LINE/FB secrets (AV195). · Encode customer id in LINE OA url.
-- Spec/plan: `docs/superpowers/{specs,plans}/2026-06-20-filler-standalone-public-site*`.
+- Spec/plan/checkpoint: `docs/superpowers/{specs,plans}/2026-06-20-filler-standalone-public-site*` · `.agents/sessions/2026-06-20-filler-standalone-public-site.md`.
