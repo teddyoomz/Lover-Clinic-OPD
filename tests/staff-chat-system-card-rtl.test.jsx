@@ -81,4 +81,14 @@ describe('StaffChatSystemCard', () => {
     expect(link.getAttribute('href')).toBe('/?backend=1&customer=LC-7');
     expect(screen.queryByTestId('system-card-missing')).toBeNull();       // a throw is NOT treated as deletion
   });
+
+  it('R8 brokerProClinicId CLEARED on the session → card reverts to pending (hook mirrors the pure picker)', async () => {
+    getCustomerMock.mockResolvedValue({ firstname: 'A', lastname: 'B', hn_no: 'LC-9' });
+    render(<StaffChatSystemCard message={{ id: 'm8', createdAt: TS, system: { kind: 'intake', customerId: null, sessionId: 'S8', nameSnapshot: 'A B', hnSnapshot: null } }} />);
+    await act(async () => { snapCb({ exists: () => true, data: () => ({ brokerProClinicId: 'LC-9' }) }); }); // register → resolve
+    expect(await screen.findByTestId('system-card-customer-link')).toBeTruthy();
+    await act(async () => { snapCb({ exists: () => true, data: () => ({ brokerProClinicId: null }) }); });    // clear → revert
+    expect(await screen.findByText('รอลงทะเบียน')).toBeTruthy();
+    expect(screen.queryByTestId('system-card-customer-link')).toBeNull();
+  });
 });

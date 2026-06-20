@@ -48,8 +48,13 @@ export function useSystemCardCustomer(card) {
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        const cid = snap.exists() ? snap.data().brokerProClinicId : '';
-        if (cid) setCustomerId(String(cid));
+        // Keep customerId IN SYNC with the session (symmetric with the pure
+        // pickSystemCardCustomerId): set it when brokerProClinicId appears (the
+        // flip), reset to pending if it is ever cleared. setCustomerId('') is a
+        // no-op re-render when already pending. (One-way latch would drift from
+        // the picker — bug-hunt round 7.)
+        const cid = (snap.exists() && snap.data().brokerProClinicId) ? String(snap.data().brokerProClinicId) : '';
+        setCustomerId(cid);
       },
       // non-fatal: a denied/missing session leaves the card pending — but LOG it
       // (no silent-swallow; aids future diagnosis). Behavior unchanged.
