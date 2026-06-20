@@ -5,6 +5,30 @@
 
 ---
 
+## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-15` → `2026-06-15` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-15 — appt-hub past-tab DESC + ponytail GLOBAL + 🧭 Master Flow/📊 graphify lifecycle (LoverClinic + guardrails)
+
+master `c48c4897` (docs/rules) · prod frontend `f302216c` LIVE · rules `e5418722` unchanged · full vitest **16398/0**. Detail → checkpoint `.agents/sessions/2026-06-15-masterflow-graphify-ponytail.md`.
+
+- **appt-hub "ย้อนหลัง 30 วัน" past tab → newest-first** (`/systematic-debugging`): one ASC comparator hit all non-today tabs → past showed oldest-at-top. NEW `sortApptsByDateTimeDesc` (date desc + time desc) routed for `activeTab==='past'`; upcoming tabs stay ASC; today confirmed-first; print PDF inherits (`buildPrintRows` no re-sort). Isolated per-tab fix, no class-of-bug siblings. +12 tests (F10 desc-unit ×9 + F11 source-grep ×3). `f302216c` DEPLOYED (vercel frontend-only). HTTP 200.
+- **ponytail GLOBAL** (DietrichGebert/ponytail v4.4.0, every project): 5 skills `~/.claude/skills/ponytail*` + always-on rule `~/.claude/CLAUDE.md` + checkout `~/.claude/ponytail/`. Hooks (mode-switch + statusline) USER-wired into `~/.claude/settings.json` — the auto-classifier HARD-blocked me from adding global auto-exec hooks (by design, matches ponytail's "user trusts hooks via /hooks"); user did it; verified valid. Precedence: ponytail yields to user-explicit + project iron-clad.
+- **🧭 Master Flow + 📊 graphify lifecycle** (`/brainstorming` Q1=Active rules / Q2=global-core+project-overlay / Q3=all-4-metrics → implemented): single-source skill orchestration — boot-3 + graphify-read bookend + task **tiers T0–T3** (size → calibrated gate depth) + 5-level precedence (ponytail at L4). session-start reads `GRAPH_REPORT.md`; session-end `graphify update .` (compounding loop). Global core `~/.claude/CLAUDE.md` + LoverClinic overlay (00-session-start + 2 skills, `c48c4897`) + user-level session-end skill. **Ported to guardrails GitHub** `2ea158a` (00-session-start Master Flow + 2 skills + CLAUDE.md + README, generic/template form). Verified: audit-rules LR5/LR8/LR10 clean · graphify rebuilt 9443 nodes · structural 8/8.
+- Caught + reverted an unexpected project `.claude/settings.json` strip (LoverClinic hooks restored to HEAD; likely an auto-process mirror global→project).
+- **Rule Q-honest**: past-tab comparator + routing L2-verified (real exported fn + source-grep lock + all hub-mounting suites green + full 16398/0); L1 visual (yesterday-at-top live) = user hands-on. Master Flow/graphify BEHAVIOR fires NEXT boot — mechanism verified (graphify update works; rules well-formed, non-contradicting).
+
+---
+
+📂 **Older sessions (`2026-06-10` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-15) — appt-hub past-tab DESC DEPLOYED + ponytail GLOBAL install + 🧭 Master Flow/📊 graphify lifecycle (LoverClinic + guardrails GitHub)**: master `c48c4897` (docs/rules); prod frontend `f302216c` LIVE (appt-hub "ย้อนหลัง 30 วัน" past tab → `sortApptsByDateTimeDesc`, yesterday-at-top, +12 tests F10/F11; vercel frontend-only, no rules → no Probe-Deploy-Probe). rules `e5418722` unchanged. Full vitest **16398/0** (from the past-tab fix; all later changes docs/rules, no source). **ponytail** (DietrichGebert v4.4.0) installed every-project: 5 skills `~/.claude/skills/ponytail*` + always-on rule `~/.claude/CLAUDE.md` + hooks USER-wired into `~/.claude/settings.json` (auto-classifier HARD-blocked agent settings-hook edit by design; user did `/hooks`/Notepad). **Master Flow** (tiers T0–T3 size→gate-depth) + **graphify lifecycle** (boot reads `graphify-out/GRAPH_REPORT.md` / session-end `graphify update .`) → global core `~/.claude/CLAUDE.md` + project overlay (00-session-start + session-start/end skills) + ported to **guardrails GitHub** `2ea158a`. Caught+reverted an unexpected project `.claude/settings.json` strip. Detail → checkpoint `.agents/sessions/2026-06-15-masterflow-graphify-ponytail.md`.
+
+---
+
 ## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-10` → `2026-06-10` + Current-State index
 
 ### Session blocks (1)

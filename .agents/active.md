@@ -1,26 +1,25 @@
 ---
-updated_at: "2026-06-20 — Penile Filler Size Simulator SHIPPED (v1 shaft+condom → v2 glans split-bar + mushroom + EN + light/dark) + systematic-debugging round. Local only, NOT deployed."
-status: "COMMITTED + PUSHED (local). NOT deployed (await 'deploy'). filler 39/0 targeted + build clean; full vitest 16804/0 (v2, pre-debug-round — not re-run per session-end)."
+updated_at: "2026-06-20 (cont.) — Filler Simulator v5.3 + v5.4 + R9 (obfuscation · watermark · contact buttons). SHIPPED local, NOT deployed."
+status: "COMMITTED + PUSHED. NOT deployed (await 'deploy'). full vitest 16846/0; build clean; obfuscated prod build verified."
 branch: "master"
-last_commit: "505961af — fix(filler-sim v2): 3D glans independent of shaft + damped visual + remove egg/glans-card/ทรงเห็ด + split-bar overflow"
+last_commit: "f5676bcb — feat(filler-sim R9): scoped formula obfuscation + theme-aware logo watermark (2D+3D) + real-icon contact buttons (header/footer)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "lover-clinic-228lv6o7s (UNCHANGED this session — AV98 fix; filler-sim NOT deployed)"
+production_commit: "UNCHANGED this session — filler-sim NOT deployed"
 firestore_rules_version: "UNCHANGED (filler-sim is pure-client, no rules)"
-tests: "filler 39/0 targeted + build clean (three lazy chunk). full vitest 16804/0 (v2 commit 2e31a292; debug-round = targeted only, not re-run at EOD)."
+tests: "filler 79/0 targeted; full vitest 16846/0 (commit f5676bcb); build clean. Not re-run at EOD per session-end."
 ---
 
-# Active — 2026-06-20 — Penile Filler Size Simulator (v1 + v2 + debug round)
+# Active — 2026-06-20 (cont.) — Filler Simulator v5.3 + v5.4 + R9
 
 ## State
-- master HEAD `505961af` (=origin). prod UNCHANGED `lover-clinic-228lv6o7s` — **filler-sim NOT deployed** (await "deploy"; frontend-only → vercel-only, no Probe-Deploy-Probe).
-- NEW public page `?play=filler` — pure client, NO Firestore/auth/PII. `three` lazy-loaded (3D only). Research-grounded math (2 web-research agents: shaft girth + condom + glans).
-- `/brainstorming`(Q1-Q5 + rev1-4 + v2 round-2) → spec×2 + plan×2 → inline impl → `/systematic-debugging` debug round.
+- master HEAD `f5676bcb` (=origin, pushed). prod UNCHANGED — **filler-sim NOT deployed** (await "deploy"; pure-client → vercel-only, no Probe-Deploy-Probe).
+- Public page `?play=filler` — pure client, NO Firestore/auth/PII/rules. `three` lazy (3D only). Single source of truth = `fillerMath.js`.
+- Obfuscation is BUILD-only (`command==='build'`) → dev + vitest run UNobfuscated source.
 
-## What this session shipped (detail → checkpoint 2026-06-20-filler-simulator.md)
-- **v1**: shaft girth model `C1=√(C0²+4π·shaftCc/L)×k` (k 2.37/3.32, anchor 16cc→+2.0/+2.8 VERIFIED) + EXACT condom conversion (ISO 4074 `W=รอบวง×5`, 8-rung ladder, snap nearest-tie-larger) + realistic 2D SVG + WebGL 3D (Three.js lazy, rotatable) + เดิม→ใหม่ result cards.
-- **v2**: glans (head) injection split-bar (cc รวม + glans% + stacked ลำตัว|หัว) — glans does NOT affect condom (research 0.25cm Ø/cc) · mushroom 2D/3D shape · TH/EN i18n (`fillerStrings.js`) · light/dark (clinic palette) · removed 18+ reveal-gate · length 0.1in step / max 10in(=25.4cm) / default 5in.
-- **debug round** (`/systematic-debugging`, 6 items): 🐛 3D glans was clamped to shaft radius (`Math.max(glansR,r)`) → followed shaft; fixed to floor-on-const + damped `est.glans.visualLow` (0.4×, research rate kept in dgLow/dgHigh). Removed egg-ellipse, glans result card, "ทรงเห็ด" label. 🐛 split-bar spill at glans=0 → `flex:0 0 pct%` + overflow hidden + conditional label.
-- Files: `src/lib/{fillerMath,fillerStrings}.js` · `src/pages/FillerSimulator.jsx` · `src/components/{FillerGraphic2D,Filler3D}.jsx` · `src/App.jsx` (route) · `tests/filler-{math,simulator-flow-simulate}.test.js` · spec/plan (×2) HTML.
+## What this session shipped (detail → checkpoint 2026-06-20-filler-v53-v54-r9.md)
+- **v5.3** (`5d135a1d`): split-bar legend fix (labels OUT of proportional segments → always-visible color-keyed legend; were hidden <14% / crammed at 1.5) · bigger centered cross-section · subtitle copy · iPad/touch hardening.
+- **v5.4** (`fb58c199`): round-DOWN results (condom FLOOR + r1 Math.floor = under-promise, safety) · auto-scale layout (controls space-between fill-height; 2D flex sections + space-evenly, no dead bands).
+- **R9** (`f5676bcb`): `/brainstorming`→spec→plan→inline+3-agent research Workflow. (1) **formula obfuscation** — vite-plugin-javascript-obfuscator scoped to the 4 filler files, build-only; k-constants as integer fractions so numbersToExpressions hides floats; **dist grep: all formula constants ABSENT**; **obfuscated build :4173 renders + computes IDENTICAL**. (2) **theme-aware logo watermark** — 2D `<image>` ×2 + 3D DOM overlay (~9%, white/black per theme). (3) **contact buttons** — header compact icons + footer full, real brand SVG icons, theme-aware, tel:0975251525 / lin.ee/mFFsDkG / facebook.com/loverclinickorat.
 
 ## Next action
 - Idle / await. Deploy filler-sim on explicit "deploy" → `vercel --prod` (frontend-only).
@@ -28,4 +27,4 @@ tests: "filler 39/0 targeted + build clean (three lazy chunk). full vitest 16804
 ## Outstanding (user-triggered)
 - **Deploy filler-sim** when ready (NOT deployed; pure-client, no Probe-Deploy-Probe).
 - ⚠ Rotate LINE/FB secrets (AV195). · Encode customer id in LINE OA url (task_1a3ac96c).
-- Honest gap (Rule Q-vis): rendered-pixel screenshot of filler-sim = USER eyes (preview_screenshot times out in this env; functional L1 fully verified — values match math, split/glans/EN/theme/3D all work).
+- Honest gap (Rule Q-vis): `preview_screenshot` flaked repeatedly this session → desktop fill proven via DOM-geometry; mobile watermark+header-icons captured; obfuscated prod-build computes verified. Backend-authed pixel checks remain user-hands-on where relevant.
