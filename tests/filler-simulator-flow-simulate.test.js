@@ -282,11 +282,23 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
     expect(page).toMatch(/@media \(max-width:820px\)/);
   });
 
-  it('V5-3: 2D enlarged (bigger viewBox + anatomy) without losing dashed-after / i18n / damped head', () => {
-    expect(g2d).toMatch(/viewBox="0 0 480 320"/);                                 // bigger canvas
+  it('V5-3: 2D enlarged (taller viewBox + anatomy) without losing dashed-after / i18n / damped head', () => {
+    expect(g2d).toMatch(/viewBox="0 0 480 460"/);                                 // taller canvas (fills the card)
     expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
+    expect(g2d).not.toMatch(/viewBox="0 0 480 320"/);                            // v5 canvas superseded
+  });
+
+  it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
+    // after-edge is now a FAINT red dash (low opacity) — both after-strokes carry strokeOpacity
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
+    // reflection highlight ellipse removed from the shaft
+    expect(g2d).not.toMatch(/rgba\(255,242,234/);
+    // equal column heights: stretch + graphic card is a flex column whose SVG wrapper fills
+    expect(page).toMatch(/align-items:stretch/);
+    expect(page).toMatch(/flexDirection: 'column'/);
+    expect(page).toMatch(/flex: 1, minHeight: 232/);
   });
 });

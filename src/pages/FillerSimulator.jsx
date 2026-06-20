@@ -164,7 +164,7 @@ export default function FillerSimulator() {
     <div style={{ background: c.bg, minHeight: '100vh', color: c.tx, overflowX: 'hidden', fontFamily: "'Sarabun', -apple-system, 'Segoe UI', sans-serif", transition: 'background-color .3s, color .3s' }}>
       <style>{`
         .fs-shell{ max-width:1040px; margin:0 auto; padding:max(18px,env(safe-area-inset-top)) 18px 48px; }
-        .fs-grid{ display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:18px; align-items:start; }
+        .fs-grid{ display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:18px; align-items:stretch; }
         .fs-controls{ order:1; } .fs-graphic{ order:2; }
         .fs-pill{ padding:4px 13px; border-radius:999px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:700;
           border:1px solid ${c.discBd}; background:${c.disc}; color:${c.discTx}; display:inline-flex; align-items:center; gap:5px; }
@@ -277,14 +277,14 @@ export default function FillerSimulator() {
           </div>
 
           {/* graphic (no gate) */}
-          <div className="fs-graphic" style={card({ padding: '17px 18px' })}>
+          <div className="fs-graphic" style={card({ padding: '17px 18px', display: 'flex', flexDirection: 'column' })}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 13, flexWrap: 'wrap' }}>
               <span style={sectionLabel}>{t('graphic')}</span>
               {webglOk && (
                 <Seg c={c} value={view} onChange={setView} options={[{ v: '2d', label: t('view2d') }, { v: '3d', label: t('view3d') }]} />
               )}
             </div>
-            <div style={{ minHeight: 232 }}>
+            <div style={{ flex: 1, minHeight: 232, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {showGraphic3D ? (
                 <Suspense fallback={<div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.tx2 }}>…</div>}>
                   <Filler3D est={est} lengthCm={lengthCm} t={t} />

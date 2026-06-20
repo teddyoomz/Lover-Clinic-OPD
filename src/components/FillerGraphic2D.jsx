@@ -1,7 +1,8 @@
 // FillerGraphic2D — realistic anatomical 2D (mushroom: shaft → sulcus → corona → glans).
 // Clinical/medical style (non-explicit). Shaft scales from shaft girth; glans bulb scales
 // SEPARATELY from glans diameter. Presentational only — numbers come from `est`. Theme-aware.
-// v5: enlarged — bigger side-view hero (~1.4× anatomy) that fills the wider graphic card.
+// v5.1: taller layout (fills the card, equal columns) · faint dashed edges (see the added band)
+//       · cross-section spaced clear of its label · no reflection highlight.
 import { diameterFromGirth } from '../lib/fillerMath.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -32,9 +33,10 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
   const lab = theme === 'light' ? '#5b6675' : '#9b938f';
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
-  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.55)';
+  // baseline edge — clearer than before so the added band (baseline → after) is visible
+  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.62)' : 'rgba(255,255,255,0.72)';
 
-  const cy = 112;
+  const cy = 152;
   const x0 = 30;
   const len = lenToPx(lengthCm);
   const tShaftA = shaftHalfT(dLo);
@@ -44,13 +46,13 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const glansLenA = tGlansA * 1.25;
   const glansLenB = tGlansB * 1.25;
 
-  const csA = clamp(dLo * 10, 18, 56);
-  const csB = clamp(d0 * 10, 18, 56);
-  const ccx = 64;
-  const ccy = 252;
+  const csA = clamp(dLo * 12, 22, 72);
+  const csB = clamp(d0 * 12, 22, 72);
+  const ccx = 74;
+  const ccy = 378;
 
   return (
-    <svg viewBox="0 0 480 320" width="100%" role="img"
+    <svg viewBox="0 0 480 460" width="100%" role="img"
          aria-label={tr('g2dAria')}>
       <defs>
         <linearGradient id="fg-skin" x1="0" y1="0" x2="0" y2="1">
@@ -65,25 +67,23 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
         </radialGradient>
       </defs>
 
-      <text x="8" y="20" fontSize="13" fill={lab}>{tr('g2dSide')}</text>
+      <text x="8" y="26" fontSize="14" fill={lab}>{tr('g2dSide')}</text>
 
-      {/* after — skin body (mushroom). Thin DASHED red so small growth isn't masked by a thick line. */}
-      <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" />
+      {/* after — skin body (mushroom). Thin DASHED red, FAINT (low opacity) so the added band shows. */}
+      <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
       {/* corona ridge */}
-      <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.55" />
-      {/* highlight */}
-      <ellipse cx={x0 + len * 0.4} cy={cy - tShaftA + 8} rx="12" ry="6" fill="rgba(255,242,234,0.45)" />
+      <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
 
-      {/* before — dashed mushroom */}
+      {/* before (baseline) — dashed mushroom, clearer */}
       <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
 
       {/* cross-section (shaft) */}
-      <text x="8" y="212" fontSize="13" fill={lab}>{tr('g2dCross')}</text>
-      <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" />
+      <text x="8" y="282" fontSize="14" fill={lab}>{tr('g2dCross')}</text>
+      <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
       <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
-      <text x={ccx + csA + 16} y={ccy - 18} fontSize="12.5" fill="#ef4444">{tr('g2dLegShaft')}</text>
-      <text x={ccx + csA + 16} y={ccy + 4} fontSize="12.5" fill="#f59e0b">{tr('g2dLegGlans')}</text>
-      <text x={ccx + csA + 16} y={ccy + 26} fontSize="12.5" fill={labStrong}>{tr('g2dLegKey')}</text>
+      <text x={ccx + csA + 20} y={ccy - 22} fontSize="13" fill="#ef4444">{tr('g2dLegShaft')}</text>
+      <text x={ccx + csA + 20} y={ccy + 2} fontSize="13" fill="#f59e0b">{tr('g2dLegGlans')}</text>
+      <text x={ccx + csA + 20} y={ccy + 26} fontSize="13" fill={labStrong}>{tr('g2dLegKey')}</text>
     </svg>
   );
 }
