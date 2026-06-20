@@ -41,6 +41,12 @@ describe('AV198 — staff-chat System notification card invariants', () => {
     expect(s).toMatch(/if \(msg\.system\) return null/);
   });
 
+  it('A10 firestore.rules — "ระบบ" system cards are SERVER-ONLY at the rule layer (no client forge or delete)', () => {
+    const s = read('firestore.rules');
+    expect(s).toMatch(/allow delete: if isClinicStaff\(\) && !\('system' in resource\.data\)/); // can't delete a system card
+    expect(s).toMatch(/&& !\('system' in request\.resource\.data\)/);                            // can't forge a system card on create
+  });
+
   it('A9 card label colors are THEME-AWARE (AA in light mode) — no hardcoded soft-pink/tan that vanishes on a light card', () => {
     const s = read('src/components/staffchat/StaffChatSystemCard.jsx');
     // round-5 fix: the "ระบบ" label + "รอลงทะเบียน" pill must be theme-aware classes, not
