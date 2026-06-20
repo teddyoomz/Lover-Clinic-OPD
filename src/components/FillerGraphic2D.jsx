@@ -42,7 +42,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const lab = theme === 'light' ? '#5b6675' : '#9b938f';
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
   // baseline (เดิม) edge — FAINT pale dash
-  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.42)' : 'rgba(255,255,255,0.5)';
+  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.21)' : 'rgba(255,255,255,0.25)';
   // centered-faint clinic watermark (theme-aware logo) — travels with any screenshot / SVG copy
   const wmLogo = theme === 'light' ? '/lover-clinic-logo-light.png' : '/lover-clinic-logo-dark.png';
 
@@ -69,6 +69,12 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', gap: 12 }}>
+      <style>{`
+        @keyframes fgRevBreathe { 0%{opacity:1} 38%{opacity:1} 62%{opacity:0} 72%{opacity:0} 100%{opacity:1} }
+        @keyframes fgRevGlow { 0%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} 38%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} 55%{filter:none} 72%{filter:none} 100%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} }
+        .fg-revBreathe { animation: fgRevBreathe 3.6s ease-in-out infinite, fgRevGlow 3.6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .fg-revBreathe { animation: none; } }
+      `}</style>
       {/* side view */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={sectionLabel}>{tr('g2dSide')}</span>
@@ -81,7 +87,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
             </linearGradient>
           </defs>
           {/* after — skin body (mushroom). Thin DASHED red, FAINT so the added band shows. */}
-          <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
+          <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
           {/* corona ridge */}
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
@@ -102,7 +108,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
               <stop offset="1" stopColor="#7b4b37" />
             </radialGradient>
           </defs>
-          <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
+          <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
           <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />

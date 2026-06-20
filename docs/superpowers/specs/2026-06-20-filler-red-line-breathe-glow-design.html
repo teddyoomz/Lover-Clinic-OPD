@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler 2D — Red dashed breathe+glow + fainter baseline · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #0a0a0a; border: 1px solid #262626; border-radius: 8px; padding: 1.2em; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: #9b938f; margin-bottom: 0.5em; }
+    .mk-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+    .mk-cell { width: 240px; text-align: center; }
+    .mk-cap { color: #e5e5e5; font-size: 0.8em; margin-top: 6px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    @keyframes fgRevBreathe { 0%{opacity:1} 38%{opacity:1} 62%{opacity:0} 72%{opacity:0} 100%{opacity:1} }
+    @keyframes fgRevGlow { 0%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} 38%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} 55%{filter:none} 72%{filter:none} 100%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} }
+    .fg-revBreathe { animation: fgRevBreathe 3.6s ease-in-out infinite, fgRevGlow 3.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .fg-revBreathe { animation: none; } }
+    .flowcycle { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .fc-box { background:#fff; border:1px solid var(--bd); border-radius:6px; padding:.5em .8em; font-size:.85em; }
+    .fc-arr { color: var(--tx-muted); font-weight:600; }
+  </style>
+</head>
+<body>
+
+<h1>Filler 2D — Red dashed breathe+glow + fainter baseline</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user · <strong>Scope:</strong> <code>src/components/FillerGraphic2D.jsx</code> (2D only) · <strong>Page:</strong> <code>?play=filler</code> (pure-client) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-20-filler-red-line-breathe-glow.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The 2D filler illustration draws two dashed outlines: a red <strong>"หลังฉีด"</strong> (after-injection) outline and a faint <strong>"เดิม"</strong> (baseline) outline. Two issues:</p>
+<ol>
+  <li>The red outline is static and easy to miss. User wants it to <strong>breathe + glow</strong> — fade fully out then return — so it stands out and looks more polished ("ให้ดูชัดขึ้น แล้วดูดีขึ้น").</li>
+  <li>The faint baseline dash is too opaque (dark-theme white at α 0.5), reading as a strong white line that fights the skin-tone fill behind it ("เส้นประจางขาวเข้มไป รบกวนสีเนื้อด้านหลัง").</li>
+</ol>
+<p>Pure visual/CSS change. No math, logic, Firestore, auth, or 3D touched. The faint baseline stays static (only the red outline animates) so it remains a calm reference.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Red "หลังฉีด" outline — Calm breathe + glow (live; ~3.6s loop)</div>
+  <div class="mk-row">
+    <div class="mk-cell">
+      <svg width="100%" viewBox="0 0 200 130" role="img" aria-label="Red outline breathing glow">
+        <defs>
+          <linearGradient id="skSpec" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0a98d"/><stop offset=".45" stop-color="#c2825f"/><stop offset="1" stop-color="#7b4b37"/></linearGradient>
+          <path id="mSpec" d="M28 31 Q20 31 20 40 L20 90 Q20 99 28 99 L120 99 C150 99 178 90 178 65 C178 40 150 31 120 31 Z"/>
+        </defs>
+        <use href="#mSpec" fill="url(#skSpec)"/>
+        <use href="#mSpec" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.3" stroke-dasharray="5 4" transform="translate(9.9 6.5) scale(.9)"/>
+        <use href="#mSpec" class="fg-revBreathe" fill="none" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="4 3" stroke-opacity="0.6"/>
+      </svg>
+      <div class="mk-cap">ค้างสว่าง+เรือง ~0–38% → จางหายสุด (opacity 0) ~62–72% → กลับมา</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Faint "เดิม" baseline — opacity before / after, over skin</div>
+  <div class="mk-row">
+    <div class="mk-cell">
+      <svg width="100%" viewBox="0 0 200 130" role="img" aria-label="Baseline before">
+        <defs><linearGradient id="skB1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0a98d"/><stop offset=".45" stop-color="#c2825f"/><stop offset="1" stop-color="#7b4b37"/></linearGradient>
+        <path id="mB1" d="M28 31 Q20 31 20 40 L20 90 Q20 99 28 99 L120 99 C150 99 178 90 178 65 C178 40 150 31 120 31 Z"/></defs>
+        <use href="#mB1" fill="url(#skB1)"/>
+        <use href="#mB1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.3" stroke-dasharray="5 4" transform="translate(9.9 6.5) scale(.9)"/>
+        <use href="#mB1" fill="none" stroke="#ef4444" stroke-width="1.3" stroke-dasharray="4 3" stroke-opacity=".6"/>
+      </svg>
+      <div class="mk-cap">ก่อน · α 0.5 (ขาวทึบ สู้สีเนื้อ)</div>
+    </div>
+    <div class="mk-cell">
+      <svg width="100%" viewBox="0 0 200 130" role="img" aria-label="Baseline after">
+        <defs><linearGradient id="skB2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0a98d"/><stop offset=".45" stop-color="#c2825f"/><stop offset="1" stop-color="#7b4b37"/></linearGradient>
+        <path id="mB2" d="M28 31 Q20 31 20 40 L20 90 Q20 99 28 99 L120 99 C150 99 178 90 178 65 C178 40 150 31 120 31 Z"/></defs>
+        <use href="#mB2" fill="url(#skB2)"/>
+        <use href="#mB2" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.3" stroke-dasharray="5 4" transform="translate(9.9 6.5) scale(.9)"/>
+        <use href="#mB2" fill="none" stroke="#ef4444" stroke-width="1.3" stroke-dasharray="4 3" stroke-opacity=".6"/>
+      </svg>
+      <div class="mk-cap">ใหม่ · α 0.25 (จางลง ไม่กวนสีเนื้อ)</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup" style="background:#fff;border-color:var(--bd)">
+  <div class="mockup-label" style="color:var(--tx-muted)">Animation state cycle of the red outline (one ~3.6s loop, repeats forever)</div>
+  <div class="flowcycle">
+    <span class="fc-box">สว่าง+เรืองสุด (held 0–38%)</span>
+    <span class="fc-arr">→</span>
+    <span class="fc-box">จางลง (38–62%)</span>
+    <span class="fc-arr">→</span>
+    <span class="fc-box">หายสุด opacity 0 (held 62–72%)</span>
+    <span class="fc-arr">→</span>
+    <span class="fc-box">จางกลับมาสว่าง (72–100%)</span>
+    <span class="fc-arr">↺</span>
+  </div>
+</div>
+<table>
+  <tr><th>#</th><th>Render / CSS wiring</th></tr>
+  <tr><td>1</td><td><code>FillerGraphic2D</code> renders one <code>&lt;style&gt;</code> block (keyframes <code>fgRevBreathe</code> + <code>fgRevGlow</code>, class <code>.fg-revBreathe</code>, <code>prefers-reduced-motion</code> guard) once at the top of its returned fragment.</td></tr>
+  <tr><td>2</td><td>The two red <code>stroke="#ef4444"</code> elements — side-view path (line 84) + cross-section circle (line 105) — get <code>className="fg-revBreathe"</code>. <code>strokeOpacity="0.6"</code> kept (peak = 0.6 × element-opacity 1).</td></tr>
+  <tr><td>3</td><td>Browser runs the CSS animation: element <code>opacity</code> 1→0 (with hold) × <code>filter: drop-shadow</code> red glow → <code>none</code>. Red line breathes + glows, vanishes fully, returns.</td></tr>
+  <tr><td>4</td><td><code>prefers-reduced-motion: reduce</code> → <code>animation: none</code> → element opacity 1, no filter → red line static at its original 0.6 (no motion).</td></tr>
+  <tr><td>5</td><td>The <code>beforeStroke</code> const (line 45) lowered: dark <code>rgba(255,255,255,0.5)</code>→<code>0.25</code>, light <code>rgba(15,23,42,0.42)</code>→<code>0.21</code>. Faint baseline (lines 88, 106) stays <strong>static</strong> — no animation.</td></tr>
+</table>
+
+<h2>Architecture</h2>
+<p>Single-file change in <code>src/components/FillerGraphic2D.jsx</code>:</p>
+<ul>
+  <li><strong>One scoped <code>&lt;style&gt;</code></strong> in the wrapping <code>&lt;div&gt;</code> — keyframes + class + reduced-motion. CSS keyframes are document-global once injected, so a single block covers both inner <code>&lt;svg&gt;</code>s. (CSS is not touched by the build-time obfuscator, which targets only the 4 filler JS files' formula constants.)</li>
+  <li><strong>Two <code>className</code> adds</strong> on the red strokes (line 84, 105). Minimal diff — keep <code>strokeOpacity="0.6"</code>; the keyframe animates element <code>opacity</code> so the lit peak equals the original 0.6.</li>
+  <li><strong>One const edit</strong> on <code>beforeStroke</code> (line 45) for the fainter baseline.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = C:</strong> Breathing + Glow (not breathing-only, not glow-only).</li>
+  <li><strong>Q2 = 1 (Calm), modified:</strong> slow ~3.6s; opacity floor = <strong>0</strong> (fully invisible, brief hold) — not 0.2; lit+glow peak <strong>held longer</strong> (~0–38% of cycle).</li>
+  <li><strong>Baseline = A (α 0.25):</strong> dark α 0.5 → 0.25, light α 0.42 → 0.21 (fainter, still readable as a reference; stays static).</li>
+  <li><strong>Scope:</strong> 2D only. 3D has no dashed line — untouched. Faint baseline does NOT animate.</li>
+  <li><strong>Accessibility:</strong> <code>prefers-reduced-motion: reduce</code> disables the animation (static = original look).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>On <code>?play=filler</code> (2D), the red "หลังฉีด" outline (both side-view + cross-section) breathes: holds lit+glowing, fades to <strong>fully invisible</strong> (opacity 0), holds, returns — ~3.6s loop. Verified in a real browser (Rule Q-vis: seen, not asserted).</li>
+  <li>The lit/glow peak is visibly held (dwell), not a momentary flash.</li>
+  <li>The faint "เดิม" baseline is clearly fainter than before and no longer fights the skin tone; it does NOT animate.</li>
+  <li>With <code>prefers-reduced-motion: reduce</code>, the red line is static at its original look (no motion).</li>
+  <li>Math / computed results / 3D / Firestore unchanged: <code>filler-math.test.js</code> + existing flow-simulate blocks stay green; full vitest green.</li>
+  <li>Source-grep regression (v5.6 block) locks: <code>.fg-revBreathe</code> on both red strokes, both keyframes present, reduced-motion guard present, <code>beforeStroke</code> uses 0.25/0.21 (anti-regression on 0.5/0.42).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>SVG <code>filter: drop-shadow</code> perf on low-end mobile</strong> — gentle (≤6px) + slow (3.6s) + single animated element per SVG → negligible. Acceptable.</li>
+  <li><strong>Baseline too faint to read</strong> — mitigated: α 0.25 chosen by user from a live before/after (0.5 / 0.28 / 0.22 / 0.16 → settled 0.25); still visible as a reference. Tunable if needed.</li>
+  <li>None open. Ready for plan.</li>
+</ul>
+
+</body>
+</html>

@@ -318,9 +318,11 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);
   });
 
-  it('V5.2-2: baseline (เดิม) dash made fainter', () => {
-    expect(g2d).toMatch(/rgba\(15,23,42,0\.42\)/);   // light theme faint
-    expect(g2d).toMatch(/rgba\(255,255,255,0\.5\)/); // dark theme faint
+  it('V5.2-2: baseline (เดิม) dash made fainter (v5.6: deepened — light 0.42→0.21, dark 0.5→0.25, less vs skin)', () => {
+    expect(g2d).toMatch(/rgba\(15,23,42,0\.21\)/);    // light theme faint (v5.6)
+    expect(g2d).toMatch(/rgba\(255,255,255,0\.25\)/); // dark theme faint (v5.6)
+    expect(g2d).not.toMatch(/rgba\(15,23,42,0\.42\)/);  // v5.2 value superseded by v5.6
+    expect(g2d).not.toMatch(/rgba\(255,255,255,0\.5\)/); // v5.2 value superseded by v5.6
   });
 
   it('V5.2-3: 2D side-view SMART auto-stretch — fills the viewBox width at max length', () => {
@@ -503,5 +505,31 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
     expect(math).toMatch(/K_OPTIMISTIC = 332 \/ 100/);
     expect(math).not.toMatch(/K_REALISTIC = 2\.37/);
     // runtime value still exact (covered by filler-math.test.js: K_REALISTIC === 2.37)
+  });
+});
+
+describe('filler-simulator v5.6 — red dashed breathe+glow (Calm, fade to invisible) + fainter baseline', () => {
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+
+  it('V5.6-1: red "หลังฉีด" outline animates — class on BOTH red strokes (side-view path + cross-section circle)', () => {
+    // className inserted BEFORE the stroke attrs → V5.3-3 red-stroke grep stays intact; exactly 2 (side + cross)
+    expect((g2d.match(/className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBe(2);
+  });
+
+  it('V5.6-2: keyframes — fgRevBreathe (opacity hold→0) + fgRevGlow (drop-shadow→none) + 3.6s loop', () => {
+    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%\{opacity:1\} 38%\{opacity:1\} 62%\{opacity:0\} 72%\{opacity:0\} 100%\{opacity:1\} \}/);
+    expect(g2d).toMatch(/@keyframes fgRevGlow \{[^}]*drop-shadow\(0 0 3px #ef4444\) drop-shadow\(0 0 6px #ef4444\)/);
+    expect(g2d).toMatch(/55%\{filter:none\} 72%\{filter:none\}/);   // fully un-lit while invisible
+    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.6s ease-in-out infinite, fgRevGlow 3\.6s ease-in-out infinite; \}/);
+  });
+
+  it('V5.6-3: prefers-reduced-motion guard disables the animation (a11y — static = original look)', () => {
+    expect(g2d).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.fg-revBreathe \{ animation: none; \} \}/);
+  });
+
+  it('V5.6-4: lit peak unchanged (strokeOpacity 0.6 kept) + 2D-only (Filler3D has no dashed line, untouched)', () => {
+    const g3d = read('src/components/Filler3D.jsx');
+    expect(g3d).not.toMatch(/fg-revBreathe/);                                  // 3D untouched
+    expect((g2d.match(/strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 });
