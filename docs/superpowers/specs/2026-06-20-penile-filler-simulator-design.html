@@ -111,7 +111,6 @@
           <div class="sld-top"><span class="sld-lab">ฟิลเลอร์ที่ฉีด</span><span class="sld-val fire">10 cc</span></div>
           <div class="track"><div class="fill" style="width:33%"></div><div class="thumb" style="left:33%"></div></div>
         </div>
-        <div class="note">เกิน 20 cc/ครั้งจะมีคำเตือน · เพดานสะสม ~30 cc</div>
       </div>
 
       <div class="sim-card">
@@ -294,7 +293,7 @@ anchor ตรวจ: 52mm·L11·V16 → +2.0 / +2.8 ซม. (= reference) ✓</p
   <tr><td>ความยาว (L) — toggle ซม./นิ้ว</td><td>8–18 ซม. (≈ 3.1–7.1 นิ้ว)</td><td>0.5 ซม. (0.25 นิ้ว)</td><td>11 ซม.</td></tr>
   <tr><td>ขนาดเดิม โหมด A: Ø slider (โชว์รอบวงคู่)</td><td>Ø 2.2–4.1 ซม. (รอบวง ~7–13)</td><td>0.1</td><td>Ø 3.0</td></tr>
   <tr><td>ขนาดเดิม โหมด B: ถุงยาง picker</td><td>8 รุ่น (45–64 มม.)</td><td>—</td><td>Regular 52</td></tr>
-  <tr><td>ฟิลเลอร์ (V)</td><td>1–30 cc (เตือนที่ 20)</td><td>1</td><td>10</td></tr>
+  <tr><td>ฟิลเลอร์ (V)</td><td>1–50 cc (เลื่อนอิสระ ไม่มีคำเตือน)</td><td>1</td><td>10</td></tr>
 </table>
 
 <h2>Decisions (locked via Q&amp;A + revisions)</h2>
@@ -322,7 +321,7 @@ anchor ตรวจ: 52mm·L11·V16 → +2.0 / +2.8 ซม. (= reference) ✓</p
   <li>baseline toggle 2 โหมดให้ C0 เดียวกัน (ถุงยาง 52 → รอบวง 10.4 / Ø 3.3 = เลื่อน Ø 3.3).</li>
   <li>condom conversion เป๊ะ: width=รอบวง×5; Ø=รอบวง/π; ถุงยาง→C0→snap กลับได้ไซส์เดิมทุกรุ่น; snap nearest-tie-larger; "+N ไซส์" = index diff.</li>
   <li>girth model ผ่าน anchor: ถุงยาง 52 (C0=10.4), L=11, V=16 → รอบวง ≈ 12.4–13.2 (+2.0/+2.8); V=10 → 11.7–12.2.</li>
-  <li>length-sensitivity ถูกทิศ + monotonic ตาม V + band low ≤ high + ทุกเลข round; V&gt;20 เตือน; clamp V≤30.</li>
+  <li>length-sensitivity ถูกทิศ + monotonic ตาม V + band low ≤ high + ทุกเลข round; V เลื่อนได้อิสระ 1–50 (ไม่มีคำเตือน/clamp).</li>
   <li>2D และ 3D ใช้ผลจาก fillerMath ตัวเดียวกัน (ขนาดตรงกัน).</li>
   <li>disclaimer ไทย+อังกฤษ เห็นชัด; ไม่ทำนายความยาวเพิ่ม; โน้ต girth-not-length + 6–24 ด. + ถุงยางประมาณ.</li>
   <li>ไม่มีการเขียน Firestore / ไม่มี PII.</li>
@@ -332,7 +331,7 @@ anchor ตรวจ: 52mm·L11·V16 → +2.0 / +2.8 ซม. (= reference) ✓</p
 <h2>Testing (Rule Q — honest)</h2>
 <ul>
   <li><strong>Unit — condom conversion (เป๊ะ):</strong> width=girth×5 / girth=width/5 / Ø=girth/π เทียบค่าจริง; snap nearest-tie-larger; ถุงยาง→C0→snap-back ทุกรุ่น; "+N ไซส์"; worked examples.</li>
-  <li><strong>Unit — girth model:</strong> anchor (52mm·L11·V16→+2.0/+2.8), monotonic ตาม V, length-sensitivity, band ordering, clamp/warn, round, adversarial (0/ติดลบ/ใหญ่สุด/NaN).</li>
+  <li><strong>Unit — girth model:</strong> anchor (52mm·L11·V16→+2.0/+2.8), monotonic ตาม V, length-sensitivity, band ordering, round, adversarial (0/ติดลบ/ใหญ่สุด/NaN).</li>
   <li><strong>Unit — unit toggle + 3D mesh dims:</strong> ซม.↔นิ้ว round-trip (×/÷ 2.54); mesh radius = girthToRadius(C) ถูก (C/(2π)), length=L → pure fn ทดสอบได้.</li>
   <li><strong>L1 จริง (Claude Preview / Rule S):</strong> เปิดหน้าจริง → เลื่อนสไลเดอร์ + สลับ baseline 2 โหมด + toggle นิ้ว + <strong>กดโหมด 3D → โมเดลเรนเดอร์ + ลากหมุน + ขยายตาม cc</strong> → ยืนยันตรงเครื่องคำนวณ. (dev server รัน Three.js ได้จริง → 3D L1 ทำได้เต็ม). pure client → <strong>ไม่มี Rule Q gap</strong>.</li>
   <li>ไม่ต้อง L2 (ไม่มี Firestore query).</li>
