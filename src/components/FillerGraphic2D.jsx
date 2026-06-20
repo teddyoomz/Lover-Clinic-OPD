@@ -6,7 +6,7 @@ import { diameterFromGirth } from '../lib/fillerMath.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const shaftHalfT = (d) => clamp(12 + (d - 2) * 8, 8, 40); // shaft Ø → px
 const glansHalfT = (d) => clamp(13 + (d - 2) * 9, 9, 50); // glans Ø → px (separate)
-const lenToPx = (L) => clamp(108 + (L - 6) * 6.5, 100, 198); // length cm → shaft px
+const lenToPx = (L) => clamp(108 + (L - 6) * 6.5, 100, 240); // length cm → shaft px (10in=25.4cm→234px fits viewBox 380)
 
 function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
   const xS = x0 + len;
@@ -23,6 +23,7 @@ function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
 }
 
 export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', t }) {
+  const tr = typeof t === 'function' ? t : (k) => k; // i18n — EN mode translates all labels
   const d0 = est?.d0 ?? diameterFromGirth(10.4);
   const dLo = est?.d1Low ?? d0;
   const dg0 = est?.glans?.dg0 ?? d0;
@@ -49,7 +50,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
   return (
     <svg viewBox="0 0 380 236" width="100%" role="img"
-         aria-label="ภาพจำลองด้านข้างและหน้าตัด ก่อนและหลังฉีดฟิลเลอร์">
+         aria-label={tr('g2dAria')}>
       <defs>
         <linearGradient id="fg-skin" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#e0a98d" />
@@ -63,7 +64,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
         </radialGradient>
       </defs>
 
-      <text x="6" y="13" fontSize="11" fill={lab}>ด้านข้าง</text>
+      <text x="6" y="13" fontSize="11" fill={lab}>{tr('g2dSide')}</text>
 
       {/* after — skin body (mushroom) */}
       <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1.6" />
@@ -76,12 +77,12 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
       <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
 
       {/* cross-section (shaft) */}
-      <text x="6" y="150" fontSize="11" fill={lab}>หน้าตัด (ลำตัว)</text>
+      <text x="6" y="150" fontSize="11" fill={lab}>{tr('g2dCross')}</text>
       <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1.5" />
       <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
-      <text x={ccx + csA + 14} y={ccy - 14} fontSize="11" fill="#ef4444">🔴 ลำตัวโตตามฟิลเลอร์ลำตัว</text>
-      <text x={ccx + csA + 14} y={ccy + 6} fontSize="11" fill="#f59e0b">🟠 หัวโตตามฟิลเลอร์หัว</text>
-      <text x={ccx + csA + 14} y={ccy + 26} fontSize="11" fill={labStrong}>ขอบแดง = หลังฉีด · ประ = เดิม</text>
+      <text x={ccx + csA + 14} y={ccy - 14} fontSize="11" fill="#ef4444">{tr('g2dLegShaft')}</text>
+      <text x={ccx + csA + 14} y={ccy + 6} fontSize="11" fill="#f59e0b">{tr('g2dLegGlans')}</text>
+      <text x={ccx + csA + 14} y={ccy + 26} fontSize="11" fill={labStrong}>{tr('g2dLegKey')}</text>
     </svg>
   );
 }

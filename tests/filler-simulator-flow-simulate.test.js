@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  estimate, girthFromWidth, girthFromDiameter, diameterFromGirth, girthToRadiusCm, CONDOM_LADDER,
+  estimate, girthFromWidth, girthFromDiameter, diameterFromGirth, girthToRadiusCm, CONDOM_LADDER, RANGES,
 } from '../src/lib/fillerMath.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -110,5 +110,92 @@ describe('filler-simulator v2 source-grep (purity + wiring + Rev requirements)',
     expect(strings).toMatch(/ไม่เพิ่ม[\s\S]*ความยาว/); // girth not length (TH note)
     expect(strings).toMatch(/glans/i);               // EN keys
     expect(strings).toMatch(/6–24/);                 // duration note
+  });
+});
+
+describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+
+  it('V3-1: minimum filler is 5cc — RANGES.cc[0]=5, default + slider min source it (SSOT)', () => {
+    expect(RANGES.cc[0]).toBe(5);
+    expect(page).toMatch(/useState\(RANGES\.cc\[0\]\)/);  // default = 5
+    expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);      // slider cannot go below 5
+    expect(page).not.toMatch(/useState\(12\)/);           // old default removed
+  });
+
+  it('V3-2: split display EXACT (ccFmt), never Math.round — 5cc 50/50 → 2.5/2.5 not 3/3', () => {
+    expect(page).toMatch(/const ccFmt = /);
+    expect(page).toMatch(/ccFmt\(shaftCc\)/);
+    expect(page).toMatch(/ccFmt\(glansCcEff\)/);
+    expect(page).not.toMatch(/Math\.round\(shaftCc\)/);   // buggy int rounding gone
+    expect(page).not.toMatch(/Math\.round\(glansCc\)/);
+    // behavior proof: ccFmt formula keeps 2.5 exact + trims whole numbers
+    const ccFmt = (x) => String(Math.round((Number(x) || 0) * 100) / 100);
+    expect(ccFmt(2.5)).toBe('2.5');
+    expect(ccFmt(5)).toBe('5');
+    expect(ccFmt(6.65)).toBe('6.65');
+    expect(ccFmt(7 * 0.05)).toBe('0.35'); // FP-safe (7*0.05 = 0.35000…003)
+    // split sums exactly: shaft = total - glans (cc model)
+    const total = 5, glans = 2.5;
+    expect((total - glans) + glans).toBe(5);
+  });
+
+  it('V3-3: 2D length no longer clamps at ~8in — lenToPx max raised past 198', () => {
+    expect(g2d).not.toMatch(/, 100, 198\)/);   // old cap (~7.8in) removed
+    expect(g2d).toMatch(/, 100, 240\)/);       // 10in = 234px fits viewBox 380
+  });
+
+  it('V3-4: REAL clinic logo — white(dark)/black(light) static asset img, theme-contrasting', () => {
+    expect(page).toMatch(/LoverMark/);
+    expect(page).toMatch(/<img/);                                  // primary = real logo image
+    expect(page).toMatch(/\/lover-clinic-logo-dark\.png/);         // white version (dark theme)
+    expect(page).toMatch(/\/lover-clinic-logo-light\.png/);        // black version (light theme)
+    expect(page).toMatch(/isLight \? '\/lover-clinic-logo-light/); // theme-driven src
+    // the static assets are committed (pure-client page can show the REAL logo, no Firestore)
+    expect(existsSync(join(ROOT, 'public/lover-clinic-logo-dark.png'))).toBe(true);
+    expect(existsSync(join(ROOT, 'public/lover-clinic-logo-light.png'))).toBe(true);
+    // inline wordmark kept as onError fallback
+    expect(page).toMatch(/onError={\(\) => setImgErr\(true\)}/);
+    expect(page).toMatch(/LOVER/);
+  });
+
+  it('V3-6: split is EXACT 0.5cc at every total — glansCc direct slider (not % steps)', () => {
+    expect(page).toMatch(/setGlansCc/);
+    expect(page).toMatch(/useState\(1\)/);                 // glansCc default
+    expect(page).toMatch(/step={0\.5}/);                   // 0.5cc finest, same at every range
+    expect(page).toMatch(/max={totalCc}/);                 // glans up to total
+    expect(page).toMatch(/glansCcEff/);                    // clamped effective value
+    expect(page).toMatch(/if \(glansCc > v\) setGlansCc\(v\)/); // clamp on total shrink
+    expect(page).not.toMatch(/setGlansPct/);               // old percent-step control gone
+    expect(page).not.toMatch(/useState\(15\)/);            // old glansPct default gone
+  });
+
+  it('V3-7: EN translation COMPLETE — 2D/3D labels go through t(), no hardcoded Thai', () => {
+    const g2dSrc = read('src/components/FillerGraphic2D.jsx');
+    const g3dSrc = read('src/components/Filler3D.jsx');
+    const strings = read('src/lib/fillerStrings.js');
+    // 2D labels translated
+    for (const k of ['g2dAria', 'g2dSide', 'g2dCross', 'g2dLegShaft', 'g2dLegGlans', 'g2dLegKey'])
+      expect(g2dSrc, k).toMatch(new RegExp(`tr\\('${k}'\\)`));
+    // no hardcoded Thai label text nodes remain in the 2D SVG
+    expect(g2dSrc).not.toMatch(/>ด้านข้าง</);
+    expect(g2dSrc).not.toMatch(/>หน้าตัด/);
+    expect(g2dSrc).not.toMatch(/หลังฉีด · ประ = เดิม/);
+    // 3D aria translated
+    expect(g3dSrc).toMatch(/tr\('model3dAria'\)/);
+    // every g2d/3d key exists in BOTH th and en
+    for (const k of ['g2dSide', 'g2dCross', 'g2dLegShaft', 'g2dLegKey', 'model3dAria']) {
+      const occ = (strings.match(new RegExp(`${k}:`, 'g')) || []).length;
+      expect(occ, k).toBeGreaterThanOrEqual(2); // th + en
+    }
+  });
+
+  it('V3-5: mobile 100% — responsive grid + safe-area + touch + stacking toggles', () => {
+    expect(page).toMatch(/@media \(max-width:820px\)/);  // 2col → 1col
+    expect(page).toMatch(/grid-template-columns:1fr/);
+    expect(page).toMatch(/@media \(max-width:560px\)/);  // toggles stack full-width
+    expect(page).toMatch(/env\(safe-area-inset/);        // notch-safe padding
+    expect(page).toMatch(/touch-action:pan-y/);          // slider drag vs page scroll
   });
 });

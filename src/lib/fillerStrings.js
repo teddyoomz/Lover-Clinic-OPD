@@ -31,6 +31,14 @@ export const STRINGS = {
     unitCm: 'ซม.',
     unitIn: 'นิ้ว',
     cc: 'cc',
+    // graphic (2D/3D) labels — i18n so EN mode is fully translated
+    g2dAria: 'ภาพจำลองด้านข้างและหน้าตัด ก่อนและหลังฉีดฟิลเลอร์',
+    g2dSide: 'ด้านข้าง',
+    g2dCross: 'หน้าตัด (ลำตัว)',
+    g2dLegShaft: '🔴 ลำตัวโตตามฟิลเลอร์ลำตัว',
+    g2dLegGlans: '🟠 หัวโตตามฟิลเลอร์หัว',
+    g2dLegKey: 'ขอบแดง = หลังฉีด · ประ = เดิม',
+    model3dAria: 'โมเดล 3 มิติ ลากเพื่อหมุน',
   },
   en: {
     title: 'Penile Filler Size Simulator',
@@ -62,6 +70,13 @@ export const STRINGS = {
     unitCm: 'cm',
     unitIn: 'in',
     cc: 'cc',
+    g2dAria: 'Side-view and cross-section, before and after filler',
+    g2dSide: 'Side view',
+    g2dCross: 'Cross-section (shaft)',
+    g2dLegShaft: '🔴 Shaft grows with shaft filler',
+    g2dLegGlans: '🟠 Glans grows with glans filler',
+    g2dLegKey: 'Red outline = after · dashed = before',
+    model3dAria: '3D model — drag to rotate',
   },
 };
 

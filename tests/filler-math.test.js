@@ -141,7 +141,7 @@ describe('fillerMath — constants/ranges sanity', () => {
   it('k + ranges + ladder', () => {
     expect(K_REALISTIC).toBe(2.37);
     expect(K_OPTIMISTIC).toBe(3.32);
-    expect(RANGES.cc).toEqual([1, 50]);
+    expect(RANGES.cc).toEqual([5, 50]); // v3 — clinical minimum 5cc (cannot go below)
     expect(RANGES.lengthCm).toEqual([6.35, 25.4]); // 2.5–10 in
     expect(CONDOM_LADDER.map((r) => r.w)).toEqual([45, 49, 52, 54, 56, 58, 60, 64]);
   });

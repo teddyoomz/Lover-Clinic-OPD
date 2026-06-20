@@ -14,7 +14,7 @@ export const CM_PER_INCH = 2.54;
 export const RANGES = {
   lengthCm: [6.35, 25.4], // 2.5 in .. 10 in — both units cap at 10 in (25.4 cm)
   diameterCm: [2.2, 4.1],
-  cc: [1, 50], // TOTAL filler (split between shaft + glans)
+  cc: [5, 50], // TOTAL filler — clinical minimum 5cc (cannot go below); split shaft + glans
 };
 
 // Glans (head) augmentation — empirical, research-grounded (approximate, ±~30%).

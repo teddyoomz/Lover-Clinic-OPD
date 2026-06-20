@@ -38,7 +38,8 @@ function buildModel(group, material, est, lengthCm) {
   group.add(base);
 }
 
-export default function Filler3D({ est, lengthCm = 11 }) {
+export default function Filler3D({ est, lengthCm = 11, t }) {
+  const tr = typeof t === 'function' ? t : (k) => k;
   const mountRef = useRef(null);
   const refs = useRef({});
 
@@ -110,6 +111,6 @@ export default function Filler3D({ est, lengthCm = 11 }) {
   }, [est, lengthCm]);
 
   return (
-    <div ref={mountRef} style={{ width: '100%', height: 300, cursor: 'grab' }} aria-label="โมเดล 3 มิติ ลากเพื่อหมุน" />
+    <div ref={mountRef} style={{ width: '100%', height: 300, cursor: 'grab' }} aria-label={tr('model3dAria')} />
   );
 }
