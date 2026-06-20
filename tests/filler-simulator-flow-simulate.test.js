@@ -228,8 +228,8 @@ describe('filler-simulator v4 — centered header + result colors + dashed 2D + 
   });
 
   it('V4-3: 2D "after" outline is THIN + DASHED + red (small growth not masked)', () => {
-    // mushroom + cross-section "after" strokes: thin (1), dashed, kept red
-    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || [];
+    // mushroom + cross-section "after" strokes: BOLD (2.6), dashed, vivid red (v7)
+    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4"/g) || [];
     expect(afterStrokes.length).toBeGreaterThanOrEqual(2); // side-view + cross-section
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.6"/); // old thick solid gone
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.5"/);
@@ -287,7 +287,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
   it('V5-3: 2D split into auto-scale sections (side-view + cross-section) without losing dashed-after / i18n / damped head', () => {
     expect(g2d).toMatch(/0 0 \$\{SIDE_W\} \$\{SIDE_H\}/);                         // v5.4: side-view own viewBox
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                                // v5.4: cross-section own square viewBox
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
@@ -297,8 +297,8 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
   });
 
   it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
-    // after-edge is now a FAINT red dash (low opacity) — both after-strokes carry strokeOpacity
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
+    // after-edge is a BOLD red dash (full opacity, v7) — both after-strokes carry strokeOpacity="1"
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
     // reflection highlight ellipse removed from the shaft
     expect(g2d).not.toMatch(/rgba\(255,242,234/);
     // equal column heights: stretch + graphic card is a flex column whose SVG wrapper fills
@@ -411,7 +411,7 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                   // own square SVG (v5.4)
     expect(g2d).toMatch(/const csA = clamp\(dLo \* 18, 48, 100\)/); // bigger + diameter-scaled (was *12, 22, 72)
     // V4-3 dashed-after stroke shape UNCHANGED → side-view + cross-section count still ≥2
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('V5.3-4: subtitle copy → "เพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น" (TH) + EN mirror; disclaimer keeps เพื่อการศึกษา', () => {
@@ -513,12 +513,12 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
   });
 });
 
-describe('filler-simulator v5.6 — red dashed breathe+glow (Calm, fade to invisible) + fainter baseline', () => {
+describe('filler-simulator v5.6→v7 — red dashed: BOLD + ALWAYS-visible + pulsing glow (was too faint) + fainter baseline', () => {
   const g2d = read('src/components/FillerGraphic2D.jsx');
 
   it('V5.6-1: red outline animates as its OWN fill:none element (side + cross) — NOT the skin body', () => {
     // the breathe class lives on fill:none OUTLINE-only elements → opacity/glow touch the LINE, not the skin fill
-    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBe(2);
+    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
     // ANTI-REGRESSION (the v5.6-first bug): the SKIN-FILLED body must NEVER carry the animation, else the WHOLE shape fades
     expect(g2d).not.toMatch(/fill="url\(#fg-skin\)" className="fg-revBreathe"/);
     expect(g2d).not.toMatch(/fill="url\(#fg-cs\)" className="fg-revBreathe"/);
@@ -527,21 +527,24 @@ describe('filler-simulator v5.6 — red dashed breathe+glow (Calm, fade to invis
     expect(g2d).toMatch(/fill="url\(#fg-cs\)" \/>/);
   });
 
-  it('V5.6-2: keyframes — fgRevBreathe (opacity hold→0) + fgRevGlow (drop-shadow→none) + 3.6s loop', () => {
-    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%\{opacity:1\} 38%\{opacity:1\} 62%\{opacity:0\} 72%\{opacity:0\} 100%\{opacity:1\} \}/);
-    expect(g2d).toMatch(/@keyframes fgRevGlow \{[^}]*drop-shadow\(0 0 4px #ef4444\) drop-shadow\(0 0 9px #ef4444\) drop-shadow\(0 0 15px rgba\(239,68,68,0\.55\)\)/);  // v6: stronger glow
-    expect(g2d).toMatch(/55%\{filter:none\} 72%\{filter:none\}/);   // fully un-lit while invisible
-    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.6s ease-in-out infinite, fgRevGlow 3\.6s ease-in-out infinite; \}/);
+  it('V7-2: line stays VISIBLE (opacity 1↔0.85, never 0) + glow ALWAYS-ON pulsing (never filter:none) + 2.6s loop', () => {
+    // v7 (2026-06-20): the red line was barely visible — opacity faded to 0 + strokeOpacity 0.6 + 1px.
+    // Now it stays clearly visible (opacity dips only to 0.85) with an always-on pulsing red glow.
+    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%,100%\{opacity:1\} 50%\{opacity:0\.85\} \}/);
+    expect(g2d).toMatch(/@keyframes fgRevGlow \{ 0%,100%\{filter:drop-shadow[^}]*\} 50%\{filter:drop-shadow/);
+    expect(g2d).not.toMatch(/filter:none/);          // glow NEVER fully off (no more invisible trough)
+    expect(g2d).not.toMatch(/62%\{opacity:0\}/);     // line NEVER fades to 0
+    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 2\.6s ease-in-out infinite, fgRevGlow 2\.6s ease-in-out infinite; \}/);
   });
 
   it('V5.6-3: prefers-reduced-motion guard disables the animation (a11y — static = original look)', () => {
     expect(g2d).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.fg-revBreathe \{ animation: none; \} \}/);
   });
 
-  it('V5.6-4: lit peak unchanged (strokeOpacity 0.6 kept) + 2D-only (Filler3D has no dashed line, untouched)', () => {
+  it('V7-4: red line is FULL opacity (strokeOpacity 1) at all times + 2D-only (Filler3D has no dashed line, untouched)', () => {
     const g3d = read('src/components/Filler3D.jsx');
     expect(g3d).not.toMatch(/fg-revBreathe/);                                  // 3D untouched
-    expect((g2d.match(/strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);  // both after-strokes vivid red
   });
 });
 

@@ -93,9 +93,9 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', gap: 12 }}>
       <style>{`
-        @keyframes fgRevBreathe { 0%{opacity:1} 38%{opacity:1} 62%{opacity:0} 72%{opacity:0} 100%{opacity:1} }
-        @keyframes fgRevGlow { 0%{filter:drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 15px rgba(239,68,68,0.55))} 38%{filter:drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 15px rgba(239,68,68,0.55))} 55%{filter:none} 72%{filter:none} 100%{filter:drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 15px rgba(239,68,68,0.55))} }
-        .fg-revBreathe { animation: fgRevBreathe 3.6s ease-in-out infinite, fgRevGlow 3.6s ease-in-out infinite; }
+        @keyframes fgRevBreathe { 0%,100%{opacity:1} 50%{opacity:0.85} }
+        @keyframes fgRevGlow { 0%,100%{filter:drop-shadow(0 0 3px #ff3b3b) drop-shadow(0 0 8px rgba(255,59,59,0.95)) drop-shadow(0 0 17px rgba(255,59,59,0.6))} 50%{filter:drop-shadow(0 0 6px #ff3b3b) drop-shadow(0 0 15px #ff3b3b) drop-shadow(0 0 28px rgba(255,59,59,0.85))} }
+        .fg-revBreathe { animation: fgRevBreathe 2.6s ease-in-out infinite, fgRevGlow 2.6s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) { .fg-revBreathe { animation: none; } }
       `}</style>
       {/* side view */}
@@ -112,7 +112,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           {/* after — skin body (mushroom), SOLID + static (never animates) */}
           <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" />
           {/* after — red DASHED outline ONLY (fill:none) → breathe+glow animates the LINE, not the body */}
-          {showAfter && <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />}
+          {showAfter && <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1" />}
           {/* corona ridge */}
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
@@ -134,7 +134,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
             </radialGradient>
           </defs>
           <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" />
-          {showAfter && <circle cx={ccx} cy={ccy} r={csA} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />}
+          {showAfter && <circle cx={ccx} cy={ccy} r={csA} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1" />}
           {showBaseline && <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
