@@ -5,12 +5,13 @@
 
 export const PI = Math.PI;
 
-// girth model calibration (geometry × k), anchored at condom Regular 52 (C0=10.4),
-// L=11, V=16cc -> girth band +2.0 / +2.8 cm. (research: ~+2.5cm @16cc, flaccid)
-// written as integer fractions (value-identical) so the build obfuscator's numbersToExpressions
-// hides them — the literal calibration values never appear in clear in the shipped bundle.
-export const K_REALISTIC = 237 / 100;
-export const K_OPTIMISTIC = 332 / 100;
+// girth model calibration (geometry × k). RCT (16.4mL HA, baseline girth 7.87cm):
+// +2.5cm @1mo / +1.9 @6mo / +1.4 @18mo (J Clin Med 2020, PMC7230452) → implied efficiency
+// k ≈ 1.7–2.5. v6: tightened to k 1.8 (durable ~6mo) – 2.3 (early-peak ~1mo) — narrower +
+// clinically anchored (was 2.37–3.32, too wide → looked unreliable). Integer fractions
+// (value-identical) so the build obfuscator's numbersToExpressions hides the literal values.
+export const K_REALISTIC = 180 / 100;  // durable (~6mo) — low end of the girth band
+export const K_OPTIMISTIC = 230 / 100; // early-peak (~1mo) — high end of the girth band
 export const CM_PER_INCH = 254 / 100;
 
 export const RANGES = {
@@ -67,9 +68,21 @@ export function condomIndexForGirth(girthCm) {
   }
   return bi;
 }
+// Beyond the named ladder, sizes continue in +2mm steps (66, 68, 70, 72). Real ISO products
+// run 45–72mm, so 66–72 are REAL numbered sizes; "เกินมาตรฐาน 🔥" fires only past 72 (genuinely
+// beyond any product). User directive 2026-06-20: compute the real size past XXL 64, not capped.
+export const LADDER_MAX_W = CONDOM_LADDER[CONDOM_LADDER.length - 1].w; // 64
+export const BEYOND_STEP = 2;
+export const REAL_MAX_W = 72; // largest real ISO nominal width — เกินมาตรฐาน past this
 export function condomForGirth(girthCm) {
+  const req = widthFromGirth(girthCm); // nominal width needed (mm) = girth * 5
+  if (req >= LADDER_MAX_W + BEYOND_STEP) {
+    const w = Math.floor(req / BEYOND_STEP) * BEYOND_STEP; // floor to the +2 grid (conservative)
+    const index = (CONDOM_LADDER.length - 1) + (w - LADDER_MAX_W) / BEYOND_STEP; // continued index → sizesUp stays meaningful
+    return { index, label: String(w), w, beyond: w > REAL_MAX_W }; // เกินมาตรฐาน only past 72mm
+  }
   const index = condomIndexForGirth(girthCm);
-  return { index, label: CONDOM_LADDER[index].label, w: CONDOM_LADDER[index].w };
+  return { index, label: CONDOM_LADDER[index].label, w: CONDOM_LADDER[index].w, beyond: false };
 }
 
 // geometric cylinder-shell growth (under-predicts real -> multiplied by k below)

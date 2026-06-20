@@ -4,6 +4,7 @@
 // v5.4: AUTO-SCALE — three flex sections (side-view SVG · cross-section SVG · HTML legend) that
 //       DISTRIBUTE to fill the card height on every device (no dead bands). Side-view auto-stretches
 //       length→width; cross-section scales with the container; legend is real HTML (never overflows).
+import { useState } from 'react';
 import { diameterFromGirth, RANGES } from '../lib/fillerMath.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -32,8 +33,30 @@ function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
     + ` Q${x0 - 16} ${cy} ${x0} ${cy - tShaft} Z`;
 }
 
+// dashed-line toggle chip — doubles as the legend (dashed swatch + label); ≥44px tap target.
+function DashToggle({ on, onClick, line, dash, label, accent, labStrong, lab }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on} aria-label={label} title={label}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44, padding: '8px 12px',
+        borderRadius: 9, cursor: 'pointer', touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
+        border: `1px solid ${on ? accent + '66' : 'rgba(255,255,255,0.12)'}`,
+        background: on ? accent + '14' : 'transparent',
+        color: on ? labStrong : lab, opacity: on ? 1 : 0.5, fontSize: 12, lineHeight: 1,
+        transition: 'opacity .15s, border-color .15s, background .15s',
+      }}>
+      <svg width="22" height="6" aria-hidden="true" style={{ flex: 'none' }}>
+        <line x1="1" y1="3" x2="21" y2="3" stroke={line} strokeWidth="2" strokeDasharray={dash} strokeOpacity={on ? 1 : 0.55} />
+      </svg>
+      {label}
+    </button>
+  );
+}
+
 export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', t }) {
   const tr = typeof t === 'function' ? t : (k) => k; // i18n — EN mode translates all labels
+  const [showAfter, setShowAfter] = useState(true);     // toggle red dashed "หลังฉีด" outline
+  const [showBaseline, setShowBaseline] = useState(true); // toggle faint dashed "เดิม" outline
   const d0 = est?.d0 ?? diameterFromGirth(10.4);
   const dLo = est?.d1Low ?? d0;
   const dg0 = est?.glans?.dg0 ?? d0;
@@ -71,7 +94,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
     <div style={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', gap: 12 }}>
       <style>{`
         @keyframes fgRevBreathe { 0%{opacity:1} 38%{opacity:1} 62%{opacity:0} 72%{opacity:0} 100%{opacity:1} }
-        @keyframes fgRevGlow { 0%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} 38%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} 55%{filter:none} 72%{filter:none} 100%{filter:drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444)} }
+        @keyframes fgRevGlow { 0%{filter:drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 15px rgba(239,68,68,0.55))} 38%{filter:drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 15px rgba(239,68,68,0.55))} 55%{filter:none} 72%{filter:none} 100%{filter:drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 15px rgba(239,68,68,0.55))} }
         .fg-revBreathe { animation: fgRevBreathe 3.6s ease-in-out infinite, fgRevGlow 3.6s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) { .fg-revBreathe { animation: none; } }
       `}</style>
@@ -89,11 +112,11 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           {/* after — skin body (mushroom), SOLID + static (never animates) */}
           <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" />
           {/* after — red DASHED outline ONLY (fill:none) → breathe+glow animates the LINE, not the body */}
-          <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
+          {showAfter && <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />}
           {/* corona ridge */}
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
-          <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
+          {showBaseline && <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="192" y="66" width="96" height="36" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         </svg>
@@ -111,18 +134,28 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
             </radialGradient>
           </defs>
           <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" />
-          <circle cx={ccx} cy={ccy} r={csA} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
-          <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
+          {showAfter && <circle cx={ccx} cy={ccy} r={csA} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />}
+          {showBaseline && <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         </svg>
       </div>
 
-      {/* legend — HTML (i18n, color-keyed, never overflows on any device) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, lineHeight: 1.4 }}>
-        <span style={{ color: '#ef4444' }}>{tr('g2dLegShaft')}</span>
-        <span style={{ color: '#f59e0b' }}>{tr('g2dLegGlans')}</span>
-        <span style={{ color: labStrong }}>{tr('g2dLegKey')}</span>
+      {/* legend + dash toggles — balanced row: color-keys (left) · dashed-line toggles (right,
+          the circled corner) that DOUBLE as the เส้นประ legend. Auto-scales: flex-wrap on narrow,
+          ≥44px tap targets on desktop/iPad/mobile. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, rowGap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, lineHeight: 1.4, minWidth: 0 }}>
+          <span style={{ color: '#ef4444' }}>{tr('g2dLegShaft')}</span>
+          <span style={{ color: '#f59e0b' }}>{tr('g2dLegGlans')}</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+          <span style={{ fontSize: 10.5, color: lab, letterSpacing: '0.3px' }}>{tr('g2dDashToggleHint')}</span>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <DashToggle on={showAfter} onClick={() => setShowAfter((v) => !v)} line="#ef4444" accent="#ef4444" dash="4 3" label={tr('g2dToggleAfter')} labStrong={labStrong} lab={lab} />
+            <DashToggle on={showBaseline} onClick={() => setShowBaseline((v) => !v)} line="#9b938f" accent="#9b938f" dash="5 4" label={tr('g2dToggleBaseline')} labStrong={labStrong} lab={lab} />
+          </div>
+        </div>
       </div>
     </div>
   );

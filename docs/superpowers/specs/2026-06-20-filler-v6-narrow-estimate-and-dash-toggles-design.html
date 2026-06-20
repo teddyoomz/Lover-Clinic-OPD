@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler v6 — narrowed estimate (cited) + ladder-to-72 + 2D dash toggles · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: .3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: .2em; margin-top: 2em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background:#f3f3f3; padding:1px 4px; border-radius:3px; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: .5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: .5em .8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .mockup { background:#0a0a0a; border:1px solid #262626; border-radius:8px; padding:1em; margin:1em 0; }
+    .mklabel { font-size:.72em; text-transform:uppercase; letter-spacing:.05em; color:#9b938f; margin-bottom:.5em; }
+    .col2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .rc { background:#0e0e0e; border:1px solid #2a2a2a; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+    .rc h4 { margin:0 0 4px; font-size:11.5px; color:#8a8a8a; font-weight:600; }
+    .rc .old { font-size:11.5px; color:#e8908a; margin:0 0 3px; }
+    .rc .new { font-size:19px; font-weight:800; color:#3ddc84; margin:0; }
+    .rc .d { font-size:11.5px; margin-top:3px; }
+    .gold{color:#fbbf24}.green{color:#3ddc84}
+    .chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;border:1px solid #333;background:#161616;font-size:12px;color:#e5e5e5}
+    .chip.red{border-color:#ef444466;background:#1c0d0d}.chip.faint{border-color:#55555566}
+    .sw{width:20px;border-top:2px dashed #ef4444;display:inline-block}.sw.f{border-top-color:#9b938f;opacity:.7}
+  </style>
+</head>
+<body>
+<h1>Filler v6 — narrowed estimate (cited) + ladder-to-72 + 2D dash toggles</h1>
+<blockquote><strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user ("go") · <strong>Page:</strong> <code>?play=filler</code> (pure-client) · <strong>Files:</strong> <code>fillerMath.js</code>, <code>FillerSimulator.jsx</code>, <code>FillerGraphic2D.jsx</code>, <code>fillerStrings.js</code></blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The estimate range read too wide to be credible — e.g. 7"/30cc → girth 12.7–13.6 cm → condom "XL 60 – 68" (~4 sizes). User: "เหวี่ยงกว้าง … ดูไม่น่าเชื่อถือ … ตรวจสอบสูตรทั้งวิทยาศาสตร์/คณิตศาสตร์ + มาตรฐานถุงยาง + บทวิชาการรองรับ." Plus 2D-illustration UX: toggle the dashed outlines, relocate the legend, stronger red glow, smart auto-scale across devices.</p>
+
+<h2>Formula audit (cited)</h2>
+<ul>
+  <li><strong>Geometry CORRECT.</strong> ISO 4074: nominal width = ½ circumference → our <code>width_mm = girth_cm × 5</code> is exact. Cross-section model <code>C₁ = √(C₀² + 4πV/L)</code> is sound (A = C²/4π, ΔA = V/L).</li>
+  <li><strong>k-multipliers were too high + too wide.</strong> RCT (16.4 mL HA, baseline girth 7.87 cm): +2.5 cm @1mo, +1.9 @6mo, +1.4 @18mo → implied efficiency <code>k ≈ 1.7–2.5</code> (peak→durable). Old <code>k = 2.37–3.32</code> overshoots (3.32 &gt; even the 1-mo peak); the 40% spread caused the wide range.</li>
+  <li><strong>A1 fix:</strong> recalibrate to <code>k = 1.8–2.3</code> (durable→peak). Same 7"/30cc → girth 12.1–12.6 cm → <strong>XL 60</strong>. Narrow + clinically anchored.</li>
+  <li><strong>Honest caveat:</strong> real per-individual SD is ±1.3 cm (large) — the narrow band is the <em>typical/expected</em> result; the existing "ผลลัพธ์แตกต่างกันในแต่ละบุคคล" disclaimer covers individual variation.</li>
+  <li><strong>Condom ladder:</strong> real ISO products span 45–72 mm (MyONE to 64; precise sizing to ~72). So 66–72 are REAL sizes → "เกินมาตรฐาน 🔥" now fires only past <strong>72</strong>.</li>
+</ul>
+<p><strong>Citations:</strong>
+<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7230452/">HA penile augmentation RCT (J Clin Med 2020, PMC7230452)</a> ·
+<a href="https://mdcpp.com/doc/standard/ISO4074-2015(E).pdf">ISO 4074</a> ·
+<a href="https://www.mistersize.ie/blog/sex/nominal-width-of-condoms-what-is-it">nominal width = ½ circumference</a> ·
+<a href="https://factually.co/fact-checks/health/condom-models-nominal-widths-where-to-buy-by-country-ee7d26">45–72 mm real range</a></p>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mklabel">A1 — narrowed estimate (7"/30cc): before → after</div>
+  <div class="col2">
+    <div>
+      <div class="rc"><h4>เส้นรอบวง (ลำตัว)</h4><p class="old">เดิม 10.4 ซม.</p><p class="new">→ 12.7 – 13.6 ซม.</p><div class="d gold">+2.3 ถึง +3.2</div></div>
+      <div class="rc"><h4>ขนาดถุงยางอนามัยที่เหมาะสม</h4><p class="old">เดิม Regular 52</p><p class="new">→ XL 60 – 68</p><div class="d gold">เกินมาตรฐาน 🔥 (กว้าง 4 ไซซ์)</div></div>
+      <div style="text-align:center;color:#e8908a;font-size:12px">ก่อน · k 2.37–3.32</div>
+    </div>
+    <div>
+      <div class="rc"><h4>เส้นรอบวง (ลำตัว)</h4><p class="old">เดิม 10.4 ซม.</p><p class="new">→ 12.1 – 12.6 ซม.</p><div class="d green">+1.7 ถึง +2.2</div></div>
+      <div class="rc"><h4>ขนาดถุงยางอนามัยที่เหมาะสม</h4><p class="old">เดิม Regular 52</p><p class="new">→ XL 60</p><div class="d green">+4 ขนาด</div></div>
+      <div style="text-align:center;color:#3ddc84;font-size:12px">หลัง · k 1.8–2.3 (อิงงานวิจัย)</div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mklabel">B — 2D card bottom: dashed toggles (double as legend) in the circled corner</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:#0e0e0e;border:1px solid #262626;border-radius:12px;padding:14px">
+    <div style="font-size:11.5px;color:#9b938f;line-height:1.7">🔴 ลำตัวขยายตามฟิลเลอร์ลำตัว<br>🟠 ส่วนหัวขยายตามฟิลเลอร์ส่วนหัว</div>
+    <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+      <div style="font-size:10px;color:#6b6b6b">เส้นประ (แตะเปิด/ปิด)</div>
+      <span class="chip red"><span class="sw"></span> หลังฉีด</span>
+      <span class="chip faint"><span class="sw f"></span> เดิม</span>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<table>
+  <tr><th>#</th><th>Estimate (A1) + ladder</th></tr>
+  <tr><td>1</td><td><code>estimate()</code>: girth gain <code>g = √(C₀²+4πV/L) − C₀</code>; <code>deltaLow = K_REALISTIC(1.8)·g</code>, <code>deltaHigh = K_OPTIMISTIC(2.3)·g</code>.</td></tr>
+  <tr><td>2</td><td><code>condomForGirth(girth)</code>: req = girth×5. ≤64 → named ladder (floor). 66–72 → real size, number label, beyond:false (+N ขนาด). &gt;72 → beyond:true (เกินมาตรฐาน 🔥).</td></tr>
+  <tr><td>3</td><td>ResultCard: narrower girth range + condom size; delta = เกินมาตรฐาน only when &gt;72.</td></tr>
+</table>
+<table>
+  <tr><th>#</th><th>2D dash toggle (B)</th></tr>
+  <tr><td>1</td><td>FillerGraphic2D holds <code>showAfter</code> + <code>showBaseline</code> state (default true).</td></tr>
+  <tr><td>2</td><td>Bottom row: color-keys left · 2 toggle chips right (dashed swatch + label = the legend). Tap → flip state.</td></tr>
+  <tr><td>3</td><td>Red dashed outline (×2 svgs) + faint baseline (×2) render conditionally on the state. Red outline keeps breathe + a STRONGER glow. 44px tap targets, flex-wrap auto-scale.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&A)</h2>
+<ul>
+  <li><strong>A1:</strong> recalibrate k 2.37/3.32 → 1.8/2.3 (RCT-anchored tight band).</li>
+  <li><strong>Ladder-to-72:</strong> 66–72 = real sizes; เกินมาตรฐาน 🔥 only past 72.</li>
+  <li><strong>B toggles:</strong> dashed-line toggles double as the legend, in the bottom-right corner; color-keys move left.</li>
+  <li><strong>Glow:</strong> stronger red drop-shadow (≈5+11px), still breathe + reduced-motion guard.</li>
+  <li><strong>Auto-scale:</strong> flex-wrap legend row + 44px tap targets, desktop/iPad/mobile.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>k = 1.8/2.3 in fillerMath; 7"/30cc result narrows to ~XL 60 (verified math + L1).</li>
+  <li>66–72 show as real numbered sizes (no เกินมาตรฐาน); &gt;72 shows เกินมาตรฐาน 🔥.</li>
+  <li>2D card: two toggle chips show/hide the red + faint dashed lines (both svgs); they double as the legend; color-keys on the left.</li>
+  <li>Stronger red glow visibly pops; reduced-motion still disables animation.</li>
+  <li>Toggles are ≥44px tap targets + layout reflows on desktop/iPad/mobile.</li>
+  <li>Tests green (recalibrated k + ladder-72 + toggle source-grep) + build clean + L1 real-browser.</li>
+</ol>
+
+<h2>Risks / Open</h2>
+<p>Narrow band under-represents true individual SD (±1.3cm) — mitigated by the disclaimer; it's the typical/expected outcome. None blocking.</p>
+</body>
+</html>

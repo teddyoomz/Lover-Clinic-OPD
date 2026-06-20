@@ -179,7 +179,7 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
     const g3dSrc = read('src/components/Filler3D.jsx');
     const strings = read('src/lib/fillerStrings.js');
     // 2D labels translated
-    for (const k of ['g2dAria', 'g2dSide', 'g2dCross', 'g2dLegShaft', 'g2dLegGlans', 'g2dLegKey'])
+    for (const k of ['g2dAria', 'g2dSide', 'g2dCross', 'g2dLegShaft', 'g2dLegGlans', 'g2dDashToggleHint', 'g2dToggleAfter', 'g2dToggleBaseline'])
       expect(g2dSrc, k).toMatch(new RegExp(`tr\\('${k}'\\)`));
     // no hardcoded Thai label text nodes remain in the 2D SVG
     expect(g2dSrc).not.toMatch(/>ด้านข้าง</);
@@ -501,10 +501,10 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
   });
 
   it('R9-9: calibration constants written as integer fractions (obfuscation-friendly, value-identical)', () => {
-    expect(math).toMatch(/K_REALISTIC = 237 \/ 100/);
-    expect(math).toMatch(/K_OPTIMISTIC = 332 \/ 100/);
-    expect(math).not.toMatch(/K_REALISTIC = 2\.37/);
-    // runtime value still exact (covered by filler-math.test.js: K_REALISTIC === 2.37)
+    expect(math).toMatch(/K_REALISTIC = 180 \/ 100/);   // v6: recalibrated 2.37→1.8 (RCT-anchored)
+    expect(math).toMatch(/K_OPTIMISTIC = 230 \/ 100/);  // v6: recalibrated 3.32→2.3
+    expect(math).not.toMatch(/K_REALISTIC = 1\.8;/);    // integer-fraction form, never the float literal
+    // runtime value still exact (covered by filler-math.test.js: K_REALISTIC === 1.8)
   });
 });
 
@@ -524,7 +524,7 @@ describe('filler-simulator v5.6 — red dashed breathe+glow (Calm, fade to invis
 
   it('V5.6-2: keyframes — fgRevBreathe (opacity hold→0) + fgRevGlow (drop-shadow→none) + 3.6s loop', () => {
     expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%\{opacity:1\} 38%\{opacity:1\} 62%\{opacity:0\} 72%\{opacity:0\} 100%\{opacity:1\} \}/);
-    expect(g2d).toMatch(/@keyframes fgRevGlow \{[^}]*drop-shadow\(0 0 3px #ef4444\) drop-shadow\(0 0 6px #ef4444\)/);
+    expect(g2d).toMatch(/@keyframes fgRevGlow \{[^}]*drop-shadow\(0 0 4px #ef4444\) drop-shadow\(0 0 9px #ef4444\) drop-shadow\(0 0 15px rgba\(239,68,68,0\.55\)\)/);  // v6: stronger glow
     expect(g2d).toMatch(/55%\{filter:none\} 72%\{filter:none\}/);   // fully un-lit while invisible
     expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.6s ease-in-out infinite, fgRevGlow 3\.6s ease-in-out infinite; \}/);
   });
@@ -537,5 +537,72 @@ describe('filler-simulator v5.6 — red dashed breathe+glow (Calm, fade to invis
     const g3d = read('src/components/Filler3D.jsx');
     expect(g3d).not.toMatch(/fg-revBreathe/);                                  // 3D untouched
     expect((g2d.match(/strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('filler-simulator v5.7 — condom size extends past XXL 64 (+2mm steps) + เกินมาตรฐาน tag', () => {
+  const math = read('src/lib/fillerMath.js');
+  const page = read('src/pages/FillerSimulator.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('V5.7-1: fillerMath.condomForGirth has the beyond-ladder branch (LADDER_MAX_W + BEYOND_STEP + floor + flag)', () => {
+    expect(math).toMatch(/export const LADDER_MAX_W = CONDOM_LADDER\[CONDOM_LADDER\.length - 1\]\.w/);
+    expect(math).toMatch(/export const BEYOND_STEP = 2/);
+    expect(math).toMatch(/if \(req >= LADDER_MAX_W \+ BEYOND_STEP\)/);
+    expect(math).toMatch(/Math\.floor\(req \/ BEYOND_STEP\) \* BEYOND_STEP/);
+    expect(math).toMatch(/label: String\(w\), w, beyond: w > REAL_MAX_W/);  // v6: เกินมาตรฐาน only past 72
+    expect(math).toMatch(/export const REAL_MAX_W = 72/);
+    expect(math).toMatch(/beyond: false/);   // in-ladder path flagged too
+  });
+
+  it('V5.7-2: behaviour — 66–72 real sizes (+2 grid, floor); เกินมาตรฐาน only past 72', () => {
+    expect(condomForGirth(13.2).w).toBe(66);
+    expect(condomForGirth(13.2).beyond).toBe(false);  // 66 is a real ISO size, not เกินมาตรฐาน
+    expect(condomForGirth(14.4).w).toBe(72);          // 72 = real ISO max
+    expect(condomForGirth(14.4).beyond).toBe(false);
+    expect(condomForGirth(17.5).w).toBe(86);          // 87.5 floor → 86
+    expect(condomForGirth(17.5).beyond).toBe(true);   // 86 > 72 → เกินมาตรฐาน
+    expect(condomForGirth(12.8).beyond).toBe(false);  // XXL 64 boundary stays standard
+    expect(condomForGirth(20).w).toBe(100);           // far beyond, not capped
+  });
+
+  it('V5.7-3: ResultCard delta shows เกินมาตรฐาน when result is beyond (not +N ขนาด)', () => {
+    expect(page).toMatch(/\(est\.condomLow\.beyond \|\| est\.condomHigh\.beyond\) \? t\('beyondStd'\) : sizesUp\(/);
+  });
+
+  it('V5.7-4: beyondStd string present (TH + EN, keeps "เกินมาตรฐาน")', () => {
+    expect(strings).toMatch(/beyondStd: 'เกินมาตรฐาน/);
+    expect(strings).toMatch(/beyondStd: 'beyond standard/);
+  });
+});
+
+describe('filler-simulator v6 — 2D dash toggles (double as legend) + stronger glow + auto-scale', () => {
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('V6-1: useState + showAfter/showBaseline toggle state', () => {
+    expect(g2d).toMatch(/import \{ useState \} from 'react'/);
+    expect(g2d).toMatch(/const \[showAfter, setShowAfter\] = useState\(true\)/);
+    expect(g2d).toMatch(/const \[showBaseline, setShowBaseline\] = useState\(true\)/);
+  });
+  it('V6-2: dashed lines render conditionally on the toggles (both svgs)', () => {
+    expect((g2d.match(/showAfter && </g) || []).length).toBe(2);    // side path + cross circle
+    expect((g2d.match(/showBaseline && </g) || []).length).toBe(2); // side baseline + cross baseline
+  });
+  it('V6-3: DashToggle chip — ≥44px tap target + touch-action; doubles as the legend (g2dLegKey span removed)', () => {
+    expect(g2d).toMatch(/function DashToggle/);
+    expect(g2d).toMatch(/minHeight: 44/);
+    expect(g2d).toMatch(/touchAction: 'manipulation'/);
+    expect((g2d.match(/<DashToggle /g) || []).length).toBe(2);
+    expect(g2d).not.toMatch(/tr\('g2dLegKey'\)/);   // toggles ARE the dashed legend now
+  });
+  it('V6-4: balanced legend row auto-scales (flex-wrap)', () => {
+    expect(g2d).toMatch(/flexWrap: 'wrap'/);
+  });
+  it('V6-5: toggle strings present (TH + EN)', () => {
+    expect(strings).toMatch(/g2dToggleAfter: 'หลังฉีด'/);
+    expect(strings).toMatch(/g2dToggleBaseline: 'เดิม'/);
+    expect(strings).toMatch(/g2dDashToggleHint: 'เส้นประ'/);
+    expect(strings).toMatch(/g2dToggleAfter: 'after'/);
   });
 });
