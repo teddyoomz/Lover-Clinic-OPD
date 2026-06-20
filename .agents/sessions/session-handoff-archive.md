@@ -5,6 +5,24 @@
 
 ---
 
+## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-16` → `2026-06-16` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-16 — ED follow-up v2 + intake-date preserve (B) + province fix — SHIPPED local, backfill APPLIED, NOT deployed
+
+master `9f2870f9` (=origin, 10 commits); prod `019df953` (PRE-v2). `/brainstorming`→spec→`/writing-plans`→`/executing-plans` (8 tasks) + B. **R1** read-only confirm card on the follow-up link (`confirmInfo` snapshot; no rule change; editable fallback). **R2** session pill removed. **R3** `supersedePendingFollowups` (latest-link-only/customer+branch). **R4** TFP note + CDV ED box show each round date (dd/mm/yyyy พ.ศ.) + "วันนี้". **🔴 province bug** — unconditional `if(!province)` BLOCKED follow-up submit on prod; gated to `isIntake` (only L1 caught it — L2/admin-SDK bypass client validation). **B** intake `assessmentDate` dropped by the projection (0/154; AV194/V141 class) → preserved end-to-end (kiosk snake→camel; addCustomer stamps once at CREATE; edit round-trips) + **Rule-M backfill APPLIED** (154; 29 exact intake-session, 125 createdAt; idempotent; LC-82→2026-05-20). Verified: full vitest **16542/0** + build clean + Rule Q **L1** (anon link confirm-card + province-submit success) + **L2 13/0** real prod + flow-sim 6/0 + 11 V21/contract fixups. Honest gap: backend-authed pixel render (CDV box + TFP "วันนี้") = USER hands-on after deploy. Frontend-only → vercel-only, no Probe-Deploy-Probe. Detail → checkpoint `.agents/sessions/2026-06-16-ed-followup-v2.md`.
+
+---
+
+📂 **Older sessions (`2026-06-15 EOD+2` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-16) — ED follow-up v2 (confirm card / latest-link-only / round dates) + intake-date preserve (B) + 🔴 province fix — SHIPPED local, backfill APPLIED, NOT deployed**: master HEAD `9f2870f9` (=origin; 10 commits); prod still **`019df953` (PRE-v2)** — frontend-only, no firestore.rules → vercel-only when authorized, no Probe-Deploy-Probe. `/brainstorming`→spec→`/writing-plans`→`/executing-plans` (8 tasks) + B. **R1** read-only confirm card on the follow-up link (ชื่อ-สกุล+อายุ+เบอร์ปิดกลาง, passive, neutral; `confirmInfo` snapshotted into the opd_session — anon `get`s it, can't read be_customers, NO rule change; editable fallback for legacy links). **R2** session pill removed all modes. **R3** `supersedePendingFollowups` — new link deletes prior PENDING session+round per customer+branch (latest-link-only). **R4** TFP note + CDV ED box both show each round date (dd/mm/yyyy พ.ศ.) + "วันนี้" badge. **🔴 province bug** (live on prod): the unconditional `if(!province)` BLOCKED follow-up submit ("กรุณาเลือกจังหวัด") — only L1 real-browser submit caught it (L2/admin-SDK bypassed client validation) → gated to `isIntake`. **B (เอาแม่นๆ)**: `patientData.assessmentDate` dropped by the kiosk→customer projection (0/154) → preserved (kioskPatientToCanonical snake `assessment_date`→camel; addCustomer stamps `thaiTodayISO()` once at CREATE; buildFormFromCustomer round-trips) — AV194/V141 class; **Rule-M backfill APPLIED** (audit `backfill-assessmentdate-1781546629477-…`): 154 customers (29 from EXACT intake-session date, 125 from createdAt), idempotent, LC-26000082→2026-05-20. Proven the date IS findable (LC-82 intake session `BL-1779253531712` assessmentDate "2026-05-20"). **Verified**: full vitest **16542/0** + build clean + **Rule Q L1** (anon link: confirm card renders [name/age/masked-phone, no inputs, no pill] + province-submit success "ส่งข้อมูลสำเร็จ") + **Rule Q L2 13/0** real prod (supersede selectivity + confirmInfo + materialize-dated-today) + Rule I flow-sim 6/0 + 11 V21/contract fixups caught (camelCase-leak, snapshots, import-locks, CRLF-fragile v136/H-quater). **Honest gap (Rule Q)**: backend-authed pixel render (CDV box + TFP "วันนี้") = USER hands-on after deploy (no staff creds for an automated backend L1). Checkpoint `.agents/sessions/2026-06-16-ed-followup-v2.md`.
+
+---
+
 ## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-15 EOD+2` → `2026-06-15 EOD+2` + Current-State index
 
 ### Session blocks (1)

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff-Chat System Notification Cards — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; }
+    .step input[type=checkbox] { margin-right: 0.5em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; } th,td { border:1px solid var(--bd); padding:0.4em 0.7em; text-align:left; vertical-align:top; } th { background: var(--bg-meta); }
+    .card { background:#1a1416; border:1px solid #3a2326; border-left:3px solid #ef4444; border-radius:0 12px 12px 0; padding:12px 14px; max-width:380px; }
+    .clink { color:#7dd3fc; font-weight:600; text-decoration:underline; } .hnpill { background:#23272e; color:#9fb0c2; font-size:11px; padding:2px 8px; border-radius:8px; }
+  </style>
+</head>
+<body>
+
+<h1>Staff-Chat System Notification Cards — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> implement task-by-task (executing-plans). Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-06-20-staff-chat-system-notification-cards-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> When the intake-complete / follow-up-assessment-complete push fires, also write a "ระบบ" notification card into the per-branch staff chat — sparkles icon, customer name + HN, clickable name → customer detail in a new tab; intake cards live-upgrade to clickable+HN once the walk-in is registered.</p>
+  <p><strong>Architecture:</strong> Server writes the card from the existing <code>sendPushOnSubmit</code> Cloud Function (admin SDK, after the FCM send, non-fatal). Client renders a dedicated <code>StaffChatSystemCard</code> with a render-time live-resolve hook (customerId direct for follow-up; via <code>opd_session.brokerProClinicId</code> for intake). No firestore.rules change.</p>
+  <p><strong>Tech Stack:</strong> Firebase Cloud Functions (admin SDK, CJS), React + Vite, lucide-react, Firestore client SDK, Vitest + RTL, Playwright (L1), admin-SDK e2e (L2).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">follow-up / registered intake (resolved → clickable)</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">
+      <span style="width:30px;height:30px;border-radius:50%;background:#ef4444;display:inline-flex;align-items:center;justify-content:center;color:#fff;">✦</span>
+      <div style="line-height:1.25;"><div style="color:#f3b4b4;font-size:10px;font-weight:600;">ระบบ · LoverClinic</div><div style="color:#ededed;font-size:13px;font-weight:600;">กรอกแบบประเมินติดตามเสร็จแล้ว</div></div>
+      <div style="margin-left:auto;font-size:9px;color:#6b6b70;">14:32</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><a class="clink" href="#">นางสาว แพรพร พรแพร ↗</a><span class="hnpill">HN LC-26000079</span></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">intake pending (no customer yet → name only)</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">
+      <span style="width:30px;height:30px;border-radius:50%;background:#ef4444;display:inline-flex;align-items:center;justify-content:center;color:#fff;">✦</span>
+      <div style="line-height:1.25;"><div style="color:#f3b4b4;font-size:10px;font-weight:600;">ระบบ · LoverClinic</div><div style="color:#ededed;font-size:13px;font-weight:600;">กรอกข้อมูลรับเข้าเสร็จแล้ว</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="color:#cfcfd4;font-size:13px;font-weight:600;">สมชาย ใจดี</span><span class="hnpill" style="background:#2a2320;color:#caa37a;">รอลงทะเบียน</span></div>
+  </div>
+</div>
+<p><strong>Card doc shape</strong> (admin SDK bypasses create validators):</p>
+<pre>{ id, branchId, deviceId:'system', displayName:'ระบบ', text:'🔔 &lt;headline&gt;', createdAt:serverTimestamp(),
+  system:{ kind:'intake'|'followup', sessionId, customerId|null, nameSnapshot, hnSnapshot|null } }</pre>
+
+<h2>Flow</h2>
+<table>
+  <tr><th>#</th><th>Stage</th><th>Detail</th></tr>
+  <tr><td>1</td><td>submit</td><td>PatientForm → <code>sendPushOnSubmit(sessionId)</code> (intake/follow-up/edit).</td></tr>
+  <tr><td>2</td><td>push</td><td>FCM send (unchanged).</td></tr>
+  <tr><td>3</td><td>write card</td><td>After FCM, non-fatal: kind=followup if <code>linkedCustomerId</code> else intake; SKIP if edit (<code>updatedAt</code>); <code>branchId=session.branchId||customer.branchId</code>; admin-SDK <code>setDoc</code> at <code>be_staff_chat_messages</code>.</td></tr>
+  <tr><td>4</td><td>listen</td><td>Branch <code>listenToStaffChatMessages</code> snapshot includes the card → V82 unread cursor + chime → counts unread + plays sound.</td></tr>
+  <tr><td>5</td><td>render</td><td><code>StaffChatMessage</code>: <code>if (message.system) return &lt;StaffChatSystemCard/&gt;</code>.</td></tr>
+  <tr><td>6</td><td>resolve</td><td><code>useSystemCardCustomer</code>: customerId from <code>system.customerId</code> (followup) OR live <code>onSnapshot(opd_session)</code> → <code>brokerProClinicId</code> (intake); then <code>getCustomer</code> → live name+HN.</td></tr>
+  <tr><td>7</td><td>upgrade</td><td>Admin registers walk-in → <code>handleOpdClick</code> stamps <code>brokerProClinicId</code> → the session listener fires → the SAME card flips to clickable+HN, live, every viewer.</td></tr>
+</table>
+
+<h2>File Structure</h2>
+<ul>
+  <li>Create <code>functions/staffChatNotify.js</code> — pure builder + admin-SDK writer.</li>
+  <li>Modify <code>functions/index.js</code> — call the writer after FCM send.</li>
+  <li>Create <code>src/lib/staffChatNotifyResolve.js</code> — pure <code>pickSystemCardCustomerId</code> + <code>useSystemCardCustomer</code> hook.</li>
+  <li>Create <code>src/components/staffchat/StaffChatSystemCard.jsx</code> — style-A card.</li>
+  <li>Modify <code>src/components/staffchat/StaffChatMessage.jsx</code> — early <code>system</code> branch.</li>
+  <li>Tests: <code>tests/staff-chat-system-notify-builder.test.js</code>, <code>tests/staff-chat-system-notify-resolve.test.js</code>, <code>tests/staff-chat-system-card-rtl.test.jsx</code>, <code>tests/staff-chat-system-notify-flow-simulate.test.js</code>, <code>tests/staff-chat-system-notify-av198.test.js</code>; <code>scripts/e2e-staff-chat-system-notify.mjs</code>, <code>scripts/diag-opd-session-branchid.mjs</code>.</li>
+  <li>firestore.rules — NO change.</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 0: Rule R diag — confirm session.branchId + brokerProClinicId on real prod (READ-ONLY)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/diag-opd-session-branchid.mjs</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Pull env (Rule R): <code>vercel env pull .env.local.prod --environment=production</code> (reuse if pulled this session).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Write a read-only admin-SDK script: read recent <code>artifacts/loverclinic-opd-4c39b/public/data/opd_sessions</code> docs; for the latest ~20, print <code>{id, formType, linkedCustomerId, branchId, brokerProClinicId, status}</code>. Report: do intake sessions carry a root <code>branchId</code>? Do follow-up sessions? Are registered intakes stamped <code>brokerProClinicId</code>?</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> If intake sessions lack a root <code>branchId</code>, note the fallback used at write time (e.g. read it from the customer for follow-up; for intake with no branch, skip the card OR use a clinic default). Decision feeds Task 2's branch routing.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Commit the diag script.</div>
+</div>
+
+<div class="task">
+  <h3>Task 1: functions/staffChatNotify.js — pure builder + writer</h3>
+  <p><strong>Files:</strong> Create <code>functions/staffChatNotify.js</code>, <code>tests/staff-chat-system-notify-builder.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Write the failing test</strong> — assert builder output for both kinds.</div>
+<pre><code class="language-js">const { buildStaffChatNotification } = require('../functions/staffChatNotify.js');
+test('followup card carries customerId + hn + name', () => {
+  const doc = buildStaffChatNotification({
+    kind: 'followup', sessionId: 'S1', branchId: 'BR1',
+    session: { linkedCustomerId: 'LC-9' },
+    customer: { firstname: 'แพรพร', lastname: 'พรแพร', hn_no: 'LC-26000079' },
+    idFactory: () => 'CHAT-T1',
+  });
+  expect(doc).toMatchObject({ id:'CHAT-T1', branchId:'BR1', deviceId:'system', displayName:'ระบบ' });
+  expect(doc.system).toMatchObject({ kind:'followup', sessionId:'S1', customerId:'LC-9', hnSnapshot:'LC-26000079' });
+  expect(doc.system.nameSnapshot).toMatch(/แพรพร/);
+  expect(doc.text).toMatch(/ประเมินติดตาม/);
+});
+test('intake card has null customerId + null hn + name from patientData', () => {
+  const doc = buildStaffChatNotification({
+    kind: 'intake', sessionId: 'S2', branchId: 'BR1',
+    session: { patientData: { firstName: 'สมชาย', lastName: 'ใจดี' } },
+    customer: null, idFactory: () => 'CHAT-T2',
+  });
+  expect(doc.system).toMatchObject({ kind:'intake', sessionId:'S2', customerId:null, hnSnapshot:null });
+  expect(doc.system.nameSnapshot).toBe('สมชาย ใจดี');
+  expect(doc.text).toMatch(/รับเข้า/);
+});
+test('builder never throws on empty/garbage inputs (non-fatal contract)', () => {
+  expect(() => buildStaffChatNotification({ kind:'intake', session:{}, idFactory:()=>'x' })).not.toThrow();
+});</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Run → FAIL (module not found).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: Implement</strong> (reuse <code>functions/customerDisplay.js</code> resolvers; crypto id; never throw):</div>
+<pre><code class="language-js">const crypto = require('crypto');
+const { resolveCustomerName, resolveCustomerHN } = require('./customerDisplay');
+function newId() { return `CHAT-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`; }
+function intakeName(session) {
+  const pd = (session && session.patientData) || {};
+  return `${pd.firstName || ''} ${pd.lastName || ''}`.trim();
+}
+function buildStaffChatNotification({ kind, session = {}, sessionId, customer, branchId, idFactory } = {}) {
+  const isFollow = kind === 'followup';
+  const name = isFollow ? (resolveCustomerName(customer) || String((session.confirmInfo && session.confirmInfo.name) || '').trim()) : intakeName(session);
+  const customerId = isFollow ? String(session.linkedCustomerId || '') || null : null;
+  const hn = isFollow ? (resolveCustomerHN(customer) || customerId || null) : null;
+  const headline = isFollow ? 'กรอกแบบประเมินติดตามเสร็จแล้ว' : 'กรอกข้อมูลรับเข้าเสร็จแล้ว';
+  return {
+    id: (typeof idFactory === 'function' ? idFactory() : newId()),
+    branchId: String(branchId || ''),
+    deviceId: 'system',
+    displayName: 'ระบบ',
+    text: `🔔 ${headline}`,
+    system: { kind: isFollow ? 'followup' : 'intake', sessionId: String(sessionId || ''), customerId: customerId || null, nameSnapshot: name || '', hnSnapshot: hn || null },
+  };
+}
+async function writeStaffChatNotification(db, BASE_PATH, FieldValue, doc) {
+  if (!doc || !doc.branchId) return false; // can't route without a branch — skip (non-fatal)
+  await db.doc(`${BASE_PATH}/be_staff_chat_messages/${doc.id}`).set({ ...doc, createdAt: FieldValue.serverTimestamp() });
+  return true;
+}
+module.exports = { buildStaffChatNotification, writeStaffChatNotification };</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Run → PASS. <strong>Step 5:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 2: functions/index.js — write the card after the FCM send</h3>
+  <p><strong>Files:</strong> Modify <code>functions/index.js</code> (after the <code>getMessaging().sendEachForMulticast</code> block, ~line 98).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Import: <code>const { buildStaffChatNotification, writeStaffChatNotification } = require('./staffChatNotify');</code> + <code>const { FieldValue } = require('firebase-admin/firestore');</code> (or reuse existing import).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> After the FCM send succeeds, add a self-contained non-fatal block:</div>
+<pre><code class="language-js">// Staff-chat system notification card (intake + follow-up only; skip edits). Non-fatal.
+try {
+  const isEdit = !!session.updatedAt;
+  if (!isEdit) {
+    const kind = session.linkedCustomerId ? 'followup' : 'intake';
+    const branchId = session.branchId || (customer && customer.branchId) || '';
+    const card = buildStaffChatNotification({ kind, session, sessionId, customer, branchId });
+    const wrote = await writeStaffChatNotification(db, BASE_PATH, FieldValue, card);
+    if (!wrote) console.warn(`[${sessionId}] staff-chat card skipped (no branchId)`);
+  }
+} catch (e) { console.warn(`[${sessionId}] staff-chat notify failed:`, e && e.message); }</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Confirm <code>session</code>, <code>sessionId</code>, <code>customer</code>, <code>db</code>, <code>BASE_PATH</code> are all in scope at the insertion point (they are — customer read at line 71). If Task 0 showed intake sessions lack <code>branchId</code>, keep the skip-on-no-branch (the writer already returns false).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> <code>node --check functions/index.js</code> → clean. <strong>Step 5:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 3: src/lib/staffChatNotifyResolve.js — pure resolver + live hook</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/staffChatNotifyResolve.js</code>, <code>tests/staff-chat-system-notify-resolve.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Write the failing test</strong> for the pure picker:</div>
+<pre><code class="language-js">import { pickSystemCardCustomerId } from '../src/lib/staffChatNotifyResolve.js';
+test('followup → customerId directly', () => {
+  expect(pickSystemCardCustomerId({ system:{ kind:'followup', customerId:'LC-9' } }, null)).toBe('LC-9');
+});
+test('intake unregistered → null', () => {
+  expect(pickSystemCardCustomerId({ system:{ kind:'intake', customerId:null, sessionId:'S2' } }, { id:'S2' })).toBeNull();
+});
+test('intake registered → session.brokerProClinicId', () => {
+  expect(pickSystemCardCustomerId({ system:{ kind:'intake', customerId:null, sessionId:'S2' } }, { brokerProClinicId:'LC-180' })).toBe('LC-180');
+});
+test('no system → null; never throws', () => {
+  expect(pickSystemCardCustomerId({}, null)).toBeNull();
+  expect(() => pickSystemCardCustomerId(null, null)).not.toThrow();
+});</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Run → FAIL. <strong>Step 3: Implement</strong> the pure picker + the live hook:</div>
+<pre><code class="language-js">import { useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db, APP_ID } from '../firebase.js';
+import { getCustomer } from './scopedDataLayer.js';
+import { resolveCustomerDisplayName, resolveCustomerHN } from './customerDisplayName.js';
+
+const BASE = `artifacts/${APP_ID}/public/data`;
+
+export function pickSystemCardCustomerId(card, sessionData) {
+  const sys = card && card.system; if (!sys) return null;
+  if (sys.customerId) return String(sys.customerId);
+  if (sessionData && sessionData.brokerProClinicId) return String(sessionData.brokerProClinicId);
+  return null;
+}
+
+// Live: intake-unresolved subscribes to the opd_session so the card flips the instant it's registered.
+export function useSystemCardCustomer(card) {
+  const sys = (card && card.system) || {};
+  const directId = sys.customerId ? String(sys.customerId) : '';
+  const [customerId, setCustomerId] = useState(directId);
+  const [resolved, setResolved] = useState(null); // { name, hn } from live be_customers
+
+  // 1) intake → subscribe to the session until brokerProClinicId appears
+  useEffect(() => {
+    if (directId || !sys.sessionId) return;          // followup or no session → nothing to watch
+    const ref = doc(db, BASE, 'opd_sessions', String(sys.sessionId));
+    const unsub = onSnapshot(ref, (snap) => {
+      const cid = snap.exists() ? snap.data().brokerProClinicId : '';
+      if (cid) setCustomerId(String(cid));
+    }, () => {});
+    return () => unsub();
+  }, [directId, sys.sessionId]);
+
+  // 2) once a customerId is known → live name + HN
+  useEffect(() => {
+    if (!customerId) { setResolved(null); return; }
+    let alive = true;
+    getCustomer(customerId).then((c) => {
+      if (alive && c) setResolved({ name: resolveCustomerDisplayName(c), hn: resolveCustomerHN(c) });
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [customerId]);
+
+  const pending = !customerId;
+  return {
+    pending,
+    customerId,
+    name: (resolved && resolved.name) || sys.nameSnapshot || '',
+    hn: (resolved && resolved.hn) || sys.hnSnapshot || '',
+  };
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 4:</strong> Confirm <code>firebase.js</code> exports <code>APP_ID</code>; if not, derive <code>BASE</code> the same way other libs do (grep <code>artifacts/${</code> in <code>src/lib/backendClient.js</code> and mirror). <strong>Step 5:</strong> Run picker test → PASS. <strong>Step 6:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 4: src/components/staffchat/StaffChatSystemCard.jsx — style-A card</h3>
+  <p><strong>Files:</strong> Create <code>src/components/staffchat/StaffChatSystemCard.jsx</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Implement</strong> (lucide <code>Sparkles</code>+<code>ExternalLink</code>; theme tokens; sky name, never red; fire accent):</div>
+<pre><code class="language-jsx">import { Sparkles, ExternalLink } from 'lucide-react';
+import { useSystemCardCustomer } from '../../lib/staffChatNotifyResolve.js';
+
+const HEADLINE = { intake: 'กรอกข้อมูลรับเข้าเสร็จแล้ว', followup: 'กรอกแบบประเมินติดตามเสร็จแล้ว' };
+
+export function StaffChatSystemCard({ message }) {
+  const kind = (message.system && message.system.kind) || 'intake';
+  const { pending, customerId, name, hn } = useSystemCardCustomer(message);
+  const time = message.createdAt && message.createdAt.toDate
+    ? message.createdAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+  return (
+    <div data-testid="staff-chat-system-card" data-kind={kind} data-pending={pending ? 'true' : 'false'}
+      className="self-stretch rounded-r-xl border border-l-4 px-3 py-2.5 my-0.5"
+      style={{ background: 'var(--bg-card)', borderColor: 'var(--bd)', borderLeftColor: '#ef4444' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ background: '#ef4444' }}>
+          <Sparkles size={16} color="#fff" />
+        </span>
+        <div className="leading-tight">
+          <div className="text-[10px] font-bold" style={{ color: '#f3b4b4' }}>ระบบ · LoverClinic</div>
+          <div className="text-[13px] font-bold" style={{ color: 'var(--tx-primary)' }}>{HEADLINE[kind]}</div>
+        </div>
+        <div className="ml-auto text-[9px]" style={{ color: 'var(--tx-muted)' }}>{time}</div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {pending ? (
+          <>
+            <span className="text-[13px] font-bold" style={{ color: 'var(--tx-primary)' }}>{name || '—'}</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'rgba(202,163,122,0.15)', color: '#caa37a' }}>รอลงทะเบียน</span>
+          </>
+        ) : (
+          <>
+            <a data-testid="system-card-customer-link"
+               href={`/?backend=1&customer=${encodeURIComponent(customerId)}`}
+               target="_blank" rel="noopener noreferrer"
+               className="text-[13px] font-bold text-sky-700 dark:text-sky-300 hover:underline underline-offset-2"
+               title={`เปิดข้อมูล ${name} ในแท็บใหม่`}>
+              {name || '—'}<ExternalLink size={12} className="inline ml-1 -mt-0.5" />
+            </a>
+            {hn && <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'var(--bg-hover)', color: 'var(--tx-muted)' }}>HN {hn}</span>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Verify the CSS vars (<code>--bg-card</code>, <code>--bd</code>, <code>--tx-primary</code>, <code>--tx-muted</code>, <code>--bg-hover</code>) exist (grep <code>index.css</code>); if a token is absent, substitute the nearest existing one. <strong>Step 3:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 5: StaffChatMessage.jsx — early system branch</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatMessage.jsx</code> (top of the component body, before the existing return).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Import: <code>import { StaffChatSystemCard } from './StaffChatSystemCard.jsx';</code></div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> At the very top of <code>StaffChatMessage(...)</code>, before any hooks that assume a human message, add:</div>
+<pre><code class="language-jsx">if (message && message.system) {
+  return &lt;div className={`group flex flex-col items-start`} ref={(el)=>{ if (registerNode) registerNode(message.id, el); }} data-testid="staff-chat-message" data-msg-id={message.id}&gt;
+    &lt;StaffChatSystemCard message={message} /&gt;
+  &lt;/div&gt;;
+}</code></pre>
+  <p>Place this BEFORE the <code>resolveSenderColor</code>/<code>useState</code> calls if any are unconditional — if hooks precede the return, instead branch on render output (keep hooks above, then <code>if (message.system) return &lt;...&gt;</code> right after the hooks but before the bubble JSX). Confirm no hook reads <code>message.text</code>/<code>displayName</code> in a way that breaks for a system doc (it has both).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> <code>npm run build</code> → clean. <strong>Step 4:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 6: RTL — both kinds + the pending→registered live flip (the critical case)</h3>
+  <p><strong>Files:</strong> Create <code>tests/staff-chat-system-card-rtl.test.jsx</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Write the tests</strong> (mock <code>scopedDataLayer.getCustomer</code> + <code>firebase/firestore onSnapshot</code>):</div>
+<pre><code class="language-jsx">// R1 followup → clickable sky link + HN; href = /?backend=1&customer=LC-9 + target=_blank
+// R2 intake pending → nameSnapshot + "รอลงทะเบียน"; NO link
+// R3 intake FLIP: onSnapshot session emits brokerProClinicId='LC-180' → getCustomer('LC-180')
+//    → link appears with that name + HN (the user's must-work case)
+// R4 customer name link className includes text-sky (NEVER text-red) — Thai culture
+// R5 link opens in a NEW TAB (target="_blank" rel="noopener noreferrer")</code></pre>
+  <p>Drive R3 by capturing the <code>onSnapshot</code> callback from the mock and invoking it with <code>{ exists:()=>true, data:()=>({ brokerProClinicId:'LC-180' }) }</code>, then <code>await</code> the <code>getCustomer</code> microtask, then assert the link appears. Assert R4 with <code>expect(link.className).toMatch(/text-sky/)</code> + <code>not.toMatch(/text-red/)</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Run → PASS (after iterating the mocks). <strong>Step 3:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule I flow-simulate — submit → build → write-shape → resolve, both kinds + flip</h3>
+  <p><strong>Files:</strong> Create <code>tests/staff-chat-system-notify-flow-simulate.test.js</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Chain the REAL pure pieces (no React): <code>buildStaffChatNotification</code> (functions) → assert the doc the listener would receive → <code>pickSystemCardCustomerId</code> with a pending session (null) then a registered session (brokerProClinicId) → assert the flip. Cover: F1 followup end-to-end shape; F2 intake pending→registered; F3 edit is never built (caller guard simulated); F4 no-branch → writer returns false; F5 adversarial (missing patientData, missing customer, Thai/emoji/long names, snake vs camel name fields).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Run → PASS. <strong>Step 3:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 8: Source-grep regression + AV198 invariant</h3>
+  <p><strong>Files:</strong> Create <code>tests/staff-chat-system-notify-av198.test.js</code>; update <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (or the project audit skill).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Source-grep locks: (a) <code>StaffChatMessage.jsx</code> has the <code>if (message.system)</code> early branch + imports <code>StaffChatSystemCard</code>; (b) <code>StaffChatSystemCard.jsx</code> name link uses <code>text-sky</code> and NOT <code>text-red</code>/<code>#ef4444</code> on the name (fire-red only on icon/border); (c) the link href is <code>/?backend=1&customer=</code> + <code>target="_blank"</code> + <code>rel="noopener noreferrer"</code>; (d) <code>functions/index.js</code> wraps the chat write in try/catch + skips edits (<code>isEdit</code>) + skips no-branch; (e) <code>buildStaffChatNotification</code> never references a human <code>deviceId</code> (always <code>'system'</code>).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Add AV198 to the audit skill: "Staff-chat System notification cards — server write MUST be non-fatal + skip edits; the customer NAME link MUST be sky (never red); the link MUST be <code>/?backend=1&customer=&lt;id&gt; target=_blank rel=noopener</code>; the card MUST live-resolve (never store a stale customerId for intake)." Grep pattern + sanctioned files (functions/staffChatNotify.js, StaffChatSystemCard.jsx, staffChatNotifyResolve.js).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Run → PASS. <strong>Step 4:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 9: Verify alert behavior (unread + chime) — no exclusion of system messages</h3>
+  <p><strong>Files:</strong> inspect <code>src/hooks/useStaffChat.js</code> + <code>src/lib/staffChatReadCursor.js</code>; add an assertion test if a filter exists.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Read the unread-cursor + chime logic. Confirm a <code>message.system</code> doc (has <code>id</code>, <code>branchId</code>, <code>createdAt</code>, <code>displayName='ระบบ'</code>, <code>text</code>) is NOT filtered out of the unread count or the sound trigger. If any code requires a specific shape (e.g. reads <code>message.attachments</code> unguarded), confirm it's optional-chained.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Add a focused test: a system message is counted by the unread cursor + would trigger the chime (per Q4). If a filter exists that drops it, FIX it (system messages must alert).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 10: Rule Q L2 — real-prod admin-SDK e2e (write → client query → resolve → flip)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-staff-chat-system-notify.mjs</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Admin SDK on real prod (Rule M/R env). Use TEST-prefixed ids (branch <code>TEST-BR-AV198</code>, message id <code>CHAT-TEST-…</code>, session <code>TEST-APPT</code>-style, customer <code>TEST-…</code>). Phases:</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> (1) build+write an INTAKE card (admin SDK) at the canonical path with branchId=TEST-BR; (2) client-style query <code>be_staff_chat_messages where branchId==TEST-BR orderBy createdAt</code> → find the card → assert <code>system.kind='intake'</code>, <code>customerId=null</code>, <code>sessionId</code> set; (3) seed a TEST opd_session + assert <code>pickSystemCardCustomerId</code> = null (pending); (4) stamp the session <code>brokerProClinicId='TEST-CUST'</code> + create TEST be_customer (name+hn) → <code>pickSystemCardCustomerId</code> = 'TEST-CUST' + a getDoc resolves name+hn → assert the FLIP; (5) build+write a FOLLOWUP card with a real TEST customerId → assert it resolves immediately. Cleanup ALL TEST docs + write an audit doc. Assert zero orphans.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Run on real prod → all phases PASS. <strong>Step 4:</strong> Commit.</div>
+</div>
+
+<div class="task">
+  <h3>Task 11: Full verification gate</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>npx vitest run</code> on the 5 new test files → all green. <strong>Step 2:</strong> full <code>npx vitest run</code> (batch end, Rule N) → no NEW reds. <strong>Step 3:</strong> <code>npm run build</code> → clean. <strong>Step 4:</strong> <code>node --check functions/index.js functions/staffChatNotify.js</code>.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 5:</strong> Rule Q L1 (Playwright/real browser if staff-auth injectable, else USER hands-on, declared honestly): render the staff chat with a seeded system card → the card shows; click the name → a new tab opens <code>/?backend=1&customer=&lt;id&gt;</code> landing on the customer detail; the pending→registered flip visible after stamping brokerProClinicId.</div>
+</div>
+
+<div class="task">
+  <h3>Task 12: Adversarial bug-hunt loop (Ultracode Workflow) until clean</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Run a Workflow adversarial hunt over the implementation (finders × verifiers), targeting: the intake pending→registered flip (every path: never-registered, registered-while-on-screen, registered-then-customer-deleted, linked-to-existing via DUPLICATE_IDENTITY, branch mismatch, missing branchId, missing idCard, concurrent registration); listener leaks (onSnapshot cleanup); customerId XSS/encoding in the href; name red-leak; the card breaking the unread/chime; admin-SDK write shape vs the client render; edit-path double-write.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Adjudicate each finding (V162 lesson — agents overstate severity). Fix real bugs + add a regression test per fix. Re-run the hunt. <strong>Loop until a fresh hunt finds nothing.</strong></div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> Commit each fix.</div>
+</div>
+
+<div class="task">
+  <h3>Task 13: Deploy + session-end</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> Deploy client: <code>vercel --prod</code> (the render + hook). Deploy server: <code>firebase deploy --only functions</code> (the card write). NO firestore.rules change → no Probe-Deploy-Probe.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> Post-deploy L2/L1 smoke: trigger a real follow-up (or a Rule R diag write) → confirm the card lands in the right branch chat + resolves; confirm an intake card flips after a real registration. Honest gap declared if any leg is USER-hands-on.</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> <code>/session-end</code> (active.md + handoff + checkpoint + V-entry).</div>
+</div>
+
+</body>
+</html>
