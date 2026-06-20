@@ -69,3 +69,5 @@ scripts/.tmp-*.mjs
 # V110 office-preview font-fidelity diag — temp downloads of real patient
 # .docx + their cached PDFs for visual comparison. Contains real PHI; never commit.
 .tmp-docx-inspect/
+
+dist-filler

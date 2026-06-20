@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="th" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Lover Clinic — จำลองผลการฉีดเพิ่มขนาด</title>
+    <link rel="icon" href="/favicon.svg" />
+    <!-- Open Graph / share preview (LINE / Facebook) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lover Clinic — จำลองผลการฉีดเพิ่มขนาด" />
+    <meta property="og:description" content="ประเมินรอบวง ขนาดถุงยาง และภาพจำลองเสมือนจริงจากปริมาณฟิลเลอร์ — โดย Lover Clinic" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- No inline JS → CSP script-src 'self' stays clean. Theme defaults dark
+         (FillerSimulator useState('dark')); dark body bg = no first-paint flash. -->
+    <style>html,body{margin:0;padding:0;min-height:100%;background:#050505;}</style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/filler-main.jsx"></script>
+  </body>
+</html>
