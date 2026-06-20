@@ -68,10 +68,10 @@
 
 <h2>Purpose / Problem</h2>
 <p>คลินิกอยากมี "ของเล่นให้ความรู้" หน้าเดียวที่ส่งลิงก์ในแชทให้ลูกค้าทุกคนเปิดเองได้ เพื่อให้ลูกค้า
-<strong>นึกภาพออก + กะเกณได้คร่าวๆ</strong> ว่าถ้าฉีดฟิลเลอร์เพิ่มขนาด (penile girth augmentation ด้วย HA filler)
+<strong>นึกภาพออก + ประมาณการได้คร่าวๆ</strong> ว่าถ้าฉีดฟิลเลอร์เพิ่มขนาด (penile girth augmentation ด้วย HA filler)
 กี่ cc แล้วขนาดจะเปลี่ยนประมาณไหน — และ <strong>ใส่ถุงยางไซส์ไหน / ใหญ่ขึ้นกี่ไซส์</strong>. ลูกค้าเลื่อนสไลเดอร์
 แล้วกราฟิก (เหมือนจริง 2D หรือ 3D หมุนได้) ขยายสด + บอกขนาดใหม่เป็น "ช่วงประเมิน".
-เน้น <strong>กะเกณ ไม่ใช่รับประกัน</strong>. ไม่เก็บข้อมูลผู้ใช้ใดๆ.</p>
+เน้น <strong>ประมาณการ ไม่ใช่รับประกัน</strong>. ไม่เก็บข้อมูลผู้ใช้ใดๆ.</p>
 
 <p><strong>ฐานความรู้ (research, อ้างอิงจริง):</strong> งานวิจัย HA penile girth augmentation รายงานรอบวงเพิ่มเฉลี่ย
 <strong>~+2.5 ซม. ที่ ~16 cc (วัดตอนอ่อนตัว, พีค ~1 เดือน)</strong> ช่วง +1.5 ถึง +4 ซม. (≈0.13–0.19 ซม./cc);
@@ -88,7 +88,7 @@
       <div class="sim-logo"></div>
       <div class="sim-title">ลองจำลองขนาดหลังเสริมฟิลเลอร์</div>
     </div>
-    <div class="sim-sub">เลื่อนปรับค่าด้านล่าง แล้วดูขนาดที่ประเมินได้ — เป็นการกะเกณคร่าวๆ เพื่อให้นึกภาพออก</div>
+    <div class="sim-sub">เลื่อนปรับค่าด้านล่าง แล้วดูขนาดที่ประเมินได้ — เป็นการประมาณคร่าวๆ เพื่อให้นึกภาพออก</div>
 
     <div class="sim-grid">
       <div class="sim-card">
@@ -150,9 +150,21 @@
     <div style="margin-top:18px" class="sim-card">
       <h4>ขนาดที่ประเมินได้ (ช่วง realistic – optimistic)</h4>
       <div style="display:flex;flex-wrap:wrap;gap:11px;">
-        <div class="res-band" style="flex:1;min-width:150px;"><div class="res-k">รอบวงใหม่</div><div class="res-v">11.7 – 12.2 ซม.<span class="delta">+1.3 ถึง +1.8</span></div></div>
-        <div class="res-band" style="flex:1;min-width:150px;"><div class="res-k">เส้นผ่านศูนย์กลางใหม่</div><div class="res-v">3.7 – 3.9 ซม.<span class="delta">+0.4 ถึง +0.6</span></div></div>
-        <div class="res-band" style="flex:1;min-width:160px;"><div class="res-k">ถุงยางที่ใส่ได้</div><div class="res-v">Large+ 58 → XL 60<span class="delta">+3 ถึง +4 ไซส์</span></div></div>
+        <div class="res-band" style="flex:1;min-width:165px;">
+          <div class="res-k">รอบวง</div>
+          <div style="font-size:12.5px;color:var(--c-tx2);">เดิม <b style="color:#cfc6c2;">10.4 ซม.</b></div>
+          <div class="res-v" style="font-size:18px;">→ 11.7 – 12.2 ซม.<span class="delta">+1.3 ถึง +1.8</span></div>
+        </div>
+        <div class="res-band" style="flex:1;min-width:165px;">
+          <div class="res-k">เส้นผ่านศูนย์กลาง</div>
+          <div style="font-size:12.5px;color:var(--c-tx2);">เดิม <b style="color:#cfc6c2;">3.3 ซม.</b></div>
+          <div class="res-v" style="font-size:18px;">→ 3.7 – 3.9 ซม.<span class="delta">+0.4 ถึง +0.6</span></div>
+        </div>
+        <div class="res-band" style="flex:1;min-width:175px;">
+          <div class="res-k">ถุงยางที่ใส่ได้</div>
+          <div style="font-size:12.5px;color:var(--c-tx2);">เดิม <b style="color:#cfc6c2;">Regular 52</b></div>
+          <div class="res-v" style="font-size:18px;">→ Large+ 58 – XL 60<span class="delta">+3 ถึง +4 ไซส์</span></div>
+        </div>
       </div>
       <div class="note" style="margin-top:11px;">
         ⚠ ฟิลเลอร์เพิ่ม <strong>รอบวง</strong> ไม่เพิ่ม <strong>ความยาว</strong> · ฐานสั้นกว่า + cc เท่ากัน = รอบวงขึ้นเยอะกว่า ·
@@ -295,12 +307,14 @@ anchor ตรวจ: 52mm·L11·V16 → +2.0 / +2.8 ซม. (= reference) ✓</p
   <li><strong>Rev1:</strong> 6–24 เดือน · ความยาว ซม./นิ้ว · baseline 2 โหมด (Ø / ถุงยาง) · ผลลัพธ์โชว์ไซส์ถุงยาง + กี่ไซส์.</li>
   <li><strong>Rev2-a = 3D จริงหมุนได้ (WebGL/Three.js):</strong> default = 2D เหมือนจริง + ปุ่มสลับโหมด 3D (lazy-load, fallback 2D).</li>
   <li><strong>Rev2-b = realism "ลงรายละเอียด":</strong> กายวิภาคเหมือนจริง (รูปทรง/ผิว/แสงเงา) แบบโมเดลการแพทย์ ไม่ sexualized.</li>
+  <li><strong>Rev3-a = การ์ดผลโชว์ "เดิม → ใหม่":</strong> ทุกช่อง (รอบวง / Ø / ถุงยาง) แสดงค่าเดิมคู่กับค่าใหม่ ให้เปรียบเทียบได้ทันทีในการมองช่องเดียว.</li>
+  <li><strong>Rev3-b = คำว่า "ประมาณ" แทน "กะเกณ"</strong> ทั่วทั้งแอป.</li>
 </ul>
 
 <h2>Acceptance Criteria</h2>
 <ol>
   <li>เปิด <code>?play=filler</code> โดยไม่ล็อกอิน → แสดงผลทันที, ไม่มี "Invalid Link" flash; โหมด 2D โหลดทันที (ไม่รอ three).</li>
-  <li>เลื่อน/เปลี่ยนค่าทุกตัว → กราฟิก (2D หรือ 3D) + การ์ดผล 3 ใบ (รอบวง / Ø / ไซส์ถุงยาง) อัปเดตสด.</li>
+  <li>เลื่อน/เปลี่ยนค่าทุกตัว → กราฟิก (2D หรือ 3D) + การ์ดผล 3 ใบ (รอบวง / Ø / ไซส์ถุงยาง) อัปเดตสด; <strong>ทุกการ์ดโชว์ "เดิม → ใหม่"</strong> เทียบได้ทันทีในช่องเดียว.</li>
   <li>กดปุ่ม 3D → lazy-load three → โมเดล 3D เรนเดอร์, ลากหมุนได้, ขยาย radius ตาม cc/L สด; กลับ 2D ได้.</li>
   <li>WebGL ไม่รองรับ → ซ่อนปุ่ม 3D, ใช้ 2D ได้ปกติ (ไม่ crash).</li>
   <li>three ไม่อยู่ใน initial bundle (verify: dynamic import; bundle หน้าอื่นไม่โต).</li>
@@ -330,7 +344,7 @@ anchor ตรวจ: 52mm·L11·V16 → +2.0 / +2.8 ซม. (= reference) ✓</p
   <li><strong>WebGL/perf บนมือถือ low-end:</strong> 3D อาจหน่วง/ไม่รองรับ → ปุ่ม 3D ซ่อนเมื่อไม่มี WebGL, mesh poly ต่ำ, จำกัด pixelRatio, dispose ตอนออกโหมด.</li>
   <li><strong>Bundle size:</strong> three ~150KB gz — lazy-load เฉพาะโหมด 3D เท่านั้น (ไม่กระทบหน้าอื่น/initial). verify ใน acceptance.</li>
   <li><strong>k calibration:</strong> ค่าประมาณ (งานวิจัยไม่ stratify ตามความยาว); L-sensitivity ถูกทิศ. โชว์เป็นช่วง + disclaimer; ปรับ k ได้ภายหลัง.</li>
-  <li><strong>ถุงยาง = ค่าประมาณ:</strong> ISO ±2mm + ลาเท็กซ์ยืด (~±0.5–0.75 ซม.) → "ไซส์เริ่มต้นที่ควรลอง". flaccid (งานวิจัย) vs erect (ถุงยาง) = กะเกณข้ามสภาวะ → disclaimer ครอบคลุม. <em>(Rule Q-honest: geometry/แปลงถุงยาง = เป๊ะ verify ได้; efficacy = ประมาณการมีงานวิจัยรองรับ.)</em></li>
+  <li><strong>ถุงยาง = ค่าประมาณ:</strong> ISO ±2mm + ลาเท็กซ์ยืด (~±0.5–0.75 ซม.) → "ไซส์เริ่มต้นที่ควรลอง". flaccid (งานวิจัย) vs erect (ถุงยาง) = ประมาณข้ามสภาวะ → disclaimer ครอบคลุม. <em>(Rule Q-honest: geometry/แปลงถุงยาง = เป๊ะ verify ได้; efficacy = ประมาณการมีงานวิจัยรองรับ.)</em></li>
   <li><strong>"Magnum" ≠ XL:</strong> แลดเดอร์ยึด width จริง ไม่ยึดชื่อการตลาด.</li>
   <li><strong>ชื่อ route:</strong> <code>?play=filler</code> default; ปรับได้ตอน plan.</li>
 </ul>
