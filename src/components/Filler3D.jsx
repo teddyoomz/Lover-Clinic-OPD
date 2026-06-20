@@ -12,22 +12,24 @@ function buildModel(group, material, est, lengthCm) {
     const c = group.children.pop();
     if (c.geometry) c.geometry.dispose();
   }
-  const r = Math.max(girthToRadiusCm(est?.c1Low ?? 5.5), 0.3); // cm
-  const L = Math.max(lengthCm ?? 11, 4); // cm
-  const glansR = r * 1.14;
+  const r = Math.max(girthToRadiusCm(est?.c1Low ?? 5.5), 0.3); // shaft radius (cm)
+  const L = Math.max(lengthCm ?? 12.7, 4); // cm
+  // glans radius from glans Ø (SEPARATE scale) — at least the shaft radius
+  const glansR = Math.max((est?.glans?.dgLow ?? r * 2) / 2, r);
 
   // shaft (cylinder along X)
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 48, 1, false), material);
   shaft.rotation.z = Math.PI / 2;
   group.add(shaft);
-  // glans (sphere at +X tip)
+  // glans bulb (slightly elongated sphere) at +X tip — mushroom head
   const glans = new THREE.Mesh(new THREE.SphereGeometry(glansR, 48, 32), material);
-  glans.position.x = L / 2;
+  glans.scale.x = 1.18;
+  glans.position.x = L / 2 + glansR * 0.25;
   group.add(glans);
-  // corona ridge (thin torus at glans base)
-  const corona = new THREE.Mesh(new THREE.TorusGeometry(r * 1.02, r * 0.12, 16, 48), material);
+  // corona ridge — prominent torus at glans base
+  const corona = new THREE.Mesh(new THREE.TorusGeometry(glansR * 0.96, glansR * 0.16, 18, 56), material);
   corona.rotation.y = Math.PI / 2;
-  corona.position.x = L / 2 - glansR * 0.55;
+  corona.position.x = L / 2 - glansR * 0.12;
   group.add(corona);
   // rounded base
   const base = new THREE.Mesh(new THREE.SphereGeometry(r, 40, 24), material);
@@ -71,7 +73,7 @@ export default function Filler3D({ est, lengthCm = 11 }) {
 
     refs.current = { scene, camera, renderer, material, group, controls, mount };
     buildModel(group, material, est, lengthCm);
-    camera.position.set(0, Math.max(lengthCm, 11) * 0.35, Math.max(lengthCm, 11) * 2.6);
+    camera.position.set(0, Math.max(lengthCm, 11) * 0.32, Math.max(lengthCm, 11) * 2.2);
     controls.target.set(0, 0, 0);
     controls.update();
 
