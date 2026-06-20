@@ -3,7 +3,7 @@
 export const STRINGS = {
   th: {
     title: 'เครื่องมือประเมินขนาดภายหลังการฉีดฟิลเลอร์',
-    sub: 'ปรับค่าพารามิเตอร์ด้านล่างเพื่อประเมินขนาดโดยประมาณภายหลังการฉีดฟิลเลอร์ ผลลัพธ์เป็นการประมาณการเชิงภาพประกอบเพื่อการศึกษา',
+    sub: 'ปรับค่าพารามิเตอร์ด้านล่างเพื่อประเมินขนาดโดยประมาณภายหลังการฉีดฟิลเลอร์ ผลลัพธ์เป็นการประมาณการเชิงภาพประกอบเพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น',
     adjust: 'ปรับค่าพารามิเตอร์',
     length: 'ความยาว',
     baseSize: 'ขนาดเดิม (เส้นรอบวงลำตัว)',
@@ -46,7 +46,7 @@ export const STRINGS = {
   },
   en: {
     title: 'Penile Filler Size Estimator',
-    sub: 'Adjust the parameters below to estimate the approximate dimensions following dermal-filler augmentation. All figures are illustrative estimates provided for educational reference.',
+    sub: 'Adjust the parameters below to estimate the approximate dimensions following dermal-filler augmentation. All figures are illustrative estimates to help visualize the outcome more clearly.',
     adjust: 'Parameters',
     length: 'Length',
     baseSize: 'Baseline size (shaft girth)',

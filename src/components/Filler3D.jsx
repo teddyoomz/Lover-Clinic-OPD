@@ -139,6 +139,6 @@ export default function Filler3D({ est, lengthCm = 11, t }) {
   }, [est, lengthCm]);
 
   return (
-    <div ref={mountRef} style={{ width: '100%', height: 300, cursor: 'grab' }} aria-label={tr('model3dAria')} />
+    <div ref={mountRef} style={{ width: '100%', height: 300, cursor: 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} aria-label={tr('model3dAria')} />
   );
 }

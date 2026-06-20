@@ -1,8 +1,8 @@
 // FillerGraphic2D — realistic anatomical 2D (mushroom: shaft → sulcus → corona → glans).
 // Clinical/medical style (non-explicit). Shaft scales from shaft girth; glans bulb scales
 // SEPARATELY from glans diameter. Presentational only — numbers come from `est`. Theme-aware.
-// v5.2: bigger side-view + SMART auto-stretch (length maps so 10in fills the full viewBox width,
-//       aspect kept by the SVG's uniform scale) · fainter baseline dash · no reflection highlight.
+// v5.3: bigger side-view (SMART auto-stretch to width) · fainter baseline dash · no reflection
+//       highlight · BIG centered cross-section (auto-scales with diameter) + legend below.
 import { diameterFromGirth, RANGES } from '../lib/fillerMath.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -56,13 +56,14 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const maxShaftLen = VIEW_W - x0 - RIGHT_MARGIN - GAP - glansLenA;
   const len = MIN_SHAFT + lenFrac * (maxShaftLen - MIN_SHAFT);
 
-  const csA = clamp(dLo * 12, 22, 72);
-  const csB = clamp(d0 * 12, 22, 72);
-  const ccx = 74;
-  const ccy = 378;
+  // cross-section — BIG + centered, auto-scales with diameter (doctor explains girth gain to patient)
+  const csA = clamp(dLo * 18, 48, 100);
+  const csB = clamp(d0 * 18, 48, 100);
+  const ccx = 240;
+  const ccy = 372;
 
   return (
-    <svg viewBox="0 0 480 460" width="100%" role="img"
+    <svg viewBox="0 0 480 552" width="100%" role="img"
          aria-label={tr('g2dAria')}>
       <defs>
         <linearGradient id="fg-skin" x1="0" y1="0" x2="0" y2="1">
@@ -87,13 +88,13 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
       {/* before (baseline) — fainter pale dashed mushroom */}
       <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
 
-      {/* cross-section (shaft) */}
-      <text x="8" y="282" fontSize="14" fill={lab}>{tr('g2dCross')}</text>
+      {/* cross-section (shaft) — BIG centered circle; legend BELOW (full-width, never overflows) */}
+      <text x="8" y="254" fontSize="14" fill={lab}>{tr('g2dCross')}</text>
       <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
       <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
-      <text x={ccx + csA + 20} y={ccy - 22} fontSize="13" fill="#ef4444">{tr('g2dLegShaft')}</text>
-      <text x={ccx + csA + 20} y={ccy + 2} fontSize="13" fill="#f59e0b">{tr('g2dLegGlans')}</text>
-      <text x={ccx + csA + 20} y={ccy + 26} fontSize="13" fill={labStrong}>{tr('g2dLegKey')}</text>
+      <text x="20" y="494" fontSize="13" fill="#ef4444">{tr('g2dLegShaft')}</text>
+      <text x="20" y="516" fontSize="13" fill="#f59e0b">{tr('g2dLegGlans')}</text>
+      <text x="20" y="538" fontSize="13" fill={labStrong}>{tr('g2dLegKey')}</text>
     </svg>
   );
 }

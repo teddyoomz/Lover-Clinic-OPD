@@ -64,7 +64,7 @@ function Seg({ options, value, onChange, c }) {
     <span style={{ display: 'inline-flex', border: `1px solid ${c.line}`, borderRadius: 9, overflow: 'hidden', background: c.card2 }}>
       {options.map((o) => (
         <button key={o.v} type="button" className="fs-btn" onClick={() => onChange(o.v)}
-          style={{ fontSize: 12, padding: '8px 13px', border: 0, cursor: 'pointer', minHeight: 36,
+          style={{ fontSize: 12, padding: '10px 14px', border: 0, cursor: 'pointer', minHeight: 44,
             background: value === o.v ? `linear-gradient(90deg, ${c.fire2}, ${c.fire})` : 'transparent',
             color: value === o.v ? '#fff' : c.tx2, fontWeight: value === o.v ? 700 : 500 }}>{o.label}</button>
       ))}
@@ -95,7 +95,7 @@ export default function FillerSimulator() {
   const [baseDiameterCm, setBaseDiameterCm] = useState(3.0);
   const [condomIdx, setCondomIdx] = useState(2); // Regular 52
   const [totalCc, setTotalCc] = useState(10); // default 10cc (min RANGES.cc[0]=5 — cannot go below)
-  const [glansCc, setGlansCc] = useState(1); // glans split in EXACT 0.5cc steps (same at every total)
+  const [glansCc, setGlansCc] = useState(0); // default split: shaft 10 · glans 0 — EXACT 0.5cc steps (same at every total)
   const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
   const [view, setView] = useState('2d');
   const [webglOk] = useState(() => webglSupported());
@@ -168,15 +168,17 @@ export default function FillerSimulator() {
         .fs-controls{ order:1; } .fs-graphic{ order:2; }
         .fs-pill{ padding:4px 13px; border-radius:999px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:700;
           border:1px solid ${c.discBd}; background:${c.disc}; color:${c.discTx}; display:inline-flex; align-items:center; gap:5px; }
-        .fs-tgl{ min-height:38px; min-width:42px; display:inline-flex; align-items:center; justify-content:center; gap:5px;
+        .fs-tgl{ min-height:44px; min-width:44px; display:inline-flex; align-items:center; justify-content:center; gap:5px;
           font-size:13px; font-weight:600; border:1px solid ${c.line}; background:${c.card2}; color:${c.tx2};
           border-radius:10px; padding:0 11px; cursor:pointer; transition:border-color .15s, color .15s; }
         .fs-tgl:hover{ border-color:${c.fire}; color:${c.tx}; }
+        /* iPad / touch / stylus: kill tap-delay + grey tap-highlight + long-press text-select on controls */
+        .fs-btn, .fs-tgl, .fs-sel{ touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-user-select:none; user-select:none; }
         .fs-btn:focus-visible, .fs-tgl:focus-visible, .fs-sel:focus-visible, .fs-range:focus-visible{
           outline:none; box-shadow:0 0 0 3px ${c.fire}55; }
         .fs-range{ -webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:4px; background:${c.line}; outline:none; touch-action:pan-y; cursor:pointer; }
-        .fs-range::-webkit-slider-thumb{ -webkit-appearance:none; width:26px; height:26px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4), 0 0 0 5px ${c.fire}26; }
-        .fs-range::-moz-range-thumb{ width:26px; height:26px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+        .fs-range::-webkit-slider-thumb{ -webkit-appearance:none; width:30px; height:30px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4), 0 0 0 5px ${c.fire}26; }
+        .fs-range::-moz-range-thumb{ width:30px; height:30px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4); }
         .fs-range.glans::-webkit-slider-thumb{ border-color:${c.amber}; box-shadow:0 2px 6px rgba(0,0,0,.4), 0 0 0 5px ${c.amber}26; }
         .fs-range.glans::-moz-range-thumb{ border-color:${c.amber}; }
         .fs-sel{ width:100%; min-height:44px; background:${c.card2}; color:${c.tx}; border:1px solid ${c.line}; border-radius:10px; padding:10px 13px; font-size:15px; cursor:pointer; }
@@ -264,14 +266,26 @@ export default function FillerSimulator() {
               </div>
               <input className="fs-range" type="range" min={RANGES.cc[0]} max={RANGES.cc[1]} step={1} value={totalCc} onChange={(e) => { const v = Number(e.target.value); setTotalCc(v); if (glansCc > v) setGlansCc(v); }} aria-label={t('totalFiller')} />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, margin: '15px 0 8px', flexWrap: 'wrap' }}>
+              <div style={{ margin: '15px 0 8px' }}>
                 <span style={{ fontSize: 14, color: c.tx }}>{t('splitLabel')}</span>
-                <span className="fs-num" style={{ fontSize: 12.5, color: c.tx2 }}>{t('shaft')} {ccFmt(shaftCc)} · {t('glans')} {ccFmt(glansCcEff)}</span>
               </div>
               <input className="fs-range glans" type="range" min={0} max={totalCc} step={0.5} value={glansCcEff} onChange={(e) => setGlansCc(Number(e.target.value))} aria-label={t('splitLabel')} />
-              <div style={{ height: 30, borderRadius: 9, overflow: 'hidden', display: 'flex', border: `1px solid ${c.line}`, marginTop: 8 }}>
-                <div style={{ flex: `0 0 ${bodyPct}%`, background: `linear-gradient(90deg, ${c.fire2}, ${c.fire})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'flex-basis .12s' }}>{bodyPct > 14 ? `${t('shaft')} ${ccFmt(shaftCc)}${t('cc')}` : ''}</div>
-                <div style={{ flex: `0 0 ${100 - bodyPct}%`, background: `linear-gradient(90deg, ${c.amber}, ${c.ember})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'flex-basis .12s' }}>{(100 - bodyPct) > 14 ? `${t('glans')} ${ccFmt(glansCcEff)}` : ''}</div>
+              {/* clean proportion strip — NO in-segment text. Labels live in the legend below so they
+                  NEVER clip/cram when a segment is narrow (small-glans display bug fix). */}
+              <div style={{ height: 14, borderRadius: 7, overflow: 'hidden', display: 'flex', border: `1px solid ${c.line}`, marginTop: 10 }}>
+                <div style={{ flex: `0 0 ${bodyPct}%`, background: `linear-gradient(90deg, ${c.fire2}, ${c.fire})`, transition: 'flex-basis .12s' }} />
+                <div style={{ flex: `0 0 ${100 - bodyPct}%`, background: `linear-gradient(90deg, ${c.amber}, ${c.ember})`, transition: 'flex-basis .12s' }} />
+              </div>
+              {/* legend — ALWAYS full text, color-keyed to the bar (readable at any split) */}
+              <div className="fs-num" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', marginTop: 10, fontSize: 13, fontWeight: 600 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: c.tx }}>
+                  <span style={{ width: 11, height: 11, borderRadius: 3, flex: 'none', background: `linear-gradient(90deg, ${c.fire2}, ${c.fire})` }} />
+                  {t('shaft')} {ccFmt(shaftCc)} {t('cc')}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: c.tx }}>
+                  <span style={{ width: 11, height: 11, borderRadius: 3, flex: 'none', background: `linear-gradient(90deg, ${c.amber}, ${c.ember})` }} />
+                  {t('glans')} {ccFmt(glansCcEff)} {t('cc')}
+                </span>
               </div>
             </div>
           </div>

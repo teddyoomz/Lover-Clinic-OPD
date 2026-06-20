@@ -98,8 +98,9 @@ describe('filler-simulator v2 source-grep (purity + wiring + Rev requirements)',
     expect(g2d).not.toMatch(/fg-glans/);       // egg ellipse + its gradient removed
     expect(g2d).not.toMatch(/ทรงเห็ด/);        // label simplified to "ด้านข้าง"
     expect(g2d).toMatch(/visualLow/);          // 2D glans uses damped visual Ø
-    expect(page).toMatch(/whiteSpace: 'nowrap'/); // split segments clip
-    expect(page).toMatch(/bodyPct > 14/);         // label hidden when narrow (no spill)
+    // v5.3: split-bar labels moved OUT to an always-visible legend (were in-segment, clipped/crammed when narrow)
+    expect(page).toMatch(/0 0 \$\{bodyPct\}%/);   // bar = clean proportion strip (width from bodyPct)
+    expect(page).not.toMatch(/bodyPct > 14/);     // buggy in-segment width-gate REMOVED
   });
 
   it('SG6: i18n strings TH+EN present, ประมาณ wording, girth-not-length, no กะเกณ', () => {
@@ -164,7 +165,7 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
 
   it('V3-6: split is EXACT 0.5cc at every total — glansCc direct slider (not % steps)', () => {
     expect(page).toMatch(/setGlansCc/);
-    expect(page).toMatch(/useState\(1\)/);                 // glansCc default
+    expect(page).toMatch(/const \[glansCc, setGlansCc\] = useState\(0\)/); // glansCc default 0 (v5.3: shaft 10 · glans 0)
     expect(page).toMatch(/step={0\.5}/);                   // 0.5cc finest, same at every range
     expect(page).toMatch(/max={totalCc}/);                 // glans up to total
     expect(page).toMatch(/glansCcEff/);                    // clamped effective value
@@ -284,12 +285,13 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
   });
 
   it('V5-3: 2D enlarged (taller viewBox + anatomy) without losing dashed-after / i18n / damped head', () => {
-    expect(g2d).toMatch(/viewBox="0 0 480 460"/);                                 // taller canvas (fills the card)
+    expect(g2d).toMatch(/viewBox="0 0 480 552"/);                                 // taller canvas (v5.3 big cross-section)
     expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
     expect(g2d).not.toMatch(/viewBox="0 0 480 320"/);                            // v5 canvas superseded
+    expect(g2d).not.toMatch(/viewBox="0 0 480 460"/);                            // v5.2 canvas superseded (v5.3 → 552)
   });
 
   it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
@@ -332,5 +334,54 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
     expect(g3d).toMatch(/2 \* Math\.atan\(Math\.tan\(vFOV \/ 2\) \* camera\.aspect\)/); // FOV+aspect fit
     expect((g3d.match(/frameCamera\(/g) || []).length).toBeGreaterThanOrEqual(4);     // def + init + rebuild + resize
     expect(g3d).not.toMatch(/Math\.max\(lengthCm, 11\) \* 2\.2/);                      // old static camera removed
+  });
+});
+
+describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + bigger cross-section + touch + copy', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+  const g3d = read('src/components/Filler3D.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('V5.3-1: default injection split is shaft 10 · glans 0 (glansCc default 0)', () => {
+    expect(page).toMatch(/const \[glansCc, setGlansCc\] = useState\(0\)/);
+    expect(page).not.toMatch(/const \[glansCc, setGlansCc\] = useState\(1\)/);
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);  // total still 10 → shaft 10
+  });
+
+  it('V5.3-2: split-bar labels moved to an always-visible color-keyed legend (no clip/cram at small glans)', () => {
+    // ISOLATED class-of-bug (grep src/: only this bar gated a label on segment width): buggy gate REMOVED
+    expect(page).not.toMatch(/bodyPct > 14/);
+    expect(page).not.toMatch(/\(100 - bodyPct\) > 14/);
+    // bar is still a proportion strip driven by bodyPct, now text-free
+    expect(page).toMatch(/0 0 \$\{bodyPct\}%/);
+    expect(page).toMatch(/0 0 \$\{100 - bodyPct\}%/);
+    // legend shows BOTH values in full, always (shaft + glans), color-keyed
+    expect(page).toMatch(/\{t\('shaft'\)\} \{ccFmt\(shaftCc\)\}/);
+    expect(page).toMatch(/\{t\('glans'\)\} \{ccFmt\(glansCcEff\)\}/);
+  });
+
+  it('V5.3-3: cross-section enlarged + centered + auto-scales with diameter', () => {
+    expect(g2d).toMatch(/viewBox="0 0 480 552"/);                    // taller canvas for the bigger circle
+    expect(g2d).not.toMatch(/viewBox="0 0 480 460"/);               // superseded
+    expect(g2d).toMatch(/const csA = clamp\(dLo \* 18, 48, 100\)/); // bigger + diameter-scaled (was *12, 22, 72)
+    expect(g2d).toMatch(/const ccx = 240/);                         // centered
+    // V4-3 dashed-after stroke shape UNCHANGED → side-view + cross-section count still ≥2
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('V5.3-4: subtitle copy → "เพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น" (TH) + EN mirror; disclaimer keeps เพื่อการศึกษา', () => {
+    expect(strings).toMatch(/sub:[^\n]*เพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น/);
+    expect(strings).not.toMatch(/sub:[^\n]*ประมาณการเชิงภาพประกอบเพื่อการศึกษา/); // old subtitle phrase gone
+    expect(strings).toMatch(/sub:[^\n]*help visualize the outcome more clearly/);  // EN mirror
+    expect(strings).toMatch(/disclaimer:[^\n]*เพื่อการศึกษา/);                      // legal disclaimer keeps the shield
+  });
+
+  it('V5.3-5: touch/iPad — 3D mount touch-action none + buttons manipulation + WCAG tap targets + bigger thumb', () => {
+    expect(g3d).toMatch(/touchAction: 'none'/);                     // 3D rotates on touch (no page scroll over canvas)
+    expect(page).toMatch(/touch-action: manipulation/);            // no 300ms tap delay on buttons
+    expect(page).toMatch(/-webkit-tap-highlight-color: transparent/);
+    expect(page).toMatch(/min-height:44px; min-width:44px/);       // WCAG 2.5.5 tap targets (toggles)
+    expect(page).toMatch(/width:30px; height:30px/);               // bigger slider thumb (finger / Apple Pencil)
   });
 });
