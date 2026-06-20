@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Penile Filler Size Simulator — Implementation Plan</title>
+<style>
+  :root{--accent:#dc2626;--bd:#e5e5e5;--bg-meta:#f0f4f8;--bg-task:#fafafa;--bg-pre:#f5f5f5;--tx-muted:#666;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:960px;margin:2em auto;padding:1em;line-height:1.6;color:#222;}
+  h1{color:#111;border-bottom:2px solid var(--accent);padding-bottom:.3em;}
+  h2{color:#111;border-bottom:1px solid var(--bd);padding-bottom:.2em;margin-top:2em;}
+  pre{background:var(--bg-pre);padding:1em;border-radius:6px;overflow-x:auto;font-size:.86em;}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;}
+  blockquote{border-left:4px solid var(--accent);padding:.5em 1em;color:var(--tx-muted);margin:1em 0;background:var(--bg-meta);border-radius:0 6px 6px 0;}
+  .header-meta{background:var(--bg-meta);padding:1em 1.5em;border-radius:8px;margin:1em 0;}
+  .task{border-left:4px solid var(--accent);padding:.8em 1.2em;margin:1.2em 0;background:var(--bg-task);border-radius:0 6px 6px 0;}
+  .step{margin:.5em 0;}
+  .mockup{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:1.2em;margin:1em 0;}
+  .mockup-label{font-size:.75em;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-muted);margin-bottom:.5em;}
+  table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.92em;}
+  th,td{border:1px solid var(--bd);padding:.4em .7em;text-align:left;}
+  th{background:var(--bg-meta);}
+</style>
+</head>
+<body>
+
+<h1>Penile Filler Size Simulator — Implementation Plan</h1>
+
+<blockquote><strong>For agentic workers:</strong> execute task-by-task (executing-plans / inline). Spec: <code>docs/superpowers/specs/2026-06-20-penile-filler-simulator-design.html</code> (rev4, approved). All math VERIFIED with node.</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Pure-client public page (<code>?play=filler</code>) ที่ลูกค้าเลื่อนสไลเดอร์แล้วเห็นขนาดประมาณการหลังฉีดฟิลเลอร์ (2D เหมือนจริง + 3D หมุนได้) + ไซส์ถุงยาง เดิม→ใหม่.</p>
+  <p><strong>Architecture:</strong> pure client, ไม่อ่าน/เขียน Firestore, ไม่เก็บ PII, ไม่แตะ firestore.rules. เครื่องคำนวณ pure <code>fillerMath.js</code> เป็น single source of truth ให้ทั้ง 2D + 3D + การ์ดผล. three lazy-loaded เฉพาะโหมด 3D.</p>
+  <p><strong>Tech:</strong> React 19 + Vite, SVG (2D), three (3D, lazy), Vitest. ธีม fire/ember เดิม.</p>
+  <p><strong>Deploy:</strong> vercel frontend อย่างเดียว เมื่อ user สั่ง (V18). ไม่มี Probe-Deploy-Probe (no rules change).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>ดูฉบับเต็ม (ธีม dark fire จริง) ใน spec. ย่อ: หัว = โลโก้+ชื่อ; การ์ดซ้าย = สไลเดอร์ ความยาว(ซม./นิ้ว) + baseline toggle (Ø slider / ถุงยาง picker) + ฟิลเลอร์(1–50); การ์ดขวา = กราฟิก + ปุ่มสลับ 2D/3D (มี reveal-gate); ล่าง = การ์ดผล 3 ใบ เดิม→ใหม่; disclaimer.</p>
+<div class="mockup">
+  <div class="mockup-label">การ์ดผล (เดิม → ใหม่ · เทียบในช่องเดียว)</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:150px;border:1px solid #eee;border-radius:8px;padding:8px 10px;"><div style="font-size:11px;color:#888;">รอบวง</div><div style="font-size:12px;color:#888;">เดิม 10.4 ซม.</div><div style="font-weight:700;">→ 11.7–12.2 <span style="color:#dc2626;font-size:12px;">+1.3 ถึง +1.8</span></div></div>
+    <div style="flex:1;min-width:150px;border:1px solid #eee;border-radius:8px;padding:8px 10px;"><div style="font-size:11px;color:#888;">Ø</div><div style="font-size:12px;color:#888;">เดิม 3.3 ซม.</div><div style="font-weight:700;">→ 3.7–3.9 <span style="color:#dc2626;font-size:12px;">+0.4 ถึง +0.6</span></div></div>
+    <div style="flex:1;min-width:160px;border:1px solid #eee;border-radius:8px;padding:8px 10px;"><div style="font-size:11px;color:#888;">ถุงยาง</div><div style="font-size:12px;color:#888;">เดิม Regular 52</div><div style="font-weight:700;">→ Large+ 58 – XL 60 <span style="color:#dc2626;font-size:12px;">+3 ถึง +4 ไซส์</span></div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">slider/picker → fillerMath.estimate() → redraw (no network, no persist)</div>
+  <table>
+    <tr><th>#</th><th>เหตุการณ์</th><th>ผล</th></tr>
+    <tr><td>1</td><td>ผู้ใช้เปลี่ยน L / baseline(Ø หรือ ถุงยาง) / cc / unit</td><td>setState</td></tr>
+    <tr><td>2</td><td><code>estimate({lengthCm, baseGirthCm, fillerCc})</code></td><td>{c0,d0,condom0, c1Low/High, d1Low/High, condomLow/High, sizesUp}</td></tr>
+    <tr><td>3</td><td>โหมด 2D → FillerGraphic2D วาด SVG ตาม c1; โหมด 3D → Filler3D อัปเดต mesh radius=girthToRadius(c1)</td><td>กราฟิกขยายสด</td></tr>
+    <tr><td>4</td><td>การ์ดผล 3 ใบ render เดิม→ใหม่</td><td>เทียบได้ทันที</td></tr>
+    <tr><td>5</td><td>(ไม่มี Firestore / ไม่มี PII / ไม่มี persist)</td><td>ephemeral</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>ความรับผิดชอบ</th></tr>
+  <tr><td><code>src/lib/fillerMath.js</code> (new)</td><td>pure: constants + girth model + condom conversion + ladder + snap + unit + mesh dims. SSOT.</td></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code> (new)</td><td>page: state + controls + view toggle + reveal-gate + result cards + disclaimer.</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code> (new)</td><td>realistic anatomical SVG (side-profile + cross-section), scales from estimate.</td></tr>
+  <tr><td><code>src/components/Filler3D.jsx</code> (new)</td><td>lazy three; parametric mesh; OrbitControls + autorotate; WebGL fallback.</td></tr>
+  <tr><td><code>src/App.jsx</code> (modify)</td><td>route <code>?play=filler</code> before auth gate.</td></tr>
+  <tr><td><code>tests/filler-math.test.js</code> (new)</td><td>unit (verified cases) + adversarial.</td></tr>
+  <tr><td><code>tests/filler-simulator-flow-simulate.test.js</code> (new)</td><td>Rule I full-flow (estimate chain + both-views-same-source).</td></tr>
+  <tr><td><code>package.json</code> (modify)</td><td>add <code>three</code>.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: fillerMath.js (TDD) — the verified math SSOT</h3>
+<p><strong>Files:</strong> Create <code>src/lib/fillerMath.js</code>, <code>tests/filler-math.test.js</code>.</p>
+<div class="step">☐ Step 1: write <code>tests/filler-math.test.js</code> covering the VERIFIED cases:</div>
+<pre><code>// geometry exact
+widthFromGirth(11) === 55 ; girthFromWidth(55) === 11
+diameterFromGirth(11) ≈ 3.50 ; diameterFromGirth(12) ≈ 3.82
+girthFromDiameter(3.0) ≈ 9.4248
+girthToRadiusCm(C) === C/(2π)
+// condom snap (nearest, tie→larger) on ladder [45,49,52,54,56,58,60,64]
+condomForGirth(10.4).widthMm === 52   // snap-back consistency (every rung)
+condomForGirth(11.67).widthMm === 58  // realistic V10 example
+condomForGirth(12.18).widthMm === 60
+// estimate anchor: baseGirth 10.4, L 11, V 16 → ΔC +2.0/+2.8 (±0.05)
+// estimate V10: c1 11.7/12.2 (±0.1), d1 3.7/3.9, condomLow 58, condomHigh 60, sizesUp 3/4
+// monotonic in V ; length-sensitivity L8 > L11 > L15 (ΔC) ; band low<=high
+// unit: cmToInch(2.54)===1 ; inchToCm(1)===2.54
+// adversarial: V=0 → ΔC 0 ; tiny/huge/NaN guarded (no throw, finite)</code></pre>
+<div class="step">☐ Step 2: run → FAIL (module missing). <code>npx vitest run tests/filler-math.test.js</code></div>
+<div class="step">☐ Step 3: implement <code>src/lib/fillerMath.js</code>:</div>
+<pre><code>export const PI = Math.PI;
+export const K_REALISTIC = 2.37, K_OPTIMISTIC = 3.32, CM_PER_INCH = 2.54;
+export const RANGES = { lengthCm:[8,18], diameterCm:[2.2,4.1], cc:[1,50] };
+export const CONDOM_LADDER = [
+  {label:'Super snug 45',w:45},{label:'Close fit 49',w:49},{label:'Regular 52',w:52},
+  {label:'Regular+ 54',w:54},{label:'Large 56',w:56},{label:'Large+ 58',w:58},
+  {label:'XL 60',w:60},{label:'XXL 64',w:64} ];
+const num = (x,d=0)=> Number.isFinite(x)? x : d;
+export const widthFromGirth   = C => num(C)*5;
+export const girthFromWidth   = W => num(W)/5;
+export const diameterFromGirth= C => num(C)/PI;
+export const girthFromDiameter= d => num(d)*PI;
+export const girthToRadiusCm  = C => num(C)/(2*PI);
+export const cmToInch = cm => num(cm)/CM_PER_INCH;
+export const inchToCm = inch => num(inch)*CM_PER_INCH;
+export function condomIndexForGirth(C){
+  const req = num(C)*5; let bi=0;
+  for(let i=1;i&lt;CONDOM_LADDER.length;i++){
+    const d=Math.abs(CONDOM_LADDER[i].w-req), bd=Math.abs(CONDOM_LADDER[bi].w-req);
+    if(d&lt;bd || (d===bd &amp;&amp; CONDOM_LADDER[i].w>CONDOM_LADDER[bi].w)) bi=i; }
+  return bi; }
+export function condomForGirth(C){ const i=condomIndexForGirth(C); return {index:i, ...CONDOM_LADDER[i]}; }
+const dCgeo = (C0,L,V)=> Math.sqrt(C0*C0 + 4*PI*num(V)/Math.max(num(L),0.1)) - C0;
+export function estimate({ lengthCm, baseGirthCm, fillerCc }){
+  const C0=num(baseGirthCm), L=Math.max(num(lengthCm),0.1), V=Math.max(num(fillerCc),0);
+  const g=dCgeo(C0,L,V);
+  const dLow=K_REALISTIC*g, dHigh=K_OPTIMISTIC*g;
+  const c1Low=C0+dLow, c1High=C0+dHigh;
+  const cd0=condomForGirth(C0), cdL=condomForGirth(c1Low), cdH=condomForGirth(c1High);
+  return { c0:C0, d0:diameterFromGirth(C0), condom0:cd0,
+    c1Low, c1High, d1Low:diameterFromGirth(c1Low), d1High:diameterFromGirth(c1High),
+    deltaCLow:dLow, deltaCHigh:dHigh,
+    condomLow:cdL, condomHigh:cdH,
+    sizesUpLow:cdL.index-cd0.index, sizesUpHigh:cdH.index-cd0.index }; }</code></pre>
+<div class="step">☐ Step 4: run → PASS. <code>npx vitest run tests/filler-math.test.js</code></div>
+<div class="step">☐ Step 5: <code>npm install three</code> ; commit (math + test + dep).</div>
+</div>
+
+<div class="task">
+<h3>Task 2: FillerGraphic2D.jsx — realistic anatomical SVG</h3>
+<p><strong>Files:</strong> Create <code>src/components/FillerGraphic2D.jsx</code>.</p>
+<p>Props: <code>{ est, baseGirthCm }</code>. Render side-profile (skin-tone shaded shaft + glans + corona, before dashed centered, after fire-outline) + cross-section circle, scaled by <code>est.c1Low/est.c0</code> (vertical scale about centerline). Pure presentational; numbers from <code>est</code>. Match spec mockup SVG (skin gradient defs, corona arc, highlight). No state.</p>
+<div class="step">☐ Build component; thickness scale = <code>c1/c0</code>; cross-section r_after/r_before = <code>est.d1Low/est.d0</code>. Sentence-case Thai labels; no red on any name (N/A).</div>
+<div class="step">☐ Commit.</div>
+</div>
+
+<div class="task">
+<h3>Task 3: Filler3D.jsx — lazy WebGL 3D model</h3>
+<p><strong>Files:</strong> Create <code>src/components/Filler3D.jsx</code>.</p>
+<p>Props: <code>{ est, lengthCm }</code>. On mount: WebGL-support check (<code>!!document.createElement('canvas').getContext('webgl')</code>); if none → render fallback note (parent shows 2D). Lazy <code>const THREE = await import('three'); const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js')</code>. Scene: shaft = CylinderGeometry(radius=girthToRadiusCm(c1)*scale, height=L*scale), glans = SphereGeometry slightly larger at tip, corona = thin TorusGeometry, MeshStandardMaterial skin-tone (#c98a6e, roughness .75), ambient + key + fill lights, OrbitControls (enableZoom, autoRotate slow). On est/length change → recompute geometry (dispose old). Cleanup renderer/geometry/controls on unmount (dispose). cap <code>setPixelRatio(min(devicePixelRatio,2))</code>.</p>
+<div class="step">☐ Build component (lazy three, mesh, controls, resize, dispose, WebGL fallback).</div>
+<div class="step">☐ Commit.</div>
+</div>
+
+<div class="task">
+<h3>Task 4: FillerSimulator.jsx — page (controls + views + result cards)</h3>
+<p><strong>Files:</strong> Create <code>src/pages/FillerSimulator.jsx</code>.</p>
+<p>State: <code>lengthCm</code>(11), <code>lengthUnit</code>('cm'), <code>baseMode</code>('condom'), <code>baseDiameterCm</code>(3.0), <code>condomIdx</code>(2=Regular52), <code>fillerCc</code>(10), <code>view</code>('2d'), <code>revealed</code>(false). Compute <code>baseGirthCm</code> = baseMode==='condom'? girthFromWidth(ladder[condomIdx].w) : girthFromDiameter(baseDiameterCm). <code>est = useMemo(()=>estimate({lengthCm,baseGirthCm,fillerCc}),[...])</code>. UI: dark fire theme; length slider + ซม./นิ้ว toggle (display convert, store cm); baseline toggle Ø-slider | condom-picker (select 8 rungs); cc slider 1–50; view toggle 2D|3D; <strong>reveal-gate</strong> overlay on graphic (blur + "แตะเพื่อดูภาพจำลอง (18+)" until revealed); 3 result cards เดิม→ใหม่ (round 1dp; sizesUp shown as "+N ไซส์"); notes (girth-not-length / 6–24 ด. / ถุงยางประมาณ) + disclaimer ไทย+อังกฤษ. ClinicLogo optional. No Firestore import.</p>
+<div class="step">☐ Build page wiring fillerMath + FillerGraphic2D + lazy Filler3D (React.lazy/Suspense or conditional dynamic). reveal-gate. result cards.</div>
+<div class="step">☐ Commit.</div>
+</div>
+
+<div class="task">
+<h3>Task 5: App.jsx route</h3>
+<p><strong>Files:</strong> Modify <code>src/App.jsx</code>.</p>
+<p>Add near the public-link branch: read URL param <code>play</code>; if <code>play==='filler'</code> → render <code>&lt;FillerSimulator/&gt;</code> (lazy import) BEFORE the anon-auth gate (no auth needed — pure client). Mirror existing public-route gating style but skip auth.</p>
+<div class="step">☐ Wire route (lazy import + early return). Verify no Firestore dependency on this path.</div>
+<div class="step">☐ Commit.</div>
+</div>
+
+<div class="task">
+<h3>Task 6: flow-simulate test (Rule I) + full verify</h3>
+<p><strong>Files:</strong> Create <code>tests/filler-simulator-flow-simulate.test.js</code>.</p>
+<div class="step">☐ F1: full chain — condom Regular52 → baseGirth 10.4 → estimate(V10,L11) → assert c1Low/High, d, condomLow/High, sizesUp (verified values). F2: Ø-mode 3.3 gives same C0 as condom 52 (→ same estimate). F3: both-views-same-source (2D scale factor and 3D radius both derive from est.c1 — assert the shared deriveation fn). F4: source-grep — FillerSimulator/Graphic2D/Filler3D import from fillerMath; no Firestore/backendClient import in any new file.</div>
+<div class="step">☐ Run <code>npm test -- --run</code> (full suite) → GREEN. <code>npm run build</code> → clean (verify three is a separate lazy chunk, initial bundle not bloated).</div>
+<div class="step">☐ Commit.</div>
+</div>
+
+<div class="task">
+<h3>Task 7: Rule Q L1 — real browser (Claude Preview)</h3>
+<div class="step">☐ <code>preview_start</code> ; open <code>?play=filler</code> ; <code>preview_console_logs</code> (no errors) ; <code>preview_snapshot</code>.</div>
+<div class="step">☐ Drive: change cc slider → assert result cards + 2D SVG update (preview_eval reads computed values vs fillerMath). Toggle baseline Ø↔condom → same C0. Toggle ซม.↔นิ้ว. Tap reveal-gate. Switch to 3D → assert canvas/WebGL renders + rotates + scales (preview_eval on the three canvas). <code>preview_screenshot</code> (2D + 3D) as proof.</div>
+<div class="step">☐ Fix any issue found; re-verify. (pure client → no Rule Q gap.)</div>
+</div>
+
+<h2>Self-review</h2>
+<p>Spec coverage: Q1(2D+3D+numbers)=T2/T3/T4 ✓ · Q2 length-input/no-length-gain=T1/T4 ✓ · Q3 band=T1 ✓ · Q4 no-persist=T4/T5/T6 ✓ · Q5 static link=T5 ✓ · rev1 (6–24,inch,dual-baseline,condom-out)=T1/T4 ✓ · rev2 (3D WebGL + detailed)=T3 ✓ · rev3 (เดิม→ใหม่ cards, ประมาณ)=T4 ✓ · rev4 (no cc warning, 1–50)=T1/T4 ✓ · content-policy gate=T4 reveal-gate ✓. No placeholders. Types consistent (estimate() shape used identically in T4/T6).</p>
+
+</body>
+</html>
