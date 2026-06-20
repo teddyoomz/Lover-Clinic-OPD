@@ -22,12 +22,16 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     versionPlugin(),
-    // Obfuscate ONLY the filler-simulator formula files on `vite build` (command === 'build').
+    // Obfuscate ONLY the filler-simulator FORMULA files on `vite build` (command === 'build').
     // Vitest runs command === 'serve' → this plugin is skipped → fillerMath is tested UNobfuscated →
-    // all tests unaffected. Scope = the 4 filler files (formula constants K_REALISTIC / K_OPTIMISTIC /
-    // dCgeo / CONDOM_LADDER). DO NOT widen this include — it must never touch the rest of the app.
+    // all tests unaffected. Scope = the formula-bearing files (constants K_REALISTIC / K_OPTIMISTIC /
+    // dCgeo / CONDOM_LADDER live in fillerMath.js; shape geometry in FillerGraphic2D.jsx).
+    // FillerSimulator.jsx + Filler3D.jsx are EXCLUDED ON PURPOSE: obfuscating FillerSimulator mangles
+    // its `import('../components/Filler3D.jsx')` literal into a string-array call → Rollup can't code-
+    // split the 3D lazy chunk → `three` never bundles and the 3D view 404s. (2026-06-20 — found while
+    // building the standalone filler site; mirrors vite.filler.config.js.) DO NOT widen this include.
     ...(command === 'build' ? [obfuscator({
-      include: ['**/fillerMath.js', '**/FillerSimulator.jsx', '**/FillerGraphic2D.jsx', '**/Filler3D.jsx'],
+      include: ['**/fillerMath.js', '**/FillerGraphic2D.jsx'],
       exclude: ['node_modules/**', 'tests/**'],
       options: {
         compact: true,

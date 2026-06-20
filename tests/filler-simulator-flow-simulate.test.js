@@ -489,13 +489,18 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
     expect(page).toMatch(/<Filler3D est=\{est\} lengthCm=\{lengthCm\} theme=\{theme\}/); // page passes theme
   });
 
-  it('R9-8: build obfuscation scoped to ONLY the 4 filler files, command-gated (vitest bypasses)', () => {
+  it('R9-8: build obfuscation scoped to the FORMULA files only, command-gated (vitest bypasses)', () => {
     expect(vite).toMatch(/import obfuscator from 'vite-plugin-javascript-obfuscator'/);
     expect(vite).toMatch(/command === 'build' \? \[obfuscator\(\{/);    // only on build, NOT serve/test
     expect(vite).toMatch(/'\*\*\/fillerMath\.js'/);
-    expect(vite).toMatch(/'\*\*\/FillerSimulator\.jsx'/);
     expect(vite).toMatch(/'\*\*\/FillerGraphic2D\.jsx'/);
-    expect(vite).toMatch(/'\*\*\/Filler3D\.jsx'/);
+    // 2026-06-20: FillerSimulator.jsx + Filler3D.jsx REMOVED from the obfuscator include —
+    // obfuscating FillerSimulator mangled its dynamic import('Filler3D.jsx') so the `three`
+    // 3D lazy chunk never emitted (the OPD prod 3D was silently broken). The include array
+    // must NOT contain them so the 3D dynamic import stays a literal Rollup can code-split.
+    const inc = vite.match(/include:\s*\[([^\]]*)\]/)[1];
+    expect(inc).not.toContain('FillerSimulator.jsx');
+    expect(inc).not.toContain('Filler3D.jsx');
     expect(vite).toMatch(/exclude: \['node_modules\/\*\*', 'tests\/\*\*'\]/);
     expect(vite).toMatch(/stringArrayEncoding: \['base64'\]/);
   });
