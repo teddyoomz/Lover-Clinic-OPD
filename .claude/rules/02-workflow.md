@@ -70,6 +70,7 @@ Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after on
    - "deploy rules only" → firestore:rules เท่านั้น (probe-deploy-probe เต็ม)
    - "deploy" (ไม่ระบุ) → **combined ทั้งคู่**
 10. **Deploy fail แบบไหนก็ตาม** → revert immediately, รายงาน user, รอคำสั่งต่อ.
+11. **🆕 Filler standalone — dual deploy (2026-06-20)**: หน้า `?play=filler` ถูกแยกเป็น standalone Vercel project (`loverclinic.vercel.app`) จาก source ชุดเดียวกัน (single source, 2 build targets). **ถ้าแก้ไฟล์ filler** (`fillerMath.js` / `fillerStrings.js` / `FillerSimulator.jsx` / `FillerGraphic2D.jsx` / `Filler3D.jsx`) แล้วจะ deploy → `npm run deploy:filler` (verify bundle → `vercel --prod` OPD → `vercel --prod` standalone). **Pure-client / frontend-only → ไม่มี firestore.rules → ไม่ต้อง Probe-Deploy-Probe**. ยังต้องพิมพ์ "deploy" อนุญาตทุกครั้ง (V18). `vite.filler.config.js` build → `dist-filler`; obfuscator scope = formula files เท่านั้น (`fillerMath.js` + `FillerGraphic2D.jsx` — **ห้ามใส่ FillerSimulator.jsx/Filler3D.jsx** มิฉะนั้น dynamic import ของ 3D พังเงียบ → three chunk ไม่ออก). Security = standalone bundle ไม่มี firebase/OPD เลย (พิสูจน์ด้วย `npm run verify:filler`). ต้องตั้ง `VERCEL_ORG_ID` + `VERCEL_FILLER_PROJECT_ID` (จาก `.env.filler-deploy`, gitignored) ก่อน deploy standalone.
 
 ### Testing
 1. **`npm test` ALL PASS ก่อน commit** เสมอ — test fail แก้โค้ดไม่ใช่แก้ test
