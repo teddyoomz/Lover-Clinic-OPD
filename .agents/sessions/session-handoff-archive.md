@@ -5,6 +5,23 @@
 
 ---
 
+## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-10` → `2026-06-10` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-10 — Cybersecurity hardening WS1–WS4 DEPLOYED + pre-deploy audit (chat_config CRITICAL)
+Whole-app security audit → 4 workstreams ALL DEPLOYED + Rule Q L2 13/13 real prod. **WS1** anon lockdown (rules + crypto ids) · **WS1-C2-bis** chat_config LINE/FB secrets were world-readable (pre-deploy `/systematic-debugging` audit caught it; first specific-match fix was ineffective — Firestore OR-unions rules → fixed via wildcard `read: if settingId != 'chat_config'`; 200→403) · **WS2** deps (jspdf4/vite/postcss, html2pdf removed; criticals=0) · **WS3** send.js/saved-replies auth restored (500→401, was broken+claimless since V50) · **WS4** 7 security headers + CSP (had none). full vitest 16349/3-flakes (isolated 19/19). master `c537ca47`, prod frontend `e5965311` + rules `e5418722`. **⚠ USER MUST ROTATE LINE+FB secrets.** Checkpoint `.agents/sessions/2026-06-10-cybersecurity-hardening-ws1-4.md`.
+
+---
+
+📂 **Older sessions (`2026-06-09 EOD+3 LATE` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-14) — AV193 branch-count + AV194 perf-assessment projection + Rule M backfill + AV195 chat_config cleanup ALL DEPLOYED; suite first-ever 16386/0**: master HEAD `201bd106`; **prod = frontend `201bd106` (vercel, lover-clinic-app.vercel.app HTTP 200) + firestore.rules `e5418722` (UNCHANGED — all today frontend-only → vercel-only, no Probe-Deploy-Probe)**. Four fixes (each `/systematic-debugging`, ultracode): **AV193** — StaffTab/DoctorsTab rendered raw `branchIds.length` → OoMz/Mild showed "4 สาขา" with 3 branches (orphan TEST-V81 branchId, Rule-H soft-keep) → NEW `countLiveBranchMemberships` live-resolves vs be_branches + Rule M cleanup of 2 staff docs (V47/AV25 display-orphan-FK class). **AV194** — kiosk perf/hormone assessment (symp_pe/ADAM/IIEF-5/MRS, 27 fields) blank in saved-customer intake view: `kioskPatientToCanonical`+`buildPatientDataFromForm` dropped them (proven prod: opd_sessions 116/136 carry, be_customers 0/150) — SAME class as V141/AV162 (visit_reasons), MRS doubly-latent → fix = 3-mapper triangle + NEW shared `src/lib/kioskAssessmentFields.js` (`pickKioskAssessmentFields`). **Rule M backfill** — 28 customers' perf recovered from surviving opd_sessions (STRONG match national-id OR name+phone; meaningful answers only; ambiguous LC-26000082 skipped; idempotent; ภูดิท LC-26000151 UNRECOVERABLE — session deleted + not in any of 7 backups). **AV195** — post-hoc blast-radius audit of WS1 (user: "did the security work break anything else?"): 4/5 tightenings clean; the 1 collateral = C2-bis denies client read of secret `clinic_settings/chat_config`, but 2 legacy CLIENT reads survived + failed graceful-but-noisy (fbConfig auto-seed + ChatPanel legacy fallback) → REMOVED (per-branch be_*_configs are primary; chat_config held OLD rotating secrets) + dead FbSettingsTab banner; killed console-error noise. **Origin proven**: the score bug did NOT come from the security work (git -S: perf never in projection; predates ~5 weeks). **Verification pass**: 3 long-standing suite reds proven test-infra flakes (NOT real bugs, NOT today — git show: today's 4 commits touch none of their subjects; rule correct, getAllMasterDataItems is a comment, fx-glow used 10×) → made deterministic (Node-fs/comment-aware) → **full vitest 16386/0** (first fully-green). Both prod data ops idempotent + stable (0 drift). **⚠ USER: ROTATE LINE+FB secrets** (chat_config held OLD secrets; AV195 reinforces). Checkpoint `.agents/sessions/2026-06-14-av193-194-195-perf-and-chatconfig.md`.
+
+---
+
 ## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-09 EOD+3 LATE` → `2026-06-09 EOD+3 LATE` + Current-State index
 
 ### Session blocks (1)
