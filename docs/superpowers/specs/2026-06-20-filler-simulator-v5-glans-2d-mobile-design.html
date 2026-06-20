@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Simulator v5 — initial glans size + bigger 2D + mobile order — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --green:#16a34a; --gold:#d97706; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    /* mockup helpers */
+    .panel { border:1px solid #ccc; border-radius:8px; padding:8px; font-size:12px; color:#555; }
+    .row { display:flex; gap:8px; }
+    .barline { height:7px; background:#e2e2e2; border-radius:4px; margin:7px 0; }
+    .anat { background:#c9886a; border-radius:18px; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Simulator v5 — initial glans size + bigger 2D + mobile order</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user ("ok") · <strong>Page:</strong> <code>?play=filler</code> (pure client, no Firestore / auth / PII) · <strong>Implementation plan:</strong> (to be written next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Three refinements to the public penile-filler size estimator, all user-requested:</p>
+<ol>
+  <li><strong>Initial glans (head) size is fixed.</strong> Real head-to-shaft ratio varies per person, but the baseline glans Ø is hard-wired to the shaft Ø. Users want to set their <em>starting</em> head size — with the default centered on today's balanced value, and still proportional to the chosen diameter.</li>
+  <li><strong>The 2D illustration is small</strong> while the screen has lots of empty space — it should use Desktop / iPad / mobile real-estate efficiently and read clearly.</li>
+  <li><strong>On mobile the order is wrong</strong> — controls sit above the illustration; the illustration should be on top, controls below.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop — BEFORE (50/50, small 2D, empty space) → AFTER (40/60, big 2D)</div>
+  <div style="display:flex; gap:18px; align-items:stretch;">
+    <div style="flex:1;">
+      <div style="font-size:11px;color:#999;margin-bottom:4px;">BEFORE</div>
+      <div class="row" style="height:120px;">
+        <div class="panel" style="flex:1;">ปรับค่า<div class="barline"></div><div class="barline"></div><div class="barline"></div></div>
+        <div class="panel" style="flex:1; display:flex; flex-direction:column;">ภาพประกอบ<div style="flex:1; display:flex; align-items:center; justify-content:center;"><div class="anat" style="width:54px; height:16px;"></div></div></div>
+      </div>
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:11px;color:var(--green);margin-bottom:4px;">AFTER (Q1 = B)</div>
+      <div class="row" style="height:120px;">
+        <div class="panel" style="flex:4;">ปรับค่า<div class="barline"></div><div class="barline"></div></div>
+        <div class="panel" style="flex:6; border-color:var(--green); display:flex; flex-direction:column;">ภาพประกอบ<div style="flex:1; display:flex; align-items:center; justify-content:center;"><div class="anat" style="width:94%; height:40px;"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile / iPad-portrait — BEFORE (controls, then graphic) → AFTER (graphic on top, controls below)</div>
+  <div style="display:flex; gap:24px;">
+    <div style="width:150px;">
+      <div style="font-size:11px;color:#999;margin-bottom:4px;">BEFORE</div>
+      <div class="panel" style="margin-bottom:6px;">ปรับค่า</div>
+      <div class="panel" style="text-align:center;">ภาพประกอบ<div class="anat" style="width:44px;height:13px;margin:6px auto 0;"></div></div>
+    </div>
+    <div style="width:150px;">
+      <div style="font-size:11px;color:var(--green);margin-bottom:4px;">AFTER</div>
+      <div class="panel" style="text-align:center; border-color:var(--green); margin-bottom:6px;">ภาพประกอบ<div class="anat" style="width:90%;height:30px;margin:6px auto 0;"></div></div>
+      <div class="panel">ปรับค่า</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">NEW control — "ขนาดหัวเริ่มต้น" (placed after baseline size, before total filler)</div>
+  <div style="max-width:440px; border:1px solid #ddd; border-radius:8px; padding:12px 14px;">
+    <div style="font-size:13px; color:#333; margin-bottom:8px;">ขนาดหัวเริ่มต้น</div>
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:4px;"><span>เล็ก</span><span style="color:#333;">ปกติ (default)</span><span>ใหญ่</span></div>
+    <div style="position:relative; height:7px; background:#e2e2e2; border-radius:4px;">
+      <div style="position:absolute; left:50%; top:-5px; width:18px; height:18px; margin-left:-9px; border-radius:50%; background:#fff; border:3px solid #f59e0b;"></div>
+    </div>
+    <div style="font-size:11px; color:#888; margin-top:8px;">ratio of shaft Ø · range 0.75× – 1.25× · default 1.0× (= shaft Ø, today's value) · scales with the chosen diameter</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Data flow — glans baseline ratio rides on the chosen diameter (single source = fillerMath)</div>
+  <table>
+    <tr><th>#</th><th>Step</th><th>Value</th></tr>
+    <tr><td>1</td><td>User picks condom / Ø</td><td><code>baseGirthCm</code> → <code>shaftØ = diameterFromGirth(baseGirthCm)</code></td></tr>
+    <tr><td>2</td><td>User moves the NEW glans slider</td><td><code>glansBaseRatio</code> ∈ [0.75, 1.25], default 1.0</td></tr>
+    <tr><td>3</td><td>Derive baseline head Ø (scales with diameter)</td><td><code>baseGlansDiameterCm = glansBaseRatio × shaftØ</code></td></tr>
+    <tr><td>4</td><td><code>estimate({…, baseGlansDiameterCm, glansCc})</code></td><td><code>glans.dg0 = baseGlansDiameterCm</code>; <code>glans.visualLow = dg0 + 0.25·glansCc·0.4</code> (damped)</td></tr>
+    <tr><td>5</td><td>2D + 3D render the head bulb</td><td>from <code>est.glans.visualLow</code> (already wired) — head bulb grows/shrinks with the ratio AND the diameter</td></tr>
+    <tr><td>6</td><td>Condom / girth results</td><td>UNCHANGED — head is excluded from condom sizing (only shaft girth)</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Responsive order flow — one grid, CSS order flips by breakpoint</div>
+  <pre>desktop ( >820px ): grid 40/60   [ controls (order 1) | graphic (order 2) ]
+mobile / iPad-portrait ( ≤820px ): 1 column
+                                 [ graphic  (order 1) ]   ← on top
+                                 [ controls (order 2) ]   ← below</pre>
+</div>
+
+<h2>Architecture</h2>
+<p>All changes are confined to the three filler files; no new dependency, no data, no API.</p>
+<ul>
+  <li><strong><code>src/pages/FillerSimulator.jsx</code></strong> — NEW <code>glansBaseRatio</code> state (default 1.0) + slider control (between baseline and total-filler sections); pass <code>baseGlansDiameterCm = glansBaseRatio × diameterFromGirth(baseGirthCm)</code> into <code>estimate()</code>; grid → <code>minmax(0,2fr) minmax(0,3fr)</code> (40/60) with a <code>1fr</code> single-column media query; CSS <code>order</code> on the controls/graphic panels so the graphic comes first ≤820px.</li>
+  <li><strong><code>src/components/FillerGraphic2D.jsx</code></strong> — enlarge the side-view so the 2D fills the (wider) card: bigger anatomy as the hero, cross-section circle + legend kept but compact. Driven by the same <code>est</code> (single source); the head bulb already reads <code>est.glans.visualLow</code>.</li>
+  <li><strong><code>src/lib/fillerStrings.js</code></strong> — NEW i18n keys: <code>glansBase</code> (TH "ขนาดหัวเริ่มต้น" / EN "Initial glans size") + small/normal/large markers (<code>gSmall</code>/<code>gNormal</code>/<code>gLarge</code>).</li>
+  <li><strong><code>src/lib/fillerMath.js</code></strong> — no logic change (<code>estimate()</code> already accepts <code>baseGlansDiameterCm</code>); add a <code>GLANS_BASE_RATIO</code> range constant (min 0.75, max 1.25, default 1.0, step 0.05) for SSOT.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = B:</strong> Desktop illustration column wider — controls 40% / graphic 60% (biggest 2D while still side-by-side with the controls).</li>
+  <li><strong>Q2 = Slider:</strong> Initial glans size is a smooth slider (เล็ก ↔ ปกติ ↔ ใหญ่), default centered, a ratio of the shaft Ø so it scales with the chosen diameter.</li>
+  <li><strong>Mobile order (given):</strong> single-column → illustration on top, controls below; desktop unchanged (controls-left | graphic-right).</li>
+  <li><strong>Glans ratio range:</strong> 0.75×–1.25× of shaft Ø, default 1.0× (= today's value), step 0.05.</li>
+  <li><strong>No new result number</strong> for the head — it isn't part of condom/girth sizing; the slider affects the 2D/3D head bulb only.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>A "ขนาดหัวเริ่มต้น / Initial glans size" slider exists, default centered (ratio 1.0); at 1.0 the head Ø equals the shaft Ø (identical to current render).</li>
+  <li>Changing the diameter/condom rescales the baseline head proportionally (ratio held); changing the ratio at a fixed diameter grows/shrinks the baseline head; the cc head-injection still adds on top.</li>
+  <li>The slider changes the 2D AND 3D head bulb; condom + girth + diameter result cards are byte-identical regardless of the ratio (head excluded from condom sizing).</li>
+  <li>Desktop: controls 40% / illustration 60%; the 2D visibly fills the wider card (no large empty band); no horizontal scroll.</li>
+  <li>Phone + iPad-portrait (≤820px): single column with the illustration box ON TOP and the controls box BELOW; no horizontal scroll; the 2D is full-width and clearly larger than before.</li>
+  <li>All copy stays formal in TH + EN (the new control included); pure-client (no Firestore/auth/PII); filler tests + build green; Rule Q L1 real-browser verified.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>SVG enlargement vs viewBox:</strong> making the side-view bigger must not clip the corona/cross-section/legend at any card width; the exact viewBox + scale constants are worked out in the plan and verified live on Desktop/iPad/mobile widths.</li>
+  <li><strong>Controls at 40% width:</strong> the condom <code>&lt;select&gt;</code> + sliders must stay comfortable in the narrower desktop column (they already wrap; verify the long condom option label doesn't overflow).</li>
+  <li><strong>Glans ratio interaction with diameter mode:</strong> ratio multiplies <code>diameterFromGirth(baseGirthCm)</code> in BOTH condom-mode and Ø-mode, so the "scales with diameter" behavior holds either way.</li>
+</ul>
+
+</body>
+</html>
