@@ -27,6 +27,7 @@ const PatientDashboard = lazy(() => import('./pages/PatientDashboard.jsx'));
 const ClinicSchedule = lazy(() => import('./pages/ClinicSchedule.jsx'));
 const BackendDashboard = lazy(() => import('./pages/BackendDashboard.jsx'));
 const TabletChartEditorPage = lazy(() => import('./pages/TabletChartEditorPage.jsx'));
+const FillerSimulator = lazy(() => import('./pages/FillerSimulator.jsx'));
 // V73 (2026-05-16) — staff chat widget. Self-gates internally on user +
 // selectedBranchId + !needsPublicAuth, so safe to mount globally inside
 // provider chain.
@@ -64,6 +65,7 @@ export default function App() {
   const patientFromUrl = params.get('patient');
   const scheduleFromUrl = params.get('schedule');
   const tabletFromUrl = params.get('tablet');   // ?tablet=chart — staff-auth tablet chart editor (NOT a public/anon link)
+  const playFromUrl = params.get('play');       // ?play=filler — pure-client public toy (no auth, no Firestore, no PII)
   const backendMode = params.get('backend');
 
   useEffect(() => {
@@ -198,6 +200,12 @@ export default function App() {
   // empty → "Invalid Link" flashes for ~200-500ms before the auth retry
   // succeeds. (User-reported bug 2026-04-25: "QR ลิ้งใช้ครั้งแรกไม่ได้
   // ต้อง refresh ถึงจะติด"). Loading screen here = ZERO flash.
+  // ?play=filler — pure-client public simulator. No auth, no Firestore, no PII.
+  // Returns before any auth gate / AdminLogin fallthrough.
+  if (playFromUrl === 'filler') {
+    return <Suspense fallback={<LazyFallback />}><FillerSimulator /></Suspense>;
+  }
+
   if (needsPublicAuth && !user) {
     // Resilient gate — if anon-auth is stuck (half-dead network) show a retry
     // escape instead of a permanent black "กำลังโหลด..." (symptom a). V16
