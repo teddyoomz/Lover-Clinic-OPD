@@ -22,7 +22,7 @@ function formatTime(createdAt) {
 
 export function StaffChatSystemCard({ message }) {
   const kind = (message.system && message.system.kind) || 'intake';
-  const { pending, customerId, name, hn } = useSystemCardCustomer(message);
+  const { pending, missing, customerId, name, hn } = useSystemCardCustomer(message);
   const time = formatTime(message.createdAt);
   return (
     <div
@@ -50,6 +50,16 @@ export function StaffChatSystemCard({ message }) {
             </span>
             <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'rgba(202,163,122,0.15)', color: '#caa37a' }}>
               รอลงทะเบียน
+            </span>
+          </>
+        ) : missing ? (
+          <>
+            {/* customer was deleted after the card was written — plain text, no 404 link */}
+            <span data-testid="system-card-customer-name" className="text-[13px] font-bold" style={{ color: 'var(--tx-primary)' }}>
+              {name || '—'}
+            </span>
+            <span data-testid="system-card-missing" className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'var(--bg-hover)', color: 'var(--tx-muted)' }}>
+              ไม่พบข้อมูลลูกค้า
             </span>
           </>
         ) : (

@@ -65,4 +65,20 @@ describe('StaffChatSystemCard', () => {
     render(<StaffChatSystemCard message={{ id: 'm5', createdAt: TS, system: { kind: 'followup', customerId: 'LC-1', sessionId: 'S5', nameSnapshot: 'A B', hnSnapshot: 'X' } }} />);
     expect(snapCb).toBeNull(); // no onSnapshot — direct customerId
   });
+
+  it('R6 customer DELETED after registration (getCustomer→null) → downgrades to plain name + ไม่พบข้อมูลลูกค้า, NO 404 link', async () => {
+    getCustomerMock.mockResolvedValue(null); // be_customers doc gone
+    render(<StaffChatSystemCard message={{ id: 'm6', createdAt: TS, system: { kind: 'followup', customerId: 'LC-DEL', nameSnapshot: 'ลบ แล้ว', hnSnapshot: 'LC-DEL' } }} />);
+    expect(await screen.findByTestId('system-card-missing')).toBeTruthy();
+    expect(screen.queryByTestId('system-card-customer-link')).toBeNull(); // no broken link
+    expect(screen.getByText(/ลบ แล้ว/)).toBeTruthy();                      // name still shown (plain)
+  });
+
+  it('R7 transient getCustomer failure (throw) → KEEPS the optimistic link (valid target), no false-missing', async () => {
+    getCustomerMock.mockRejectedValue(new Error('unavailable'));
+    render(<StaffChatSystemCard message={{ id: 'm7', createdAt: TS, system: { kind: 'followup', customerId: 'LC-7', nameSnapshot: 'A B', hnSnapshot: 'LC-7' } }} />);
+    const link = await screen.findByTestId('system-card-customer-link'); // link stays (customerId valid)
+    expect(link.getAttribute('href')).toBe('/?backend=1&customer=LC-7');
+    expect(screen.queryByTestId('system-card-missing')).toBeNull();       // a throw is NOT treated as deletion
+  });
 });
