@@ -55,7 +55,7 @@ function DashToggle({ on, onClick, line, dash, label, accent, labStrong, lab }) 
 
 export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', t }) {
   const tr = typeof t === 'function' ? t : (k) => k; // i18n — EN mode translates all labels
-  const [showAfter, setShowAfter] = useState(true);     // toggle red dashed "หลังฉีด" outline
+  const [showAfter, setShowAfter] = useState(false);    // default OFF — red dashed "หลังฉีด" outline hidden until toggled on
   const [showBaseline, setShowBaseline] = useState(true); // toggle faint dashed "เดิม" outline
   const d0 = est?.d0 ?? diameterFromGirth(10.4);
   const dLo = est?.d1Low ?? d0;

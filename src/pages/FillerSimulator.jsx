@@ -233,7 +233,7 @@ export default function FillerSimulator() {
         .fs-range.glans::-moz-range-thumb{ border-color:${c.amber}; }
         .fs-sel{ width:100%; min-height:44px; background:${c.card2}; color:${c.tx}; border:1px solid ${c.line}; border-radius:10px; padding:10px 13px; font-size:15px; cursor:pointer; }
         .fs-num{ font-variant-numeric:tabular-nums; }
-        @media (max-width:820px){ .fs-grid{ grid-template-columns:1fr; } .fs-graphic{ order:1; } .fs-controls{ order:2; } }
+        @media (max-width:820px){ .fs-grid{ grid-template-columns:1fr; } .fs-controls{ order:1; } .fs-graphic{ order:2; } }
         @media (max-width:560px){ .fs-shell{ padding:max(14px,env(safe-area-inset-top)) 13px 40px; } }
         @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
       `}</style>

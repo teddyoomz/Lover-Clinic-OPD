@@ -274,14 +274,13 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
     expect(strings).toMatch(/glansBase: 'Initial glans size'/);
   });
 
-  it('V5-2: desktop 40/60 grid + mobile illustration-on-top order', () => {
+  it('V5-2→v7: desktop 40/60 grid + mobile CONTROLS-on-top order', () => {
     expect(page).toMatch(/grid-template-columns:minmax\(0,2fr\) minmax\(0,3fr\)/); // 40/60 desktop
-    expect(page).toMatch(/\.fs-graphic\{ order:1; \}/);     // mobile: graphic first (top)
-    expect(page).toMatch(/\.fs-controls\{ order:2; \}/);    // mobile: controls below
+    // mobile (≤820px): single column, CONTROLS first (top), illustration below (v7 — was graphic-on-top)
+    expect(page).toMatch(/@media \(max-width:820px\)\{ \.fs-grid\{ grid-template-columns:1fr; \} \.fs-controls\{ order:1; \} \.fs-graphic\{ order:2; \} \}/);
+    expect(page).not.toMatch(/\.fs-graphic\{ order:1; \}/);  // graphic is NEVER order:1 now (anti-regression)
     expect(page).toMatch(/className="fs-graphic"/);
     expect(page).toMatch(/className="fs-controls"/);
-    // single-column breakpoint preserved
-    expect(page).toMatch(/@media \(max-width:820px\)/);
   });
 
   it('V5-3: 2D split into auto-scale sections (side-view + cross-section) without losing dashed-after / i18n / damped head', () => {
@@ -588,9 +587,9 @@ describe('filler-simulator v6 — 2D dash toggles (double as legend) + stronger 
   const g2d = read('src/components/FillerGraphic2D.jsx');
   const strings = read('src/lib/fillerStrings.js');
 
-  it('V6-1: useState + showAfter/showBaseline toggle state', () => {
+  it('V6-1→v7: useState toggle state — showAfter default OFF, showBaseline default ON', () => {
     expect(g2d).toMatch(/import \{ useState \} from 'react'/);
-    expect(g2d).toMatch(/const \[showAfter, setShowAfter\] = useState\(true\)/);
+    expect(g2d).toMatch(/const \[showAfter, setShowAfter\] = useState\(false\)/);   // v7: red "หลังฉีด" hidden by default
     expect(g2d).toMatch(/const \[showBaseline, setShowBaseline\] = useState\(true\)/);
   });
   it('V6-2: dashed lines render conditionally on the toggles (both svgs)', () => {
