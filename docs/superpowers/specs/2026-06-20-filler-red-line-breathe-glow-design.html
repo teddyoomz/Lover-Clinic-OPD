@@ -108,7 +108,7 @@
 <table>
   <tr><th>#</th><th>Render / CSS wiring</th></tr>
   <tr><td>1</td><td><code>FillerGraphic2D</code> renders one <code>&lt;style&gt;</code> block (keyframes <code>fgRevBreathe</code> + <code>fgRevGlow</code>, class <code>.fg-revBreathe</code>, <code>prefers-reduced-motion</code> guard) once at the top of its returned fragment.</td></tr>
-  <tr><td>2</td><td>The two red <code>stroke="#ef4444"</code> elements — side-view path (line 84) + cross-section circle (line 105) — get <code>className="fg-revBreathe"</code>. <code>strokeOpacity="0.6"</code> kept (peak = 0.6 × element-opacity 1).</td></tr>
+  <tr><td>2</td><td>Each red outline is its OWN <code>fill="none"</code> element overlaying the static skin-fill body (side-view path + cross-section circle), carrying <code>className="fg-revBreathe"</code> + <code>strokeOpacity="0.6"</code>. Animating opacity/glow on the <code>fill:none</code> outline fades ONLY the dashed line — the skin body never moves. (A first cut put the class on the combined fill+stroke element → the WHOLE body faded; fixed by splitting.)</td></tr>
   <tr><td>3</td><td>Browser runs the CSS animation: element <code>opacity</code> 1→0 (with hold) × <code>filter: drop-shadow</code> red glow → <code>none</code>. Red line breathes + glows, vanishes fully, returns.</td></tr>
   <tr><td>4</td><td><code>prefers-reduced-motion: reduce</code> → <code>animation: none</code> → element opacity 1, no filter → red line static at its original 0.6 (no motion).</td></tr>
   <tr><td>5</td><td>The <code>beforeStroke</code> const (line 45) lowered: dark <code>rgba(255,255,255,0.5)</code>→<code>0.25</code>, light <code>rgba(15,23,42,0.42)</code>→<code>0.21</code>. Faint baseline (lines 88, 106) stays <strong>static</strong> — no animation.</td></tr>
@@ -118,7 +118,7 @@
 <p>Single-file change in <code>src/components/FillerGraphic2D.jsx</code>:</p>
 <ul>
   <li><strong>One scoped <code>&lt;style&gt;</code></strong> in the wrapping <code>&lt;div&gt;</code> — keyframes + class + reduced-motion. CSS keyframes are document-global once injected, so a single block covers both inner <code>&lt;svg&gt;</code>s. (CSS is not touched by the build-time obfuscator, which targets only the 4 filler JS files' formula constants.)</li>
-  <li><strong>Two <code>className</code> adds</strong> on the red strokes (line 84, 105). Minimal diff — keep <code>strokeOpacity="0.6"</code>; the keyframe animates element <code>opacity</code> so the lit peak equals the original 0.6.</li>
+  <li><strong>Split each red outline into its own <code>fill="none"</code> element</strong> overlaying the static skin-fill body (side + cross). The animation lives on the <code>fill:none</code> outline only, so opacity→0 + glow fade the LINE, never the skin body. <code>strokeOpacity="0.6"</code> sets the lit peak.</li>
   <li><strong>One const edit</strong> on <code>beforeStroke</code> (line 45) for the fainter baseline.</li>
 </ul>
 

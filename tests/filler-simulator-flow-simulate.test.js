@@ -511,9 +511,15 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
 describe('filler-simulator v5.6 — red dashed breathe+glow (Calm, fade to invisible) + fainter baseline', () => {
   const g2d = read('src/components/FillerGraphic2D.jsx');
 
-  it('V5.6-1: red "หลังฉีด" outline animates — class on BOTH red strokes (side-view path + cross-section circle)', () => {
-    // className inserted BEFORE the stroke attrs → V5.3-3 red-stroke grep stays intact; exactly 2 (side + cross)
-    expect((g2d.match(/className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBe(2);
+  it('V5.6-1: red outline animates as its OWN fill:none element (side + cross) — NOT the skin body', () => {
+    // the breathe class lives on fill:none OUTLINE-only elements → opacity/glow touch the LINE, not the skin fill
+    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBe(2);
+    // ANTI-REGRESSION (the v5.6-first bug): the SKIN-FILLED body must NEVER carry the animation, else the WHOLE shape fades
+    expect(g2d).not.toMatch(/fill="url\(#fg-skin\)" className="fg-revBreathe"/);
+    expect(g2d).not.toMatch(/fill="url\(#fg-cs\)" className="fg-revBreathe"/);
+    // skin body elements still present, solid + static
+    expect(g2d).toMatch(/fill="url\(#fg-skin\)" \/>/);
+    expect(g2d).toMatch(/fill="url\(#fg-cs\)" \/>/);
   });
 
   it('V5.6-2: keyframes — fgRevBreathe (opacity hold→0) + fgRevGlow (drop-shadow→none) + 3.6s loop', () => {
