@@ -41,6 +41,17 @@ describe('AV198 — staff-chat System notification card invariants', () => {
     expect(s).toMatch(/if \(msg\.system\) return null/);
   });
 
+  it('A9 card label colors are THEME-AWARE (AA in light mode) — no hardcoded soft-pink/tan that vanishes on a light card', () => {
+    const s = read('src/components/staffchat/StaffChatSystemCard.jsx');
+    // round-5 fix: the "ระบบ" label + "รอลงทะเบียน" pill must be theme-aware classes, not
+    // hardcoded #f3b4b4 / #caa37a (1.37:1 on the light --bg-card).
+    expect(s).not.toMatch(/#f3b4b4/);
+    expect(s).not.toMatch(/color:\s*'#caa37a'/);
+    expect(s).toMatch(/ระบบ · LoverClinic<\/div>/);
+    expect(s).toMatch(/text-rose-700 dark:text-rose-300/);   // system label
+    expect(s).toMatch(/text-amber-700 dark:text-amber-300/); // รอลงทะเบียน pill
+  });
+
   it('A3 the customer NAME link is sky, NEVER red (Thai culture); fire-red only on icon/border', () => {
     const s = read('src/components/staffchat/StaffChatSystemCard.jsx');
     // the clickable name uses text-sky

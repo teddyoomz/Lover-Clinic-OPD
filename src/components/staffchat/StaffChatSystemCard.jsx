@@ -37,7 +37,9 @@ export function StaffChatSystemCard({ message }) {
           <Sparkles size={16} color="#fff" />
         </span>
         <div className="leading-tight">
-          <div className="text-[10px] font-bold" style={{ color: '#f3b4b4' }}>ระบบ · LoverClinic</div>
+          {/* theme-aware (AA): deep rose in light, soft rose in dark — the "ระบบ" label
+              is the system identity, not a patient name, so rose is culturally fine. */}
+          <div className="text-[10px] font-bold text-rose-700 dark:text-rose-300">ระบบ · LoverClinic</div>
           <div className="text-[13px] font-bold" style={{ color: 'var(--tx-primary)' }}>{HEADLINE[kind] || HEADLINE.intake}</div>
         </div>
         {time && <div className="ml-auto text-[9px] flex-none" style={{ color: 'var(--tx-muted)' }}>{time}</div>}
@@ -48,7 +50,7 @@ export function StaffChatSystemCard({ message }) {
             <span data-testid="system-card-customer-name" className="text-[13px] font-bold" style={{ color: 'var(--tx-primary)' }}>
               {name || '—'}
             </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'rgba(202,163,122,0.15)', color: '#caa37a' }}>
+            <span className="text-[11px] px-2 py-0.5 rounded-md text-amber-700 dark:text-amber-300" style={{ background: 'rgba(202,163,122,0.15)' }}>
               รอลงทะเบียน
             </span>
           </>
