@@ -39,7 +39,7 @@ describe('fillerMath — units', () => {
   });
 });
 
-describe('fillerMath — condom snap (nearest width, tie → larger)', () => {
+describe('fillerMath — condom snap (FLOOR — largest size that fits, conservative)', () => {
   it('exact width snaps to that rung', () => {
     expect(condomForGirth(10.4).w).toBe(52); // 52mm
     expect(condomForGirth(12.0).w).toBe(60); // 60mm exact
@@ -54,11 +54,13 @@ describe('fillerMath — condom snap (nearest width, tie → larger)', () => {
     expect(condomForGirth(11.67).w).toBe(58); // Large+
     expect(condomForGirth(12.18).w).toBe(60); // XL
   });
-  it('tie resolves to the LARGER width', () => {
-    // girth 11.0 → req 55mm, midway 54 & 56 → pick 56
-    expect(condomForGirth(11.0).w).toBe(56);
-    // girth 10.0 → req 50mm, midway 49 & 52 (Δ1 vs Δ2) → 49 (nearest, not tie)
+  it('floor: between sizes → rounds DOWN to the size that fits (conservative)', () => {
+    // girth 11.0 → req 55mm, between 54 & 56 → floor → 54 (under-promise, safety)
+    expect(condomForGirth(11.0).w).toBe(54);
+    // girth 10.0 → req 50mm, between 49 & 52 → floor → 49
     expect(condomForGirth(10.0).w).toBe(49);
+    // girth 11.5 → req 57.5mm, between 56 & 58 → floor → 56
+    expect(condomForGirth(11.5).w).toBe(56);
   });
   it('clamps to ladder ends for out-of-range girth', () => {
     expect(condomForGirth(5).w).toBe(45); // tiny → smallest

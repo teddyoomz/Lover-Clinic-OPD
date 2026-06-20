@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  estimate, girthFromWidth, girthFromDiameter, diameterFromGirth, girthToRadiusCm, CONDOM_LADDER, RANGES,
+  estimate, girthFromWidth, girthFromDiameter, diameterFromGirth, girthToRadiusCm, CONDOM_LADDER, RANGES, condomForGirth,
 } from '../src/lib/fillerMath.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -145,7 +145,7 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
   it('V3-3: 2D length auto-stretches (no static clamp) — fills viewBox width at max length (v5.2)', () => {
     expect(g2d).not.toMatch(/, 100, 198\)/);   // old cap (~7.8in) removed
     expect(g2d).not.toMatch(/lenToPx/);        // static clamp helper removed → dynamic
-    expect(g2d).toMatch(/maxShaftLen = VIEW_W - x0 - RIGHT_MARGIN - GAP - glansLenA/); // smart fill-to-width
+    expect(g2d).toMatch(/maxShaftLen = SIDE_W - x0 - RIGHT_MARGIN - GAP - glansLenA/); // smart fill-to-width (v5.4: VIEW_W→SIDE_W)
     expect(g2d).toMatch(/lenFrac/);            // length → 0..1 over the real range
   });
 
@@ -284,14 +284,16 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
     expect(page).toMatch(/@media \(max-width:820px\)/);
   });
 
-  it('V5-3: 2D enlarged (taller viewBox + anatomy) without losing dashed-after / i18n / damped head', () => {
-    expect(g2d).toMatch(/viewBox="0 0 480 552"/);                                 // taller canvas (v5.3 big cross-section)
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept
+  it('V5-3: 2D split into auto-scale sections (side-view + cross-section) without losing dashed-after / i18n / damped head', () => {
+    expect(g2d).toMatch(/0 0 \$\{SIDE_W\} \$\{SIDE_H\}/);                         // v5.4: side-view own viewBox
+    expect(g2d).toMatch(/viewBox="0 0 240 240"/);                                // v5.4: cross-section own square viewBox
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
     expect(g2d).not.toMatch(/viewBox="0 0 480 320"/);                            // v5 canvas superseded
-    expect(g2d).not.toMatch(/viewBox="0 0 480 460"/);                            // v5.2 canvas superseded (v5.3 → 552)
+    expect(g2d).not.toMatch(/viewBox="0 0 480 460"/);                            // v5.2 canvas superseded
+    expect(g2d).not.toMatch(/viewBox="0 0 480 552"/);                            // v5.3 single-canvas superseded (v5.4 split)
   });
 
   it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
@@ -323,9 +325,9 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
 
   it('V5.2-3: 2D side-view SMART auto-stretch — fills the viewBox width at max length', () => {
     expect(g2d).toMatch(/import \{ diameterFromGirth, RANGES \}/);        // length range for the fraction
-    expect(g2d).toMatch(/const maxShaftLen = VIEW_W - x0 - RIGHT_MARGIN - GAP - glansLenA/);
+    expect(g2d).toMatch(/const maxShaftLen = SIDE_W - x0 - RIGHT_MARGIN - GAP - glansLenA/); // v5.4: VIEW_W→SIDE_W
     expect(g2d).toMatch(/const len = MIN_SHAFT \+ lenFrac \* \(maxShaftLen - MIN_SHAFT\)/);
-    expect(g2d).toMatch(/VIEW_W = 480/);
+    expect(g2d).toMatch(/SIDE_W = 480/);
   });
 
   it('V5.2-4: 3D auto-scale — frameCamera fits the model (FOV+aspect), reframed on rebuild + resize', () => {
@@ -334,6 +336,48 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
     expect(g3d).toMatch(/2 \* Math\.atan\(Math\.tan\(vFOV \/ 2\) \* camera\.aspect\)/); // FOV+aspect fit
     expect((g3d.match(/frameCamera\(/g) || []).length).toBeGreaterThanOrEqual(4);     // def + init + rebuild + resize
     expect(g3d).not.toMatch(/Math\.max\(lengthCm, 11\) \* 2\.2/);                      // old static camera removed
+  });
+});
+
+describe('filler-simulator v5.4 — round-DOWN results (safety) + auto-scale layout (fill height, no dead bands)', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+  const math = read('src/lib/fillerMath.js');
+
+  it('V5.4-1: condom snap is FLOOR (largest size that fits) — conservative, under-promise', () => {
+    expect(math).toMatch(/CONDOM_LADDER\[i\]\.w <= req\) bi = i/);   // floor to the largest fitting size
+    expect(math).not.toMatch(/Math\.abs\(CONDOM_LADDER\[i\]\.w - req\)/); // old nearest-snap gone
+    // behaviour: 55mm req (girth 11.0) floors to 54, not nearest-tie 56
+    expect(condomForGirth(11.0).w).toBe(54);
+    expect(condomForGirth(11.5).w).toBe(56);
+    expect(condomForGirth(10.4).w).toBe(52); // exact rung unaffected
+  });
+
+  it('V5.4-2: numeric result display rounds DOWN (Math.floor, not Math.round)', () => {
+    expect(page).toMatch(/const r1 = \(x\) => \(Math\.floor\(/);
+    expect(page).not.toMatch(/const r1 = \(x\) => \(Math\.round\(/);
+    // floor at 1 decimal under-states (10.46 → 10.4, never 10.5)
+    const r1 = (x) => (Math.floor((Number(x) || 0) * 10) / 10).toFixed(1);
+    expect(r1(10.46)).toBe('10.4');
+    expect(r1(2.99)).toBe('2.9');
+  });
+
+  it('V5.4-3: controls box distributes to fill its height (no empty bottom on desktop/iPad)', () => {
+    expect(page).toMatch(/className="fs-controls" style=\{card\(\{ padding: '17px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' \}\)\}/);
+  });
+
+  it('V5.4-4: 2D illustration is a flex column that fills + DISTRIBUTES its 3 sections (no dead bands)', () => {
+    expect(g2d).toMatch(/justifyContent: 'space-evenly'/);   // side-view / cross-section / legend distribute
+    expect(g2d).toMatch(/flex: 1, minHeight: 0/);            // fills the card area (desktop) / natural (mobile)
+    // legend is real HTML now (i18n spans), not SVG <text> — never overflows
+    expect(g2d).toMatch(/<span style=\{\{ color: '#ef4444' \}\}>\{tr\('g2dLegShaft'\)\}/);
+    expect(g2d).toMatch(/<span style=\{\{ color: '#f59e0b' \}\}>\{tr\('g2dLegGlans'\)\}/);
+    expect(g2d).not.toMatch(/<text x="20" y="494"/);         // old SVG legend coords gone
+  });
+
+  it('V5.4-5: cross-section SVG scales with the container + capped (auto-scale, centered)', () => {
+    expect(g2d).toMatch(/width: 'min\(62%, 250px\)', margin: '0 auto'/); // responsive + capped + centered
+    expect(g2d).toMatch(/preserveAspectRatio="xMidYMid meet"/);
   });
 });
 
@@ -361,11 +405,9 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
     expect(page).toMatch(/\{t\('glans'\)\} \{ccFmt\(glansCcEff\)\}/);
   });
 
-  it('V5.3-3: cross-section enlarged + centered + auto-scales with diameter', () => {
-    expect(g2d).toMatch(/viewBox="0 0 480 552"/);                    // taller canvas for the bigger circle
-    expect(g2d).not.toMatch(/viewBox="0 0 480 460"/);               // superseded
+  it('V5.3-3: cross-section big + own SVG + auto-scales with diameter', () => {
+    expect(g2d).toMatch(/viewBox="0 0 240 240"/);                   // own square SVG (v5.4)
     expect(g2d).toMatch(/const csA = clamp\(dLo \* 18, 48, 100\)/); // bigger + diameter-scaled (was *12, 22, 72)
-    expect(g2d).toMatch(/const ccx = 240/);                         // centered
     // V4-3 dashed-after stroke shape UNCHANGED → side-view + cross-section count still ≥2
     expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0\.6"/g) || []).length).toBeGreaterThanOrEqual(2);
   });

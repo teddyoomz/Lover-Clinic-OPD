@@ -54,14 +54,14 @@ export const girthToRadiusCm = (girthCm) => num(girthCm) / (2 * PI); // 3D mesh 
 export const cmToInch = (cm) => num(cm) / CM_PER_INCH;
 export const inchToCm = (inch) => num(inch) * CM_PER_INCH;
 
-// ---- condom snap: nearest nominal width, tie -> larger ----
+// ---- condom snap: FLOOR — the largest nominal width that still fits within the girth.
+// Conservative by design: never recommends a size bigger than the girth strictly reaches,
+// so the predicted result is UNDER-promised (safety — user directive 2026-06-20). ----
 export function condomIndexForGirth(girthCm) {
   const req = num(girthCm) * 5;
   let bi = 0;
-  for (let i = 1; i < CONDOM_LADDER.length; i++) {
-    const d = Math.abs(CONDOM_LADDER[i].w - req);
-    const bd = Math.abs(CONDOM_LADDER[bi].w - req);
-    if (d < bd || (d === bd && CONDOM_LADDER[i].w > CONDOM_LADDER[bi].w)) bi = i;
+  for (let i = 0; i < CONDOM_LADDER.length; i++) {
+    if (CONDOM_LADDER[i].w <= req) bi = i; // floor to the largest size that fits
   }
   return bi;
 }

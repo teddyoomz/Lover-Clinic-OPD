@@ -13,7 +13,7 @@ import FillerGraphic2D from '../components/FillerGraphic2D.jsx';
 
 const Filler3D = lazy(() => import('../components/Filler3D.jsx'));
 
-const r1 = (x) => (Math.round((Number(x) || 0) * 10) / 10).toFixed(1);
+const r1 = (x) => (Math.floor((Number(x) || 0) * 10) / 10).toFixed(1); // round DOWN (conservative — under-promise results)
 // exact cc display — round to 2 decimals + trim trailing zeros (2.5 stays 2.5, 5 stays 5).
 const ccFmt = (x) => String(Math.round((Number(x) || 0) * 100) / 100);
 
@@ -210,7 +210,7 @@ export default function FillerSimulator() {
 
         <div className="fs-grid">
           {/* controls */}
-          <div className="fs-controls" style={card({ padding: '17px 18px' })}>
+          <div className="fs-controls" style={card({ padding: '17px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' })}>
             <div style={{ ...sectionLabel, marginBottom: 15 }}>{t('adjust')}</div>
 
             {/* length */}
@@ -298,7 +298,7 @@ export default function FillerSimulator() {
                 <Seg c={c} value={view} onChange={setView} options={[{ v: '2d', label: t('view2d') }, { v: '3d', label: t('view3d') }]} />
               )}
             </div>
-            <div style={{ flex: 1, minHeight: 232, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: 1, minHeight: 232, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               {showGraphic3D ? (
                 <Suspense fallback={<div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.tx2 }}>…</div>}>
                   <Filler3D est={est} lengthCm={lengthCm} t={t} />
