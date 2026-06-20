@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Simulator R9 — Implementation Plan</title>
+  <style>
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid #dc2626; padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid #e5e5e5; padding-bottom: 0.2em; margin-top: 1.8em; }
+    code { font-family: Menlo, Consolas, monospace; background:#f5f5f5; padding:0 3px; border-radius:3px; }
+    pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:0.85em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #e5e5e5; padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: #f0f4f8; }
+    .mockup { background:#fff; border:1px solid #e5e5e5; border-radius:8px; padding:1em; margin:1em 0; }
+    .task { background:#fafafa; border-left:3px solid #dc2626; padding:0.6em 1em; margin:0.8em 0; border-radius:0 6px 6px 0; }
+    blockquote { border-left:4px solid #dc2626; background:#f0f4f8; padding:0.5em 1em; border-radius:0 6px 6px 0; color:#666; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Simulator R9 — Implementation Plan</h1>
+<blockquote><strong>Spec:</strong> 2026-06-20-filler-r9-protect-watermark-contact-design.html (approved) · <strong>Page:</strong> <code>?play=filler</code> (pure-client) · <strong>Deploy:</strong> NOT this turn (await "deploy").</blockquote>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <strong>Header (top bar):</strong> [📞][L][f] compact icons — left &nbsp;·&nbsp; centered LOVER CLINIC hero &nbsp;·&nbsp; [EN][☀] — right<br>
+  <strong>Graphic card:</strong> side-view SVG + cross-section SVG, each with a faint centered logo <code>&lt;image&gt;</code>; 3D canvas with a centered logo DOM overlay.<br>
+  <strong>Footer (new bar, above disclaimer):</strong> [ 📞 โทร ][ 💬 LINE ][ 📘 Facebook ] — full theme-aware brand buttons.<br>
+  <em>Dark = filled brand + white icon · Light = soft brand-tint + deepened brand icon/label + border.</em>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+<table>
+  <tr><th>#</th><th>Flow</th></tr>
+  <tr><td>Build</td><td>source → <code>vite build</code> (prod) → obfuscator plugin matches ONLY 4 filler files → obfuscated <code>dist/</code> chunk. <code>vitest</code> reads source directly → bypasses the plugin → 16837 tests unaffected.</td></tr>
+  <tr><td>Render</td><td>page mount → watermark <code>&lt;image&gt;</code> in 2D SVGs + DOM overlay over 3D canvas (theme logo) → header icons + footer buttons render.</td></tr>
+  <tr><td>Theme</td><td><code>theme</code> state flips → logo white↔black · buttons filled↔soft-tint · icon white↔brand-color.</td></tr>
+  <tr><td>Click</td><td>📞 → <code>tel:0975251525</code> · LINE → <code>lin.ee/mFFsDkG</code> (new tab) · FB → <code>facebook.com/loverclinickorat</code> (new tab).</td></tr>
+</table>
+</div>
+
+<h2>Tasks (work-first; verify + commit at the end — Rule K)</h2>
+
+<div class="task"><strong>T1 · Contact buttons (FillerSimulator.jsx)</strong><br>
+Add <code>CLINIC_CONTACT = { tel:'0975251525', telDisplay:'097-525-1525', line:'https://lin.ee/mFFsDkG', fb:'https://www.facebook.com/loverclinickorat' }</code>.
+Add a theme-aware <code>ContactButtons({ variant, c, isLight })</code> helper (Rule of 3 — header <code>variant="icon"</code> + footer <code>variant="full"</code> reuse it) with the 3 real brand SVG icons (phone / LINE / Facebook). Wire compact icons top-left in the header bar; add a footer bar (3 full buttons) above the disclaimer. LINE+FB: <code>target="_blank" rel="noopener noreferrer"</code>; phone: <code>href="tel:…"</code>. Theme tokens: dark filled brand + white; light soft-tint (<code>#fef2f2/#ecfdf3/#eff6ff</code> bg + <code>#be123c/#047a43/#1d4ed8</code> icon/label + border).</div>
+
+<div class="task"><strong>T2 · Watermark (FillerGraphic2D.jsx + Filler3D.jsx)</strong><br>
+2D: add <code>&lt;image href={isLight?'/lover-clinic-logo-light.png':'/lover-clinic-logo-dark.png'} opacity="0.09" pointer-events="none"&gt;</code> centered in the side-view SVG (cx 240, cy 84, w 96, h ~36) and the cross-section SVG (cx 120, cy 120, w 70, h ~26), aspect ~2.63:1. Pass <code>theme</code> through (FillerGraphic2D already gets <code>theme</code>).
+3D: add a <code>theme</code> prop to Filler3D; render a centered DOM <code>&lt;img&gt;</code> overlay (absolute, <code>pointer-events:none</code>, <code>opacity:0.09</code>, width ~46%) inside the mount wrapper; FillerSimulator passes <code>theme</code>.</div>
+
+<div class="task"><strong>T3 · Formula obfuscation (vite.config.js + package.json)</strong><br>
+<code>npm i -D vite-plugin-javascript-obfuscator</code>. Add the plugin, <code>process.env.NODE_ENV==='production'</code> gated, <code>include:['**/fillerMath.js','**/FillerSimulator.jsx','**/FillerGraphic2D.jsx','**/Filler3D.jsx']</code>, <code>exclude:['node_modules/**','tests/**']</code>, options <code>{ compact:true, controlFlowFlattening:false, stringArray:true }</code>. Document the scope in a comment.</div>
+
+<div class="task"><strong>T4 · Tests</strong><br>
+v5.5 block in <code>tests/filler-simulator-flow-simulate.test.js</code>: CLINIC_CONTACT values + tel/line/fb hrefs + target/rel + theme-aware button style (light soft-tint colors) + brand-icon path fragments + watermark <code>&lt;image&gt;</code> in g2d + theme-aware logo src + Filler3D overlay <code>&lt;img&gt;</code> + theme prop.
+New <code>tests/filler-obfuscation-config.test.js</code>: vite.config has the obfuscator scoped to the 4 filler files, prod-gated, excludes tests/node_modules.</div>
+
+<div class="task"><strong>T5 · Verify (Rule N + Rule Q)</strong><br>
+Targeted filler tests + new tests green → full <code>vitest</code> 16837/0 → <code>npm run build</code> clean → <strong>grep <code>dist/</code></strong> for <code>K_REALISTIC</code> / <code>2.37</code> / <code>CONDOM_LADDER</code> → must be ABSENT (obfuscated) → Rule Q L1: render <code>?play=filler</code>, confirm watermark on 2D + 3D, contact links correct, theme toggle flips buttons+watermark. (Screenshot if the preview capture cooperates; else DOM-geometry + computed-style eval.)</div>
+
+<div class="task"><strong>T6 · Commit + push</strong> (NOT deploy). Then session-end.</div>
+
+<h2>Risks</h2>
+<ul>
+  <li>Obfuscator breaking the build / bloating the chunk → verify build + page run immediately after T3; <code>controlFlowFlattening:false</code> keeps size sane. If it misbehaves, the plugin is isolated (4-file include) and trivially removable.</li>
+  <li>Watermark opacity — tune in preview (faint, must not obscure anatomy).</li>
+  <li>3D overlay won't be in a raw canvas-export (only screenshots) — accepted limitation (documented in spec).</li>
+</ul>
+
+</body>
+</html>

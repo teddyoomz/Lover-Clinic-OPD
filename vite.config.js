@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { writeFileSync } from 'fs'
 import { visualizer } from 'rollup-plugin-visualizer'
+import obfuscator from 'vite-plugin-javascript-obfuscator'
 
 function versionPlugin() {
   return {
@@ -17,10 +18,33 @@ function versionPlugin() {
 const analyze = process.env.ANALYZE === '1'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     versionPlugin(),
+    // Obfuscate ONLY the filler-simulator formula files on `vite build` (command === 'build').
+    // Vitest runs command === 'serve' → this plugin is skipped → fillerMath is tested UNobfuscated →
+    // all tests unaffected. Scope = the 4 filler files (formula constants K_REALISTIC / K_OPTIMISTIC /
+    // dCgeo / CONDOM_LADDER). DO NOT widen this include — it must never touch the rest of the app.
+    ...(command === 'build' ? [obfuscator({
+      include: ['**/fillerMath.js', '**/FillerSimulator.jsx', '**/FillerGraphic2D.jsx', '**/Filler3D.jsx'],
+      exclude: ['node_modules/**', 'tests/**'],
+      options: {
+        compact: true,
+        identifierNamesGenerator: 'hexadecimal',
+        numbersToExpressions: true,
+        simplify: true,
+        transformObjectKeys: true,
+        controlFlowFlattening: true,
+        controlFlowFlatteningThreshold: 0.75,
+        stringArray: true,
+        stringArrayThreshold: 1,
+        stringArrayEncoding: ['base64'],
+        stringArrayCallsTransform: true,
+        splitStrings: true,
+        splitStringsChunkLength: 6,
+      },
+    })] : []),
     ...(analyze ? [visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true, open: false })] : []),
   ],
   server: {
@@ -125,4 +149,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

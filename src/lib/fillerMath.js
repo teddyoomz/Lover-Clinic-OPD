@@ -7,9 +7,11 @@ export const PI = Math.PI;
 
 // girth model calibration (geometry × k), anchored at condom Regular 52 (C0=10.4),
 // L=11, V=16cc -> girth band +2.0 / +2.8 cm. (research: ~+2.5cm @16cc, flaccid)
-export const K_REALISTIC = 2.37;
-export const K_OPTIMISTIC = 3.32;
-export const CM_PER_INCH = 2.54;
+// written as integer fractions (value-identical) so the build obfuscator's numbersToExpressions
+// hides them — the literal calibration values never appear in clear in the shipped bundle.
+export const K_REALISTIC = 237 / 100;
+export const K_OPTIMISTIC = 332 / 100;
+export const CM_PER_INCH = 254 / 100;
 
 export const RANGES = {
   lengthCm: [6.35, 25.4], // 2.5 in .. 10 in — both units cap at 10 in (25.4 cm)
@@ -20,14 +22,14 @@ export const RANGES = {
 // Glans (head) augmentation — empirical, research-grounded (approximate, ±~30%).
 // 2 cc → glans Ø +0.5 cm (+16%); ~0.25 cm Ø per cc (Kim/Abdallah/Kwak cohorts).
 // Independent of shaft girth → does NOT change รอบวง / condom size.
-export const GLANS_DIAM_PER_CC = { low: 0.25, high: 0.32 }; // cm diameter per cc
+export const GLANS_DIAM_PER_CC = { low: 25 / 100, high: 32 / 100 }; // cm diameter per cc
 export const GLANS_CC = { min: 0.5, max: 4, step: 0.5, default: 2 };
 // initial glans (head) baseline size — a ratio of the shaft Ø; default 1.0 = shaft Ø (today's value).
 // Multiplies diameterFromGirth(baseGirthCm), so the baseline head scales with the chosen diameter.
 export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0 };
 // the glans is ~5x more cc-responsive than the shaft; render the head growth gentler
 // (illustrative only) so a few cc doesn't look like it balloons. research rate kept above.
-export const GLANS_VISUAL_DAMP = 0.4;
+export const GLANS_VISUAL_DAMP = 4 / 10;
 
 // real, sourced, mainstream condom nominal widths (mm), ascending. (ISO 4074)
 export const CONDOM_LADDER = [

@@ -43,6 +43,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
   // baseline (เดิม) edge — FAINT pale dash
   const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.42)' : 'rgba(255,255,255,0.5)';
+  // centered-faint clinic watermark (theme-aware logo) — travels with any screenshot / SVG copy
+  const wmLogo = theme === 'light' ? '/lover-clinic-logo-light.png' : '/lover-clinic-logo-dark.png';
 
   // side-view thicknesses + auto-stretch length→width (10in fills the band width)
   const cy = SIDE_CY;
@@ -84,6 +86,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
           <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
+          {/* clinic watermark — centered, faint, non-interactive */}
+          <image href={wmLogo} x="192" y="66" width="96" height="36" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         </svg>
       </div>
 
@@ -100,6 +104,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           </defs>
           <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.6" />
           <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
+          {/* clinic watermark — centered, faint, non-interactive */}
+          <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         </svg>
       </div>
 

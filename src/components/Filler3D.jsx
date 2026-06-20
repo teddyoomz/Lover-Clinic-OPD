@@ -64,7 +64,7 @@ function frameCamera(camera, controls, modelLen) {
   controls.update();
 }
 
-export default function Filler3D({ est, lengthCm = 11, t }) {
+export default function Filler3D({ est, lengthCm = 11, theme = 'dark', t }) {
   const tr = typeof t === 'function' ? t : (k) => k;
   const mountRef = useRef(null);
   const refs = useRef({});
@@ -139,6 +139,11 @@ export default function Filler3D({ est, lengthCm = 11, t }) {
   }, [est, lengthCm]);
 
   return (
-    <div ref={mountRef} style={{ width: '100%', height: 300, cursor: 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} aria-label={tr('model3dAria')} />
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div ref={mountRef} style={{ width: '100%', height: 300, cursor: 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} aria-label={tr('model3dAria')} />
+      {/* centered-faint clinic watermark over the canvas (shows in screenshots) */}
+      <img src={theme === 'light' ? '/lover-clinic-logo-light.png' : '/lover-clinic-logo-dark.png'} alt=""
+        style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '46%', maxWidth: 230, opacity: 0.1, pointerEvents: 'none', userSelect: 'none' }} />
+    </div>
   );
 }

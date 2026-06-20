@@ -427,3 +427,81 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
     expect(page).toMatch(/width:30px; height:30px/);               // bigger slider thumb (finger / Apple Pencil)
   });
 });
+
+describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + theme-aware contact buttons', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+  const g3d = read('src/components/Filler3D.jsx');
+  const vite = read('vite.config.js');
+  const math = read('src/lib/fillerMath.js');
+
+  it('R9-1: contact const + real values (tel / lin.ee / facebook), hardcoded (pure-client)', () => {
+    expect(page).toMatch(/const CLINIC_CONTACT = \{/);
+    expect(page).toMatch(/tel: '0975251525'/);
+    expect(page).toMatch(/line: 'https:\/\/lin\.ee\/mFFsDkG'/);
+    expect(page).toMatch(/fb: 'https:\/\/www\.facebook\.com\/loverclinickorat'/);
+  });
+
+  it('R9-2: ContactButtons reused in header (icon) + footer (full) — Rule of 3', () => {
+    expect(page).toMatch(/function ContactButtons\(\{ variant, isLight, lang \}\)/);
+    expect(page).toMatch(/<ContactButtons variant="icon"/);   // header
+    expect(page).toMatch(/<ContactButtons variant="full"/);   // footer
+  });
+
+  it('R9-3: external links open safely (target/rel); phone dials (tel:)', () => {
+    expect(page).toMatch(/target: '_blank', rel: 'noopener noreferrer'/);
+    expect(page).toMatch(/line: \{ href: CLINIC_CONTACT\.line, ext: true/);
+    expect(page).toMatch(/fb: \{ href: CLINIC_CONTACT\.fb, ext: true/);
+    expect(page).toMatch(/call: \{ href: `tel:\$\{CLINIC_CONTACT\.tel\}`, ext: false/);
+  });
+
+  it('R9-4: real brand SVG icons (phone / LINE / Facebook glyph paths) — no emoji', () => {
+    expect(page).toMatch(/const IconPhone = /);
+    expect(page).toMatch(/const IconLine = /);
+    expect(page).toMatch(/const IconFb = /);
+    expect(page).toMatch(/M19\.365 9\.863/);        // official LINE logo path
+    expect(page).toMatch(/M24 12\.073c0-6\.627/);   // official Facebook f path
+  });
+
+  it('R9-5: theme-aware buttons — dark filled brand + white; light soft-tint + deepened brand + border (AA)', () => {
+    expect(page).toMatch(/dark: \{ bg: '#06C755', fg: '#fff'/);                       // LINE filled green
+    expect(page).toMatch(/dark: \{ bg: '#1877F2', fg: '#fff'/);                       // FB filled blue
+    expect(page).toMatch(/light: \{ bg: '#fef2f2', fg: '#be123c', bd: '#fbcfcf' \}/); // call soft
+    expect(page).toMatch(/light: \{ bg: '#ecfdf3', fg: '#047a43', bd: '#a7f0c6' \}/); // LINE soft
+    expect(page).toMatch(/light: \{ bg: '#eff6ff', fg: '#1d4ed8', bd: '#bcd7fb' \}/); // FB soft
+    expect(page).toMatch(/const sk = isLight \? b\.light : b\.dark/);
+  });
+
+  it('R9-6: 2D watermark — centered-faint theme-aware logo <image> in BOTH SVGs, non-interactive', () => {
+    expect(g2d).toMatch(/const wmLogo = theme === 'light' \? '\/lover-clinic-logo-light\.png' : '\/lover-clinic-logo-dark\.png'/);
+    expect((g2d.match(/<image href=\{wmLogo\}/g) || []).length).toBe(2);   // side-view + cross-section
+    expect((g2d.match(/pointerEvents: 'none'/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/opacity="0\.1"/g) || []).length).toBeGreaterThanOrEqual(2); // faint
+  });
+
+  it('R9-7: 3D watermark — theme prop + centered DOM <img> overlay over the canvas', () => {
+    expect(g3d).toMatch(/function Filler3D\(\{ est, lengthCm = 11, theme = 'dark', t \}\)/);
+    expect(g3d).toMatch(/<img src=\{theme === 'light' \? '\/lover-clinic-logo-light\.png' : '\/lover-clinic-logo-dark\.png'\}/);
+    expect(g3d).toMatch(/pointerEvents: 'none'/);
+    expect(g3d).toMatch(/transform: 'translate\(-50%, -50%\)'/);                       // centered
+    expect(page).toMatch(/<Filler3D est=\{est\} lengthCm=\{lengthCm\} theme=\{theme\}/); // page passes theme
+  });
+
+  it('R9-8: build obfuscation scoped to ONLY the 4 filler files, command-gated (vitest bypasses)', () => {
+    expect(vite).toMatch(/import obfuscator from 'vite-plugin-javascript-obfuscator'/);
+    expect(vite).toMatch(/command === 'build' \? \[obfuscator\(\{/);    // only on build, NOT serve/test
+    expect(vite).toMatch(/'\*\*\/fillerMath\.js'/);
+    expect(vite).toMatch(/'\*\*\/FillerSimulator\.jsx'/);
+    expect(vite).toMatch(/'\*\*\/FillerGraphic2D\.jsx'/);
+    expect(vite).toMatch(/'\*\*\/Filler3D\.jsx'/);
+    expect(vite).toMatch(/exclude: \['node_modules\/\*\*', 'tests\/\*\*'\]/);
+    expect(vite).toMatch(/stringArrayEncoding: \['base64'\]/);
+  });
+
+  it('R9-9: calibration constants written as integer fractions (obfuscation-friendly, value-identical)', () => {
+    expect(math).toMatch(/K_REALISTIC = 237 \/ 100/);
+    expect(math).toMatch(/K_OPTIMISTIC = 332 \/ 100/);
+    expect(math).not.toMatch(/K_REALISTIC = 2\.37/);
+    // runtime value still exact (covered by filler-math.test.js: K_REALISTIC === 2.37)
+  });
+});

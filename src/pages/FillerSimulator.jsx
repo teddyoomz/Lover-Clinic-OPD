@@ -17,6 +17,53 @@ const r1 = (x) => (Math.floor((Number(x) || 0) * 10) / 10).toFixed(1); // round 
 // exact cc display — round to 2 decimals + trim trailing zeros (2.5 stays 2.5, 5 stays 5).
 const ccFmt = (x) => String(Math.round((Number(x) || 0) * 100) / 100);
 
+// Clinic contact — public marketing info, hardcoded (page is pure-client, no Firestore).
+const CLINIC_CONTACT = { tel: '0975251525', telDisplay: '097-525-1525', line: 'https://lin.ee/mFFsDkG', fb: 'https://www.facebook.com/loverclinickorat' };
+const IconPhone = ({ fill, s = 18 }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill={fill} aria-hidden="true"><path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" /></svg>
+);
+const IconLine = ({ fill, s = 18 }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill={fill} aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" /></svg>
+);
+const IconFb = ({ fill, s = 18 }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill={fill} aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+);
+// theme-aware brand tokens — dark: filled brand + white icon · light: soft tint + deepened brand icon/label + border
+const CONTACT_BRAND = {
+  call: { href: `tel:${CLINIC_CONTACT.tel}`, ext: false, Icon: IconPhone,
+    dark: { bg: 'linear-gradient(90deg,#dc2626,#ef4444)', fg: '#fff', bd: 'transparent' }, light: { bg: '#fef2f2', fg: '#be123c', bd: '#fbcfcf' } },
+  line: { href: CLINIC_CONTACT.line, ext: true, Icon: IconLine, label: 'LINE',
+    dark: { bg: '#06C755', fg: '#fff', bd: 'transparent' }, light: { bg: '#ecfdf3', fg: '#047a43', bd: '#a7f0c6' } },
+  fb: { href: CLINIC_CONTACT.fb, ext: true, Icon: IconFb, label: 'Facebook',
+    dark: { bg: '#1877F2', fg: '#fff', bd: 'transparent' }, light: { bg: '#eff6ff', fg: '#1d4ed8', bd: '#bcd7fb' } },
+};
+const CONTACT_KEYS = ['call', 'line', 'fb'];
+
+// header (compact icon) + footer (full) reuse this — Rule of 3.
+function ContactButtons({ variant, isLight, lang }) {
+  const compact = variant === 'icon';
+  return (
+    <div style={{ display: 'flex', gap: compact ? 8 : 10, ...(compact ? {} : { width: '100%' }) }}>
+      {CONTACT_KEYS.map((k) => {
+        const b = CONTACT_BRAND[k];
+        const sk = isLight ? b.light : b.dark;
+        const Icon = b.Icon;
+        const label = k === 'call' ? (lang === 'th' ? 'โทร' : 'Call') : b.label;
+        return (
+          <a key={k} href={b.href} {...(b.ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className="fs-contact" aria-label={label}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, textDecoration: 'none',
+              background: sk.bg, color: sk.fg, border: `1px solid ${sk.bd}`,
+              ...(compact ? { width: 42, height: 42, borderRadius: 11 } : { flex: 1, padding: '13px 0', borderRadius: 12, fontWeight: 800, fontSize: 14 }) }}>
+            <Icon fill={sk.fg} s={compact ? 20 : 17} />
+            {!compact && <span>{label}</span>}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 const PAL = {
   dark: { bg: '#050505', card: '#0f0f0f', card2: '#161616', line: '#262626', tx: '#ededed', tx2: '#8b9099', fire: '#ef4444', fire2: '#dc2626', amber: '#f59e0b', ember: '#f97316', disc: '#160d0c', discBd: '#3a201c', discTx: '#c9b8b4', logo: '#ffffff', logoSub: '#cbd5e1', green: '#22c55e', goldA: '#fcd34d', goldB: '#f97316' },
   light: { bg: '#f0f4f8', card: '#f8fafc', card2: '#eef2f7', line: '#d7dee7', tx: '#1e293b', tx2: '#5b6675', fire: '#dc2626', fire2: '#b91c1c', amber: '#d97706', ember: '#ea580c', disc: '#fff5f5', discBd: '#f1c7c0', discTx: '#7c4a44', logo: '#0f172a', logoSub: '#475569', green: '#16a34a', goldA: '#d97706', goldB: '#ea580c' },
@@ -174,6 +221,9 @@ export default function FillerSimulator() {
         .fs-tgl:hover{ border-color:${c.fire}; color:${c.tx}; }
         /* iPad / touch / stylus: kill tap-delay + grey tap-highlight + long-press text-select on controls */
         .fs-btn, .fs-tgl, .fs-sel{ touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-user-select:none; user-select:none; }
+        .fs-contact{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; transition:transform .1s, filter .15s; }
+        .fs-contact:hover{ filter:brightness(1.07); }
+        .fs-contact:active{ transform:scale(.95); }
         .fs-btn:focus-visible, .fs-tgl:focus-visible, .fs-sel:focus-visible, .fs-range:focus-visible{
           outline:none; box-shadow:0 0 0 3px ${c.fire}55; }
         .fs-range{ -webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:4px; background:${c.line}; outline:none; touch-action:pan-y; cursor:pointer; }
@@ -204,6 +254,8 @@ export default function FillerSimulator() {
               <h1 style={{ margin: 0, fontSize: 'clamp(23px,5.2vw,35px)', fontWeight: 800, lineHeight: 1.22, letterSpacing: '-0.01em', backgroundImage: titleGrad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', display: 'inline-block' }}>{t('title')}</h1>
               <div style={{ fontSize: 14, color: c.tx2, maxWidth: 560, lineHeight: 1.55 }}>{t('sub')}</div>
               <span className="fs-pill">🔒 {lang === 'th' ? 'ไม่จัดเก็บข้อมูล' : 'No data stored'}</span>
+              {/* contact (header) — centered row, robust on mobile vs the wide logo */}
+              <ContactButtons variant="icon" isLight={isLight} lang={lang} />
             </div>
           </div>
         </div>
@@ -301,7 +353,7 @@ export default function FillerSimulator() {
             <div style={{ flex: 1, minHeight: 232, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               {showGraphic3D ? (
                 <Suspense fallback={<div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.tx2 }}>…</div>}>
-                  <Filler3D est={est} lengthCm={lengthCm} t={t} />
+                  <Filler3D est={est} lengthCm={lengthCm} theme={theme} t={t} />
                 </Suspense>
               ) : (
                 <FillerGraphic2D est={est} lengthCm={lengthCm} theme={theme} t={t} />
@@ -322,6 +374,14 @@ export default function FillerSimulator() {
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.label}`} newVal={est.condomLow.index === est.condomHigh.index ? est.condomLow.label : `${est.condomLow.label} – ${est.condomHigh.label}`} delta={sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
           </div>
           <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 12, lineHeight: 1.5 }}>{t('note')}</div>
+        </div>
+
+        {/* footer — contact buttons (call · LINE OA · Facebook) */}
+        <div style={card({ marginTop: 18, padding: '15px 18px' })}>
+          <ContactButtons variant="full" isLight={isLight} lang={lang} />
+          <div className="fs-num" style={{ textAlign: 'center', fontSize: 11, color: c.tx2, marginTop: 11 }}>
+            {CLINIC_CONTACT.telDisplay} · LINE OA · facebook.com/loverclinickorat
+          </div>
         </div>
 
         <div style={{ marginTop: 16, background: c.disc, border: `1px solid ${c.discBd}`, borderRadius: 12, padding: '12px 15px', fontSize: 11.5, color: c.discTx, lineHeight: 1.55 }}>
