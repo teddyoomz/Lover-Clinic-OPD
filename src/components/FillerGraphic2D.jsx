@@ -93,9 +93,9 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', gap: 12 }}>
       <style>{`
-        @keyframes fgRevBreathe { 0%,100%{opacity:1} 50%{opacity:0.85} }
-        @keyframes fgRevGlow { 0%,100%{filter:drop-shadow(0 0 3px #ff3b3b) drop-shadow(0 0 8px rgba(255,59,59,0.95)) drop-shadow(0 0 17px rgba(255,59,59,0.6))} 50%{filter:drop-shadow(0 0 6px #ff3b3b) drop-shadow(0 0 15px #ff3b3b) drop-shadow(0 0 28px rgba(255,59,59,0.85))} }
-        .fg-revBreathe { animation: fgRevBreathe 2.6s ease-in-out infinite, fgRevGlow 2.6s ease-in-out infinite; }
+        @keyframes fgRevBreathe { 0%,40%{opacity:1} 56%{opacity:0} 68%{opacity:0} 84%,100%{opacity:1} }
+        @keyframes fgRevGlow { 0%,40%{filter:drop-shadow(0 0 5px #ff3b3b) drop-shadow(0 0 13px #ff3b3b) drop-shadow(0 0 26px rgba(255,59,59,0.8))} 52%{filter:none} 68%{filter:none} 84%,100%{filter:drop-shadow(0 0 5px #ff3b3b) drop-shadow(0 0 13px #ff3b3b) drop-shadow(0 0 26px rgba(255,59,59,0.8))} }
+        .fg-revBreathe { animation: fgRevBreathe 3.4s ease-in-out infinite, fgRevGlow 3.4s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) { .fg-revBreathe { animation: none; } }
       `}</style>
       {/* side view */}

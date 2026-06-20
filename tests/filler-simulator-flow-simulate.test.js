@@ -526,14 +526,16 @@ describe('filler-simulator v5.6→v7 — red dashed: BOLD + ALWAYS-visible + pul
     expect(g2d).toMatch(/fill="url\(#fg-cs\)" \/>/);
   });
 
-  it('V7-2: line stays VISIBLE (opacity 1↔0.85, never 0) + glow ALWAYS-ON pulsing (never filter:none) + 2.6s loop', () => {
-    // v7 (2026-06-20): the red line was barely visible — opacity faded to 0 + strokeOpacity 0.6 + 1px.
-    // Now it stays clearly visible (opacity dips only to 0.85) with an always-on pulsing red glow.
-    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%,100%\{opacity:1\} 50%\{opacity:0\.85\} \}/);
-    expect(g2d).toMatch(/@keyframes fgRevGlow \{ 0%,100%\{filter:drop-shadow[^}]*\} 50%\{filter:drop-shadow/);
-    expect(g2d).not.toMatch(/filter:none/);          // glow NEVER fully off (no more invisible trough)
-    expect(g2d).not.toMatch(/62%\{opacity:0\}/);     // line NEVER fades to 0
-    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 2\.6s ease-in-out infinite, fgRevGlow 2\.6s ease-in-out infinite; \}/);
+  it('V7.1-2: breathing has a FULL-disappear (opacity→0 + glow→none) for the before↔after contrast; visible peak still BOLD', () => {
+    // v7.1 (2026-06-20): user wants the red line to fully VANISH for a beat (so the before↔after
+    // difference reads clearly), while the VISIBLE state stays bold (strokeOpacity 1 + width 2.6,
+    // locked by V7-4). 3.4s loop: bold-hold → fade-out → GONE-hold → fade-in → bold-hold.
+    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%,40%\{opacity:1\} 56%\{opacity:0\} 68%\{opacity:0\} 84%,100%\{opacity:1\} \}/);
+    expect(g2d).toMatch(/56%\{opacity:0\}/);                        // line FULLY disappears (the requested beat)
+    expect(g2d).toMatch(/@keyframes fgRevGlow \{ 0%,40%\{filter:drop-shadow/);  // strong glow when visible
+    expect(g2d).toMatch(/52%\{filter:none\} 68%\{filter:none\}/);   // glow fully OFF during the disappear
+    expect(g2d).toMatch(/84%,100%\{filter:drop-shadow/);           // glow returns strong
+    expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.4s ease-in-out infinite, fgRevGlow 3\.4s ease-in-out infinite; \}/);
   });
 
   it('V5.6-3: prefers-reduced-motion guard disables the animation (a11y — static = original look)', () => {
@@ -611,5 +613,24 @@ describe('filler-simulator v6 — 2D dash toggles (double as legend) + stronger 
     expect(strings).toMatch(/g2dToggleBaseline: 'เดิม'/);
     expect(strings).toMatch(/g2dDashToggleHint: 'เส้นประ'/);
     expect(strings).toMatch(/g2dToggleAfter: 'after'/);
+  });
+});
+
+describe('filler-simulator v7.1 — condom HERO card (top + most prominent) in the results', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('V7.1-1: condom card is FIRST + hero (full-width, prominent) with แนะนำ badge', () => {
+    const condomIdx = page.indexOf("k={t('resCondom')}");
+    const girthIdx = page.indexOf("k={t('resGirth')}");
+    const diaIdx = page.indexOf("k={t('resDia')}");
+    expect(condomIdx).toBeGreaterThan(0);
+    expect(condomIdx).toBeLessThan(girthIdx);   // condom rendered BEFORE girth (top of the results)
+    expect(condomIdx).toBeLessThan(diaIdx);     // and before diameter
+    expect(page).toMatch(/<ResultCard hero badge=\{t\('recommended'\)\}/);  // hero + recommended badge
+    expect(page).toMatch(/if \(hero\) \{/);                                  // ResultCard hero branch
+    expect(page).toMatch(/flexBasis: '100%'/);                              // hero = full-width (most prominent)
+    expect(strings).toMatch(/recommended: 'แนะนำ'/);
+    expect(strings).toMatch(/recommended: 'Recommended'/);
   });
 });

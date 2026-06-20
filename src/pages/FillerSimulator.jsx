@@ -120,7 +120,23 @@ function Seg({ options, value, onChange, c }) {
 }
 
 // Result card — baseline size in RED, estimated NEW size in GREEN, the +delta in GOLD (luxury).
-function ResultCard({ k, oldVal, newVal, delta, c, card, goldGrad }) {
+// hero = the headline card (full-width, fire-accent border + glow, bigger numbers, แนะนำ badge).
+function ResultCard({ k, oldVal, newVal, delta, c, card, goldGrad, hero, badge }) {
+  if (hero) {
+    return (
+      <div style={{ flexBasis: '100%', borderRadius: 14, padding: '15px 18px',
+        border: `1.5px solid ${c.fire}`, background: c.card2,
+        boxShadow: `0 0 0 3px ${c.fire}1f, 0 10px 28px ${c.fire}22` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13.5, fontWeight: 800, color: c.tx }}>{k}</span>
+          {badge && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: '#fff', background: `linear-gradient(90deg,${c.fire2},${c.fire})`, borderRadius: 999, padding: '3px 10px' }}>{badge}</span>}
+        </div>
+        <div style={{ fontSize: 12.5, color: c.fire }}>{oldVal}</div>
+        <div style={{ fontSize: 30, fontWeight: 900, color: c.green, fontVariantNumeric: 'tabular-nums', marginTop: 4, lineHeight: 1.12 }}>→ {newVal}</div>
+        <div style={{ fontSize: 15, fontWeight: 800, marginTop: 4, backgroundImage: goldGrad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', letterSpacing: '0.01em' }}>{delta}</div>
+      </div>
+    );
+  }
   return (
     <div style={{ ...card, flex: 1, minWidth: 160, padding: '13px 15px' }}>
       <div style={{ fontSize: 12, color: c.tx2, marginBottom: 5, fontWeight: 600 }}>{k}</div>
@@ -369,9 +385,9 @@ export default function FillerSimulator() {
         <div style={card({ marginTop: 18, padding: '17px 18px' })}>
           <div style={{ ...sectionLabel, marginBottom: 14 }}>{t('resultsHeader')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 11 }}>
+            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.label}`} newVal={est.condomLow.index === est.condomHigh.index ? est.condomLow.label : `${est.condomLow.label} – ${est.condomHigh.label}`} delta={(est.condomLow.beyond || est.condomHigh.beyond) ? t('beyondStd') : sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resGirth')} oldVal={`${t('before')} ${r1(est.c0)} ${t('unitCm')}`} newVal={`${r1(est.c1Low)} – ${r1(est.c1High)} ${t('unitCm')}`} delta={`+${r1(est.deltaCLow)} ${rangeTo} +${r1(est.deltaCHigh)}`} />
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resDia')} oldVal={`${t('before')} ${r1(est.d0)} ${t('unitCm')}`} newVal={`${r1(est.d1Low)} – ${r1(est.d1High)} ${t('unitCm')}`} delta={`+${r1(est.d1Low - est.d0)} ${rangeTo} +${r1(est.d1High - est.d0)}`} />
-            <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.label}`} newVal={est.condomLow.index === est.condomHigh.index ? est.condomLow.label : `${est.condomLow.label} – ${est.condomHigh.label}`} delta={(est.condomLow.beyond || est.condomHigh.beyond) ? t('beyondStd') : sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
           </div>
           <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 12, lineHeight: 1.5 }}>{t('note')}</div>
         </div>
