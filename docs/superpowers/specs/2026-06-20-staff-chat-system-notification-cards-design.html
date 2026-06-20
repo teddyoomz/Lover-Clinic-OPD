@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff-Chat System Notification Cards — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .chatframe { background:#0e0e10; border:1px solid #2a2a2e; border-radius:14px; overflow:hidden; max-width:430px; }
+    .chatbar { background:#161619; padding:10px 14px; border-bottom:1px solid #2a2a2e; color:#ededed; font-size:13px; font-weight:600; }
+    .card { background:#1a1416; border:1px solid #3a2326; border-left:3px solid #ef4444; border-radius:0 12px 12px 0; padding:12px 14px; }
+    .iconcircle { width:30px; height:30px; border-radius:50%; background:#ef4444; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:700; flex:none; }
+    .clink { color:#7dd3fc; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+    .hnpill { background:#23272e; color:#9fb0c2; font-size:11px; padding:2px 8px; border-radius:8px; }
+    .avatar { width:26px; height:26px; border-radius:50%; background:#1d3a4d; color:#7dd3fc; font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; }
+    svg text { font-family: -apple-system, sans-serif; }
+  </style>
+</head>
+<body>
+
+<h1>Staff-Chat System Notification Cards — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user · <strong>Implementation plan:</strong> (to be linked by writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Today, when a customer finishes the <strong>intake form</strong> ("ลูกค้ากรอกข้อมูลรับเข้าเสร็จ") or a <strong>follow-up assessment</strong> ("ลูกค้ากรอกแบบประเมินติดตามเสร็จ"), the system fires a Web-Push notification only (FCM, on devices). Staff who don't have push, or who live inside the app, miss it. We want the same event to ALSO drop a <strong>beautiful "System" notification card</strong> into the per-branch staff chat — with a cool icon, the customer's name + HN, and a <strong>clickable name that opens that customer's detail page in a new tab</strong> (the same affordance used elsewhere in the app). For walk-in intake (no customer record exists yet), the card shows the name only and <strong>auto-upgrades to a clickable name + HN the moment an admin registers that walk-in</strong> — consistent across every device that views it.</p>
+
+<h2>Mockup Design</h2>
+<p>Grounded in the real staff-chat bubble (<code>src/components/staffchat/StaffChatMessage.jsx</code>): dark panel, sender-tinted bubbles, name styled, timestamp muted. The new System card is style <strong>A · full card</strong> with the <code>sparkles</code> icon, a fire-red identity accent, and a sky-blue clickable name (never red on a patient name — Thai culture).</p>
+
+<div class="mockup">
+  <div class="mockup-label">Dark staff-chat panel · follow-up card (customer EXISTS → resolved)</div>
+  <div class="chatframe">
+    <div class="chatbar">แชทพนักงาน · นครราชสีมา</div>
+    <div style="padding:14px;">
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:9px; margin-bottom:9px;">
+          <span class="iconcircle">✦</span>
+          <div style="line-height:1.25;">
+            <div style="color:#f3b4b4; font-size:10px; font-weight:600;">ระบบ · LoverClinic</div>
+            <div style="color:#ededed; font-size:13px; font-weight:600;">กรอกแบบประเมินติดตามเสร็จแล้ว</div>
+          </div>
+          <div style="margin-left:auto; font-size:9px; color:#6b6b70;">14:32</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="avatar">ปร</span>
+          <a class="clink" href="#">นางสาว แพรพร พรแพร&nbsp;↗</a>
+          <span class="hnpill">HN LC-26000079</span>
+        </div>
+        <div style="font-size:10px; color:#6b6b70; margin-top:7px;">ℹ แตะชื่อเพื่อเปิดข้อมูลลูกค้าในแท็บใหม่</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Intake card BEFORE registration (no customer yet → name only) · AFTER registration (same card, now resolved)</div>
+  <div style="display:flex; gap:14px; flex-wrap:wrap;">
+    <div class="chatframe" style="max-width:330px;">
+      <div class="chatbar" style="font-size:12px;">ก่อนลงทะเบียน</div>
+      <div style="padding:12px;">
+        <div class="card">
+          <div style="display:flex; align-items:center; gap:9px; margin-bottom:9px;">
+            <span class="iconcircle">✦</span>
+            <div style="line-height:1.25;">
+              <div style="color:#f3b4b4; font-size:10px; font-weight:600;">ระบบ · LoverClinic</div>
+              <div style="color:#ededed; font-size:13px; font-weight:600;">กรอกข้อมูลรับเข้าเสร็จแล้ว</div>
+            </div>
+            <div style="margin-left:auto; font-size:9px; color:#6b6b70;">10:05</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="avatar" style="background:#2a2a2e; color:#9b9ba2;">สม</span>
+            <span style="color:#cfcfd4; font-size:13px; font-weight:600;">สมชาย ใจดี</span>
+            <span class="hnpill" style="background:#2a2320; color:#caa37a;">รอลงทะเบียน</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="chatframe" style="max-width:330px;">
+      <div class="chatbar" style="font-size:12px;">หลังแอดมินลงทะเบียน (re-render)</div>
+      <div style="padding:12px;">
+        <div class="card">
+          <div style="display:flex; align-items:center; gap:9px; margin-bottom:9px;">
+            <span class="iconcircle">✦</span>
+            <div style="line-height:1.25;">
+              <div style="color:#f3b4b4; font-size:10px; font-weight:600;">ระบบ · LoverClinic</div>
+              <div style="color:#ededed; font-size:13px; font-weight:600;">กรอกข้อมูลรับเข้าเสร็จแล้ว</div>
+            </div>
+            <div style="margin-left:auto; font-size:9px; color:#6b6b70;">10:05</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="avatar">สม</span>
+            <a class="clink" href="#">สมชาย ใจดี&nbsp;↗</a>
+            <span class="hnpill">HN LC-26000180</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<p>Two trigger paths, one write site (the existing <code>sendPushOnSubmit</code> Cloud Function, right after the FCM send), and a render-time live-resolve on the client.</p>
+
+<div class="mockup">
+  <div class="mockup-label">Server write flow — submit → push → chat card</div>
+  <svg viewBox="0 0 920 230" width="100%" role="img" aria-label="Server flow from form submit to staff-chat card">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#888"/></marker></defs>
+    <rect x="8" y="20" width="170" height="56" rx="6" fill="#eef4fb" stroke="#378add"/>
+    <text x="93" y="44" font-size="12" text-anchor="middle" fill="#0c447c" font-weight="600">PatientForm submit</text>
+    <text x="93" y="62" font-size="11" text-anchor="middle" fill="#185fa5">intake OR follow-up</text>
+    <rect x="210" y="20" width="190" height="56" rx="6" fill="#f1efe8" stroke="#5f5e5a"/>
+    <text x="305" y="44" font-size="12" text-anchor="middle" fill="#2c2c2a" font-weight="600">sendPushOnSubmit</text>
+    <text x="305" y="62" font-size="11" text-anchor="middle" fill="#444">Cloud Function (admin SDK)</text>
+    <rect x="432" y="20" width="150" height="56" rx="6" fill="#e1f5ee" stroke="#0f6e56"/>
+    <text x="507" y="44" font-size="12" text-anchor="middle" fill="#04342c" font-weight="600">FCM push</text>
+    <text x="507" y="62" font-size="11" text-anchor="middle" fill="#0f6e56">(unchanged)</text>
+    <rect x="614" y="20" width="296" height="56" rx="6" fill="#fcebeb" stroke="#a32d2d"/>
+    <text x="762" y="40" font-size="12" text-anchor="middle" fill="#501313" font-weight="600">write be_staff_chat_messages</text>
+    <text x="762" y="58" font-size="11" text-anchor="middle" fill="#791f1f">system:{kind, sessionId, customerId|null, snapshots}</text>
+    <line x1="178" y1="48" x2="206" y2="48" stroke="#888" stroke-width="1.5" marker-end="url(#ar)"/>
+    <line x1="400" y1="48" x2="428" y2="48" stroke="#888" stroke-width="1.5" marker-end="url(#ar)"/>
+    <line x1="582" y1="48" x2="610" y2="48" stroke="#888" stroke-width="1.5" marker-end="url(#ar)"/>
+    <rect x="210" y="120" width="700" height="86" rx="6" fill="#fafafa" stroke="#d3d1c7"/>
+    <text x="225" y="142" font-size="12" fill="#2c2c2a" font-weight="600">kind &amp; routing (inside the function, non-fatal try/catch — never blocks the push):</text>
+    <text x="225" y="162" font-size="11.5" fill="#444">• has linkedCustomerId → kind='followup' · read be_customers (already done) → nameSnapshot + hnSnapshot + customerId</text>
+    <text x="225" y="180" font-size="11.5" fill="#444">• no linkedCustomerId → kind='intake' · nameSnapshot from patientData · customerId=null · store sessionId</text>
+    <text x="225" y="198" font-size="11.5" fill="#444">• has updatedAt (edit) → SKIP card (push only) · branchId = session.branchId (fallback customer.branchId)</text>
+  </svg>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Client render flow — live-resolve the clickable name</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>What happens</th></tr>
+    <tr><td>1</td><td>Listener</td><td>The branch's <code>listenToStaffChatMessages</code> snapshot includes the system card (it has <code>branchId</code> + <code>createdAt</code>). It flows through the V82 unread cursor + the chat chime → <strong>counts unread + plays sound</strong> (Q4).</td></tr>
+    <tr><td>2</td><td>Render branch</td><td><code>StaffChatMessage</code>: <code>if (message.system) return &lt;StaffChatSystemCard/&gt;</code> — an early branch before the normal bubble (read-only: no reply/delete affordance).</td></tr>
+    <tr><td>3</td><td>Resolve customerId</td><td><code>useSystemCardCustomer(card)</code>: if <code>system.customerId</code> (follow-up) → use it; else (intake) <code>getDoc(opd_sessions/{system.sessionId})</code> → <code>brokerProClinicId</code>. Memoized per card id; unresolved intake re-checks on re-render.</td></tr>
+    <tr><td>4</td><td>Live name + HN</td><td>When a customerId is known → <code>getCustomer(id)</code> → <code>resolveCustomerDisplayName</code> + <code>resolveCustomerHN</code> (V113 live-resolve — always current).</td></tr>
+    <tr><td>5</td><td>Render</td><td>Resolved → sky-blue clickable name + ↗ + HN pill, <code>&lt;a href="/?backend=1&amp;customer=&lt;id&gt;" target="_blank" rel="noopener noreferrer"&gt;</code> (RecallRow pattern). Unresolved intake → nameSnapshot + "(รอลงทะเบียน)", no link.</td></tr>
+    <tr><td>6</td><td>Auto-upgrade</td><td>Admin registers the walk-in → <code>handleOpdClick</code> stamps <code>opd_session.brokerProClinicId</code> → next chat re-render, stage 3 resolves → the same card becomes clickable + shows HN ("เห็นพร้อมกันทุกที่").</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+
+<div class="section">
+<h3>Write side — <code>functions/</code></h3>
+<ul>
+  <li>NEW <code>functions/staffChatNotify.js</code> — pure <code>buildStaffChatNotification({kind, session, sessionId, customer, branchId})</code> returns the Firestore doc; + <code>writeStaffChatNotification(db, BASE_PATH, doc)</code> (admin-SDK <code>setDoc</code> at <code>${BASE_PATH}/be_staff_chat_messages/{id}</code>). Mirrors the pure-builder pattern of <code>notificationContent.js</code> so it's unit-testable.</li>
+  <li><code>functions/index.js</code> <code>sendPushOnSubmit</code>: right after the FCM <code>sendEachForMulticast</code>, determine <code>kind</code>, build + write the card. Wrapped in its own try/catch (non-fatal — a chat-write failure must never affect the push). Skip on edit (<code>s.updatedAt</code>).</li>
+</ul>
+<pre>// card doc (admin SDK bypasses the create validators)
+{
+  id: 'CHAT-&lt;ts&gt;-&lt;hex&gt;',           // crypto-secure id
+  branchId,                          // session.branchId (fallback customer.branchId)
+  deviceId: 'system',
+  displayName: 'ระบบ',
+  text: '🔔 &lt;thai headline&gt;',       // graceful fallback (chat-list lastMessage / non-card readers)
+  createdAt: serverTimestamp(),
+  system: {
+    kind: 'intake' | 'followup',
+    sessionId,                       // for intake live-resolve
+    customerId: &lt;id&gt; | null,         // followup: linkedCustomerId; intake: null
+    nameSnapshot,                    // followup: resolved name; intake: patientData name
+    hnSnapshot: &lt;hn&gt; | null,         // followup: resolved HN; intake: null
+  }
+}</pre>
+</div>
+
+<div class="section">
+<h3>Render side — client</h3>
+<ul>
+  <li>NEW <code>src/components/staffchat/StaffChatSystemCard.jsx</code> — style A. Theme-aware via clinic tokens (<code>--tx-primary</code>, <code>--tx-muted</code>, <code>--bd</code>), fire-red identity accent (icon circle + left border), <code>sparkles</code> lucide icon, sky-blue clickable name. Headline by <code>system.kind</code>.</li>
+  <li>NEW <code>src/lib/staffChatNotifyResolve.js</code> — pure <code>resolveSystemCardCustomerId(card, getSession)</code> + a small hook <code>useSystemCardCustomer(card)</code> with a module-level cache (resolved customerId/name/HN). Reads via <code>scopedDataLayer</code> <code>getCustomer</code> + a session getter.</li>
+  <li><code>src/components/staffchat/StaffChatMessage.jsx</code> — add the early <code>if (message.system)</code> branch at the top of the render.</li>
+</ul>
+</div>
+
+<div class="section">
+<h3>Alert, scope, rules</h3>
+<ul>
+  <li><strong>Alert (Q4):</strong> the card is a normal branch message → flows through the existing V82 unread cursor + chime → counts unread + plays sound. Only requirement: confirm nothing excludes <code>system</code> messages from the cursor/chime path.</li>
+  <li><strong>Scope:</strong> fresh intake + fresh follow-up only (skip edits). Read-only card. The V161 retention cron cleans system cards like any message (acceptable — they're transient notifications). Per-branch via <code>branchId</code>.</li>
+  <li><strong>firestore.rules:</strong> NO change. Admin-SDK write bypasses the create validators; staff <code>read</code> already allowed; the render reads <code>opd_sessions</code> + <code>be_customers</code> which staff can already read.</li>
+</ul>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> full notification card (prominent, "noti แบบสวยงาม").</li>
+  <li><strong>Q2 = sparkles:</strong> the system identity icon.</li>
+  <li><strong>Q3 = name-only-until-registered, then live-resolve:</strong> intake shows name only (no link/HN) until the admin registers the walk-in; then the same card live-resolves to a clickable name + HN, consistent everywhere. Resolution key = <code>opd_session.brokerProClinicId</code> via the stored <code>sessionId</code> (no PII stored; no registration-flow change).</li>
+  <li><strong>Q4 = counts unread + plays the chat sound</strong> (even though the push already alerts on devices).</li>
+  <li><strong>Defaults (approved):</strong> skip edits (push only); read-only card; <code>getDoc</code>+cache resolution (flips on re-render, not a live per-card listener).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>A finished <strong>follow-up</strong> assessment writes a System card into the customer's branch chat: <code>sparkles</code> icon, headline "กรอกแบบประเมินติดตามเสร็จแล้ว", sky-blue clickable name + HN pill; clicking opens <code>/?backend=1&amp;customer=&lt;id&gt;</code> in a new tab.</li>
+  <li>A finished <strong>intake</strong> writes a System card into the session's branch chat: headline "กรอกข้อมูลรับเข้าเสร็จแล้ว", name shown, no link/HN, "(รอลงทะเบียน)".</li>
+  <li>After an admin registers that intake (<code>handleOpdClick</code> → <code>brokerProClinicId</code> stamped), the SAME intake card becomes clickable + shows HN on the next chat render — for every device/viewer.</li>
+  <li>The System card counts toward the chat unread badge AND plays the chat notification sound.</li>
+  <li>An <strong>edit</strong> (re-submit of an existing session) does NOT create a card; the push still fires as today.</li>
+  <li>The customer name renders sky-blue, never red (Thai culture); HN is a neutral pill.</li>
+  <li>The push notification is unchanged; the chat write is non-fatal (a write failure never blocks the push).</li>
+  <li>The card appears ONLY in its own branch's chat (per-branch isolation).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>session.branchId presence:</strong> verify the opd_session doc the function reads carries <code>branchId</code>; fallback to <code>customer.branchId</code> (follow-up) — confirm during implementation.</li>
+  <li><strong>Resolution cost:</strong> unresolved intake cards <code>getDoc(opd_session)</code> on re-render; bounded (few intake cards) + memoized once resolved. Live per-card listener is a possible future upgrade (not in scope).</li>
+  <li><strong>Cloud Function deploy:</strong> the write side requires <code>firebase deploy --only functions</code>; the client render ships via <code>vercel</code>. No firestore.rules change → no Probe-Deploy-Probe.</li>
+  <li><strong>Rule Q verification:</strong> L2 real-prod e2e (admin-SDK write at the canonical path → client-SDK branch query → renders + resolves) + L1 (clickable name opens the customer page). Functions builder unit + render RTL (both kinds, resolved/unresolved) + Rule I flow-sim.</li>
+  <li><strong>Edge — intake with no eventual registration:</strong> the card stays name-only forever (correct — no customer exists). Retention cron eventually removes it.</li>
+</ul>
+
+</body>
+</html>
