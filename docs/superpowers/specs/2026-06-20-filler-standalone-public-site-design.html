@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Simulator — Standalone Public Site Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .ok { color: #15803d; font-weight: 700; }
+    .no { color: #b91c1c; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Simulator — Standalone Public Site Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user ("ที่เหลือ ok") · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-20-filler-standalone-public-site.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>หน้าจำลองการเพิ่มขนาด (<code>?play=filler</code>) ปัจจุบันอยู่ใน OPD app เดียวกัน. เวลาส่งลิ้งสาธารณะให้ลูกค้า ลิ้งนั้นชี้ไปที่ <code>lover-clinic-app.vercel.app</code> ซึ่งเป็นโดเมนเดียวกับระบบ OPD ทั้งหมด — bundle ที่ลูกค้าโหลดมีโค้ด/SDK ของ OPD (firebase config ฯลฯ) ปนอยู่. ต้องการ<strong>แยกหน้านี้ออกไปอีก Vercel project (URL <code>loverclinic.vercel.app</code>) ที่บรรจุแต่หน้า filler ล้วนๆ ไม่มีทางแตะ OPD ได้เลย</strong> — เพื่อความปลอดภัยขั้นสุดเมื่อแชร์ลิ้งสู่สาธารณะ. หน้าเดิมใน OPD ยังคงอยู่ (สำหรับใช้ภายใน). แก้ไฟล์ filler ครั้งเดียว → deploy ทั้ง 2 ที่.</p>
+
+<p><strong>การค้นพบสำคัญ (สิ่งที่ทำให้งานนี้สะอาด):</strong> หน้า <code>?play=filler</code> <em>self-contained 100%</em> อยู่แล้ว — <code>App.jsx</code> return <code>&lt;FillerSimulator/&gt;</code> <strong>ก่อน</strong> auth gate ทุกตัว, และ import graph ของมันมีแค่ React → <code>fillerMath.js</code> / <code>fillerStrings.js</code> / <code>FillerGraphic2D.jsx</code> / <code>Filler3D.jsx</code> (lazy <code>three</code>) + โลโก้ static 2 ไฟล์ + inline <code>&lt;style&gt;</code> block (ไม่พึ่ง index.css/Tailwind, ไม่มี firebase, ไม่มี component ของ OPD). ดังนั้น build แยกที่ mount <code>&lt;FillerSimulator/&gt;</code> จะได้ bundle ที่ <strong>ไม่มี firebase/OPD โดยโครงสร้าง</strong> — ความปลอดภัยการันตีด้วย tree-shaking ไม่ใช่แค่ convention.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">หน้า standalone @ loverclinic.vercel.app — เหมือน ?play=filler เป๊ะ (dark theme, root URL ไม่มี ?play=)</div>
+  <div style="background:#050505;color:#ededed;border-radius:10px;padding:18px;font-family:system-ui;max-width:760px;margin:auto;">
+    <!-- header: centered hero logo + compact contact icons (real layout) -->
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="display:inline-flex;flex-direction:column;align-items:center;">
+        <span style="font-size:22px;font-weight:800;letter-spacing:.07em;">LO<span style="color:#ef4444;">V</span>ER</span>
+        <span style="font-size:9px;font-weight:700;letter-spacing:.42em;color:#cbd5e1;margin-top:3px;">CLINIC</span>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;">
+        <span style="width:38px;height:38px;border-radius:10px;background:linear-gradient(90deg,#dc2626,#ef4444);display:inline-flex;align-items:center;justify-content:center;">📞</span>
+        <span style="width:38px;height:38px;border-radius:10px;background:#06C755;display:inline-flex;align-items:center;justify-content:center;color:#fff;">L</span>
+        <span style="width:38px;height:38px;border-radius:10px;background:#1877F2;display:inline-flex;align-items:center;justify-content:center;color:#fff;">f</span>
+      </div>
+    </div>
+    <!-- grid: controls (2fr) | graphic (3fr) -->
+    <div style="display:grid;grid-template-columns:2fr 3fr;gap:14px;">
+      <div style="background:#0f0f0f;border:1px solid #262626;border-radius:10px;padding:12px;font-size:12px;color:#8b9099;">
+        <div style="color:#ededed;font-weight:700;margin-bottom:8px;">ปริมาณฟิลเลอร์ (cc)</div>
+        <div style="height:7px;border-radius:4px;background:#262626;margin:10px 0;"></div>
+        <div>ความยาว · glans % · ภาษา TH/EN · ☀/🌙</div>
+      </div>
+      <div style="background:#0f0f0f;border:1px solid #262626;border-radius:10px;padding:12px;text-align:center;color:#8b9099;font-size:12px;">
+        <div style="color:#ededed;font-weight:700;margin-bottom:8px;">2D / 3D illustration + watermark โลโก้</div>
+        <div style="height:120px;border:1px dashed #3a201c;border-radius:8px;display:flex;align-items:center;justify-content:center;">รูปจำลอง (โลโก้ watermark จาง)</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><span style="border:1px solid #262626;border-radius:8px;padding:3px 8px;">หลังฉีด</span><span style="border:1px solid #262626;border-radius:8px;padding:3px 8px;">เดิม</span></div>
+      </div>
+    </div>
+    <!-- result cards + footer contacts -->
+    <div style="display:flex;gap:8px;margin-top:12px;font-size:12px;">
+      <div style="flex:1;background:#160d0c;border:1px solid #3a201c;border-radius:8px;padding:8px;text-align:center;">เดิม<br><b style="color:#ef4444;">รอบวง 10.4</b></div>
+      <div style="flex:1;background:#160d0c;border:1px solid #3a201c;border-radius:8px;padding:8px;text-align:center;">ใหม่<br><b style="color:#22c55e;">11.5–11.9</b></div>
+      <div style="flex:1;background:#160d0c;border:1px solid #3a201c;border-radius:8px;padding:8px;text-align:center;">ถุงยาง<br><b style="color:#fcd34d;">+2 ขนาด</b></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <span style="flex:1;background:linear-gradient(90deg,#dc2626,#ef4444);color:#fff;border-radius:10px;padding:11px 0;text-align:center;font-weight:800;font-size:13px;">📞 โทร</span>
+      <span style="flex:1;background:#06C755;color:#fff;border-radius:10px;padding:11px 0;text-align:center;font-weight:800;font-size:13px;">LINE</span>
+      <span style="flex:1;background:#1877F2;color:#fff;border-radius:10px;padding:11px 0;text-align:center;font-weight:800;font-size:13px;">Facebook</span>
+    </div>
+  </div>
+  <p style="font-size:.85em;color:#666;">ทุกอย่าง render จาก <code>&lt;FillerSimulator/&gt;</code> ตัวเดียวกับใน OPD — โทน/โลโก้/3D/i18n/contact เหมือนเป๊ะ. ต่างจากใน OPD แค่: (1) อยู่ที่ root URL ไม่ต้อง <code>?play=</code>, (2) มี <code>&lt;title&gt;</code>/favicon/og meta ของตัวเอง.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">og:image 1200×630 — โลโก้จริงเท่านั้น บนพื้น brand dark (ทำด้วย tool, ไม่มี AI/รูปปลอม)</div>
+  <div style="width:480px;height:252px;margin:auto;background:radial-gradient(120% 100% at 50% 0%,#1a0d0c 0%,#050505 60%);border:1px solid #3a201c;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ededed;font-family:system-ui;">
+    <div style="font-size:34px;font-weight:800;letter-spacing:.07em;">LO<span style="color:#ef4444;">V</span>ER <span style="font-size:13px;letter-spacing:.42em;color:#cbd5e1;">CLINIC</span></div>
+    <div style="margin-top:14px;font-size:17px;color:#cbd5e1;">จำลองผลการฉีดเพิ่มขนาด</div>
+    <div style="margin-top:6px;font-size:12px;color:#8b9099;">ประเมินรอบวง · ขนาดถุงยาง · ภาพจำลองเสมือนจริง</div>
+  </div>
+  <p style="font-size:.85em;color:#666;">โลโก้กลาง = <code>public/lover-clinic-logo-dark.png</code> (โลโก้จริง). พื้น + ข้อความ = brand color คลินิก. ไม่มีรูปถ่ายปลอม/AI. (มีรูปถ่ายคลินิกจริง ส่งมาภายหลังเปลี่ยนได้.)</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape — สิ่งที่อยู่ใน dist-filler (bundle สาธารณะ)</div>
+  <table>
+    <tr><th>อยู่ใน bundle <span class="ok">✓</span></th><th>ไม่อยู่ใน bundle <span class="no">✗</span> (พิสูจน์ด้วย build-guard grep)</th></tr>
+    <tr>
+      <td>React · ReactDOM<br>fillerMath.js (obfuscated) · fillerStrings.js<br>FillerSimulator · FillerGraphic2D · Filler3D (lazy)<br>three (lazy chunk)<br>logo dark/light · favicon · og-image</td>
+      <td><code>firebase</code> / <code>firebaseConfig</code> / <code>getFirestore</code> / <code>signInWith*</code><br><code>AdminDashboard</code> / <code>BackendDashboard</code> / backendClient<br>any OPD route / component / PII / Firestore path<br>index.css / Tailwind ของ OPD</td>
+    </tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Single source → 2 builds → 2 Vercel projects → 2 URLs</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>รายละเอียด</th></tr>
+    <tr><td>1</td><td>แก้ source ครั้งเดียว</td><td>แก้ไฟล์ filler ชุดเดียว (fillerMath / FillerSimulator / FillerGraphic2D / Filler3D / fillerStrings)</td></tr>
+    <tr><td>2a</td><td>Build OPD</td><td><code>vite build</code> → <code>dist/</code> (ทั้งแอป; <code>?play=filler</code> ใช้ source ชุดเดียวกัน)</td></tr>
+    <tr><td>2b</td><td>Build standalone</td><td><code>vite build --config vite.filler.config.js</code> → <code>dist-filler/</code> (entry <code>filler.html</code> → <code>src/filler-main.jsx</code> → mount <code>&lt;FillerSimulator/&gt;</code>; tree-shake ตัด firebase/OPD)</td></tr>
+    <tr><td>3</td><td>Deploy ทั้งคู่ (1 คำสั่ง)</td><td><code>npm run deploy:filler</code> → <code>vercel --prod</code> project <code>lover-clinic-app</code> + <code>vercel --prod</code> project <code>loverclinic</code> (target ด้วย VERCEL_PROJECT_ID override)</td></tr>
+    <tr><td>4</td><td>2 URLs live</td><td><code>lover-clinic-app.vercel.app/?play=filler</code> (ภายใน) + <code>loverclinic.vercel.app</code> (สาธารณะ, root = หน้า filler)</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Security boundary — ทำไมลูกค้าแตะ OPD ไม่ได้</div>
+  <pre>filler-main.jsx
+   └─ import FillerSimulator
+        └─ fillerMath / fillerStrings / FillerGraphic2D / Filler3D / 2 logos
+            └─ (NO import of firebase.js / App.jsx / backendClient / any OPD module)
+
+Rollup tree-shake  →  dist-filler ไม่มี code path ใดไปถึง OPD/Firestore เลย
+Build-guard test   →  grep dist-filler หา firebase|firebaseConfig|getFirestore|
+                       AdminDashboard|signInWith  →  ต้องเป็น 0 matches (ไม่งั้น build fail)</pre>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>Repo เดียว, build 2 target (Q1).</strong> ไม่ copy code. NEW เพิ่มเฉพาะไฟล์โครง:</p>
+<table>
+  <tr><th>ไฟล์ใหม่</th><th>หน้าที่</th></tr>
+  <tr><td><code>filler.html</code> (repo root)</td><td>entry ของ standalone — root URL = หน้า filler ตรงๆ (ไม่มี <code>?play=</code>). มี <code>&lt;title&gt;</code> ไทย + favicon คลินิก + <code>og:image</code>/<code>og:title</code>/<code>og:description</code> (Q3). โหลด <code>/src/filler-main.jsx</code>.</td></tr>
+  <tr><td><code>src/filler-main.jsx</code></td><td><code>createRoot(document.getElementById('root')).render(&lt;FillerSimulator/&gt;)</code> — mount หน้าเดิมเป๊ะ ไม่ผ่าน App.jsx/auth.</td></tr>
+  <tr><td><code>vite.filler.config.js</code></td><td>build แยก: <code>build.rollupOptions.input: 'filler.html'</code>, <code>build.outDir: 'dist-filler'</code>, plugin obfuscator <strong>ตัวเดิม</strong> (scope 4 ไฟล์ filler เหมือนเดิม), <code>publicDir: 'public-filler'</code>. ใช้ <code>react()</code> plugin เดียวกัน.</td></tr>
+  <tr><td><code>public-filler/</code></td><td><code>lover-clinic-logo-dark.png</code>, <code>lover-clinic-logo-light.png</code> (สำเนา binary — ไม่ใช่ drift ของ code), <code>favicon.svg</code> (หรือ .png คลินิก), <code>og-image.png</code> (gen เอง). เอาเฉพาะที่ standalone ต้องใช้ → deploy สาธารณะไม่มี chart-templates/stickers ของ OPD ปน.</td></tr>
+  <tr><td><code>scripts/build-filler-og.mjs</code> (หรือ HTML→headless)</td><td>สร้าง og-image 1200×630 จากโลโก้จริงบนพื้น brand dark + ข้อความไทย ด้วย tool (render HTML ใน headless browser → screenshot, การันตี font ไทย+โลโก้คม). โลโก้จริงเท่านั้น, ไม่มี AI/รูปปลอม.</td></tr>
+  <tr><td><code>package.json</code> script <code>deploy:filler</code></td><td>deploy OPD + standalone ใน 1 คำสั่ง (Q2).</td></tr>
+  <tr><td>build-guard test (tests/)</td><td>build <code>dist-filler</code> แล้ว grep ยืนยันไม่มี firebase/OPD (Rule Q L2 ของ security claim).</td></tr>
+</table>
+<p><strong>Vercel:</strong> NEW project <code>loverclinic</code> (Build Command <code>vite build --config vite.filler.config.js</code>, Output <code>dist-filler</code>, Root = repo root). OPD project <code>lover-clinic-app</code> คงเดิม. กลไก deploy 2 project จาก dir เดียว = ใช้ <code>VERCEL_ORG_ID</code>/<code>VERCEL_PROJECT_ID</code> env override ต่อคำสั่ง (resolve กลไกชัดตอน plan).</p>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Repo เดียว, build 2 target — single source, ไม่มี drift (Rule of 3).</li>
+  <li><strong>Q2 = A:</strong> <code>npm run deploy:filler</code> คำสั่งเดียว deploy ทั้ง OPD + standalone (ยังต้องพิมพ์ "deploy" อนุญาตทุกครั้ง — V18).</li>
+  <li><strong>Q3 = A:</strong> ใส่ <code>&lt;title&gt;</code> ไทย + favicon คลินิก + og:image/og:title/og:description ให้ลิ้งสวยใน LINE/FB.</li>
+  <li><strong>Q4 = B:</strong> ถ้า <code>loverclinic.vercel.app</code> ถูกจอง → <strong>หยุดถาม user ก่อน</strong> ไม่เดาชื่อเอง (hard gate ใน plan).</li>
+  <li><strong>og:image:</strong> ทำเองด้วย tool, <strong>โลโก้จริงเท่านั้น</strong> (lover-clinic-logo-dark.png) บนพื้น brand dark + ข้อความไทย. <code>src/assets/hero.png</code> ไม่ใช่รูปคลินิก → ไม่ใช้. ไม่มี AI/รูปปลอม.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>เปิด <code>loverclinic.vercel.app</code> (หรือ <code>vite preview</code> ของ <code>dist-filler</code>) → render เหมือน <code>?play=filler</code> เป๊ะ: โลโก้จริง, โทน dark/light toggle, 2D/3D, TH/EN, contact buttons, watermark, มือถือ no-overflow + tap ≥44px. Console สะอาด.</li>
+  <li><strong>build-guard:</strong> grep <code>dist-filler</code> หา <code>firebase|firebaseConfig|getFirestore|AdminDashboard|signInWith</code> = <strong>0 matches</strong>. DevTools → Sources บนหน้าจริงไม่มี firebase.</li>
+  <li>obfuscation ยังทำงานบน standalone: grep <code>dist-filler</code> ไม่เจอ <code>K_REALISTIC / 1.8 / 2.3 / condomIndexForGirth / dCgeo</code> (เหมือน R9).</li>
+  <li>แก้ไฟล์ filler 1 ครั้ง → <code>npm run deploy:filler</code> → ทั้ง 2 URL อัพเดตตรงกัน (ไม่มี drift).</li>
+  <li>แชร์ <code>loverclinic.vercel.app</code> ใน LINE/FB → preview card ขึ้นโลโก้คลินิก + ชื่อ + คำอธิบาย (og meta ทำงาน).</li>
+  <li>filler tests เดิม 98/0 + full vitest ไม่เปลี่ยน (vitest รัน serve → config/obfuscation ใหม่ไม่กระทบ).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>URL availability:</strong> <code>loverclinic.vercel.app</code> อาจถูกจองทั่วโลกบน Vercel. Q4=B → เช็คตอนสร้าง, ถ้าถูกจองหยุดถาม user. <em>(hard gate — ไม่ build/deploy ต่อจนกว่าจะได้ชื่อ)</em></li>
+  <li><strong>Vercel CLI auth/org:</strong> ต้องมี account link + org ใน environment นี้. ถ้า CLI ไม่ได้ auth → ขอ user login หรือใช้ Vercel MCP. (เช็คตอนเริ่ม plan)</li>
+  <li><strong>กลไก deploy 2 project จาก repo เดียว:</strong> ใช้ <code>VERCEL_PROJECT_ID</code> override; ตรวจว่า repo-level <code>vercel.json</code> (มี maxDuration ของ backup endpoints — V122) ไม่ทำให้ build filler พัง → ถ้าชน ใช้ <code>--local-config vercel.filler.json</code>.</li>
+  <li><strong>รูปถ่ายคลินิกจริง:</strong> ตอนนี้ไม่มีเป็น asset (hero.png ไม่ใช่). og:image ใช้โลโก้จริง. ถ้า user ส่งรูปถ่ายคลินิกจริงมาทีหลัง → เปลี่ยน og:image ได้.</li>
+</ul>
+
+</body>
+</html>
