@@ -199,3 +199,59 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
     expect(page).toMatch(/touch-action:pan-y/);          // slider drag vs page scroll
   });
 });
+
+describe('filler-simulator v4 — centered header + result colors + dashed 2D + formal copy', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('V4-1: centered hero header — title/logo/subtitle centered, toggles floated top-right', () => {
+    expect(page).toMatch(/textAlign: 'center'/);                 // centered hero (not edge-stuck)
+    expect(page).toMatch(/position: 'absolute', top: 0, right: 0/); // toggles out of centered flow
+    expect(page).toMatch(/alignItems: 'center'/);                // centered column
+    expect(page).toMatch(/at 50% 0%/);                           // glow centered
+  });
+
+  it('V4-2: result colors — new size GREEN, baseline RED, delta GOLD (luxury)', () => {
+    expect(page).toMatch(/green: '#22c55e'/);   // dark theme green
+    expect(page).toMatch(/green: '#16a34a'/);   // light theme green (AA)
+    expect(page).toMatch(/goldA:/);
+    expect(page).toMatch(/goldB:/);
+    expect(page).toMatch(/const goldGrad = /);  // gold gradient for the +delta
+    // ResultCard: new value green, baseline red, delta gold-gradient text
+    expect(page).toMatch(/color: c\.green/);            // → new size
+    expect(page).toMatch(/style=\{\{ fontSize: 12, color: c\.fire \}\}>\{oldVal\}/); // baseline red
+    expect(page).toMatch(/backgroundImage: goldGrad/);  // delta gold
+  });
+
+  it('V4-3: 2D "after" outline is THIN + DASHED + red (small growth not masked)', () => {
+    // mushroom + cross-section "after" strokes: thin (1), dashed, kept red
+    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || [];
+    expect(afterStrokes.length).toBeGreaterThanOrEqual(2); // side-view + cross-section
+    expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.6"/); // old thick solid gone
+    expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.5"/);
+    // legend wording updated for the dashed-after / faint-dashed-before
+    expect(strings).toMatch(/เส้นประแดง = หลังฉีด/);
+    expect(strings).toMatch(/Red dashed = after/);
+  });
+
+  it('V4-4: formal / professional copy in BOTH languages (credible register)', () => {
+    // TH formal markers
+    expect(strings).toMatch(/พารามิเตอร์/);            // "parameters" (formal)
+    expect(strings).toMatch(/ประมาณการ/);              // "estimate" (formal noun)
+    expect(strings).toMatch(/แพทย์ผู้เชี่ยวชาญ/);       // "qualified physician"
+    expect(strings).toMatch(/ไฮยาลูรอนิก/);            // names the filler type (clinical)
+    // EN formal markers
+    expect(strings).toMatch(/illustrative estimates/);
+    expect(strings).toMatch(/qualified physician/);
+    expect(strings).toMatch(/dermal-filler augmentation/);
+    // casual phrasing removed
+    expect(strings).not.toMatch(/นึกภาพออก/);          // old casual "to picture it"
+    expect(strings).not.toMatch(/กดไซส์ถุงยาง/);        // old casual "press condom size"
+  });
+
+  it('V4-5: privacy pill copy is formal in both languages', () => {
+    expect(page).toMatch(/ไม่จัดเก็บข้อมูล/);   // TH formal (was ไม่เก็บข้อมูล)
+    expect(page).toMatch(/No data stored/);     // EN formal (was Private · no data)
+  });
+});

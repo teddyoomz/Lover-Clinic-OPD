@@ -66,8 +66,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
       <text x="6" y="13" fontSize="11" fill={lab}>{tr('g2dSide')}</text>
 
-      {/* after — skin body (mushroom) */}
-      <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1.6" />
+      {/* after — skin body (mushroom). Thin DASHED red so small growth isn't masked by a thick line. */}
+      <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" />
       {/* corona ridge */}
       <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 4} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.2" opacity="0.55" />
       {/* highlight */}
@@ -78,7 +78,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
       {/* cross-section (shaft) */}
       <text x="6" y="150" fontSize="11" fill={lab}>{tr('g2dCross')}</text>
-      <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1.5" />
+      <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" />
       <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
       <text x={ccx + csA + 14} y={ccy - 14} fontSize="11" fill="#ef4444">{tr('g2dLegShaft')}</text>
       <text x={ccx + csA + 14} y={ccy + 6} fontSize="11" fill="#f59e0b">{tr('g2dLegGlans')}</text>
