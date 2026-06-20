@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Simulator R9 — Formula Protection + Watermark + Contact Buttons — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .btn { display:flex; align-items:center; justify-content:center; gap:8px; padding:13px 0; border-radius:12px; font-weight:800; font-size:14px; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Simulator R9 — Formula Protection + Logo Watermark + Contact Buttons</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user · <strong>Page:</strong> public pure-client <code>?play=filler</code> (no Firestore/auth/PII) · <strong>Implementation plan:</strong> 2026-06-20-filler-r9-protect-watermark-contact.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Three additions to the public Penile Filler Size Simulator, all clinic-protection / branding:</p>
+<ol>
+  <li><strong>Protect the calculation formula</strong> from being scraped out of the shipped bundle (user: "ห้ามให้สูตรการคิดคำนวนโดนดูดไปได้เด็ดขาด"). The page stays pure-client, so the chosen mitigation is build-time obfuscation scoped to the filler files (deterrence, not encryption — the page must remain instant/offline).</li>
+  <li><strong>Centered-faint clinic-logo watermark</strong> on the 2D AND 3D anatomy graphics so a copied/screenshotted image carries the clinic branding ("เปรียบเสมือนลายน้ำ").</li>
+  <li><strong>Contact buttons</strong> (📞 โทร · LINE OA · Facebook) in the header AND footer, with real brand icons, theme-aware in both dark and light.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Contact buttons — DARK theme (filled brand + white icon)</div>
+  <div style="background:#050505;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:9px;max-width:420px">
+    <div class="btn" style="background:linear-gradient(90deg,#dc2626,#ef4444);color:#fff"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> โทร</div>
+    <div class="btn" style="background:#06C755;color:#fff"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg> LINE</div>
+    <div class="btn" style="background:#1877F2;color:#fff"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> Facebook</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Contact buttons — LIGHT theme (soft brand-tint + deepened brand icon/label + border; AA-safe)</div>
+  <div style="background:#f0f4f8;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:9px;max-width:420px">
+    <div class="btn" style="background:#fef2f2;border:1px solid #fbcfcf;color:#be123c"><svg width="17" height="17" viewBox="0 0 24 24" fill="#be123c"><path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> โทร</div>
+    <div class="btn" style="background:#ecfdf3;border:1px solid #a7f0c6;color:#047a43"><svg width="18" height="18" viewBox="0 0 24 24" fill="#047a43"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg> LINE</div>
+    <div class="btn" style="background:#eff6ff;border:1px solid #bcd7fb;color:#1d4ed8"><svg width="17" height="17" viewBox="0 0 24 24" fill="#1d4ed8"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> Facebook</div>
+  </div>
+  <p style="font-size:0.85em;color:#666;margin:0.6em 0 0">Header = the same 3 as <strong>compact icon-only</strong> buttons (42×42 rounded) top-left, balancing the EN/theme toggles top-right. Dark = filled brand square + white icon; light = soft tint + brand icon.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Watermark — centered-faint clinic logo on the graphic (dark theme shown)</div>
+  <div style="background:#0f0f0f;border:1px solid #262626;border-radius:12px;padding:16px;position:relative;max-width:360px;height:170px;overflow:hidden">
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <svg width="200" height="80" viewBox="0 0 200 80"><ellipse cx="80" cy="40" rx="70" ry="26" fill="#c2825f"/><circle cx="150" cy="40" r="30" fill="#c2825f"/></svg>
+    </div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0.10;pointer-events:none">
+      <span style="font-weight:800;font-size:30px;letter-spacing:1px;color:#fff">LOVER</span>
+      <span style="font-weight:700;font-size:12px;letter-spacing:6px;color:#fff">CLINIC</span>
+    </div>
+  </div>
+  <p style="font-size:0.85em;color:#666;margin:0.6em 0 0">Real PNG logo, ~8–10% opacity, <code>pointer-events:none</code>. <strong>2D</strong>: an <code>&lt;image&gt;</code> centered inside BOTH the side-view SVG (cx240,cy84) and the cross-section SVG (cx120,cy120) → travels with any SVG copy / screenshot. <strong>3D</strong>: the same logo as a centered DOM <code>&lt;img&gt;</code> overlay pinned over the WebGL canvas → appears in any screenshot. Theme-aware asset: white wordmark (<code>logo-dark.png</code>) on dark, black (<code>logo-light.png</code>) on light.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Build-time: formula obfuscation scoped to the filler files (vitest bypasses it)</div>
+  <table>
+    <tr><th>Stage</th><th>What happens</th></tr>
+    <tr><td>1. <code>npm test</code> (vitest)</td><td>Reads <strong>original source</strong> directly via jsdom — Vite <em>build</em> plugins never run → <code>fillerMath.js</code> formulas tested unobfuscated → all 16837 tests stay green.</td></tr>
+    <tr><td>2. <code>npm run build</code> (Vite, <code>NODE_ENV=production</code>)</td><td>The scoped <code>vite-plugin-javascript-obfuscator</code> runs ONLY on <code>include</code> globs = the 4 filler files. Renames <code>K_REALISTIC→a</code>, inlines/flattens <code>dCgeo</code>, mangles <code>CONDOM_LADDER</code>. Everything else (backend dashboard, firebase, 360+ components) untouched.</td></tr>
+    <tr><td>3. <code>dist/</code> artifact</td><td>The filler chunk ships obfuscated → constants <code>2.37</code>/<code>3.32</code>/<code>K_REALISTIC</code> no longer appear in clear. git source stays unobfuscated.</td></tr>
+  </table>
+  <p style="font-size:0.85em;color:#666;margin:0.4em 0 0"><strong>Honest caveat (locked decision):</strong> obfuscation is deterrence, not encryption — a determined reverse-engineer can still recover it; input→output remains observable. Chosen over a serverless API to keep the page pure-client/instant/offline.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Runtime: render + contact-click</div>
+  <table>
+    <tr><th>Event</th><th>Result</th></tr>
+    <tr><td>Page renders <code>?play=filler</code></td><td>Watermark <code>&lt;image&gt;</code> drawn into both 2D SVGs + DOM overlay over the 3D canvas (theme-aware logo, ~9% opacity, non-interactive). Header renders 3 compact contact icons; footer renders the 3 full buttons.</td></tr>
+    <tr><td>Theme toggle (🌙/☀)</td><td>Watermark logo swaps white↔black; buttons swap filled↔soft-tint; icons swap white↔brand-color. (Single <code>theme</code> state already drives the page.)</td></tr>
+    <tr><td>Tap 📞 / LINE / FB</td><td><code>tel:0975251525</code> · <code>https://lin.ee/mFFsDkG</code> · <code>https://www.facebook.com/loverclinickorat</code> — LINE/FB open <code>target="_blank" rel="noopener noreferrer"</code>; phone uses the device dialer.</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>package.json</code></td><td>+ devDependency <code>vite-plugin-javascript-obfuscator</code></td></tr>
+  <tr><td><code>vite.config.js</code></td><td>Add the obfuscator plugin, <code>process.env.NODE_ENV==='production'</code> gated, <code>include</code> = 4 filler files, <code>exclude</code> = node_modules + tests. Options <code>compact:true, controlFlowFlattening:false</code> (avoid bundle bloat). A comment documents the scope so it's never widened.</td></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code></td><td>+ <code>CLINIC_CONTACT</code> const (3 links) + a small theme-aware <code>ContactButtons</code> helper (compact + full variants — Rule of 3: header + footer reuse it). Header gets compact icons top-left; new footer bar above the disclaimer. Brand SVG icon paths (real LINE/FB/phone marks).</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code></td><td>+ <code>&lt;image&gt;</code> watermark centered in the side-view SVG and the cross-section SVG (theme-driven logo src, ~9% opacity, <code>pointerEvents:'none'</code>).</td></tr>
+  <tr><td><code>src/components/Filler3D.jsx</code></td><td>+ a centered DOM <code>&lt;img&gt;</code> watermark overlay inside the mount wrapper (absolute, centered, non-interactive, theme-driven src). Receives <code>theme</code> prop (currently it doesn't — add it).</td></tr>
+  <tr><td><code>tests/filler-simulator-flow-simulate.test.js</code></td><td>+ v5.5 block: contact const + links + target/rel + theme-aware button styles + watermark <code>&lt;image&gt;</code>/overlay present + real brand-icon paths.</td></tr>
+  <tr><td><code>tests/filler-obfuscation-config.test.js</code> (new)</td><td>Source-grep <code>vite.config.js</code>: obfuscator plugin scoped to the 4 filler files, prod-gated, excludes tests/node_modules.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = Client obfuscation:</strong> scoped <code>vite-plugin-javascript-obfuscator</code> on the 4 filler files (prod build only). Keeps the page pure-client/instant/offline. Deterrence, not encryption (disclosed).</li>
+  <li><strong>Q2 = Centered-faint watermark:</strong> real PNG logo, theme-aware, same on 2D (in-SVG) + 3D (DOM overlay), ~8–10% opacity, non-interactive.</li>
+  <li><strong>Q3 = Contact buttons:</strong> header (compact icons) + footer (full), real brand SVG icons, real values (097-525-1525 · lin.ee/mFFsDkG · facebook.com/loverclinickorat).</li>
+  <li><strong>Theme-aware (user add-on):</strong> button colors + icon colors adapt — dark = filled brand + white icon; light = soft brand-tint + deepened brand-color icon/label + border (AA-safe). Watermark logo swaps white/black.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Header shows 3 compact contact icon-buttons (real brand SVGs); footer shows 3 full buttons. Each has the correct <code>href</code> (<code>tel:0975251525</code> / <code>lin.ee/mFFsDkG</code> / <code>facebook.com/loverclinickorat</code>); LINE+FB carry <code>target="_blank" rel="noopener noreferrer"</code>.</li>
+  <li>Buttons + icons are theme-aware: dark filled+white, light soft-tint+brand-color; verified visually in both themes (Rule Q L1).</li>
+  <li>Centered-faint clinic logo watermark (theme-aware, ~8–10% opacity, <code>pointer-events:none</code>) renders on the 2D side-view + cross-section AND over the 3D canvas; visible in a screenshot of each view.</li>
+  <li><code>npm run build</code> clean; <code>dist/</code> filler chunk obfuscated — grep the built JS for <code>K_REALISTIC</code> / <code>2.37</code> / <code>CONDOM_LADDER</code> → NOT present in clear. The rest of the bundle is byte-unaffected by the plugin scope.</li>
+  <li>Full <code>vitest</code> stays 16837/0 (vitest bypasses the build plugin); new v5.5 + obfuscation-config tests pass.</li>
+  <li>NOT deployed (await explicit "deploy"; pure-client → vercel-only, no Probe-Deploy-Probe).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Obfuscator bundle bloat / JSX interplay:</strong> the plugin runs on bundled JS post-transform; <code>controlFlowFlattening:false</code> + <code>compact:true</code> keep size sane. Verify the filler chunk size before/after + that the page still runs (Rule Q L1).</li>
+  <li><strong>Watermark opacity tuning:</strong> 8–10% is a starting point; final value tuned in preview (must read as a faint watermark, not obscure the anatomy).</li>
+  <li><strong>3D overlay vs in-scene:</strong> DOM overlay is screenshot-covered (the stated threat). A right-click "save canvas image" would NOT include it — documented as an acceptable limitation; in-scene HUD sprite is a future upgrade if needed.</li>
+  <li><strong>Contact values:</strong> hardcoded (page is pure-client; values are public marketing info, provided by the clinic operator). If the clinic changes a number/link, edit the <code>CLINIC_CONTACT</code> const.</li>
+</ul>
+
+</body>
+</html>
