@@ -5,6 +5,29 @@
 
 ---
 
+## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-15 EOD+1` → `2026-06-15 EOD+1` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-15 EOD+1 — ponytail statusline + SESSION_HANDOFF archive (housekeeping)
+
+master `1b5c9c13` (docs/housekeeping) · prod frontend `f302216c` LIVE · rules `e5418722` unchanged · vitest 16398/0 (reused) · tree clean.
+
+- **ponytail statusLine** — auto-classifier HARD-blocked me from writing a `-ExecutionPolicy Bypass` statusLine into `~/.claude/settings.json` (security-weakening self-mod; same wall as the hooks last session). USER added it manually → verified JSON valid + 4 hooks intact. `[PONYTAIL]` badge shows next boot.
+- **SESSION_HANDOFF.md archived** (`1b5c9c13`) — over the 200 KB hard cap (217.8 KiB). The bulk had **drifted**: cap procedure targets `### Session` blocks (41 KB) but the real bloat was the `## Current State` one-liner index (177 KB). Moved oldest 43 index entries (`2026-05-27 EOD+13` → `2026-05-21`, oldest-first) → NEW `.agents/sessions/session-handoff-archive.md` (79 KiB). Live **217.8 → 139 KiB** (<150 KB target, 61 KB headroom). All 19 detail blocks + recent index (→ `2026-05-28 EOD`) preserved; verbatim slice (no block altered).
+- **ภูดิท LC-26000151 / LC-26000082** — read `scripts/backfill-perf-assessment.mjs` + `diag-find-deleted-session-in-backups.mjs` only (read-only, no env pull, no mutation). User: "ไม่ต้องทำแล้ว" → left deferred. (ภูดิท unrecoverable by data; LC-26000082 = ambiguous, needs user to pick a session.)
+- No source touched → graphify update + checkpoint skipped (not a milestone); tests not re-run.
+
+---
+
+📂 **Older sessions (`2026-06-15` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-15 EOD+1) — housekeeping only (no source, no deploy)**: master `1b5c9c13`; prod frontend `f302216c` LIVE + rules `e5418722` (both unchanged); vitest **16398/0** (reused — no source touched). (1) **ponytail statusLine**: auto-classifier HARD-blocked me writing the `-ExecutionPolicy Bypass` command into `~/.claude/settings.json` → USER added it manually (JSON valid, hooks intact; `[PONYTAIL]` badge next boot). (2) **SESSION_HANDOFF.md archived** (`1b5c9c13`): was 217.8 KiB (over 200 KB cap) — bulk had drifted to the `## Current State` one-liner index (177 KB), NOT the `### Session` blocks the cap procedure assumed; moved oldest 43 index entries (`2026-05-27 EOD+13` → `2026-05-21`) → NEW `.agents/sessions/session-handoff-archive.md`; live = **139 KiB** (<150 KB target, 61 KB headroom); all 19 detail blocks + recent index kept. (3) ภูดิท LC-26000151 / LC-26000082 = read AV194 backfill + backup-search scripts only (no env pull, no mutation), user said "ไม่ต้องทำแล้ว" → deferred.
+
+---
+
 ## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-15` → `2026-06-15` + Current-State index
 
 ### Session blocks (1)
