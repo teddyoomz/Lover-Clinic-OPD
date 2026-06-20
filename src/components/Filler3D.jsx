@@ -38,6 +38,32 @@ function buildModel(group, material, est, lengthCm) {
   group.add(base);
 }
 
+// model's intrinsic X-extent (cm) — shaft length + glans bulb + rounded base
+function computeModelLen(est, lengthCm) {
+  const r = Math.max(girthToRadiusCm(est?.c1Low ?? 5.5), 0.3);
+  const glansR = Math.max((est?.glans?.visualLow ?? r * 2) / 2, 0.3);
+  const L = Math.max(lengthCm ?? 12.7, 4);
+  return L + glansR * 2.4 + r * 2;
+}
+
+// auto-scale: frame the model so its length fills ~the canvas width (using the live FOV+aspect),
+// reframed on every rebuild/resize so it always looks good. Preserves the current orbit angle.
+function frameCamera(camera, controls, modelLen) {
+  const vFOV = (camera.fov * Math.PI) / 180;
+  const hFOV = 2 * Math.atan(Math.tan(vFOV / 2) * camera.aspect);
+  const fill = 0.82; // model spans ~82% of the width at the front-facing angle
+  const dist = (modelLen / 2) / Math.tan(hFOV / 2) / fill;
+  let dir = camera.position.clone().sub(controls.target);
+  if (dir.lengthSq() < 1e-6) dir = new THREE.Vector3(0, 0.32, 1);
+  dir.normalize();
+  controls.target.set(0, 0, 0);
+  camera.position.copy(dir.multiplyScalar(dist));
+  camera.near = Math.max(dist / 100, 0.1);
+  camera.far = dist * 100;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
 export default function Filler3D({ est, lengthCm = 11, t }) {
   const tr = typeof t === 'function' ? t : (k) => k;
   const mountRef = useRef(null);
@@ -68,16 +94,15 @@ export default function Filler3D({ est, lengthCm = 11, t }) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.enablePan = false;
-    controls.minDistance = 8;
-    controls.maxDistance = 60;
+    controls.minDistance = 5;
+    controls.maxDistance = 160;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.4;
 
     refs.current = { scene, camera, renderer, material, group, controls, mount };
     buildModel(group, material, est, lengthCm);
-    camera.position.set(0, Math.max(lengthCm, 11) * 0.32, Math.max(lengthCm, 11) * 2.2);
-    controls.target.set(0, 0, 0);
-    controls.update();
+    refs.current.modelLen = computeModelLen(est, lengthCm);
+    frameCamera(camera, controls, refs.current.modelLen); // auto-scale to fill the canvas
 
     let raf;
     const animate = () => { controls.update(); renderer.render(scene, camera); raf = requestAnimationFrame(animate); };
@@ -85,7 +110,8 @@ export default function Filler3D({ est, lengthCm = 11, t }) {
 
     const onResize = () => {
       const w = mount.clientWidth || width;
-      camera.aspect = w / height; camera.updateProjectionMatrix(); renderer.setSize(w, height);
+      camera.aspect = w / height; renderer.setSize(w, height);
+      frameCamera(camera, controls, refs.current.modelLen || computeModelLen(est, lengthCm)); // re-fit on resize
     };
     const ro = new ResizeObserver(onResize);
     ro.observe(mount);
@@ -103,11 +129,13 @@ export default function Filler3D({ est, lengthCm = 11, t }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // rebuild geometry on estimate / length change
+  // rebuild geometry + auto-scale on estimate / length change
   useEffect(() => {
     const r = refs.current;
     if (!r.group) return;
     buildModel(r.group, r.material, est, lengthCm);
+    r.modelLen = computeModelLen(est, lengthCm);
+    frameCamera(r.camera, r.controls, r.modelLen); // re-fit so it always fills nicely
   }, [est, lengthCm]);
 
   return (

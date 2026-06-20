@@ -117,10 +117,10 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
   const page = read('src/pages/FillerSimulator.jsx');
   const g2d = read('src/components/FillerGraphic2D.jsx');
 
-  it('V3-1: minimum filler is 5cc — RANGES.cc[0]=5, default + slider min source it (SSOT)', () => {
+  it('V3-1: slider min 5cc (cannot go below); default now 10cc (v5.2)', () => {
     expect(RANGES.cc[0]).toBe(5);
-    expect(page).toMatch(/useState\(RANGES\.cc\[0\]\)/);  // default = 5
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);      // slider cannot go below 5
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/); // default 10cc
     expect(page).not.toMatch(/useState\(12\)/);           // old default removed
   });
 
@@ -141,10 +141,11 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
     expect((total - glans) + glans).toBe(5);
   });
 
-  it('V3-3: 2D length no longer clamps at ~8in — lenToPx max well past 198 (v5 enlarged)', () => {
+  it('V3-3: 2D length auto-stretches (no static clamp) — fills viewBox width at max length (v5.2)', () => {
     expect(g2d).not.toMatch(/, 100, 198\)/);   // old cap (~7.8in) removed
-    expect(g2d).not.toMatch(/, 100, 240\)/);   // v3 cap superseded by v5 enlargement
-    expect(g2d).toMatch(/, 140, 330\)/);       // v5: full 10in range shows in viewBox 480
+    expect(g2d).not.toMatch(/lenToPx/);        // static clamp helper removed → dynamic
+    expect(g2d).toMatch(/maxShaftLen = VIEW_W - x0 - RIGHT_MARGIN - GAP - glansLenA/); // smart fill-to-width
+    expect(g2d).toMatch(/lenFrac/);            // length → 0..1 over the real range
   });
 
   it('V3-4: REAL clinic logo — white(dark)/black(light) static asset img, theme-contrasting', () => {
@@ -300,5 +301,36 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
     expect(page).toMatch(/align-items:stretch/);
     expect(page).toMatch(/flexDirection: 'column'/);
     expect(page).toMatch(/flex: 1, minHeight: 232/);
+  });
+});
+
+describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-stretch + 3D auto-scale', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+  const g3d = read('src/components/Filler3D.jsx');
+
+  it('V5.2-1: default filler is 10cc (slider min still 5)', () => {
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);
+    expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);
+  });
+
+  it('V5.2-2: baseline (เดิม) dash made fainter', () => {
+    expect(g2d).toMatch(/rgba\(15,23,42,0\.42\)/);   // light theme faint
+    expect(g2d).toMatch(/rgba\(255,255,255,0\.5\)/); // dark theme faint
+  });
+
+  it('V5.2-3: 2D side-view SMART auto-stretch — fills the viewBox width at max length', () => {
+    expect(g2d).toMatch(/import \{ diameterFromGirth, RANGES \}/);        // length range for the fraction
+    expect(g2d).toMatch(/const maxShaftLen = VIEW_W - x0 - RIGHT_MARGIN - GAP - glansLenA/);
+    expect(g2d).toMatch(/const len = MIN_SHAFT \+ lenFrac \* \(maxShaftLen - MIN_SHAFT\)/);
+    expect(g2d).toMatch(/VIEW_W = 480/);
+  });
+
+  it('V5.2-4: 3D auto-scale — frameCamera fits the model (FOV+aspect), reframed on rebuild + resize', () => {
+    expect(g3d).toMatch(/function frameCamera/);
+    expect(g3d).toMatch(/function computeModelLen/);
+    expect(g3d).toMatch(/2 \* Math\.atan\(Math\.tan\(vFOV \/ 2\) \* camera\.aspect\)/); // FOV+aspect fit
+    expect((g3d.match(/frameCamera\(/g) || []).length).toBeGreaterThanOrEqual(4);     // def + init + rebuild + resize
+    expect(g3d).not.toMatch(/Math\.max\(lengthCm, 11\) \* 2\.2/);                      // old static camera removed
   });
 });

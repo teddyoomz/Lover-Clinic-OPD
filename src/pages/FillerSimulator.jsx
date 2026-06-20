@@ -94,7 +94,7 @@ export default function FillerSimulator() {
   const [baseMode, setBaseMode] = useState('condom');
   const [baseDiameterCm, setBaseDiameterCm] = useState(3.0);
   const [condomIdx, setCondomIdx] = useState(2); // Regular 52
-  const [totalCc, setTotalCc] = useState(RANGES.cc[0]); // min 5cc — cannot go below
+  const [totalCc, setTotalCc] = useState(10); // default 10cc (min RANGES.cc[0]=5 — cannot go below)
   const [glansCc, setGlansCc] = useState(1); // glans split in EXACT 0.5cc steps (same at every total)
   const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
   const [view, setView] = useState('2d');

@@ -1,18 +1,23 @@
 // FillerGraphic2D — realistic anatomical 2D (mushroom: shaft → sulcus → corona → glans).
 // Clinical/medical style (non-explicit). Shaft scales from shaft girth; glans bulb scales
 // SEPARATELY from glans diameter. Presentational only — numbers come from `est`. Theme-aware.
-// v5.1: taller layout (fills the card, equal columns) · faint dashed edges (see the added band)
-//       · cross-section spaced clear of its label · no reflection highlight.
-import { diameterFromGirth } from '../lib/fillerMath.js';
+// v5.2: bigger side-view + SMART auto-stretch (length maps so 10in fills the full viewBox width,
+//       aspect kept by the SVG's uniform scale) · fainter baseline dash · no reflection highlight.
+import { diameterFromGirth, RANGES } from '../lib/fillerMath.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const shaftHalfT = (d) => clamp(16 + (d - 2) * 11, 11, 56); // shaft Ø → px
-const glansHalfT = (d) => clamp(18 + (d - 2) * 12, 12, 70); // glans Ø → px (separate)
-const lenToPx = (L) => clamp(150 + (L - 6) * 9, 140, 330); // length cm → shaft px (fits viewBox 480)
+const shaftHalfT = (d) => clamp(18 + (d - 2) * 12, 14, 60); // shaft Ø → px (bigger)
+const glansHalfT = (d) => clamp(20 + (d - 2) * 13, 15, 76); // glans Ø → px (separate, bigger)
+
+const VIEW_W = 480;   // viewBox width
+const X0 = 30;        // shaft start x
+const GAP = 7;        // sulcus gap
+const RIGHT_MARGIN = 14;
+const MIN_SHAFT = 150; // shaft px at the shortest length
 
 function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
   const xS = x0 + len;
-  const xC = xS + 7;
+  const xC = xS + GAP;
   const xT = xC + glansLen;
   return `M${x0} ${cy - tShaft}`
     + ` L${xS} ${cy - tShaft}`
@@ -33,18 +38,23 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
   const lab = theme === 'light' ? '#5b6675' : '#9b938f';
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
-  // baseline edge — clearer than before so the added band (baseline → after) is visible
-  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.62)' : 'rgba(255,255,255,0.72)';
+  // baseline (เดิม) edge — FAINT pale dash (user: จางลงอีกหน่อย)
+  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.42)' : 'rgba(255,255,255,0.5)';
 
   const cy = 152;
-  const x0 = 30;
-  const len = lenToPx(lengthCm);
+  const x0 = X0;
   const tShaftA = shaftHalfT(dLo);
   const tShaftB = shaftHalfT(d0);
   const tGlansA = glansHalfT(dgLo);
   const tGlansB = glansHalfT(dg0);
   const glansLenA = tGlansA * 1.25;
   const glansLenB = tGlansB * 1.25;
+
+  // SMART auto-stretch: length maps 0..1 over the real range; at MAX length the glans tip
+  // lands exactly at the right margin (full viewBox width). Aspect kept by the SVG scaling.
+  const lenFrac = clamp((lengthCm - RANGES.lengthCm[0]) / (RANGES.lengthCm[1] - RANGES.lengthCm[0]), 0, 1);
+  const maxShaftLen = VIEW_W - x0 - RIGHT_MARGIN - GAP - glansLenA;
+  const len = MIN_SHAFT + lenFrac * (maxShaftLen - MIN_SHAFT);
 
   const csA = clamp(dLo * 12, 22, 72);
   const csB = clamp(d0 * 12, 22, 72);
@@ -74,7 +84,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
       {/* corona ridge */}
       <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
 
-      {/* before (baseline) — dashed mushroom, clearer */}
+      {/* before (baseline) — fainter pale dashed mushroom */}
       <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
 
       {/* cross-section (shaft) */}
