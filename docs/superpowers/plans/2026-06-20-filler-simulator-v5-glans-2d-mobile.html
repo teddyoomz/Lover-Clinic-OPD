@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Simulator v5 Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; --green:#16a34a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .panel { border:1px solid #ccc; border-radius:8px; padding:8px; font-size:12px; color:#555; }
+    .anat { background:#c9886a; border-radius:18px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Filler Simulator v5 Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> implement task-by-task. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-06-20-filler-simulator-v5-glans-2d-mobile-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add an "initial glans size" slider (ratio of shaft Ø, default 1.0×, scales with diameter), enlarge the 2D illustration (desktop 40/60 + fill the card), and reorder mobile so the illustration sits above the controls.</p>
+  <p><strong>Architecture:</strong> 4 files in the existing pure-client <code>?play=filler</code> page; <code>estimate()</code> already accepts <code>baseGlansDiameterCm</code> so the math is unchanged — only a range constant + UI wiring + CSS. No new dependency, no data, no API.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite, inline styles + a small <code>&lt;style&gt;</code> block, Vitest source-grep + estimate() unit tests, Rule Q L1 via Claude Preview.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Desktop — AFTER (controls 40% | illustration 60%, big 2D)</div>
+  <div style="display:flex; gap:8px; height:130px;">
+    <div class="panel" style="flex:4;">ปรับค่า<div style="height:7px;background:#e2e2e2;border-radius:4px;margin:8px 0;"></div><div style="height:7px;background:#e2e2e2;border-radius:4px;"></div><div style="font-size:11px;color:#999;margin-top:8px;">+ ขนาดหัวเริ่มต้น (ใหม่)</div></div>
+    <div class="panel" style="flex:6; border-color:var(--green); display:flex; flex-direction:column;">ภาพประกอบ<div style="flex:1; display:flex; align-items:center; justify-content:center;"><div class="anat" style="width:94%; height:46px;"></div></div></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Mobile / iPad-portrait (≤820px) — illustration on top, controls below + the NEW slider</div>
+  <div style="max-width:160px;">
+    <div class="panel" style="text-align:center; border-color:var(--green); margin-bottom:6px;">ภาพประกอบ<div class="anat" style="width:92%;height:30px;margin:6px auto 0;"></div></div>
+    <div class="panel">ปรับค่า
+      <div style="margin-top:8px; font-size:11px; color:#777;">ขนาดหัวเริ่มต้น</div>
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:#999;"><span>เล็ก</span><span>ปกติ</span><span>ใหญ่</span></div>
+      <div style="position:relative;height:6px;background:#e2e2e2;border-radius:3px;margin-top:3px;"><div style="position:absolute;left:50%;top:-4px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#fff;border:2px solid #f59e0b;"></div></div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Glans baseline rides on the diameter (single source = fillerMath)</div>
+  <table>
+    <tr><th>#</th><th>Step</th><th>Value</th></tr>
+    <tr><td>1</td><td>pick condom / Ø</td><td><code>shaftØ = diameterFromGirth(baseGirthCm)</code></td></tr>
+    <tr><td>2</td><td>move glans slider</td><td><code>glansBaseRatio</code> ∈ [0.75,1.25], default 1.0</td></tr>
+    <tr><td>3</td><td>derive baseline head Ø</td><td><code>baseGlansDiameterCm = glansBaseRatio × shaftØ</code></td></tr>
+    <tr><td>4</td><td><code>estimate(…)</code></td><td><code>glans.dg0 = baseGlansDiameterCm</code> → <code>glans.visualLow</code> (damped)</td></tr>
+    <tr><td>5</td><td>2D + 3D head bulb render</td><td>from <code>est.glans.visualLow</code> (already wired)</td></tr>
+    <tr><td>6</td><td>condom / girth results</td><td>UNCHANGED (head excluded from condom sizing)</td></tr>
+  </table>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Responsive order — CSS order flips on the single-column breakpoint</div>
+  <pre> &gt;820px : grid 40/60   [ controls(order 1) | graphic(order 2) ]
+ ≤820px : 1 column     [ graphic(order 1) ] then [ controls(order 2) ]</pre>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li><code>src/lib/fillerMath.js</code> — add <code>GLANS_BASE_RATIO</code> range constant (SSOT). No estimate change.</li>
+  <li><code>src/lib/fillerStrings.js</code> — add <code>glansBase</code> + <code>gSmall</code>/<code>gNormal</code>/<code>gLarge</code> (TH+EN).</li>
+  <li><code>src/pages/FillerSimulator.jsx</code> — glans state + slider + wire <code>baseGlansDiameterCm</code>; grid 40/60; <code>fs-controls</code>/<code>fs-graphic</code> classes + CSS <code>order</code>.</li>
+  <li><code>src/components/FillerGraphic2D.jsx</code> — enlarge the side-view to fill the card.</li>
+  <li><code>tests/filler-math.test.js</code> + <code>tests/filler-simulator-flow-simulate.test.js</code> — v5 regression.</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: GLANS_BASE_RATIO constant + estimate ratio test</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/fillerMath.js</code>; Test <code>tests/filler-math.test.js</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1: Write the failing test</strong> (append inside the v2 glans describe block)</div>
+<pre><code class="language-js">it('glans baseline ratio: dg0 = ratio × shaft Ø (scales with diameter)', () => {
+  expect(GLANS_BASE_RATIO).toEqual({ min: 0.75, max: 1.25, step: 0.05, default: 1.0 });
+  const dia = diameterFromGirth(10.4);                 // shaft Ø
+  // ratio 1.0 → dg0 = shaft Ø (today's behavior)
+  const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.0 * dia });
+  expect(a.glans.dg0).toBeCloseTo(dia, 6);
+  // ratio 1.25 → dg0 25% larger; condom UNCHANGED
+  const b = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.25 * dia });
+  expect(b.glans.dg0).toBeCloseTo(1.25 * dia, 6);
+  expect(b.condomLow.w).toBe(a.condomLow.w);
+});</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: Run — expect FAIL</strong> (<code>GLANS_BASE_RATIO is not defined</code>)</div>
+  <p>Run: <code>npx vitest run tests/filler-math.test.js</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: Add the constant</strong> in <code>fillerMath.js</code> (near <code>GLANS_CC</code>)</div>
+<pre><code class="language-js">// initial glans (head) baseline size — a ratio of the shaft Ø; default 1.0 = shaft Ø (today's value).
+export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0 };</code></pre>
+  <p>Also add <code>GLANS_BASE_RATIO</code> to the test's import list from <code>../src/lib/fillerMath.js</code>.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4: Run — expect PASS</strong></div>
+  <div class="step"><input type="checkbox"> <strong>Step 5: Commit</strong></div>
+<pre><code class="language-bash">git add src/lib/fillerMath.js tests/filler-math.test.js
+git commit -m "feat(filler-sim v5): GLANS_BASE_RATIO constant + estimate ratio test"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: i18n keys for the glans-baseline control</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/fillerStrings.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Add keys to BOTH th and en</strong> (next to <code>cc: 'cc',</code>)</div>
+<pre><code class="language-js">// th block:
+glansBase: 'ขนาดหัวเริ่มต้น', gSmall: 'เล็ก', gNormal: 'ปกติ', gLarge: 'ใหญ่',
+// en block:
+glansBase: 'Initial glans size', gSmall: 'Small', gNormal: 'Normal', gLarge: 'Large',</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: Commit</strong> (test lands in Task 6)</div>
+<pre><code class="language-bash">git add src/lib/fillerStrings.js
+git commit -m "feat(filler-sim v5): i18n keys for the initial-glans-size slider"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: glansBaseRatio state + slider + wire into estimate()</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/FillerSimulator.jsx</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1: Import the constant + diameterFromGirth</strong></div>
+  <p>Add <code>diameterFromGirth</code> and <code>GLANS_BASE_RATIO</code> to the existing <code>from '../lib/fillerMath.js'</code> import.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: Add state + derived baseline head Ø</strong></div>
+<pre><code class="language-jsx">const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default);
+// ... after baseGirthCm:
+const baseGlansDiameterCm = glansBaseRatio * diameterFromGirth(baseGirthCm);</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: Pass it into estimate()</strong> (+ deps)</div>
+<pre><code class="language-jsx">const est = useMemo(
+  () => estimate({ lengthCm, baseGirthCm, shaftCc, glansCc: glansCcEff, baseGlansDiameterCm }),
+  [lengthCm, baseGirthCm, shaftCc, glansCcEff, baseGlansDiameterCm],
+);</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4: Add the slider control</strong> — between the baseline (ขนาดเดิม) block and the filler-split block</div>
+<pre><code class="language-jsx">{/* initial glans size — ratio of shaft Ø, default centered, scales with diameter */}
+&lt;div style={{ marginBottom: 19 }}&gt;
+  &lt;div style={{ fontSize: 14, color: c.tx, marginBottom: 6 }}&gt;{t('glansBase')}&lt;/div&gt;
+  &lt;div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: c.tx2, marginBottom: 6 }}&gt;
+    &lt;span&gt;{t('gSmall')}&lt;/span&gt;&lt;span&gt;{t('gNormal')}&lt;/span&gt;&lt;span&gt;{t('gLarge')}&lt;/span&gt;
+  &lt;/div&gt;
+  &lt;input className="fs-range glans" type="range" min={GLANS_BASE_RATIO.min} max={GLANS_BASE_RATIO.max} step={GLANS_BASE_RATIO.step} value={glansBaseRatio} onChange={(e) =&gt; setGlansBaseRatio(Number(e.target.value))} aria-label={t('glansBase')} /&gt;
+&lt;/div&gt;</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 5: Commit</strong></div>
+<pre><code class="language-bash">git add src/pages/FillerSimulator.jsx
+git commit -m "feat(filler-sim v5): initial-glans-size slider wired into estimate (ratio × shaft Ø)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Desktop 40/60 grid + mobile reorder (graphic on top)</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/FillerSimulator.jsx</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1: Grid → 40/60 + order CSS</strong> (in the <code>&lt;style&gt;</code> block)</div>
+<pre><code class="language-css">.fs-grid{ display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:18px; align-items:start; }
+.fs-controls{ order:1; } .fs-graphic{ order:2; }
+@media (max-width:820px){
+  .fs-grid{ grid-template-columns:1fr; }
+  .fs-graphic{ order:1; }   /* illustration on top */
+  .fs-controls{ order:2; }  /* controls below */
+}</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: Tag the two panels</strong></div>
+  <p>Add <code>className="fs-controls"</code> to the controls card div and <code>className="fs-graphic"</code> to the graphic card div (both inside <code>.fs-grid</code>).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: Commit</strong></div>
+<pre><code class="language-bash">git add src/pages/FillerSimulator.jsx
+git commit -m "feat(filler-sim v5): desktop 40/60 grid + mobile illustration-on-top order"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Enlarge the 2D side-view to fill the (wider) card</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/FillerGraphic2D.jsx</code></p>
+  <p>Make the side-view the prominent hero. Starting values (tune live so nothing clips at any width):</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: Scale up the anatomy + viewBox</strong></div>
+<pre><code class="language-js">// scale helpers ~1.4× larger:
+const shaftHalfT = (d) =&gt; clamp(16 + (d - 2) * 11, 11, 56);
+const glansHalfT = (d) =&gt; clamp(18 + (d - 2) * 12, 12, 70);
+const lenToPx    = (L) =&gt; clamp(150 + (L - 6) * 9, 140, 330);
+// viewBox widened/taller so the bigger side-view + cross-section/legend fit:
+// &lt;svg viewBox="0 0 480 300" ...&gt;  (was 380 236)
+// raise cy (side-view centre) to ~96, x0 ~30; move the cross-section row + legend down
+// (ccy ~ 230) and keep them compact. preserveAspectRatio left default (fills width).</code></pre>
+  <p>Keep the dashed-after (V4-3) strokes, the legend keys via <code>tr()</code> (V3-7), and the <code>visualLow</code> head bulb (V3 debug round) — only geometry/scale changes.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: Run the targeted filler tests</strong> (V4-3 dashed-stroke regex still matches; V3-7 i18n still matches)</div>
+  <p>Run: <code>npx vitest run tests/filler-simulator-flow-simulate.test.js</code> → expect PASS. If the V4-3 stroke regex breaks because dimensions moved, the <code>strokeDasharray="4 3"</code> + thin width must remain (keep the exact stroke attrs).</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: Commit</strong></div>
+<pre><code class="language-bash">git add src/components/FillerGraphic2D.jsx
+git commit -m "feat(filler-sim v5): enlarge 2D side-view to fill the wider graphic card"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: v5 regression tests + build + live verify + full suite</h3>
+  <p><strong>Files:</strong> Modify <code>tests/filler-simulator-flow-simulate.test.js</code></p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 1: Add a v5 describe block</strong></div>
+<pre><code class="language-js">describe('filler-simulator v5 — glans baseline + 40/60 + mobile order', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('V5-1: glans baseline slider — ratio of shaft Ø, scales with diameter', () => {
+    expect(page).toMatch(/GLANS_BASE_RATIO/);
+    expect(page).toMatch(/glansBaseRatio \* diameterFromGirth\(baseGirthCm\)/);
+    expect(page).toMatch(/baseGlansDiameterCm/);              // passed to estimate
+    expect(page).toMatch(/setGlansBaseRatio/);
+    expect(strings).toMatch(/glansBase:/);
+    expect(strings).toMatch(/Initial glans size/);
+  });
+  it('V5-2: desktop 40/60 grid + mobile graphic-on-top order', () => {
+    expect(page).toMatch(/grid-template-columns:minmax\(0,2fr\) minmax\(0,3fr\)/);
+    expect(page).toMatch(/\.fs-graphic\{ order:1; \}/);       // mobile: graphic first
+    expect(page).toMatch(/\.fs-controls\{ order:2; \}/);
+    expect(page).toMatch(/className="fs-graphic"/);
+    expect(page).toMatch(/className="fs-controls"/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox"> <strong>Step 2: Targeted run + build</strong></div>
+  <p>Run: <code>npx vitest run tests/filler-math.test.js tests/filler-simulator-flow-simulate.test.js</code> → all PASS. Then <code>npm run build</code> → EXIT 0.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 3: Rule Q L1 — live verify (Claude Preview)</strong></div>
+  <p>Reload <code>?play=filler</code>; verify via <code>preview_eval</code> + screenshot:</p>
+  <ul>
+    <li>Glans slider present, default centered (1.0); at 1.0 the head Ø == shaft Ø; raising Ø raises the baseline head; moving the slider grows/shrinks the head bulb; condom/girth cards unchanged.</li>
+    <li>Desktop ≥820: grid columns ~40/60 (controls ~2fr, graphic ~3fr), 2D visibly larger, no h-scroll.</li>
+    <li>Mobile 375 + iPad-portrait 768: single column with the graphic box ABOVE the controls box; no h-scroll; 2D full-width bigger.</li>
+  </ul>
+
+  <div class="step"><input type="checkbox"> <strong>Step 4: Full suite (end-of-batch, Rule N)</strong></div>
+  <p>Run: <code>npx vitest run</code> → no NEW reds.</p>
+
+  <div class="step"><input type="checkbox"> <strong>Step 5: Commit</strong></div>
+<pre><code class="language-bash">git add tests/filler-simulator-flow-simulate.test.js
+git commit -m "test(filler-sim v5): regression locks for glans baseline + 40/60 + mobile order"
+git push origin master</code></pre>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> #1 glans → Tasks 1-3; #2 bigger 2D → Tasks 4 (40/60) + 5 (SVG); #3 mobile order → Task 4. Tests → Tasks 1 + 6. All spec acceptance criteria mapped.</li>
+  <li><strong>No placeholders:</strong> every code step has concrete code; SVG scale values are concrete starting points explicitly flagged "tune live" (the one visual-tuning step).</li>
+  <li><strong>Type/name consistency:</strong> <code>glansBaseRatio</code>/<code>setGlansBaseRatio</code>/<code>baseGlansDiameterCm</code>/<code>GLANS_BASE_RATIO</code> consistent across tasks; <code>fs-controls</code>/<code>fs-graphic</code> consistent in CSS + JSX + tests.</li>
+</ul>
+
+</body>
+</html>
