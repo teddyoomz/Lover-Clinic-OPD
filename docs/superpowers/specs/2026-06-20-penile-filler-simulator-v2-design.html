@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penile Filler Simulator v2 — Design Spec</title>
+<style>
+  :root{--accent:#dc2626;--bd:#e5e5e5;--bg-meta:#f0f4f8;--bg-section:#fafafa;--tx-muted:#666;
+    --d-bg:#050505;--d-card:#0f0f0f;--d-card2:#161616;--d-line:#262626;--d-tx:#ededed;--d-tx2:#8b9099;--fire:#ef4444;--amber:#f59e0b;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Sarabun',sans-serif;max-width:980px;margin:2em auto;padding:1em;line-height:1.65;color:#222;}
+  h1{border-bottom:2px solid var(--accent);padding-bottom:.3em;}
+  h2{border-bottom:1px solid var(--bd);padding-bottom:.2em;margin-top:2em;}
+  h3{margin-top:1.3em;}
+  pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;font-size:.85em;}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;}
+  blockquote{border-left:4px solid var(--accent);background:var(--bg-meta);padding:.5em 1em;border-radius:0 6px 6px 0;color:var(--tx-muted);}
+  table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.92em;}
+  th,td{border:1px solid var(--bd);padding:.45em .7em;text-align:left;vertical-align:top;}
+  th{background:var(--bg-meta);}
+  .mockup{background:#000;border-radius:12px;padding:0;margin:1em 0;overflow:hidden;}
+  .mockup-label{font-size:.75em;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-muted);margin:1.2em 0 .4em;}
+  .sim{background:var(--d-bg);color:var(--d-tx);padding:18px;font-family:'Sarabun',sans-serif;}
+  .scard{background:var(--d-card);border:1px solid var(--d-line);border-radius:13px;padding:14px 16px;margin-bottom:14px;}
+  .splitbar{height:28px;border-radius:8px;overflow:hidden;display:flex;border:1px solid var(--d-line);margin-top:6px;}
+  .sbb{background:linear-gradient(90deg,#dc2626,#ef4444);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .sbg{background:linear-gradient(90deg,#f59e0b,#f97316);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .res{display:flex;flex-wrap:wrap;gap:9px;}
+  .rb{flex:1;min-width:140px;background:var(--d-card2);border:1px solid var(--d-line);border-radius:10px;padding:10px 12px;}
+  .rb.g{border-color:var(--amber);}
+  .rk{font-size:11px;color:var(--d-tx2);}
+  .ro{font-size:11px;color:var(--d-tx2);}.ro b{color:#cfc6c2;}
+  .rn{font-size:15px;font-weight:800;color:#fff;}.rn .d{font-size:11px;color:var(--fire);margin-left:6px;}.rn .dg{color:var(--amber);}
+</style>
+</head>
+<body>
+
+<h1>Penile Filler Simulator v2 — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved (round-2 Q&amp;A) · <strong>Builds on:</strong> v1 (shipped, commit 62cd64fd — shaft girth + condom, all VERIFIED) · <strong>v1 spec:</strong> 2026-06-20-penile-filler-simulator-design.html
+</blockquote>
+
+<h2>Purpose / Problem (v2 delta)</h2>
+<p>v1 จำลอง <strong>ฉีดลำตัว (shaft girth)</strong> → รอบวง/Ø/ไซส์ถุงยาง. v2 เพิ่ม 8 อย่างตาม user:</p>
+<ol>
+  <li><strong>ฉีดหัว (glans)</strong> — คลินิกแบ่งฉีดทั้งลำตัว+หัว; หัว <strong>ไม่มีผลต่อไซส์ถุงยาง</strong> (ยึดลำตัว). research: 2cc → หัว Ø +0.5cm (+16%); ~0.25 cm Ø/cc (±30%).</li>
+  <li><strong>Split-bar</strong> (Q1=A) — แถว cc เป็น "cc รวม + สไลเดอร์แบ่ง% + แถบ stacked ลำตัว(แดง)|หัว(ส้ม)".</li>
+  <li><strong>ทรงหัวเหมือนจริง</strong> — silhouette ทรงเห็ด (shaft → sulcus → corona flare → glans bulb → tip) ให้ลูกค้านึกออกทันที.</li>
+  <li><strong>ตัด reveal-gate 18+</strong> — โชว์ภาพได้เลย.</li>
+  <li><strong>ความยาว</strong> — step 0.1 นิ้ว · max 10 นิ้ว (= 25.4 ซม., ทั้งสองหน่วยตันจุดเดียวกัน) · <strong>default 5 นิ้ว</strong> (display นิ้วเป็นหลัก).</li>
+  <li><strong>EN version</strong> — ปุ่มสลับ TH/EN (default TH); ทุก string i18n.</li>
+  <li><strong>Light theme</strong> — ใช้ palette คลินิกจริง (light sakura + dark fire) + ปุ่มสลับ.</li>
+  <li><strong>Polish</strong> — /audit ปรับ design ให้สวย+เข้าตีม.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+<p class="mockup-label">Desktop · dark (มี ☀/🌙 สลับ light + EN/TH · ตัวอย่าง: 5นิ้ว · ถุงยาง 52 · รวม 12cc แบ่ง ลำตัว10/หัว2)</p>
+<div class="mockup">
+  <div class="sim">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <div style="width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f97316,#dc2626);"></div>
+      <b style="color:#fff;">ลองจำลองขนาดหลังเสริมฟิลเลอร์</b>
+      <span style="margin-left:auto;font-size:11px;color:#8b9099;border:1px solid #262626;border-radius:8px;padding:4px 9px;">EN</span>
+      <span style="font-size:11px;color:#8b9099;border:1px solid #262626;border-radius:8px;padding:4px 9px;">☀ Light</span>
+    </div>
+    <div class="scard">
+      <div style="font-size:12px;color:#8b9099;margin-bottom:8px;">ฟิลเลอร์</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;"><span>ฟิลเลอร์ทั้งหมด</span><b style="color:#fff;">12 cc</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#8b9099;margin:8px 0 2px;"><span>แบ่งฉีด ลำตัว ↔ หัว</span><span>ลำตัว 10 · หัว 2</span></div>
+      <div class="splitbar"><div class="sbb" style="width:83%;">ลำตัว 10cc</div><div class="sbg" style="width:17%;">หัว 2</div></div>
+    </div>
+    <div class="scard">
+      <div style="font-size:12px;color:#8b9099;margin-bottom:6px;">ภาพจำลอง (ทรงเห็ด · เห็นได้เลย ไม่มี gate)</div>
+      <svg viewBox="0 0 360 96" width="100%" role="img" aria-label="mushroom side profile">
+        <defs><linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0a98d"/><stop offset="1" stop-color="#7b4b37"/></linearGradient>
+        <radialGradient id="gl" cx="0.6" cy="0.35" r="0.7"><stop offset="0" stop-color="#edb89f"/><stop offset="1" stop-color="#7a4936"/></radialGradient></defs>
+        <path d="M26 36 L150 36 Q156 30 168 26 Q210 14 232 30 Q246 42 246 48 Q246 54 232 66 Q210 82 168 70 Q156 66 150 60 L26 60 Q14 48 26 36 Z" fill="url(#sk)" stroke="#ef4444" stroke-width="1.5"/>
+        <ellipse cx="214" cy="48" rx="30" ry="26" fill="url(#gl)" opacity="0.9"/>
+        <text x="250" y="30" font-size="10" fill="#f59e0b">🟠 หัวโต (glans)</text>
+        <text x="30" y="80" font-size="10" fill="#ef4444">🔴 ลำตัวโต (รอบวง→ถุงยาง)</text>
+      </svg>
+    </div>
+    <div class="scard">
+      <div style="font-size:12px;color:#8b9099;margin-bottom:10px;">ขนาดที่ประเมินได้ (เดิม → ใหม่)</div>
+      <div class="res">
+        <div class="rb"><div class="rk">รอบวง (ลำตัว)</div><div class="ro">เดิม <b>10.4</b></div><div class="rn">→ 11.7–12.2<span class="d">+1.3..1.8</span></div></div>
+        <div class="rb"><div class="rk">Ø (ลำตัว)</div><div class="ro">เดิม <b>3.3</b></div><div class="rn">→ 3.7–3.9<span class="d">+0.4..0.6</span></div></div>
+        <div class="rb"><div class="rk">ถุงยาง</div><div class="ro">เดิม <b>Regular 52</b></div><div class="rn">→ Large+ 58–XL 60<span class="d">+3..4</span></div></div>
+        <div class="rb g"><div class="rk">ขนาดหัว</div><div class="ro">เดิม <b>3.3</b></div><div class="rn">→ 3.8<span class="d dg">+0.5</span></div><div style="font-size:10px;color:#f59e0b;">ไม่มีผลถุงยาง</div></div>
+      </div>
+    </div>
+    <div style="background:#160d0c;border:1px solid #3a201c;border-radius:10px;padding:10px 12px;font-size:11px;color:#c9b8b4;">🇹🇭 ภาพจำลองเป็นค่าประมาณ ไม่ใช่การรับประกัน ผลจริงต่างกันแต่ละบุคคล ฟิลเลอร์สลายตัวได้ ปรึกษาแพทย์ก่อนตัดสินใจ</div>
+  </div>
+</div>
+<p class="mockup-label">Interactive version = the implemented page at <code>?play=filler</code> (light/dark + split + mushroom verified via Claude Preview).</p>
+<p>Light theme: bg <code>#f0f4f8</code> / card <code>#f8fafc</code> / heading <code>#0f172a</code> / muted <code>#5b6675</code> (clinic palette); fire accent ลึกขึ้น <code>#dc2626→#b91c1c</code> เพื่อ AA บนพื้นสว่าง; skin/amber คงเดิม (ทำงานทั้งสองธีม).</p>
+
+<h2>Flow</h2>
+<div class="mockup" style="background:#fafafa;">
+<table style="margin:0;">
+  <tr><th>#</th><th>เหตุการณ์</th><th>ผล</th></tr>
+  <tr><td>1</td><td>ปรับ total cc + split% → shaftCc = total·(1−p), glansCc = total·p</td><td>2 ค่า</td></tr>
+  <tr><td>2</td><td><code>estimate({lengthCm, baseGirthCm, shaftCc, glansCc, baseGlansDiameterCm})</code></td><td>shaft band + glans band</td></tr>
+  <tr><td>3</td><td>2D mushroom: shaft thickness ← shaft Ø ; glans bulb ← glans Ø · 3D: shaft radius + glans sphere แยกสเกล</td><td>ภาพ 2 ส่วนโตแยกกัน</td></tr>
+  <tr><td>4</td><td>การ์ด 4 ใบ เดิม→ใหม่ (รอบวง/Ø/ถุงยาง = ลำตัว · ขนาดหัว = glans, ไม่มีผลถุงยาง)</td><td>เทียบทันที</td></tr>
+  <tr><td>5</td><td>ปุ่ม TH/EN → t(key) swap · ปุ่ม ☀/🌙 → theme var swap · (ไม่มี gate, ไม่เขียน Firestore)</td><td>i18n + theme + ephemeral</td></tr>
+</table>
+</div>
+
+<h2>Architecture (modify existing v1 files)</h2>
+<table>
+  <tr><th>ไฟล์</th><th>การแก้</th></tr>
+  <tr><td><code>src/lib/fillerMath.js</code></td><td>+ glans model (empirical) · estimate() รับ <code>shaftCc</code> + <code>glansCc</code> (+ <code>baseGlansDiameterCm</code>, default = shaft Ø) → คืน glans band · RANGES.lengthCm → [6.35, 25.4] · NEW GLANS const + CM_PER_INCH (มีแล้ว).</td></tr>
+  <tr><td><code>src/lib/fillerStrings.js</code> (new)</td><td>i18n dict { th, en } + <code>makeT(lang)</code>. ทุก label/disclaimer/หน่วย.</td></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code></td><td>+ split-bar (total + glans% + stacked) · ลบ reveal-gate (revealed state + blur + overlay) · length default 5in/step0.1in/max10in + cm align · + TH/EN toggle (useState lang + t()) · + theme toggle (useTheme หรือ local data-theme + clinic vars) · + glans result card · polish.</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code></td><td>ทรงเห็ด (mushroom path: shaft+sulcus+corona+glans bulb+tip) · shaft scale ← shaft Ø · glans bulb scale ← glans Ø (แยก) · before dashed · theme-aware stroke via CSS var.</td></tr>
+  <tr><td><code>src/components/Filler3D.jsx</code></td><td>mushroom mesh: shaft cylinder + sulcus + corona torus (เด่นขึ้น) + glans sphere ที่สเกลด้วย glans Ø แยกจาก shaft radius · theme-aware bg (alpha:true อยู่แล้ว).</td></tr>
+  <tr><td><code>tests/filler-math.test.js</code></td><td>update estimate signature (shaftCc) + NEW glans tests (verified anchor Ø3.1+2cc→3.6).</td></tr>
+  <tr><td><code>tests/filler-simulator-flow-simulate.test.js</code></td><td>update + glans split chain + EN strings present + no reveal-gate + source-grep.</td></tr>
+</table>
+
+<h3>Glans math (research-grounded, empirical — VERIFIED anchor)</h3>
+<pre>baseGlansDiameterCm dg0  (default = shaft Ø = diameterFromGirth(baseGirthCm))
+GLANS_DIAM_PER_CC = { low: 0.25, high: 0.32 }   // cm Ø per cc (research 2.5mm/mL ±~30%)
+dgLow  = dg0 + 0.25 · glansCc ;  dgHigh = dg0 + 0.32 · glansCc
+// anchor: dg0 3.1 + 2cc → +0.50cm → 3.6cm (circ +15.8mm, +16%)  ✓ (Kim/Abdallah/Kwak)
+// glans does NOT feed condom/รอบวง — separate card only
+GLANS_CC range 0.5–4 (จาก split) ; ความหัวเป็น "ประมาณ ±30%" + disclaimer</pre>
+<p>Shaft (unchanged from v1, VERIFIED): <code>C1=√(C0²+4π·shaftCc/L)×k</code>, k 2.37/3.32; condom width=รอบวง×5, ladder 8 รุ่น, snap nearest-tie-larger.</p>
+
+<h3>Length range (v2)</h3>
+<table>
+  <tr><th>หน่วย</th><th>min</th><th>max</th><th>step</th><th>default</th></tr>
+  <tr><td>นิ้ว (display หลัก)</td><td>2.5</td><td>10.0</td><td>0.1</td><td>5.0</td></tr>
+  <tr><td>ซม.</td><td>6.35</td><td>25.4 (= 10 นิ้ว)</td><td>0.5</td><td>12.7</td></tr>
+</table>
+
+<h2>Decisions (locked)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> split-bar = cc รวม + สไลเดอร์แบ่ง% + แถบ stacked ลำตัว|หัว.</li>
+  <li><strong>Q2 = โอเค:</strong> หัวทรงเห็ดเหมือนจริง + light/dark + ตัด gate + การ์ดหัว → ทำต่อ.</li>
+  <li><strong>Glans (research):</strong> empirical 0.25–0.32 cm Ø/cc; baseline glans Ø = shaft Ø (derive, ไม่เพิ่ม input); cc 0.5–4 จาก split; ไม่มีผลถุงยาง; "ประมาณ".</li>
+  <li><strong>EN:</strong> toggle TH/EN, default TH, ทุก string i18n.</li>
+  <li><strong>Light:</strong> clinic palette (light + dark) + toggle.</li>
+  <li><strong>Length:</strong> นิ้ว default 5, step 0.1, max 10 (=25.4ซม. ทั้งสองตันจุดเดียว).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>cc รวม + split% → ลำตัว/หัว แยกถูก (shaftCc+glansCc=total); แถบ stacked สะท้อนสัดส่วน.</li>
+  <li>ฉีดหัวเพิ่ม → กราฟิกหัวโต + การ์ด "ขนาดหัว" เดิม→ใหม่ อัปเดต; <strong>รอบวง/Ø/ถุงยางไม่เปลี่ยนตาม glans cc</strong> (เปลี่ยนตาม shaft cc เท่านั้น).</li>
+  <li>glans anchor: dg0 3.1 + 2cc → ≈3.6cm (±0.05).</li>
+  <li>ทรงเห็ด render (shaft+corona+glans bulb) ทั้ง 2D + 3D; หัวโต/ลำตัวโตแยกสเกลได้.</li>
+  <li>ไม่มี reveal-gate / blur / "แตะเพื่อดู" ในโค้ดเลย.</li>
+  <li>ความยาว: เปิดมา default 5.0 นิ้ว; step 0.1 นิ้ว; ลากตันที่ 10 นิ้ว; สลับ ซม. แล้วตันที่ 25.4 (จุดเดียวกัน); round-trip นิ้ว↔ซม. ถูก.</li>
+  <li>ปุ่ม TH/EN สลับทุก string (label/หน่วย/disclaimer/การ์ด); default TH.</li>
+  <li>ปุ่ม ☀/🌙 สลับ light/dark; light = clinic palette, อ่านออกชัด (AA), ไม่มีสีแดงบนชื่อ (N/A); ทั้ง 2 ธีมสวย เข้าตีม.</li>
+  <li>shaft math เดิม (v1) ยังถูก (anchor 52·L11·shaftCc16 → +2.0/+2.8); full vitest + build เขียว; three ยัง lazy chunk.</li>
+  <li>ไม่เขียน Firestore / ไม่เก็บ PII.</li>
+</ol>
+
+<h2>Testing (Rule Q — honest)</h2>
+<ul>
+  <li><strong>Unit:</strong> glans (anchor 3.1+2→3.6, band low≤high, 0cc→no change, monotonic, adversarial) · estimate shaft+glans split (glans cc ไม่กระทบ condom/รอบวง) · length range/step/unit round-trip · shaft v1 cases ยังผ่าน.</li>
+  <li><strong>flow-simulate:</strong> split chain (total+%→shaft/glans→cards) · glans-independent-of-condom · EN strings present · no-reveal-gate source-grep · purity (no Firestore).</li>
+  <li><strong>L1 (Claude Preview):</strong> เลื่อน split → ลำตัว/หัวโตแยก + การ์ดถูก · เพิ่ม glans cc → ถุงยางไม่ขยับ · สลับ TH/EN + light/dark · length 0.1นิ้ว/ตัน10 · 2D+3D mushroom. (pure client → ไม่มี Rule Q gap; screenshot tool อาจ time out → ดูภาพ = user.)</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Glans ±30% ประมาณ:</strong> rate จาก 1-study cohort (PE-treatment, glans target เดียวกัน); baseline glans Ø ไม่มี dataset ใหญ่ → derive จาก shaft Ø. โชว์ "ประมาณ" + disclaimer. (shaft = exact verified; glans = approximate-grounded.)</li>
+  <li><strong>i18n scope:</strong> EN ครอบ UI strings + disclaimer; ชื่อไซส์ถุงยาง (Regular/Large…) เป็นอังกฤษอยู่แล้ว.</li>
+  <li><strong>Theme:</strong> ใช้ local data-theme + clinic var values (หน้า public ไม่อ่าน clinic_settings) — bundled palette, fallback ปลอดภัย.</li>
+  <li><strong>3D mushroom + glans-separate-scale:</strong> mesh ซับซ้อนขึ้นเล็กน้อย; poly ต่ำ, dispose เดิม. WebGL fallback → 2D.</li>
+  <li><strong>Polish/audit:</strong> รัน /audit หลัง implement; ปรับ spacing/hierarchy/contrast ให้เข้าตีม.</li>
+</ul>
+
+</body>
+</html>
