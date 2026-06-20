@@ -6521,7 +6521,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               }}
               onOpenLineForAppt={(appt) => {
                 if (!appt.customerLineUserId) return;
-                window.open(`https://line.me/R/oaMessage/@loverclinic/?customer=${appt.customerHN || appt.customerId}`, '_blank');
+                // URL-encode the customer ref so a special-char HN/id can't break the
+                // LINE OA deep-link query. Byte-identical for normal LC- ids (URL-safe).
+                window.open(`https://line.me/R/oaMessage/@loverclinic/?customer=${encodeURIComponent(appt.customerHN || appt.customerId)}`, '_blank');
               }}
               /* V71 (2026-05-15) — mark service complete. Calls the canonical
                * writer with the current admin's Firebase auth uid for the
