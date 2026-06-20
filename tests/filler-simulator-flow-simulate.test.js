@@ -228,8 +228,8 @@ describe('filler-simulator v4 — centered header + result colors + dashed 2D + 
   });
 
   it('V4-3: 2D "after" outline is THIN + DASHED + red (small growth not masked)', () => {
-    // mushroom + cross-section "after" strokes: BOLD (2.6), dashed, vivid red (v7)
-    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4"/g) || [];
+    // mushroom + cross-section "after" strokes: dashed, vivid red, width 2 (v7.3 — thinner + outset)
+    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="2" strokeDasharray="7 4"/g) || [];
     expect(afterStrokes.length).toBeGreaterThanOrEqual(2); // side-view + cross-section
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.6"/); // old thick solid gone
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.5"/);
@@ -286,7 +286,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
   it('V5-3: 2D split into auto-scale sections (side-view + cross-section) without losing dashed-after / i18n / damped head', () => {
     expect(g2d).toMatch(/0 0 \$\{SIDE_W\} \$\{SIDE_H\}/);                         // v5.4: side-view own viewBox
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                                // v5.4: cross-section own square viewBox
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="2" strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
@@ -297,7 +297,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
 
   it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
     // after-edge is a BOLD red dash (full opacity, v7) — both after-strokes carry strokeOpacity="1"
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="2" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
     // reflection highlight ellipse removed from the shaft
     expect(g2d).not.toMatch(/rgba\(255,242,234/);
     // equal column heights: stretch + graphic card is a flex column whose SVG wrapper fills
@@ -410,7 +410,7 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                   // own square SVG (v5.4)
     expect(g2d).toMatch(/const csA = clamp\(dLo \* 18, 48, 100\)/); // bigger + diameter-scaled (was *12, 22, 72)
     // V4-3 dashed-after stroke shape UNCHANGED → side-view + cross-section count still ≥2
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="2" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('V5.3-4: subtitle copy → "เพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น" (TH) + EN mirror; disclaimer keeps เพื่อการศึกษา', () => {
@@ -517,13 +517,27 @@ describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, N
 
   it('V5.6-1: red outline animates as its OWN fill:none element (side + cross) — NOT the skin body', () => {
     // the breathe class lives on fill:none OUTLINE-only elements → opacity/glow touch the LINE, not the skin fill
-    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="2.6" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
+    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="2" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
     // ANTI-REGRESSION (the v5.6-first bug): the SKIN-FILLED body must NEVER carry the animation, else the WHOLE shape fades
     expect(g2d).not.toMatch(/fill="url\(#fg-skin\)" className="fg-revBreathe"/);
     expect(g2d).not.toMatch(/fill="url\(#fg-cs\)" className="fg-revBreathe"/);
     // skin body elements still present, solid + static
     expect(g2d).toMatch(/fill="url\(#fg-skin\)" \/>/);
     expect(g2d).toMatch(/fill="url\(#fg-cs\)" \/>/);
+  });
+
+  it('V7.3-1: red dashed is OUTSET (hugs the OUTER edge, NOT overlapping the body) + thinner (width 2)', () => {
+    // v7.3 (2026-06-20): user — "ลดความหนาเส้นประแดงลงนิดนึง แล้วให้แสดงแบบติดขอบนอกของเส้นจริง
+    // ไม่ใช่วาดทับเส้นจริงแบบปัจจุบัน". The after-dashed must sit OUTSIDE the body silhouette, not coincide with it.
+    expect(g2d).toMatch(/const DASH_OUT = 3/);
+    // cross-section: dashed radius = body radius + outset (was bare csA → overlapped the body edge)
+    expect(g2d).toMatch(/<circle cx=\{ccx\} cy=\{ccy\} r=\{csA \+ DASH_OUT\} fill="none" className="fg-revBreathe"/);
+    expect(g2d).toMatch(/<circle cx=\{ccx\} cy=\{ccy\} r=\{csA\} fill="url\(#fg-cs\)"/);   // body fill stays bare csA (un-outset)
+    // side-view: dashed silhouette inflated by DASH_OUT on every dimension (was the bare body args → overlapped)
+    expect(g2d).toMatch(/mushPath\(x0 - DASH_OUT, cy, len \+ DASH_OUT, tShaftA \+ DASH_OUT, tGlansA \+ DASH_OUT, glansLenA \+ DASH_OUT\)/);
+    expect(g2d).toMatch(/d=\{mushPath\(x0, cy, len, tShaftA, tGlansA, glansLenA\)\} fill="url\(#fg-skin\)"/);  // body fill = bare silhouette
+    // thinner: the old bold 2.6 width is gone everywhere
+    expect(g2d).not.toMatch(/strokeWidth="2\.6"/);
   });
 
   it('V7.2-2: breathing keeps the FULL-disappear; GLOW REMOVED (the red drop-shadow tinted the 2D model colors)', () => {
