@@ -5,6 +5,32 @@
 
 ---
 
+## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-15 EOD+2` → `2026-06-15 EOD+2` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-15 EOD+2 — ED Score box + follow-up assessment (SHIPPED + DEPLOYED)
+
+master `3cf4b01b` (=origin) · prod frontend `019df953` LIVE + rules +be_assessments + functions materialize CF DEPLOYED · full vitest **16482/0** · Rule Q L2 12/0 real prod · build clean. `/brainstorming`→`/writing-plans`→`/executing-plans` (14 tasks) + `/audit` design. Detail → checkpoint `.agents/sessions/2026-06-15-ed-score-feature.md`.
+
+- **ED Score box** (CustomerDetailView, right col under the 4-tab course box): latest-round hero + 4 chips (ADAM/IIEF/MRS/PE) + expandable **deletable** history (followups only; intake `__intake__` protected) + "ครั้งที่ N" send button. Theme-aware both themes; no red on names (rule 04).
+- **EDFollowupModal** — round-aware type picker (default = intake types) + per-round link + **full-screen mobile QR** (`generateQrDataUrl width:600`). Customer fills via the EXISTING PatientForm follow-up render: neutral `formType:'followup_assessment'` (PatientForm gates purely by `types[]`, NOT by formType — this was a P1 fix), 128-bit crypto id `FW-ED-*`, `expiresAt` = +1 day OR on-complete.
+- **be_assessments** durable collection — `createAssessmentRound`/`deleteAssessmentRound`/`createAssessmentSession`/`listenToAssessments` (BSA `__universal__` listener, V38 spread); firestore.rules staff-only read/create/update/**DELETE** (delete ALLOWED — unlike append-only be_course_changes). Pure cores: `assessmentRoundsCore.js` (date-rank derived round#, round1 = virtual intake, pending excluded) + `edScoreDisplay.js` (`scoreForType` reusing calculateADAM/IIEFScore/MRS + `stripScreeningSection` EXACT-header match).
+- **Materialize CF** — `sendPushOnSubmit` requires `functions/assessmentMaterialize.js`, runs BEFORE push checks, non-fatal try/catch, canonical BASE_PATH → completed follow-up → durable be_assessments round.
+- **Zero-migration**: round 1 derived LIVE from `patientData` → current customers (LC-26000082 just backfilled) show immediately. **Delete renumbers** (round# never stored — date-rank).
+- **Note relocation**: CDV note strips ED; TFP หมายเหตุทั่วไป shows the ED-stripped note + clean ED latest-2 + dates. `generateClinicalSummary(...,includeScreening=false)` ONLY for the note builder (`kioskPatientToCanonical`) — print + intake-view (AdminDashboard/PrintTemplates) KEEP ED (user Q11, verified by-design false positives). DX/Tx/Plan rows 6/6/4 (was 3/3/2) + health-info rows 4 → both save buttons row-align (left `mt-auto` + right `flex-1`).
+- **Verified**: full vitest **16482/0** + build clean + **Rule Q L2 12/0 real prod** (`scripts/e2e-ed-assessment.mjs`) + flow-simulate 6/0. 6-agent adversarial hunt + full-suite fixed 5 real issues (stripScreening `.startsWith`→`=== h`; neutral formType; basePath; +2 a11y P1 from `/audit`) + 3 V21 fixups. **Deploy**: master ff-merge `019df953` + firestore.rules **Probe-Deploy-Probe** (WS1 13/13 intact + be_assessments #17 3/3 DENIED) + functions + `vercel --prod`. **Honest gap**: rendered-pixel L1 = user hands-on (no browser connected).
+
+---
+
+📂 **Older sessions (`2026-06-15 EOD+1` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-15 EOD+2) — ED Score box + follow-up assessment SHIPPED + DEPLOYED (zero-migration; brainstorm→plan→14-task impl)**: master HEAD `3cf4b01b` (=origin; probe #17 diag, non-bundled); **prod = frontend `019df953` (vercel, lover-clinic-app.vercel.app HTTP 200) + firestore.rules +be_assessments DEPLOYED (Probe-Deploy-Probe) + functions `sendPushOnSubmit` materialize CF DEPLOYED**. New **"สมรรถภาพ · ED Score" box** in CustomerDetailView (right col, under the 4-tab course box): latest round hero + 4 chips (ADAM/IIEF/MRS/PE) + expandable **deletable** history (followups only; intake `__intake__` protected) + "ครั้งที่ N" send button → **EDFollowupModal** (round-aware type picker + per-round link + **full-screen mobile QR**). Customer fills via existing PatientForm follow-up render (neutral `formType:'followup_assessment'`, PatientForm gates purely by `types[]`; 128-bit crypto id; `expiresAt`=+1 day OR on-complete). A **materialize CF** (`assessmentMaterialize` inside `sendPushOnSubmit`, non-fatal, canonical BASE_PATH) writes the completed answers into a durable **`be_assessments`** collection. **Round 1 = virtual record derived LIVE from intake patientData → ZERO migration** (LC-26000082, just backfilled, shows immediately). Round# is **date-rank derived (never stored) → delete renumbers**. Also: stripped ED from CDV note; TFP หมายเหตุทั่วไป shows clean ED latest-2 + dates (`generateClinicalSummary(...,includeScreening=false)` for the note builder ONLY — print + intake-view KEEP it per user Q11); DX/Tx/Plan 2× (rows 6/6/4) + health-info rows 4 → both save buttons row-align. **Verified**: full vitest **16482/0** + build clean + **Rule Q L2 12/0 on REAL prod** (`scripts/e2e-ed-assessment.mjs` — materialize durable, delete renumbers) + flow-simulate 6/0; **6-agent adversarial hunt + full-suite caught & fixed 5 real issues** (stripScreening `.startsWith`→exact `=== h`; neutral formType not `'followup_ed'`; basePath hygiene; +2 a11y P1 from `/audit`: modal role=dialog/aria-modal/aria-labelledby + icon-button aria-labels) + **3 V21 test fixups** (eod7 expiry regex, phase-26-2 note gate, v83/AV78 named-handlers). New files: `assessmentRoundsCore.js` · `edScoreDisplay.js` · `EDScoreBox.jsx` · `EDFollowupModal.jsx` · `functions/assessmentMaterialize.js`. **Honest gap (Rule Q)**: rendered-pixel L1 (the box on a real authed customer, send modal+QR, materialize round-trip, delete-renumber, theme) = USER hands-on — no browser connected this session. Spec/plan `docs/superpowers/{specs,plans}/2026-06-15-ed-score-box-followup-assessment*`. Checkpoint `.agents/sessions/2026-06-15-ed-score-feature.md`.
+
+---
+
 ## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-15 EOD+1` → `2026-06-15 EOD+1` + Current-State index
 
 ### Session blocks (1)

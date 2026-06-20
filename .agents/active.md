@@ -1,31 +1,29 @@
 ---
-updated_at: "2026-06-20 (cont.3) — Filler standalone public site SHIPPED + DEPLOYED LIVE (loverclinic.vercel.app) + OPD redeployed."
-status: "DONE + DEPLOYED. loverclinic.vercel.app LIVE (isolated). OPD redeployed (filler + 3D fix live). filler 102/0; full vitest 16869/0."
+updated_at: "2026-06-20 (cont.3) — Filler standalone DEPLOYED LIVE (loverclinic.vercel.app); v7/v7.1 visual polish committed, NOT deployed."
+status: "Standalone site LIVE. 3 filler-polish commits pending deploy. filler 103/0; full vitest 16870/0; build clean."
 branch: "master"
-last_commit: "deploy-script fix + handoff (after 6c40a5d6 OPD 3D fix)"
+last_commit: "df2f277f — feat(filler-sim v7.1): condom hero card + red line breathing full-disappear"
 production_url: "https://loverclinic.vercel.app (standalone) + https://lover-clinic-app.vercel.app (OPD)"
-production_commit: "lover-clinic-app: lover-clinic-o5gogdbfp · loverclinic: loverclinic-jwk0jef67 (alias loverclinic.vercel.app)"
+production_commit: "BOTH live at ~5742f73a (PRE v7-polish) — loverclinic-jwk0jef67 + lover-clinic-o5gogdbfp"
 firestore_rules_version: "UNCHANGED (filler pure-client; OPD deploy was vercel-only, no rules)"
-tests: "filler 102/0; full vitest 16869/0. Not re-run after deploy (no source change)."
+tests: "full vitest 16870/0 (this turn) + build clean; filler 103/0 targeted. Not re-run after — reuse."
 ---
 
-# Active — 2026-06-20 (cont.3) — Filler standalone SHIPPED + DEPLOYED
+# Active — 2026-06-20 (cont.3) — Filler standalone deployed + v7/v7.1 polish
 
-## State — DONE + LIVE
-- **`loverclinic.vercel.app`** = public filler simulator, SEPARATE Vercel project (`loverclinic`, team `teddyoomz-4523s-projects`). Prebuilt STATIC dist-filler → zero firebase/api/OPD code. LIVE + Rule Q L1-verified on prod.
-- **`lover-clinic-app.vercel.app/?play=filler`** = OPD copy, redeployed (3D fix + filler work now live).
-- master pushed. Both deploys frontend-only → no firestore.rules → no Probe-Deploy-Probe.
+## State
+- **`loverclinic.vercel.app`** = public filler simulator, SEPARATE Vercel project, prebuilt STATIC dist-filler → zero firebase/api/OPD. LIVE + Rule Q L1-verified. OPD `?play=filler` redeployed too.
+- **3 filler visual-polish commits (`6f78c45d` `c63fd2cb` `df2f277f`) committed+pushed but NOT deployed** → both live sites still show the PRE-polish version.
+- master `df2f277f`; full vitest 16870/0; build clean.
 
-## Verified (Rule Q)
-- LIVE L1 (Playwright, real prod): loverclinic.vercel.app renders + math + real logo + 3D (`canvasCount:1` + `filler3dChunkLoaded:true`) + **`offHostRequests:[]` + `firebaseRequests:[]`** (talks to nothing but its own host) + mobile no-overflow + console clean.
-- Security: live `/api/*` = `text/html` md5-identical to homepage (SPA fallback, NOT a function) + tight CSP `connect-src 'self'`. No OPD serverless on the public site.
-- OPD `?play=filler` LIVE L1: 3D chunk loads (`filler3dChunkLoaded:true`) — OPD obfuscator fix works.
-- filler 102/0 · full vitest 16869/0 · build clean.
+## What this session shipped (detail → checkpoints)
+- **Standalone site** (`2026-06-20-filler-standalone-public-site.md`): `filler.html`→`src/filler-main.jsx`→`<FillerSimulator/>` + `vite.filler.config.js`→`dist-filler` (obfuscator scope = formula files only); `verify-filler-bundle.mjs`; og:image from REAL logo (Playwright); `vercel.filler.json` tight CSP; `deploy:filler` dual-deploy; Vercel project `loverclinic` (Q4 URL available). DEPLOYED + LIVE L1 (zero firebase network, 3D loads, /api=SPA-fallback).
+- 🐛 **Found+fixed obfuscator-breaks-3D bug in BOTH vite configs** (obfuscating FillerSimulator mangled its `import('Filler3D')` → three chunk never emitted). OPD build now emits Filler3D 524.9K.
+- **v7 polish** (`2026-06-20-filler-v7-polish.md`): red "หลังฉีด" line BOLD + glow (was barely visible) · mobile controls-on-top · red line default OFF · condom card = HERO (top+most prominent, แนะนำ badge) · breathing full-disappear (bold→GONE→bold for before↔after contrast).
 
-## Edit-once → deploy-both (convention, rule 02 item 11)
-- Edit any filler file → `npm run deploy:filler` (verify → `vercel --prod` OPD → `vercel deploy dist-filler --prod --local-config vercel.filler.json` standalone). Needs `.env.filler-deploy` (VERCEL_ORG_ID/FILLER_PROJECT_ID/SCOPE — gitignored). Still requires explicit "deploy" (V18).
-- Obfuscator scope = formula files only (`fillerMath.js` + `FillerGraphic2D.jsx`) — NEVER add FillerSimulator/Filler3D (breaks 3D).
+## Next action
+- Idle / await. **Deploy the 3 filler-polish commits on explicit "deploy"** → `npm run deploy:filler` (both OPD + standalone; frontend-only, no Probe-Deploy-Probe).
 
 ## Outstanding (user-triggered)
+- Deploy filler v7/v7.1 polish (3 commits) → loverclinic.vercel.app + OPD.
 - ⚠ Rotate LINE/FB secrets (AV195). · Encode customer id in LINE OA url.
-- Spec/plan/checkpoint: `docs/superpowers/{specs,plans}/2026-06-20-filler-standalone-public-site*` · `.agents/sessions/2026-06-20-filler-standalone-public-site.md`.
