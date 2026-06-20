@@ -242,6 +242,7 @@ export function useStaffChat() {
     const myName = getDisplayName();
     const seen = new Set();
     for (let i = messages.length - 1; i >= 0 && seen.size < 30; i--) {
+      if (messages[i]?.system) continue;   // AV198 — "ระบบ" cards aren't @-mentionable
       const n = messages[i]?.displayName;
       if (n && n !== myName) seen.add(n);
     }

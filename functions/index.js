@@ -2,10 +2,11 @@
 // PatientForm เรียกหลัง updateDoc สำเร็จ
 const functionsV1 = require('firebase-functions/v1');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { buildAssessmentRoundPatch, isMaterializableAssessment } = require('./assessmentMaterialize');
 const { buildNotificationContent } = require('./notificationContent');
+const { buildStaffChatNotification, writeStaffChatNotification } = require('./staffChatNotify');
 
 initializeApp();
 
@@ -120,6 +121,25 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
     }
 
     console.log(`[${sessionId}] Push: ${response.successCount} ok, ${response.failureCount} fail`);
+
+    // Staff-chat "ระบบ" notification card (intake + follow-up only; SKIP edits).
+    // Non-fatal: a chat-write failure must NEVER affect the push response. The
+    // card is written via admin SDK (bypasses the create validators). Intake
+    // cards carry no customerId — the client live-resolves once the walk-in is
+    // registered (opd_session.brokerProClinicId). AV198.
+    try {
+      const isEdit = !!session.updatedAt;
+      if (!isEdit) {
+        const kind = session.linkedCustomerId ? 'followup' : 'intake';
+        const branchId = session.branchId || (customer && customer.branchId) || '';
+        const card = buildStaffChatNotification({ kind, session, sessionId, customer, branchId });
+        const wrote = await writeStaffChatNotification(db, BASE_PATH, FieldValue, card);
+        if (!wrote) console.warn(`[${sessionId}] staff-chat card skipped (no branchId)`);
+      }
+    } catch (e) {
+      console.warn(`[${sessionId}] staff-chat notify failed:`, e && e.message);
+    }
+
     res.status(200).json({ ok: true, sent: response.successCount });
   } catch (err) {
     console.error('FCM error:', err);

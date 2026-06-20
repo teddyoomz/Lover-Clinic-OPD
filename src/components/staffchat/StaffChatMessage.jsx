@@ -21,6 +21,7 @@ import { StaffChatReplyPreview } from './StaffChatReplyPreview.jsx';
 import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
 import { gridLayoutFor, attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
 import { bundledStickerSrc } from '../../lib/staffChatStickers.js';
+import { StaffChatSystemCard } from './StaffChatSystemCard.jsx';
 
 // (2026-05-22) Adaptive thumbnail grid for message.attachments[] (LINE-style).
 function AttachmentGrid({ attachments, onOpen }) {
@@ -103,6 +104,21 @@ export function StaffChatMessage({ message, isOwn, onReply, onDelete, onQuoteCli
   // (2026-06-02, AV174) bounce highlight when the user clicks a quote pointing at
   // THIS message (set by StaffChatMessageList.scrollToMessage after scroll).
   const highlightCls = isHighlighted ? ' staff-chat-reply-bounce' : '';
+  // AV198 — "ระบบ" notification card (intake/follow-up). Read-only: no reply/
+  // delete affordance. Rendered AFTER all hooks (Rules of Hooks) but before the
+  // human-bubble JSX. The customer-resolve hook lives inside StaffChatSystemCard.
+  if (message && message.system) {
+    return (
+      <div
+        data-testid="staff-chat-message"
+        data-msg-id={message.id}
+        ref={(el) => { if (registerNode) registerNode(message.id, el); }}
+        className="group flex flex-col items-start"
+      >
+        <StaffChatSystemCard message={message} />
+      </div>
+    );
+  }
   return (
     <div
       data-testid="staff-chat-message"

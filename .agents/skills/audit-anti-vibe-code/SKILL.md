@@ -12,6 +12,19 @@ Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 
 ## Invariants (AV1–AV49)
 
+### AV198 — Staff-chat "ระบบ" notification cards (intake + follow-up) (2026-06-21)
+
+**Why**: when the intake-complete / follow-up-assessment-complete push fires, a "ระบบ" notification card is ALSO written into the per-branch staff chat (sparkles icon, customer name + HN, clickable name → customer detail in a new tab). Intake cards have no `be_customer` at write time; they MUST live-resolve to clickable+HN once the walk-in is registered (never store a stale customerId).
+
+**The rules** (sanctioned files: `functions/staffChatNotify.js`, `functions/index.js`, `src/lib/staffChatNotifyResolve.js`, `src/components/staffchat/StaffChatSystemCard.jsx`, `src/components/staffchat/StaffChatMessage.jsx`):
+1. The server write is in `sendPushOnSubmit` AFTER the FCM send, in its OWN try/catch (non-fatal — never blocks the push), SKIPS edits (`!!session.updatedAt`), and skips when there is no `branchId` to route to.
+2. The card uses the system identity (`deviceId:'system'`, `displayName:'ระบบ'`) — NEVER a human device. Admin-SDK write bypasses the create validators; no firestore.rules change.
+3. The customer NAME link is sky (`text-sky-*`), NEVER red (`text-red` / `#dc2626` / `#ef4444`) — Thai culture (no red on a patient name). Fire-red is ONLY the icon circle + the left accent border.
+4. The link is the canonical deep-link `/?backend=1&customer=${encodeURIComponent(customerId)}` + `target="_blank"` + `rel="noopener noreferrer"`.
+5. Intake live-resolves at RENDER time (V113): `pickSystemCardCustomerId` prefers `system.customerId` else `opd_session.brokerProClinicId`; the hook subscribes (`onSnapshot`) to the session so the card flips the instant the walk-in is registered, and live-resolves name+HN from `be_customers` (`getCustomer`). A stale stored customerId for intake is FORBIDDEN.
+
+**Grep / regression**: `tests/staff-chat-system-notify-av198.test.js` (A1-A7). Builder/resolver/render covered by `tests/staff-chat-system-notify-{builder,resolve}.test.js`, `tests/staff-chat-system-card-rtl.test.jsx`, `tests/staff-chat-system-notify-flow-simulate.test.js`. L2 real-prod e2e: `scripts/e2e-staff-chat-system-notify.mjs`.
+
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
 **Grep**:
