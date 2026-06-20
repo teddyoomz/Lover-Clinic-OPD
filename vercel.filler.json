@@ -1,6 +1,4 @@
 {
-  "buildCommand": "vite build --config vite.filler.config.js",
-  "outputDirectory": "dist-filler",
   "framework": null,
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
