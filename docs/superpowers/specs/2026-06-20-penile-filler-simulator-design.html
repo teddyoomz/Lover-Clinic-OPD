@@ -32,7 +32,7 @@
   .sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
   @media(max-width:760px){.sim-grid{grid-template-columns:1fr;}}
   .sim-card{background:var(--c-card);border:1px solid var(--c-line);border-radius:14px;padding:16px 18px;}
-  .sim-card h4{margin:0 0 14px;font-size:13px;color:var(--c-tx2);font-weight:600;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:center;}
+  .sim-card h4{margin:0 0 14px;font-size:13px;color:var(--c-tx2);font-weight:600;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .seg{display:inline-flex;border:1px solid var(--c-line);border-radius:8px;overflow:hidden;}
   .seg span{font-size:11px;padding:3px 10px;color:var(--c-tx2);}
   .seg span.on{background:linear-gradient(90deg,var(--c-fire2),var(--c-fire));color:#fff;}
@@ -55,6 +55,7 @@
   .disc{margin-top:16px;background:#160d0c;border:1px solid #3a201c;border-radius:11px;padding:12px 14px;font-size:11.5px;color:#c9b8b4;line-height:1.55;}
   .legend{display:flex;gap:16px;font-size:11.5px;color:var(--c-tx2);margin-top:8px;flex-wrap:wrap;}
   .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  .hint3d{font-size:11px;color:#8a807c;margin-top:8px;display:flex;align-items:center;gap:6px;}
 </style>
 </head>
 <body>
@@ -62,14 +63,15 @@
 <h1>Penile Filler Size Simulator — Design Spec</h1>
 
 <blockquote>
-  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user (Q1–Q5 + revision round 1 locked) · <strong>Type:</strong> T2 customer-facing feature · <strong>Implementation plan:</strong> (writing-plans → next)
+  <strong>Date:</strong> 2026-06-20 · <strong>Status:</strong> Approved by user (Q1–Q5 + rev1 + rev2 locked) · <strong>Type:</strong> T2 customer-facing feature · <strong>Implementation plan:</strong> (writing-plans → next)
 </blockquote>
 
 <h2>Purpose / Problem</h2>
 <p>คลินิกอยากมี "ของเล่นให้ความรู้" หน้าเดียวที่ส่งลิงก์ในแชทให้ลูกค้าทุกคนเปิดเองได้ เพื่อให้ลูกค้า
 <strong>นึกภาพออก + กะเกณได้คร่าวๆ</strong> ว่าถ้าฉีดฟิลเลอร์เพิ่มขนาด (penile girth augmentation ด้วย HA filler)
 กี่ cc แล้วขนาดจะเปลี่ยนประมาณไหน — และ <strong>ใส่ถุงยางไซส์ไหน / ใหญ่ขึ้นกี่ไซส์</strong>. ลูกค้าเลื่อนสไลเดอร์
-แล้วกราฟิกขยายสด + บอกขนาดใหม่เป็น "ช่วงประเมิน". เน้น <strong>กะเกณ ไม่ใช่รับประกัน</strong>. ไม่เก็บข้อมูลผู้ใช้ใดๆ.</p>
+แล้วกราฟิก (เหมือนจริง 2D หรือ 3D หมุนได้) ขยายสด + บอกขนาดใหม่เป็น "ช่วงประเมิน".
+เน้น <strong>กะเกณ ไม่ใช่รับประกัน</strong>. ไม่เก็บข้อมูลผู้ใช้ใดๆ.</p>
 
 <p><strong>ฐานความรู้ (research, อ้างอิงจริง):</strong> งานวิจัย HA penile girth augmentation รายงานรอบวงเพิ่มเฉลี่ย
 <strong>~+2.5 ซม. ที่ ~16 cc (วัดตอนอ่อนตัว, พีค ~1 เดือน)</strong> ช่วง +1.5 ถึง +4 ซม. (≈0.13–0.19 ซม./cc);
@@ -79,7 +81,7 @@
 การแปลงไซส์ถุงยางอิง <strong>ISO 4074 nominal width</strong> + ไซส์จริงในตลาด (OneTouch TH 49/52/54/56 · Durex · Okamoto · ONE/MyONE 45–64).</p>
 
 <h2>Mockup Design</h2>
-<p class="mockup-label">Desktop · loaded (ธีมจริง dark fire/ember · ค่าตัวอย่าง verify แล้ว: ยาว 11 ซม. · ถุงยาง Regular 52 · ฟิลเลอร์ 10 cc)</p>
+<p class="mockup-label">Desktop · loaded (ธีม dark fire/ember · กราฟิกเหมือนจริงเชิงกายวิภาค + สลับ 3D · ค่า verify แล้ว: ยาว 11 · ถุงยาง Regular 52 · ฟิลเลอร์ 10 cc)</p>
 <div class="mockup">
   <div class="sim">
     <div class="sim-head">
@@ -99,17 +101,12 @@
           </div>
           <div class="track"><div class="fill" style="width:30%"></div><div class="thumb" style="left:30%"></div></div>
         </div>
-
         <div class="sld">
           <div class="sld-top"><span class="sld-lab">ขนาดเดิม</span>
             <span class="seg"><span>เลื่อน Ø</span><span class="on">กดไซส์ถุงยาง</span></span>
           </div>
-          <div class="picker">
-            <span class="nm">ถุงยาง Regular · 52 มม.</span>
-            <span class="ch">รอบวง ~10.4 · Ø ~3.3 ▾</span>
-          </div>
+          <div class="picker"><span class="nm">ถุงยาง Regular · 52 มม.</span><span class="ch">รอบวง ~10.4 · Ø ~3.3 ▾</span></div>
         </div>
-
         <div class="sld" style="margin-top:16px;">
           <div class="sld-top"><span class="sld-lab">ฟิลเลอร์ที่ฉีด</span><span class="sld-val fire">10 cc</span></div>
           <div class="track"><div class="fill" style="width:33%"></div><div class="thumb" style="left:33%"></div></div>
@@ -118,43 +115,44 @@
       </div>
 
       <div class="sim-card">
-        <h4>ภาพจำลอง</h4>
-        <svg viewBox="0 0 360 200" width="100%" role="img" aria-label="side profile and cross-section before and after filler">
-          <text x="6" y="14" font-size="11" fill="#9b938f">ด้านข้าง (ความยาวคงเดิม)</text>
-          <rect x="20" y="30" width="250" height="56" rx="28" fill="#2a0f0d" stroke="#ef4444" stroke-width="1.6"/>
-          <rect x="20" y="44" width="250" height="28" rx="14" fill="#0a0a0a" stroke="#7a6a66" stroke-width="1.1" stroke-dasharray="5 4"/>
-          <text x="276" y="52" font-size="10.5" fill="#ef4444">+ฟิลเลอร์</text>
-          <text x="276" y="66" font-size="10.5" fill="#9b938f">รอบวง↑</text>
+        <h4>ภาพจำลอง <span class="seg"><span class="on">2D เหมือนจริง</span><span>3D หมุนได้ ⟳</span></span></h4>
+        <svg viewBox="0 0 360 196" width="100%" role="img" aria-label="realistic anatomical side profile and cross-section, before and after filler">
+          <defs>
+            <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#dda489"/><stop offset="0.45" stop-color="#c1825f"/><stop offset="1" stop-color="#7c4c38"/>
+            </linearGradient>
+            <radialGradient id="gl" cx="0.62" cy="0.34" r="0.72">
+              <stop offset="0" stop-color="#ecb79e"/><stop offset="0.55" stop-color="#bd7c5b"/><stop offset="1" stop-color="#7c4a36"/>
+            </radialGradient>
+          </defs>
+          <text x="6" y="13" font-size="11" fill="#9b938f">ด้านข้าง — รูปทรงกายวิภาค (ความยาวคงเดิม)</text>
+          <path d="M40 36 L246 36 C260 36 262 95 246 95 L40 95 C16 95 16 36 40 36 Z" fill="url(#skin)" stroke="#ef4444" stroke-width="1.7"/>
+          <ellipse cx="270" cy="65" rx="42" ry="35" fill="url(#gl)" stroke="#ef4444" stroke-width="1.4"/>
+          <path d="M246 36 C252 50 252 80 246 95" fill="none" stroke="#6e4030" stroke-width="1.4" opacity="0.7"/>
+          <path d="M54 48 C140 43 205 44 244 48" fill="none" stroke="rgba(255,238,228,0.45)" stroke-width="3.4" stroke-linecap="round"/>
+          <ellipse cx="258" cy="54" rx="9" ry="6" fill="rgba(255,242,234,0.5)"/>
+          <path d="M58 52 L244 52 C254 52 254 79 244 79 L58 79 C44 79 44 52 58 52 Z" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-dasharray="5 4"/>
+          <text x="300" y="40" font-size="10.5" fill="#ef4444">+ฟิลเลอร์</text>
           <text x="6" y="120" font-size="11" fill="#9b938f">หน้าตัด</text>
-          <circle cx="66" cy="158" r="32" fill="#2a0f0d" stroke="#ef4444" stroke-width="1.6"/>
-          <circle cx="66" cy="158" r="20" fill="#0a0a0a" stroke="#7a6a66" stroke-width="1.1" stroke-dasharray="5 4"/>
-          <line x1="66" y1="158" x2="98" y2="158" stroke="#ef4444" stroke-width="1.2"/>
-          <text x="116" y="144" font-size="11" fill="#ededed">วงแดง = ชั้นฟิลเลอร์</text>
-          <text x="116" y="164" font-size="11" fill="#9b938f">เส้นประ = ขนาดเดิม</text>
-          <text x="116" y="184" font-size="11" fill="#9b938f">โตขึ้นสดตามจำนวน cc</text>
+          <circle cx="62" cy="158" r="30" fill="url(#skin)" stroke="#ef4444" stroke-width="1.6"/>
+          <circle cx="62" cy="158" r="18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.1" stroke-dasharray="5 4"/>
+          <text x="110" y="150" font-size="11" fill="#ededed">ขอบแดง = หลังฉีด · เส้นประ = เดิม</text>
+          <text x="110" y="170" font-size="11" fill="#9b938f">โตขึ้นสดตามจำนวน cc</text>
         </svg>
         <div class="legend">
-          <span><i style="background:#0a0a0a;border:1px dashed #7a6a66"></i>ขนาดเดิม</span>
-          <span><i style="background:#2a0f0d;border:1px solid #ef4444"></i>หลังฉีด (ประเมิน)</span>
+          <span><i style="background:none;border:1px dashed #ccc"></i>ขนาดเดิม</span>
+          <span><i style="background:#c1825f;border:1px solid #ef4444"></i>หลังฉีด (ประเมิน)</span>
         </div>
+        <div class="hint3d">⟳ โหมด 3D: โมเดลกายวิภาคจริง (Three.js/WebGL) ลากหมุนดูรอบได้ ขยายตาม cc สด — เรนเดอร์ในแอป</div>
       </div>
     </div>
 
     <div style="margin-top:18px" class="sim-card">
       <h4>ขนาดที่ประเมินได้ (ช่วง realistic – optimistic)</h4>
       <div style="display:flex;flex-wrap:wrap;gap:11px;">
-        <div class="res-band" style="flex:1;min-width:150px;">
-          <div class="res-k">รอบวงใหม่</div>
-          <div class="res-v">11.7 – 12.2 ซม.<span class="delta">+1.3 ถึง +1.8</span></div>
-        </div>
-        <div class="res-band" style="flex:1;min-width:150px;">
-          <div class="res-k">เส้นผ่านศูนย์กลางใหม่</div>
-          <div class="res-v">3.7 – 3.9 ซม.<span class="delta">+0.4 ถึง +0.6</span></div>
-        </div>
-        <div class="res-band" style="flex:1;min-width:160px;">
-          <div class="res-k">ถุงยางที่ใส่ได้</div>
-          <div class="res-v">Large+ 58 → XL 60<span class="delta">+3 ถึง +4 ไซส์</span></div>
-        </div>
+        <div class="res-band" style="flex:1;min-width:150px;"><div class="res-k">รอบวงใหม่</div><div class="res-v">11.7 – 12.2 ซม.<span class="delta">+1.3 ถึง +1.8</span></div></div>
+        <div class="res-band" style="flex:1;min-width:150px;"><div class="res-k">เส้นผ่านศูนย์กลางใหม่</div><div class="res-v">3.7 – 3.9 ซม.<span class="delta">+0.4 ถึง +0.6</span></div></div>
+        <div class="res-band" style="flex:1;min-width:160px;"><div class="res-k">ถุงยางที่ใส่ได้</div><div class="res-v">Large+ 58 → XL 60<span class="delta">+3 ถึง +4 ไซส์</span></div></div>
       </div>
       <div class="note" style="margin-top:11px;">
         ⚠ ฟิลเลอร์เพิ่ม <strong>รอบวง</strong> ไม่เพิ่ม <strong>ความยาว</strong> · ฐานสั้นกว่า + cc เท่ากัน = รอบวงขึ้นเยอะกว่า ·
@@ -171,44 +169,44 @@
 </div>
 
 <p class="mockup-label">Mobile · ค่าซ้อนแนวตั้ง</p>
-<p>มือถือ: การ์ด "ปรับค่า" / "ภาพจำลอง" / "ผลลัพธ์" เรียงคอลัมน์เดียว, การ์ดผล 3 ใบเรียงแนวตั้ง, กราฟิกย่อพอดีจอ,
-สไลเดอร์เต็มกว้าง, disclaimer ล่างสุดเสมอ. ไม่มี state empty/error (pure client) — ถ้าแบรนด์คลินิกโหลดไม่ทันก็ fallback ธีม fire ในตัว.</p>
+<p>มือถือ: การ์ด "ปรับค่า" / "ภาพจำลอง" / "ผลลัพธ์" เรียงคอลัมน์เดียว, การ์ดผล 3 ใบเรียงแนวตั้ง, กราฟิก/3D ย่อพอดีจอ,
+สไลเดอร์เต็มกว้าง, disclaimer ล่างสุดเสมอ. ปุ่มสลับ 2D/3D อยู่บนการ์ดภาพจำลอง. ไม่มี state empty/error (pure client).
+ถ้าอุปกรณ์ไม่รองรับ WebGL → ซ่อนปุ่ม 3D, เหลือ 2D เหมือนจริง.</p>
 
 <h2>Flow</h2>
-<p class="mockup-label">Interaction flow — slider/picker → recompute → redraw (ไม่มี network, ไม่มี persistence)</p>
+<p class="mockup-label">Interaction flow — slider/picker → recompute → redraw 2D / re-mesh 3D (ไม่มี network, ไม่มี persistence)</p>
 <div class="mockup" style="background:#fafafa;border:1px solid var(--bd);">
-<svg viewBox="0 0 960 170" width="100%" role="img" aria-label="interaction flow">
+<svg viewBox="0 0 960 180" width="100%" role="img" aria-label="interaction flow">
   <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#dc2626"/></marker></defs>
   <g font-family="sans-serif" font-size="12" fill="#222">
-    <rect x="12" y="20" width="150" height="46" rx="8" fill="#fff" stroke="#dc2626"/>
-    <text x="87" y="40" text-anchor="middle">เลือก baseline</text>
-    <text x="87" y="56" text-anchor="middle" fill="#666" font-size="10.5">Ø slider หรือ ถุงยาง→W/5</text>
-    <rect x="12" y="78" width="150" height="40" rx="8" fill="#fff" stroke="#dc2626"/>
-    <text x="87" y="102" text-anchor="middle">ความยาว L (ซม./นิ้ว)</text>
-    <rect x="12" y="130" width="150" height="34" rx="8" fill="#fff" stroke="#dc2626"/>
-    <text x="87" y="151" text-anchor="middle">ฟิลเลอร์ V (cc)</text>
+    <rect x="12" y="22" width="150" height="44" rx="8" fill="#fff" stroke="#dc2626"/>
+    <text x="87" y="41" text-anchor="middle">เลือก baseline</text>
+    <text x="87" y="57" text-anchor="middle" fill="#666" font-size="10">Ø slider / ถุงยาง→W÷5</text>
+    <rect x="12" y="78" width="150" height="38" rx="8" fill="#fff" stroke="#dc2626"/>
+    <text x="87" y="101" text-anchor="middle">ความยาว L (ซม./นิ้ว)</text>
+    <rect x="12" y="128" width="150" height="34" rx="8" fill="#fff" stroke="#dc2626"/>
+    <text x="87" y="149" text-anchor="middle">ฟิลเลอร์ V (cc)</text>
     <line x1="164" y1="92" x2="206" y2="92" stroke="#dc2626" stroke-width="1.6" marker-end="url(#ar)"/>
-
     <rect x="210" y="68" width="172" height="48" rx="8" fill="#fff" stroke="#dc2626"/>
     <text x="296" y="89" text-anchor="middle">fillerMath (pure)</text>
     <text x="296" y="106" text-anchor="middle" fill="#666" font-size="10">C1=√(C0²+4πV/L)×k</text>
     <line x1="382" y1="92" x2="424" y2="92" stroke="#dc2626" stroke-width="1.6" marker-end="url(#ar)"/>
-
     <rect x="428" y="68" width="172" height="48" rx="8" fill="#fff" stroke="#dc2626"/>
     <text x="514" y="84" text-anchor="middle">band + แปลงถุงยาง</text>
     <text x="514" y="100" text-anchor="middle" fill="#666" font-size="10">W=C×5 → snap ladder</text>
     <line x1="600" y1="92" x2="642" y2="92" stroke="#dc2626" stroke-width="1.6" marker-end="url(#ar)"/>
-
-    <rect x="646" y="40" width="150" height="38" rx="8" fill="#fff" stroke="#dc2626"/>
-    <text x="721" y="63" text-anchor="middle">redraw SVG</text>
-    <rect x="646" y="106" width="150" height="38" rx="8" fill="#fff" stroke="#dc2626"/>
-    <text x="721" y="129" text-anchor="middle">การ์ด: รอบวง/Ø/ไซส์</text>
-    <line x1="600" y1="86" x2="642" y2="62" stroke="#dc2626" stroke-width="1.4" marker-end="url(#ar)"/>
-    <line x1="600" y1="98" x2="642" y2="122" stroke="#dc2626" stroke-width="1.4" marker-end="url(#ar)"/>
-
-    <rect x="818" y="68" width="128" height="48" rx="8" fill="#f0f4f8" stroke="#999" stroke-dasharray="4 3"/>
-    <text x="882" y="89" text-anchor="middle" font-size="10.5">ไม่เขียน Firestore</text>
-    <text x="882" y="104" text-anchor="middle" font-size="10.5">ไม่เก็บ PII</text>
+    <rect x="646" y="26" width="156" height="34" rx="8" fill="#fff" stroke="#dc2626"/>
+    <text x="724" y="47" text-anchor="middle">redraw 2D (SVG)</text>
+    <rect x="646" y="72" width="156" height="34" rx="8" fill="#fff" stroke="#dc2626"/>
+    <text x="724" y="93" text-anchor="middle">re-mesh 3D (radius)</text>
+    <rect x="646" y="118" width="156" height="34" rx="8" fill="#fff" stroke="#dc2626"/>
+    <text x="724" y="139" text-anchor="middle">การ์ด: รอบวง/Ø/ไซส์</text>
+    <line x1="600" y1="84" x2="642" y2="46" stroke="#dc2626" stroke-width="1.3" marker-end="url(#ar)"/>
+    <line x1="600" y1="92" x2="642" y2="89" stroke="#dc2626" stroke-width="1.3" marker-end="url(#ar)"/>
+    <line x1="600" y1="100" x2="642" y2="132" stroke="#dc2626" stroke-width="1.3" marker-end="url(#ar)"/>
+    <rect x="824" y="70" width="124" height="44" rx="8" fill="#f0f4f8" stroke="#999" stroke-dasharray="4 3"/>
+    <text x="886" y="89" text-anchor="middle" font-size="10">ไม่เขียน Firestore</text>
+    <text x="886" y="104" text-anchor="middle" font-size="10">ไม่เก็บ PII</text>
   </g>
 </svg>
 </div>
@@ -218,16 +216,18 @@
 <ul>
   <li><strong>Static public link เส้นเดียว</strong> ส่งในแชทให้ลูกค้าทุกคน — เช่น <code>?play=filler</code> (route ใน App.jsx). URL เดียวกันทุกคน ไม่มี token/expiry ไม่มี per-customer doc.</li>
   <li><strong>ไม่ต้องล็อกอิน</strong> · pure client calculator → <strong>ไม่อ่าน/ไม่เขียน Firestore, ไม่เก็บ PII, ไม่แตะ firestore.rules</strong> → ไม่มี Probe-Deploy-Probe. deploy = vercel frontend อย่างเดียว.</li>
-  <li>แบรนด์คลินิก: MVP ใช้ธีม fire/ember + ชื่อคลินิก bundled. (option ดึงโลโก้ dynamic ภายหลังด้วย pattern public-link เดิม + fallback.)</li>
+  <li>แบรนด์คลินิก: MVP ใช้ธีม fire/ember + ชื่อคลินิก bundled.</li>
 </ul>
 
 <h3>Files (lean, reuse)</h3>
 <table>
   <tr><th>ไฟล์</th><th>หน้าที่</th></tr>
-  <tr><td><code>src/lib/fillerMath.js</code> (ใหม่)</td><td>เครื่องคำนวณ pure (ไม่มี React/Firebase): girth model + condom conversion + ladder + snap. export ฟังก์ชัน + constants. ทดสอบได้ตรงๆ.</td></tr>
-  <tr><td><code>src/pages/FillerSimulator.jsx</code> (ใหม่)</td><td>หน้าเพจ: สไลเดอร์ความยาว (ซม./นิ้ว) + baseline toggle (Ø slider / ถุงยาง picker) + ฟิลเลอร์ + กราฟิก + การ์ดผล 3 ใบ + disclaimer. state ใน useState ล้วน.</td></tr>
-  <tr><td><code>src/components/FillerGraphic.jsx</code> (ใหม่/inline)</td><td>SVG ด้านข้าง + วงหน้าตัด ขยับตามค่าที่คำนวณ.</td></tr>
+  <tr><td><code>src/lib/fillerMath.js</code> (ใหม่)</td><td>เครื่องคำนวณ pure (ไม่มี React/Firebase): girth model + condom conversion + ladder + snap + unit (ซม./นิ้ว) + parametric mesh dims (radius/length จาก girth/L สำหรับ 3D). export ฟังก์ชัน + constants. ทดสอบตรงๆ.</td></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code> (ใหม่)</td><td>หน้าเพจ: สไลเดอร์ความยาว (ซม./นิ้ว) + baseline toggle (Ø / ถุงยาง) + ฟิลเลอร์ + ปุ่มสลับ 2D/3D + การ์ดผล 3 ใบ + disclaimer. state ใน useState ล้วน.</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code> (ใหม่/inline)</td><td>SVG เหมือนจริงเชิงกายวิภาค (แกน+ปลาย+corona+skin-tone shading) + วงหน้าตัด, ขยับตามค่าที่คำนวณ. default view.</td></tr>
+  <tr><td><code>src/components/Filler3D.jsx</code> (ใหม่)</td><td>โมเดล 3D จริง — <strong>lazy import <code>three</code></strong> (เฉพาะตอนกดโหมด 3D, ไม่อยู่ใน initial bundle). parametric mesh (แกน cylinder + ปลาย glans rounded + corona) · MeshStandardMaterial skin-tone · 3-point lighting · OrbitControls (ลากหมุน) + auto-rotate ช้าๆ · resize radius/length ตาม girth/L สด · WebGL ไม่รองรับ → fallback เป็น 2D.</td></tr>
   <tr><td><code>src/App.jsx</code> (แก้)</td><td>เพิ่ม route <code>?play=filler</code> → render FillerSimulator (กิ่งใหม่ก่อน auth gate).</td></tr>
+  <tr><td>dep ใหม่</td><td><code>three</code> (lazy-loaded; ไม่กระทบ bundle หน้าอื่น). ใช้ plain Three.js (ไม่ต้อง r3f/drei สำหรับ mesh เดียว — lean).</td></tr>
   <tr><td>reuse</td><td>ธีม CSS เดิม (fire/ember), ClinicLogo (optional).</td></tr>
 </table>
 
@@ -259,7 +259,15 @@ diameter_cm = girth_cm / π = width_mm / (5π)
   <tr><td>6</td><td>60</td><td>XL</td><td>12.0</td><td>Durex Thin Feel XL, MyONE 60</td></tr>
   <tr><td>7</td><td>64</td><td>XXL</td><td>12.8</td><td>Durex XXL, ONE/MyONE 64 (ใหญ่สุด mainstream)</td></tr>
 </table>
-<p class="note" style="color:#555;">หมายเหตุ: แลดเดอร์เต็มในตลาดมีรุ่นถี่กว่านี้ (47/51/53/57). เราใช้ชุด mainstream 8 รุ่นเพื่อให้ picker + "+N ไซส์" สื่อกับการซื้อจริง — เป็น design choice ที่ document ไว้; geometry การแปลงยังเป๊ะเสมอ.</p>
+<p class="note" style="color:#555;">หมายเหตุ: แลดเดอร์เต็มในตลาดมีรุ่นถี่กว่านี้ (47/51/53/57). เราใช้ชุด mainstream 8 รุ่นเพื่อให้ picker + "+N ไซส์" สื่อกับการซื้อจริง — design choice ที่ document ไว้; geometry การแปลงเป๊ะเสมอ.</p>
+
+<h3>Graphic &amp; 3D mode (rev2)</h3>
+<ul>
+  <li><strong>Default = 2D เหมือนจริงเชิงกายวิภาค</strong> (FillerGraphic2D): silhouette แกน+ปลาย (glans)+corona + skin-tone shading; before เส้นประ + after ขอบแดง (ฟิลเลอร์); วงหน้าตัดประกอบ. ขยับสดตามคณิตศาสตร์. เบา เปิดเร็ว เสมอ.</li>
+  <li><strong>3D จริงหมุนได้ (Filler3D, Three.js/WebGL):</strong> โมเดล mesh กายวิภาค (cylinder แกน + glans rounded + corona), MeshStandardMaterial skin-tone, แสง 3 จุด, ลากหมุน (OrbitControls) + auto-rotate. <strong>radius ของแกน = ฟังก์ชันของ girth (C/π/2), ความยาว = L</strong> → ขยายสดตาม cc/L. <strong>lazy-load</strong> เฉพาะตอนกดปุ่ม 3D (ไม่ถ่วง initial load). WebGL ไม่รองรับ/โหลด fail → ซ่อนปุ่ม, เหลือ 2D.</li>
+  <li><strong>Realism = "ลงรายละเอียด" (rev2)</strong> เชิงกายวิภาคทางการแพทย์ — รูปทรง/ผิว/แสงเงาเหมือนจริง แต่ <strong>เฟรมเป็นโมเดลการแพทย์ ไม่ sexualized</strong> (ไม่มีฉาก/บริบททางเพศ). ดู Risks เรื่อง content policy.</li>
+  <li><strong>Both views ใช้ <code>fillerMath</code> ตัวเดียวกัน</strong> (single source of truth) — 2D scale + 3D mesh radius มาจากผลลัพธ์เดียวกัน → ตรงกันเสมอ.</li>
+</ul>
 
 <h3>Worked examples (VERIFIED ด้วย node)</h3>
 <pre>geometry:  รอบวง 11 → Ø 3.50, width 55mm ; รอบวง 12 → Ø 3.82, width 60mm
@@ -277,51 +285,54 @@ anchor ตรวจ: 52mm·L11·V16 → +2.0 / +2.8 ซม. (= reference) ✓</p
   <tr><td>ฟิลเลอร์ (V)</td><td>1–30 cc (เตือนที่ 20)</td><td>1</td><td>10</td></tr>
 </table>
 
-<h2>Decisions (locked via Q&amp;A + revision)</h2>
+<h2>Decisions (locked via Q&amp;A + revisions)</h2>
 <ul>
-  <li><strong>Q1 = C:</strong> กราฟิก "รวม 2 มุม + ตัวเลข" — ภาพด้านข้าง + วงหน้าตัด + การ์ดตัวเลข.</li>
-  <li><strong>Q2 = ความยาวเป็น input ที่มีผลต่อรอบวง (ผ่าน V/L):</strong> สไลเดอร์ความยาวปรับได้ (ซม./นิ้ว) + geometry×k (length matters) แต่ <strong>ไม่ทำนายความยาวเพิ่ม</strong> + โน้ต girth-not-length.</li>
-  <li><strong>Q3 = ช่วงล้วน:</strong> realistic–optimistic band, ไม่มี toggle พีค/อยู่ตัว (หมายเหตุระยะเวลา 6–24 ด. บรรทัดเดียว).</li>
+  <li><strong>Q1 = C:</strong> กราฟิก "รวม 2 มุม + ตัวเลข".</li>
+  <li><strong>Q2 = ความยาวเป็น input ที่มีผลต่อรอบวง (ผ่าน V/L):</strong> สไลเดอร์ความยาว (ซม./นิ้ว) + geometry×k แต่ <strong>ไม่ทำนายความยาวเพิ่ม</strong>.</li>
+  <li><strong>Q3 = ช่วงล้วน:</strong> realistic–optimistic band (หมายเหตุระยะเวลา 6–24 ด.).</li>
   <li><strong>Q4 = กรอกเอง + ไม่เก็บอะไรเลย:</strong> ephemeral ล้วน · ไม่เขียน Firestore · ไม่เก็บ PII.</li>
-  <li><strong>Q5 = static public link:</strong> เส้นเดียว ส่งในแชท เปิดได้ทุกคน ไม่ล็อกอิน.</li>
-  <li><strong>Rev1-a:</strong> ระยะเวลา 6–24 เดือน.</li>
-  <li><strong>Rev1-b:</strong> ความยาวเลือกหน่วย <strong>ซม. หรือ นิ้ว</strong> ได้ (toggle).</li>
-  <li><strong>Rev1-c:</strong> ขนาดเดิมเลือกได้ <strong>2 โหมด</strong> — เลื่อน Ø ตรงๆ หรือ กดไซส์ถุงยาง → แปลงเป็น Ø (ทั้งคู่ → C0 เดียวกัน).</li>
-  <li><strong>Rev1-d:</strong> ผลลัพธ์โชว์ <strong>ไซส์ถุงยางใหม่ + เพิ่มกี่ไซส์</strong> ด้วยการแปลงคณิตศาสตร์เป๊ะ (verified).</li>
+  <li><strong>Q5 = static public link.</strong></li>
+  <li><strong>Rev1:</strong> 6–24 เดือน · ความยาว ซม./นิ้ว · baseline 2 โหมด (Ø / ถุงยาง) · ผลลัพธ์โชว์ไซส์ถุงยาง + กี่ไซส์.</li>
+  <li><strong>Rev2-a = 3D จริงหมุนได้ (WebGL/Three.js):</strong> default = 2D เหมือนจริง + ปุ่มสลับโหมด 3D (lazy-load, fallback 2D).</li>
+  <li><strong>Rev2-b = realism "ลงรายละเอียด":</strong> กายวิภาคเหมือนจริง (รูปทรง/ผิว/แสงเงา) แบบโมเดลการแพทย์ ไม่ sexualized.</li>
 </ul>
 
 <h2>Acceptance Criteria</h2>
 <ol>
-  <li>เปิด <code>?play=filler</code> โดยไม่ล็อกอิน → แสดงผลทันที, ไม่มี "Invalid Link" flash.</li>
-  <li>เลื่อน/เปลี่ยนค่าทุกตัว → กราฟิก + การ์ดผล 3 ใบ (รอบวง / Ø / ไซส์ถุงยาง) อัปเดตสด.</li>
-  <li>ความยาว toggle ซม.↔นิ้ว แปลงค่าถูก (1 นิ้ว = 2.54 ซม.) ค่าภายในเก็บเป็น ซม.</li>
-  <li>baseline toggle 2 โหมดให้ C0 เดียวกัน: เลือกถุงยาง 52 → รอบวง 10.4 / Ø 3.3; เลื่อน Ø 3.3 → ได้ผลเท่ากัน.</li>
-  <li>condom conversion เป๊ะ: width_mm = รอบวง×5; Ø = รอบวง/π; ถุงยาง→C0→snap กลับได้ไซส์เดิมทุกรุ่น.</li>
-  <li>snap rule = nearest width, tie→larger; "+N ไซส์" = ผลต่าง index ในแลดเดอร์ 8 รุ่น.</li>
-  <li>girth model ผ่าน anchor: ถุงยาง 52 (C0=10.4), L=11, V=16 → รอบวงใหม่ ≈ 12.4–13.2 (+2.0/+2.8); V=10 → 11.7–12.2.</li>
-  <li>length-sensitivity ถูกทิศ (cc เท่ากัน, L น้อยลง → ΔC มากขึ้น) + monotonic ตาม V + band low ≤ high + ทุกเลข round.</li>
-  <li>V > 20 → คำเตือน soft-cap; clamp V ≤ 30; ค่าเกินช่วงงานวิจัย → โน้ตเตือน.</li>
-  <li>disclaimer ไทย+อังกฤษ เห็นชัด; ไม่ทำนายความยาวเพิ่ม; โน้ต girth-not-length + 6–24 ด. + ถุงยางเป็นค่าประมาณ.</li>
-  <li>ไม่มีการเขียน Firestore / ไม่มี PII (verify: ไม่มี import backendClient/Firestore write).</li>
+  <li>เปิด <code>?play=filler</code> โดยไม่ล็อกอิน → แสดงผลทันที, ไม่มี "Invalid Link" flash; โหมด 2D โหลดทันที (ไม่รอ three).</li>
+  <li>เลื่อน/เปลี่ยนค่าทุกตัว → กราฟิก (2D หรือ 3D) + การ์ดผล 3 ใบ (รอบวง / Ø / ไซส์ถุงยาง) อัปเดตสด.</li>
+  <li>กดปุ่ม 3D → lazy-load three → โมเดล 3D เรนเดอร์, ลากหมุนได้, ขยาย radius ตาม cc/L สด; กลับ 2D ได้.</li>
+  <li>WebGL ไม่รองรับ → ซ่อนปุ่ม 3D, ใช้ 2D ได้ปกติ (ไม่ crash).</li>
+  <li>three ไม่อยู่ใน initial bundle (verify: dynamic import; bundle หน้าอื่นไม่โต).</li>
+  <li>ความยาว toggle ซม.↔นิ้ว แปลงถูก (1 นิ้ว = 2.54 ซม.) ค่าภายในเก็บเป็น ซม.</li>
+  <li>baseline toggle 2 โหมดให้ C0 เดียวกัน (ถุงยาง 52 → รอบวง 10.4 / Ø 3.3 = เลื่อน Ø 3.3).</li>
+  <li>condom conversion เป๊ะ: width=รอบวง×5; Ø=รอบวง/π; ถุงยาง→C0→snap กลับได้ไซส์เดิมทุกรุ่น; snap nearest-tie-larger; "+N ไซส์" = index diff.</li>
+  <li>girth model ผ่าน anchor: ถุงยาง 52 (C0=10.4), L=11, V=16 → รอบวง ≈ 12.4–13.2 (+2.0/+2.8); V=10 → 11.7–12.2.</li>
+  <li>length-sensitivity ถูกทิศ + monotonic ตาม V + band low ≤ high + ทุกเลข round; V&gt;20 เตือน; clamp V≤30.</li>
+  <li>2D และ 3D ใช้ผลจาก fillerMath ตัวเดียวกัน (ขนาดตรงกัน).</li>
+  <li>disclaimer ไทย+อังกฤษ เห็นชัด; ไม่ทำนายความยาวเพิ่ม; โน้ต girth-not-length + 6–24 ด. + ถุงยางประมาณ.</li>
+  <li>ไม่มีการเขียน Firestore / ไม่มี PII.</li>
   <li>ธีม dark fire/ember, อ่านง่ายทั้ง desktop/mobile.</li>
 </ol>
 
 <h2>Testing (Rule Q — honest)</h2>
 <ul>
-  <li><strong>Unit — condom conversion (เป๊ะ, ตามคำสั่ง "เทสมาด้วย"):</strong> width=girth×5 / girth=width/5 / Ø=girth/π เทียบค่าจริง (girth 9–14 → width 45–70, Ø 2.86–4.46); snap nearest-tie-larger; ถุงยาง→C0→snap-back consistency ทุกรุ่น; "+N ไซส์" index diff; worked examples (10.5→Regular, 12.0→XL60).</li>
-  <li><strong>Unit — girth model:</strong> anchor (52mm·L11·V16→+2.0/+2.8), monotonic ตาม V, length-sensitivity (สั้น→เยอะกว่า), band ordering, clamp V≤30, warn V&gt;20, round, adversarial (0/ติดลบ/ใหญ่สุด/NaN).</li>
-  <li><strong>Unit — unit toggle:</strong> ซม.↔นิ้ว round-trip (×/÷ 2.54).</li>
-  <li><strong>L1 จริง (Claude Preview / Rule S):</strong> เปิดหน้าจริง → เลื่อนสไลเดอร์ + สลับ 2 โหมด baseline + toggle นิ้ว → ยืนยันกราฟิก + การ์ด 3 ใบขยับถูก ตรงเครื่องคำนวณ. เป็น pure client → <strong>ไม่มี Rule Q gap</strong>.</li>
+  <li><strong>Unit — condom conversion (เป๊ะ):</strong> width=girth×5 / girth=width/5 / Ø=girth/π เทียบค่าจริง; snap nearest-tie-larger; ถุงยาง→C0→snap-back ทุกรุ่น; "+N ไซส์"; worked examples.</li>
+  <li><strong>Unit — girth model:</strong> anchor (52mm·L11·V16→+2.0/+2.8), monotonic ตาม V, length-sensitivity, band ordering, clamp/warn, round, adversarial (0/ติดลบ/ใหญ่สุด/NaN).</li>
+  <li><strong>Unit — unit toggle + 3D mesh dims:</strong> ซม.↔นิ้ว round-trip (×/÷ 2.54); mesh radius = girthToRadius(C) ถูก (C/(2π)), length=L → pure fn ทดสอบได้.</li>
+  <li><strong>L1 จริง (Claude Preview / Rule S):</strong> เปิดหน้าจริง → เลื่อนสไลเดอร์ + สลับ baseline 2 โหมด + toggle นิ้ว + <strong>กดโหมด 3D → โมเดลเรนเดอร์ + ลากหมุน + ขยายตาม cc</strong> → ยืนยันตรงเครื่องคำนวณ. (dev server รัน Three.js ได้จริง → 3D L1 ทำได้เต็ม). pure client → <strong>ไม่มี Rule Q gap</strong>.</li>
   <li>ไม่ต้อง L2 (ไม่มี Firestore query).</li>
 </ul>
 
 <h2>Risks / Open Questions</h2>
 <ul>
-  <li><strong>k calibration:</strong> k เป็นค่าประมาณ (งานวิจัยไม่ได้ stratify ตามความยาว); L-sensitivity ถูกทิศจาก geometry. โชว์เป็น "ช่วงประเมิน" + disclaimer ชดเชย; ปรับ k ได้ภายหลังไม่กระทบโครงสร้าง.</li>
-  <li><strong>ถุงยาง = ค่าประมาณ:</strong> ISO ±2mm + ลาเท็กซ์ยืด (1 ไซส์ครอบคลุมรอบวง ~±0.5–0.75 ซม.) → เป็น "ไซส์เริ่มต้นที่ควรลอง" ไม่ใช่การรับประกันฟิต. แลดเดอร์ใช้ชุด mainstream 8 รุ่น (design choice, document แล้ว) — "+N ไซส์" ขึ้นกับแลดเดอร์นี้.</li>
-  <li><strong>flaccid vs erect:</strong> งานวิจัยวัดรอบวงตอน "อ่อนตัว" แต่ถุงยางอิงรอบวงตอน "แข็งตัว" — ค่าเป็นการกะเกณข้ามสภาวะ (ไม่มีข้อมูล erect-gain ในงานวิจัย). disclaimer + "ค่าประมาณ" ครอบคลุม. <em>(Rule Q-honest: ส่วน geometry/แปลงถุงยาก = เป๊ะ verify ได้; ส่วน efficacy ฟิลเลอร์ = ประมาณการมีงานวิจัยรองรับ.)</em></li>
-  <li><strong>"Magnum" ≠ XL:</strong> ชื่อการตลาดไม่ตรง width (Trojan Magnum shaft ~54mm). แลดเดอร์ยึด width จริง ไม่ยึดชื่อ.</li>
-  <li><strong>ชื่อ route:</strong> <code>?play=filler</code> default; ปรับเป็น path สวยกว่าได้ตอน plan.</li>
+  <li><strong>Content policy ตอนแชร์ (rev2 — สำคัญ):</strong> ภาพ realistic ลงรายละเอียด อาจโดน auto-moderation ของ LINE/FB ตอนแชร์ลิงก์/พรีวิว. ทางกัน: เฟรมเป็น "โมเดลการแพทย์" ไม่ sexualized + disclaimer + พิจารณา <strong>"แตะเพื่อดูภาพจำลอง" reveal gate</strong> (default บังภาพ, ผู้ใช้แตะเปิด) + OG/preview image เป็นโลโก้คลินิก ไม่ใช่โมเดล. <em>(ยืนยันแนวทาง gate ตอน plan)</em></li>
+  <li><strong>WebGL/perf บนมือถือ low-end:</strong> 3D อาจหน่วง/ไม่รองรับ → ปุ่ม 3D ซ่อนเมื่อไม่มี WebGL, mesh poly ต่ำ, จำกัด pixelRatio, dispose ตอนออกโหมด.</li>
+  <li><strong>Bundle size:</strong> three ~150KB gz — lazy-load เฉพาะโหมด 3D เท่านั้น (ไม่กระทบหน้าอื่น/initial). verify ใน acceptance.</li>
+  <li><strong>k calibration:</strong> ค่าประมาณ (งานวิจัยไม่ stratify ตามความยาว); L-sensitivity ถูกทิศ. โชว์เป็นช่วง + disclaimer; ปรับ k ได้ภายหลัง.</li>
+  <li><strong>ถุงยาง = ค่าประมาณ:</strong> ISO ±2mm + ลาเท็กซ์ยืด (~±0.5–0.75 ซม.) → "ไซส์เริ่มต้นที่ควรลอง". flaccid (งานวิจัย) vs erect (ถุงยาง) = กะเกณข้ามสภาวะ → disclaimer ครอบคลุม. <em>(Rule Q-honest: geometry/แปลงถุงยาง = เป๊ะ verify ได้; efficacy = ประมาณการมีงานวิจัยรองรับ.)</em></li>
+  <li><strong>"Magnum" ≠ XL:</strong> แลดเดอร์ยึด width จริง ไม่ยึดชื่อการตลาด.</li>
+  <li><strong>ชื่อ route:</strong> <code>?play=filler</code> default; ปรับได้ตอน plan.</li>
 </ul>
 
 </body>
