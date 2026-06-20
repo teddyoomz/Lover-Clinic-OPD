@@ -1,6 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import obfuscator from 'vite-plugin-javascript-obfuscator'
+import { renameSync, existsSync } from 'fs'
+
+// Entry file is filler.html, but emit it as index.html so `/` serves it
+// everywhere (vite preview + Vercel default) with no rewrite dependency.
+function emitAsIndex() {
+  return {
+    name: 'filler-emit-index',
+    closeBundle() {
+      const from = 'dist-filler/filler.html'
+      if (existsSync(from)) renameSync(from, 'dist-filler/index.html')
+    },
+  }
+}
 
 // Standalone PUBLIC build of the filler simulator → dist-filler/.
 // Entry = filler.html → src/filler-main.jsx → <FillerSimulator/> ONLY.
@@ -17,6 +30,7 @@ import obfuscator from 'vite-plugin-javascript-obfuscator'
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
+    emitAsIndex(),
     ...(command === 'build' ? [obfuscator({
       include: ['**/fillerMath.js', '**/FillerGraphic2D.jsx'],
       exclude: ['node_modules/**', 'tests/**'],

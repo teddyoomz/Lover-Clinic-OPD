@@ -3,7 +3,7 @@
   "outputDirectory": "dist-filler",
   "framework": null,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/filler.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
