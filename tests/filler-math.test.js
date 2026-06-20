@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PI, K_REALISTIC, K_OPTIMISTIC, CM_PER_INCH, RANGES, CONDOM_LADDER,
+  GLANS_DIAM_PER_CC, GLANS_CC,
   widthFromGirth, girthFromWidth, diameterFromGirth, girthFromDiameter, girthToRadiusCm,
   cmToInch, inchToCm, condomIndexForGirth, condomForGirth, estimate,
 } from '../src/lib/fillerMath.js';
@@ -141,6 +142,53 @@ describe('fillerMath — constants/ranges sanity', () => {
     expect(K_REALISTIC).toBe(2.37);
     expect(K_OPTIMISTIC).toBe(3.32);
     expect(RANGES.cc).toEqual([1, 50]);
+    expect(RANGES.lengthCm).toEqual([6.35, 25.4]); // 2.5–10 in
     expect(CONDOM_LADDER.map((r) => r.w)).toEqual([45, 49, 52, 54, 56, 58, 60, 64]);
+  });
+});
+
+describe('fillerMath v2 — glans (head) augmentation', () => {
+  it('glans constants', () => {
+    expect(GLANS_DIAM_PER_CC).toEqual({ low: 0.25, high: 0.32 });
+    expect(GLANS_CC).toEqual({ min: 0.5, max: 4, step: 0.5, default: 2 });
+  });
+  it('ANCHOR: glans Ø 3.1 + 2cc → ~3.6 cm (research Kim/Abdallah)', () => {
+    const e = estimate({ lengthCm: 11, baseGirthCm: 9.74, shaftCc: 0, glansCc: 2, baseGlansDiameterCm: 3.1 });
+    expect(e.glans.dgLow).toBeCloseTo(3.6, 2); // 3.1 + 0.25*2
+    expect(e.glans.dgHigh).toBeCloseTo(3.74, 2); // 3.1 + 0.32*2
+    expect(e.glans.deltaLow).toBeCloseTo(0.5, 2);
+  });
+  it('band low ≤ high; 0cc → no change', () => {
+    const e0 = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 0 });
+    expect(e0.glans.dgLow).toBe(e0.glans.dg0);
+    expect(e0.glans.dgHigh).toBe(e0.glans.dg0);
+    const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 3 });
+    expect(e.glans.dgLow).toBeLessThanOrEqual(e.glans.dgHigh);
+  });
+  it('glans baseline defaults to shaft Ø when not provided', () => {
+    const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
+    expect(e.glans.dg0).toBeCloseTo(diameterFromGirth(10.4), 6); // ≈3.31
+  });
+  it('CRITICAL: glans cc does NOT change shaft girth / condom', () => {
+    const a = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 12, glansCc: 0 });
+    const b = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 12, glansCc: 4 });
+    expect(b.c1Low).toBeCloseTo(a.c1Low, 6);
+    expect(b.c1High).toBeCloseTo(a.c1High, 6);
+    expect(b.condomLow.w).toBe(a.condomLow.w);
+    expect(b.sizesUpLow).toBe(a.sizesUpLow);
+  });
+  it('back-compat: fillerCc alias still drives shaft band', () => {
+    const v1 = estimate({ lengthCm: 11, baseGirthCm: 10.4, fillerCc: 16 });
+    const v2 = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 16 });
+    expect(v1.c1Low).toBeCloseTo(v2.c1Low, 6);
+    expect(v1.glans.dg0).toBeCloseTo(diameterFromGirth(10.4), 6);
+  });
+  it('split math: total 12 · glans% 15 → shaft 10.2 / glans 1.8', () => {
+    const total = 12, gp = 0.15;
+    const shaftCc = total * (1 - gp), glansCc = total * gp;
+    expect(shaftCc).toBeCloseTo(10.2, 6);
+    expect(glansCc).toBeCloseTo(1.8, 6);
+    const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc, glansCc });
+    expect(e.glans.deltaLow).toBeCloseTo(0.25 * 1.8, 6);
   });
 });

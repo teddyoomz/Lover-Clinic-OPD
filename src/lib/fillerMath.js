@@ -12,10 +12,16 @@ export const K_OPTIMISTIC = 3.32;
 export const CM_PER_INCH = 2.54;
 
 export const RANGES = {
-  lengthCm: [8, 18],
+  lengthCm: [6.35, 25.4], // 2.5 in .. 10 in — both units cap at 10 in (25.4 cm)
   diameterCm: [2.2, 4.1],
-  cc: [1, 50],
+  cc: [1, 50], // TOTAL filler (split between shaft + glans)
 };
+
+// Glans (head) augmentation — empirical, research-grounded (approximate, ±~30%).
+// 2 cc → glans Ø +0.5 cm (+16%); ~0.25 cm Ø per cc (Kim/Abdallah/Kwak cohorts).
+// Independent of shaft girth → does NOT change รอบวง / condom size.
+export const GLANS_DIAM_PER_CC = { low: 0.25, high: 0.32 }; // cm diameter per cc
+export const GLANS_CC = { min: 0.5, max: 4, step: 0.5, default: 2 };
 
 // real, sourced, mainstream condom nominal widths (mm), ascending. (ISO 4074)
 export const CONDOM_LADDER = [
@@ -62,10 +68,11 @@ export function condomForGirth(girthCm) {
 const dCgeo = (C0, L, V) => Math.sqrt(C0 * C0 + (4 * PI * num(V)) / Math.max(num(L), 0.1)) - C0;
 
 // ---- main estimate: baseGirthCm in, full result (raw numbers; round at display) ----
-export function estimate({ lengthCm, baseGirthCm, fillerCc }) {
+export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0, baseGlansDiameterCm } = {}) {
   const C0 = Math.max(num(baseGirthCm), 0);
   const L = Math.max(num(lengthCm), 0.1);
-  const V = Math.max(num(fillerCc), 0);
+  // shaftCc (v2) with fillerCc (v1) back-compat alias
+  const V = Math.max(num(shaftCc != null ? shaftCc : fillerCc), 0);
   const g = Math.max(dCgeo(C0, L, V), 0);
   const deltaCLow = K_REALISTIC * g;
   const deltaCHigh = K_OPTIMISTIC * g;
@@ -74,6 +81,16 @@ export function estimate({ lengthCm, baseGirthCm, fillerCc }) {
   const condom0 = condomForGirth(C0);
   const condomLow = condomForGirth(c1Low);
   const condomHigh = condomForGirth(c1High);
+  // glans (head) — independent of shaft girth / condom; default baseline = shaft Ø
+  const dg0 = num(baseGlansDiameterCm) > 0 ? num(baseGlansDiameterCm) : diameterFromGirth(C0);
+  const gc = Math.max(num(glansCc), 0);
+  const glans = {
+    dg0,
+    dgLow: dg0 + GLANS_DIAM_PER_CC.low * gc,
+    dgHigh: dg0 + GLANS_DIAM_PER_CC.high * gc,
+    deltaLow: GLANS_DIAM_PER_CC.low * gc,
+    deltaHigh: GLANS_DIAM_PER_CC.high * gc,
+  };
   return {
     c0: C0,
     d0: diameterFromGirth(C0),
@@ -88,5 +105,6 @@ export function estimate({ lengthCm, baseGirthCm, fillerCc }) {
     condomHigh,
     sizesUpLow: condomLow.index - condom0.index,
     sizesUpHigh: condomHigh.index - condom0.index,
+    glans,
   };
 }
