@@ -51,7 +51,9 @@ export function useSystemCardCustomer(card) {
         const cid = snap.exists() ? snap.data().brokerProClinicId : '';
         if (cid) setCustomerId(String(cid));
       },
-      () => {}, // non-fatal: a denied/missing session just leaves the card pending
+      // non-fatal: a denied/missing session leaves the card pending — but LOG it
+      // (no silent-swallow; aids future diagnosis). Behavior unchanged.
+      (err) => { try { console.warn('[staff-chat] system-card session listener:', (err && err.message) || err); } catch { /* noop */ } },
     );
     return () => unsub();
   }, [directId, sessionId]);

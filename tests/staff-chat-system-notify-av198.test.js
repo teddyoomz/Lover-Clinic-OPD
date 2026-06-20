@@ -19,6 +19,10 @@ describe('AV198 — staff-chat System notification card invariants', () => {
     // wrapped in its own try/catch (non-fatal — never breaks the push)
     expect(s).toMatch(/staff-chat notify failed/);
     expect(s).toMatch(/FieldValue/);
+    // round-2 fix C: the card write MUST be BEFORE the FCM-token guards, so the
+    // in-app card writes even when no device registered for push.
+    expect(s.indexOf('writeStaffChatNotification(db')).toBeGreaterThan(0);
+    expect(s.indexOf('writeStaffChatNotification(db')).toBeLessThan(s.indexOf('push_config/tokens'));
   });
 
   it('A2 builder always uses the system identity (deviceId:system, displayName:ระบบ) — never a human device', () => {
@@ -58,6 +62,8 @@ describe('AV198 — staff-chat System notification card invariants', () => {
     expect(s).toMatch(/brokerProClinicId/);
     expect(s).toMatch(/onSnapshot/);            // live flip for intake
     expect(s).toMatch(/getCustomer/);           // live name + HN
+    expect(s).toMatch(/system-card session listener/); // round-2 fix A: listener error is LOGGED, not silently swallowed
+    expect(s).toMatch(/setMissing\(true\)/);    // round-1 fix: deleted-customer downgrade
   });
 
   it('A7 the AV198 invariant is recorded in the audit skill', () => {

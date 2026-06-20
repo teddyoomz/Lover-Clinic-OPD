@@ -57,15 +57,8 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
     res.status(200).json({ ok: false, reason: 'push muted (test mode)' }); return;
   }
 
-  // อ่าน FCM tokens
-  const tokensDoc = await db.doc(`${BASE_PATH}/push_config/tokens`).get();
-  if (!tokensDoc.exists) { res.status(200).json({ ok: false, reason: 'no tokens doc' }); return; }
-
-  const tokenEntries = tokensDoc.data().tokens || [];
-  if (tokenEntries.length === 0) { res.status(200).json({ ok: false, reason: 'no tokens' }); return; }
-
-  // สร้างข้อความ notification — follow-up (linkedCustomerId) แสดงชื่อ + HN ของลูกค้า.
-  // อ่าน be_customers แบบ live (V113) เพื่อชื่อ+HN จริง; non-fatal — push ต้องส่งได้แม้อ่านไม่ได้.
+  // อ่าน be_customers แบบ live (V113) — needed for the follow-up push body AND the
+  // staff-chat card name/HN. Non-fatal — push/card must work even if this read fails.
   let customer = null;
   if (session.linkedCustomerId) {
     try {
@@ -73,6 +66,36 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
       if (cdoc.exists) customer = cdoc.data();
     } catch (e) { console.warn(`[${sessionId}] be_customers read failed:`, e?.message); }
   }
+
+  // Staff-chat "ระบบ" notification card (intake + follow-up only; SKIP edits).
+  // Written for EVERY notif-worthy submission (already past the isUnread + test-mute
+  // guards), INDEPENDENT of FCM tokens/push — the in-app chat channel must work even
+  // when NO device has registered for push (AV198 rule 1; round-2 fix: this used to
+  // sit after the no-tokens early-return → a clinic with no push tokens got no card).
+  // Non-fatal: its own try/catch never affects the push. Admin SDK bypasses the
+  // create validators. Intake carries no customerId — the client live-resolves once
+  // the walk-in is registered (opd_session.brokerProClinicId).
+  try {
+    const isEdit = !!session.updatedAt;
+    if (!isEdit) {
+      const kind = session.linkedCustomerId ? 'followup' : 'intake';
+      const branchId = session.branchId || (customer && customer.branchId) || '';
+      const card = buildStaffChatNotification({ kind, session, sessionId, customer, branchId });
+      const wrote = await writeStaffChatNotification(db, BASE_PATH, FieldValue, card);
+      if (!wrote) console.warn(`[${sessionId}] staff-chat card skipped (no branchId)`);
+    }
+  } catch (e) {
+    console.warn(`[${sessionId}] staff-chat notify failed:`, e && e.message);
+  }
+
+  // อ่าน FCM tokens
+  const tokensDoc = await db.doc(`${BASE_PATH}/push_config/tokens`).get();
+  if (!tokensDoc.exists) { res.status(200).json({ ok: false, reason: 'no tokens doc' }); return; }
+
+  const tokenEntries = tokensDoc.data().tokens || [];
+  if (tokenEntries.length === 0) { res.status(200).json({ ok: false, reason: 'no tokens' }); return; }
+
+  // สร้างข้อความ notification (push title/body) — customer already read above (before the token guards).
   const { title, body } = buildNotificationContent({ session, sessionId, customer, changedSections });
 
   const tokenStrings = tokenEntries
@@ -121,25 +144,6 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
     }
 
     console.log(`[${sessionId}] Push: ${response.successCount} ok, ${response.failureCount} fail`);
-
-    // Staff-chat "ระบบ" notification card (intake + follow-up only; SKIP edits).
-    // Non-fatal: a chat-write failure must NEVER affect the push response. The
-    // card is written via admin SDK (bypasses the create validators). Intake
-    // cards carry no customerId — the client live-resolves once the walk-in is
-    // registered (opd_session.brokerProClinicId). AV198.
-    try {
-      const isEdit = !!session.updatedAt;
-      if (!isEdit) {
-        const kind = session.linkedCustomerId ? 'followup' : 'intake';
-        const branchId = session.branchId || (customer && customer.branchId) || '';
-        const card = buildStaffChatNotification({ kind, session, sessionId, customer, branchId });
-        const wrote = await writeStaffChatNotification(db, BASE_PATH, FieldValue, card);
-        if (!wrote) console.warn(`[${sessionId}] staff-chat card skipped (no branchId)`);
-      }
-    } catch (e) {
-      console.warn(`[${sessionId}] staff-chat notify failed:`, e && e.message);
-    }
-
     res.status(200).json({ ok: true, sent: response.successCount });
   } catch (err) {
     console.error('FCM error:', err);
