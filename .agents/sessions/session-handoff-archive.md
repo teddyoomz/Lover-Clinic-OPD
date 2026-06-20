@@ -5,6 +5,24 @@
 
 ---
 
+## Archived 2026-06-20 — SESSION_HANDOFF overflow: sessions `2026-06-09 EOD+3 LATE` → `2026-06-09 EOD+3 LATE` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-09 EOD+3 LATE — V163: "แก้คงเหลือ" parseQtyString prod crash — FIXED + DEPLOYED LIVE
+
+`/systematic-debugging` + ultracode. User (angry, screenshot LC-26000138): กดลด/เพิ่มคงเหลือคอร์ส → `alert: parseQtyString is not defined`. **Root**: `adjustCourseRemainingQty` (backendClient.js, the `b8351546` unified add/reduce refactor) called `parseQtyString` but the module-top static `import {…} from './courseUtils.js'` OMITTED it → undefined identifier → global lookup → build CLEAN → only threw at runtime on save (V6/V11/V104 class). **Fix (1 line)**: add `parseQtyString` to the static import → module-scoped. **Why 16326-green missed it**: the default-suite tests were SOURCE-GREP only (never execute the fn); NEW execution test reproduces it RED→GREEN (real ESM import resolution, only Firestore tx mocked). **Rule P**: 5-agent adversarial sweep → sole instance, no siblings. **AV192**. **Rule Q L1**: real browser → real prod Firestore, TEST customer, exact flow → no alert + 6/12→5/12 + Firestore confirmed. Deployed vercel-only (firestore.rules unchanged). full vitest 16332/2 (2 = pre-existing unrelated flakes, pass isolated). Detail → checkpoint `.agents/sessions/2026-06-09-v163-parseqtystring-crash.md`.
+
+---
+
+📂 **Older sessions (`2026-06-09 EOD+3` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-10) — CYBERSECURITY HARDENING WS1–WS4 ALL DEPLOYED + pre-deploy audit caught a live CRITICAL**: master HEAD `c537ca47`; prod = frontend `e5965311` (vercel) + firestore.rules `e5418722` (firebase) LIVE @ lover-clinic-app.vercel.app. Whole-app security audit → 4 workstreams, each `/brainstorming`→spec→impl→Rule Q L1/L2→deploy. **WS1** anon-surface lockdown (opd_sessions get/list split killed a LIVE anon mass-PII dump; clinic_schedules/chat/form_templates; client crypto-128-bit ids + PatientDashboard→/api/patient-view + webhook chat→admin SDK). **WS1-C2-bis (found by the pre-deploy `/systematic-debugging` audit)** — `clinic_settings/chat_config` LINE/FB channel SECRETS were STILL world-readable (C2 migrated readers to admin SDK but never closed the rule; confirmed live HTTP 200). **First fix (specific staff-only match) was INEFFECTIVE — Firestore UNIONS all matching rules (`true OR isClinicStaff`=true; system_config had the same latent leak)**; real fix = wildcard `read: if settingId != 'chat_config'`. Post-probe 200→**403**; main/system_config stay public (App.jsx v86Glow anon read). **WS2** deps: html2pdf removed (CRIT XSS, dead) + jspdf 3→4.2.1 (CRIT, not-reachable; L1 PDF + node 5/5) + vite 8.0.16 + postcss → npm-audit criticals=0. **WS3** endpoint auth: send.js+saved-replies were 500-BROKEN since V50 (ghost import) + old gate checked NO claim (latent weak-auth) → NEW `verifyClinicStaffToken` (verifyIdToken + isClinicStaff/admin); no-auth → **401** (was 500); schedule token 40→128-bit. **WS4** security headers (vercel.json had NONE): CSP (inline-script SHA-256 hashes, no unsafe-inline/eval; connect *.googleapis.com) + HSTS + nosniff + X-Frame + Referrer + Permissions + X-DNS — all 7 live, L1-verified (0 CSP violations). **Verified**: Rule Q L2 `scripts/diag-ws1-anon-lockdown.mjs` **13/13** real prod + Probe-Deploy-Probe (Rule B). full vitest 16349 pass / 3 timing-flakes (pass isolated 19/19, unrelated). V23 re-break trap CLEARED (all list/query of tightened collections run in staff context). **⚠ USER ACTION (CRITICAL): ROTATE LINE channelSecret+channelAccessToken + FB appSecret+pageAccessToken** (publicly exposed for an unknown window; rule stops future reads, rotation invalidates scraped values). Checkpoint `.agents/sessions/2026-06-10-cybersecurity-hardening-ws1-4.md`.
+
+---
+
 ## Archived 2026-06-18 — SESSION_HANDOFF overflow: sessions `2026-06-09 EOD+3` → `2026-06-09 EOD+3` + Current-State index
 
 ### Session blocks (1)
