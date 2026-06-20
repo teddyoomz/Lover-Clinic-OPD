@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PI, K_REALISTIC, K_OPTIMISTIC, CM_PER_INCH, RANGES, CONDOM_LADDER,
-  GLANS_DIAM_PER_CC, GLANS_CC,
+  GLANS_DIAM_PER_CC, GLANS_CC, GLANS_BASE_RATIO,
   widthFromGirth, girthFromWidth, diameterFromGirth, girthFromDiameter, girthToRadiusCm,
   cmToInch, inchToCm, condomIndexForGirth, condomForGirth, estimate,
 } from '../src/lib/fillerMath.js';
@@ -190,6 +190,23 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
     expect(glansCc).toBeCloseTo(1.8, 6);
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc, glansCc });
     expect(e.glans.deltaLow).toBeCloseTo(0.25 * 1.8, 6);
+  });
+  it('glans baseline ratio (v5): dg0 = ratio × shaft Ø; scales with diameter; condom unchanged', () => {
+    expect(GLANS_BASE_RATIO).toEqual({ min: 0.75, max: 1.25, step: 0.05, default: 1.0 });
+    const dia = diameterFromGirth(10.4); // shaft Ø
+    // ratio 1.0 → dg0 = shaft Ø (today's behavior)
+    const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.0 * dia });
+    expect(a.glans.dg0).toBeCloseTo(dia, 6);
+    // ratio 1.25 → dg0 25% larger; shaft girth + condom UNCHANGED (head excluded from condom)
+    const b = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.25 * dia });
+    expect(b.glans.dg0).toBeCloseTo(1.25 * dia, 6);
+    expect(b.glans.visualLow).toBeGreaterThan(a.glans.visualLow); // bigger baseline → bigger head bulb
+    expect(b.c1Low).toBeCloseTo(a.c1Low, 6);
+    expect(b.condomLow.w).toBe(a.condomLow.w);
+    // scales with diameter: bigger baseGirth → bigger dg0 at the same ratio
+    const bigDia = diameterFromGirth(12.0);
+    const big = estimate({ lengthCm: 12.7, baseGirthCm: 12.0, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.0 * bigDia });
+    expect(big.glans.dg0).toBeGreaterThan(a.glans.dg0);
   });
   it('visual diameter is damped (gentler than measured) + independent of shaft', () => {
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });

@@ -4,8 +4,8 @@
 //     (new=green / baseline=red / delta=gold) + formal copy. Single source of truth = fillerMath.
 import { useMemo, useState, lazy, Suspense } from 'react';
 import {
-  CONDOM_LADDER, RANGES,
-  girthFromWidth, girthFromDiameter,
+  CONDOM_LADDER, RANGES, GLANS_BASE_RATIO,
+  girthFromWidth, girthFromDiameter, diameterFromGirth,
   cmToInch, inchToCm, estimate,
 } from '../lib/fillerMath.js';
 import { makeT } from '../lib/fillerStrings.js';
@@ -96,6 +96,7 @@ export default function FillerSimulator() {
   const [condomIdx, setCondomIdx] = useState(2); // Regular 52
   const [totalCc, setTotalCc] = useState(RANGES.cc[0]); // min 5cc — cannot go below
   const [glansCc, setGlansCc] = useState(1); // glans split in EXACT 0.5cc steps (same at every total)
+  const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
   const [view, setView] = useState('2d');
   const [webglOk] = useState(() => webglSupported());
 
@@ -110,10 +111,12 @@ export default function FillerSimulator() {
   // split: glansCc is the direct 0.5-step control; shaft gets the rest. Clamp glans ≤ total.
   const glansCcEff = Math.min(glansCc, totalCc);
   const shaftCc = totalCc - glansCcEff;
+  // baseline head Ø = ratio × shaft Ø → scales with the chosen diameter (default 1.0 = shaft Ø)
+  const baseGlansDiameterCm = glansBaseRatio * diameterFromGirth(baseGirthCm);
 
   const est = useMemo(
-    () => estimate({ lengthCm, baseGirthCm, shaftCc, glansCc: glansCcEff }),
-    [lengthCm, baseGirthCm, shaftCc, glansCcEff],
+    () => estimate({ lengthCm, baseGirthCm, shaftCc, glansCc: glansCcEff, baseGlansDiameterCm }),
+    [lengthCm, baseGirthCm, shaftCc, glansCcEff, baseGlansDiameterCm],
   );
 
   const isInch = lengthUnit === 'inch';
@@ -161,7 +164,8 @@ export default function FillerSimulator() {
     <div style={{ background: c.bg, minHeight: '100vh', color: c.tx, overflowX: 'hidden', fontFamily: "'Sarabun', -apple-system, 'Segoe UI', sans-serif", transition: 'background-color .3s, color .3s' }}>
       <style>{`
         .fs-shell{ max-width:1040px; margin:0 auto; padding:max(18px,env(safe-area-inset-top)) 18px 48px; }
-        .fs-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+        .fs-grid{ display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:18px; align-items:start; }
+        .fs-controls{ order:1; } .fs-graphic{ order:2; }
         .fs-pill{ padding:4px 13px; border-radius:999px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:700;
           border:1px solid ${c.discBd}; background:${c.disc}; color:${c.discTx}; display:inline-flex; align-items:center; gap:5px; }
         .fs-tgl{ min-height:38px; min-width:42px; display:inline-flex; align-items:center; justify-content:center; gap:5px;
@@ -177,7 +181,7 @@ export default function FillerSimulator() {
         .fs-range.glans::-moz-range-thumb{ border-color:${c.amber}; }
         .fs-sel{ width:100%; min-height:44px; background:${c.card2}; color:${c.tx}; border:1px solid ${c.line}; border-radius:10px; padding:10px 13px; font-size:15px; cursor:pointer; }
         .fs-num{ font-variant-numeric:tabular-nums; }
-        @media (max-width:820px){ .fs-grid{ grid-template-columns:1fr; } }
+        @media (max-width:820px){ .fs-grid{ grid-template-columns:1fr; } .fs-graphic{ order:1; } .fs-controls{ order:2; } }
         @media (max-width:560px){ .fs-shell{ padding:max(14px,env(safe-area-inset-top)) 13px 40px; } }
         @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
       `}</style>
@@ -204,7 +208,7 @@ export default function FillerSimulator() {
 
         <div className="fs-grid">
           {/* controls */}
-          <div style={card({ padding: '17px 18px' })}>
+          <div className="fs-controls" style={card({ padding: '17px 18px' })}>
             <div style={{ ...sectionLabel, marginBottom: 15 }}>{t('adjust')}</div>
 
             {/* length */}
@@ -243,6 +247,15 @@ export default function FillerSimulator() {
               )}
             </div>
 
+            {/* initial glans (head) size — ratio of shaft Ø, default centered, scales with diameter */}
+            <div style={{ marginBottom: 19 }}>
+              <div style={{ fontSize: 14, color: c.tx, marginBottom: 7 }}>{t('glansBase')}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: c.tx2, marginBottom: 7 }}>
+                <span>{t('gSmall')}</span><span>{t('gNormal')}</span><span>{t('gLarge')}</span>
+              </div>
+              <input className="fs-range glans" type="range" min={GLANS_BASE_RATIO.min} max={GLANS_BASE_RATIO.max} step={GLANS_BASE_RATIO.step} value={glansBaseRatio} onChange={(e) => setGlansBaseRatio(Number(e.target.value))} aria-label={t('glansBase')} />
+            </div>
+
             {/* filler split */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 9, flexWrap: 'wrap' }}>
@@ -264,7 +277,7 @@ export default function FillerSimulator() {
           </div>
 
           {/* graphic (no gate) */}
-          <div style={card({ padding: '17px 18px' })}>
+          <div className="fs-graphic" style={card({ padding: '17px 18px' })}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 13, flexWrap: 'wrap' }}>
               <span style={sectionLabel}>{t('graphic')}</span>
               {webglOk && (

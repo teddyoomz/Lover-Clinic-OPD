@@ -141,9 +141,10 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
     expect((total - glans) + glans).toBe(5);
   });
 
-  it('V3-3: 2D length no longer clamps at ~8in — lenToPx max raised past 198', () => {
+  it('V3-3: 2D length no longer clamps at ~8in — lenToPx max well past 198 (v5 enlarged)', () => {
     expect(g2d).not.toMatch(/, 100, 198\)/);   // old cap (~7.8in) removed
-    expect(g2d).toMatch(/, 100, 240\)/);       // 10in = 234px fits viewBox 380
+    expect(g2d).not.toMatch(/, 100, 240\)/);   // v3 cap superseded by v5 enlargement
+    expect(g2d).toMatch(/, 140, 330\)/);       // v5: full 10in range shows in viewBox 480
   });
 
   it('V3-4: REAL clinic logo — white(dark)/black(light) static asset img, theme-contrasting', () => {
@@ -253,5 +254,39 @@ describe('filler-simulator v4 — centered header + result colors + dashed 2D + 
   it('V4-5: privacy pill copy is formal in both languages', () => {
     expect(page).toMatch(/ไม่จัดเก็บข้อมูล/);   // TH formal (was ไม่เก็บข้อมูล)
     expect(page).toMatch(/No data stored/);     // EN formal (was Private · no data)
+  });
+});
+
+describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mobile order', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+  const g2d = read('src/components/FillerGraphic2D.jsx');
+
+  it('V5-1: initial-glans-size slider — ratio of shaft Ø, scales with diameter', () => {
+    expect(page).toMatch(/GLANS_BASE_RATIO/);
+    expect(page).toMatch(/glansBaseRatio \* diameterFromGirth\(baseGirthCm\)/); // ratio × shaft Ø
+    expect(page).toMatch(/baseGlansDiameterCm/);            // passed into estimate
+    expect(page).toMatch(/setGlansBaseRatio/);
+    expect(page).toMatch(/t\('glansBase'\)/);               // labelled control
+    expect(strings).toMatch(/glansBase: 'ขนาดหัวเริ่มต้น'/);
+    expect(strings).toMatch(/glansBase: 'Initial glans size'/);
+  });
+
+  it('V5-2: desktop 40/60 grid + mobile illustration-on-top order', () => {
+    expect(page).toMatch(/grid-template-columns:minmax\(0,2fr\) minmax\(0,3fr\)/); // 40/60 desktop
+    expect(page).toMatch(/\.fs-graphic\{ order:1; \}/);     // mobile: graphic first (top)
+    expect(page).toMatch(/\.fs-controls\{ order:2; \}/);    // mobile: controls below
+    expect(page).toMatch(/className="fs-graphic"/);
+    expect(page).toMatch(/className="fs-controls"/);
+    // single-column breakpoint preserved
+    expect(page).toMatch(/@media \(max-width:820px\)/);
+  });
+
+  it('V5-3: 2D enlarged (bigger viewBox + anatomy) without losing dashed-after / i18n / damped head', () => {
+    expect(g2d).toMatch(/viewBox="0 0 480 320"/);                                 // bigger canvas
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept
+    expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
+    expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
+    expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
   });
 });

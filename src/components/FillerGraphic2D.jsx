@@ -1,12 +1,13 @@
 // FillerGraphic2D — realistic anatomical 2D (mushroom: shaft → sulcus → corona → glans).
 // Clinical/medical style (non-explicit). Shaft scales from shaft girth; glans bulb scales
 // SEPARATELY from glans diameter. Presentational only — numbers come from `est`. Theme-aware.
+// v5: enlarged — bigger side-view hero (~1.4× anatomy) that fills the wider graphic card.
 import { diameterFromGirth } from '../lib/fillerMath.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const shaftHalfT = (d) => clamp(12 + (d - 2) * 8, 8, 40); // shaft Ø → px
-const glansHalfT = (d) => clamp(13 + (d - 2) * 9, 9, 50); // glans Ø → px (separate)
-const lenToPx = (L) => clamp(108 + (L - 6) * 6.5, 100, 240); // length cm → shaft px (10in=25.4cm→234px fits viewBox 380)
+const shaftHalfT = (d) => clamp(16 + (d - 2) * 11, 11, 56); // shaft Ø → px
+const glansHalfT = (d) => clamp(18 + (d - 2) * 12, 12, 70); // glans Ø → px (separate)
+const lenToPx = (L) => clamp(150 + (L - 6) * 9, 140, 330); // length cm → shaft px (fits viewBox 480)
 
 function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
   const xS = x0 + len;
@@ -19,7 +20,7 @@ function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
     + ` C${xT} ${cy + tGlans * 0.5} ${xC + glansLen * 0.45} ${cy + tGlans} ${xC} ${cy + tGlans}`
     + ` Q${xS + 3} ${cy + tShaft * 0.72} ${xS} ${cy + tShaft}`
     + ` L${x0} ${cy + tShaft}`
-    + ` Q${x0 - 13} ${cy} ${x0} ${cy - tShaft} Z`;
+    + ` Q${x0 - 16} ${cy} ${x0} ${cy - tShaft} Z`;
 }
 
 export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', t }) {
@@ -33,8 +34,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
   const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.55)';
 
-  const cy = 76;
-  const x0 = 24;
+  const cy = 112;
+  const x0 = 30;
   const len = lenToPx(lengthCm);
   const tShaftA = shaftHalfT(dLo);
   const tShaftB = shaftHalfT(d0);
@@ -43,13 +44,13 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const glansLenA = tGlansA * 1.25;
   const glansLenB = tGlansB * 1.25;
 
-  const csA = clamp(dLo * 8.6, 15, 52);
-  const csB = clamp(d0 * 8.6, 15, 52);
-  const ccx = 62;
-  const ccy = 192;
+  const csA = clamp(dLo * 10, 18, 56);
+  const csB = clamp(d0 * 10, 18, 56);
+  const ccx = 64;
+  const ccy = 252;
 
   return (
-    <svg viewBox="0 0 380 236" width="100%" role="img"
+    <svg viewBox="0 0 480 320" width="100%" role="img"
          aria-label={tr('g2dAria')}>
       <defs>
         <linearGradient id="fg-skin" x1="0" y1="0" x2="0" y2="1">
@@ -64,25 +65,25 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
         </radialGradient>
       </defs>
 
-      <text x="6" y="13" fontSize="11" fill={lab}>{tr('g2dSide')}</text>
+      <text x="8" y="20" fontSize="13" fill={lab}>{tr('g2dSide')}</text>
 
       {/* after — skin body (mushroom). Thin DASHED red so small growth isn't masked by a thick line. */}
       <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" />
       {/* corona ridge */}
-      <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 4} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.2" opacity="0.55" />
+      <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.55" />
       {/* highlight */}
-      <ellipse cx={x0 + len * 0.4} cy={cy - tShaftA + 6} rx="9" ry="5" fill="rgba(255,242,234,0.45)" />
+      <ellipse cx={x0 + len * 0.4} cy={cy - tShaftA + 8} rx="12" ry="6" fill="rgba(255,242,234,0.45)" />
 
       {/* before — dashed mushroom */}
       <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
 
       {/* cross-section (shaft) */}
-      <text x="6" y="150" fontSize="11" fill={lab}>{tr('g2dCross')}</text>
+      <text x="8" y="212" fontSize="13" fill={lab}>{tr('g2dCross')}</text>
       <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" stroke="#ef4444" strokeWidth="1" strokeDasharray="4 3" />
       <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />
-      <text x={ccx + csA + 14} y={ccy - 14} fontSize="11" fill="#ef4444">{tr('g2dLegShaft')}</text>
-      <text x={ccx + csA + 14} y={ccy + 6} fontSize="11" fill="#f59e0b">{tr('g2dLegGlans')}</text>
-      <text x={ccx + csA + 14} y={ccy + 26} fontSize="11" fill={labStrong}>{tr('g2dLegKey')}</text>
+      <text x={ccx + csA + 16} y={ccy - 18} fontSize="12.5" fill="#ef4444">{tr('g2dLegShaft')}</text>
+      <text x={ccx + csA + 16} y={ccy + 4} fontSize="12.5" fill="#f59e0b">{tr('g2dLegGlans')}</text>
+      <text x={ccx + csA + 16} y={ccy + 26} fontSize="12.5" fill={labStrong}>{tr('g2dLegKey')}</text>
     </svg>
   );
 }

@@ -22,6 +22,9 @@ export const RANGES = {
 // Independent of shaft girth → does NOT change รอบวง / condom size.
 export const GLANS_DIAM_PER_CC = { low: 0.25, high: 0.32 }; // cm diameter per cc
 export const GLANS_CC = { min: 0.5, max: 4, step: 0.5, default: 2 };
+// initial glans (head) baseline size — a ratio of the shaft Ø; default 1.0 = shaft Ø (today's value).
+// Multiplies diameterFromGirth(baseGirthCm), so the baseline head scales with the chosen diameter.
+export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0 };
 // the glans is ~5x more cc-responsive than the shaft; render the head growth gentler
 // (illustrative only) so a few cc doesn't look like it balloons. research rate kept above.
 export const GLANS_VISUAL_DAMP = 0.4;
