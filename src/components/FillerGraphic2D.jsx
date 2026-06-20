@@ -26,7 +26,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const d0 = est?.d0 ?? diameterFromGirth(10.4);
   const dLo = est?.d1Low ?? d0;
   const dg0 = est?.glans?.dg0 ?? d0;
-  const dgLo = est?.glans?.dgLow ?? dg0;
+  const dgLo = est?.glans?.visualLow ?? est?.glans?.dgLow ?? dg0;
 
   const lab = theme === 'light' ? '#5b6675' : '#9b938f';
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
@@ -49,18 +49,13 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
 
   return (
     <svg viewBox="0 0 380 236" width="100%" role="img"
-         aria-label="ภาพจำลองทรงเห็ด (ลำตัว+หัว) ด้านข้างและหน้าตัด ก่อนและหลังฉีดฟิลเลอร์">
+         aria-label="ภาพจำลองด้านข้างและหน้าตัด ก่อนและหลังฉีดฟิลเลอร์">
       <defs>
         <linearGradient id="fg-skin" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#e0a98d" />
           <stop offset="0.45" stopColor="#c2825f" />
           <stop offset="1" stopColor="#7b4b37" />
         </linearGradient>
-        <radialGradient id="fg-glans" cx="0.62" cy="0.34" r="0.72">
-          <stop offset="0" stopColor="#edb89f" />
-          <stop offset="0.55" stopColor="#c07a58" />
-          <stop offset="1" stopColor="#7a4936" />
-        </radialGradient>
         <radialGradient id="fg-cs" cx="0.4" cy="0.34" r="0.75">
           <stop offset="0" stopColor="#e0a98d" />
           <stop offset="0.6" stopColor="#bd7c5b" />
@@ -68,12 +63,10 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
         </radialGradient>
       </defs>
 
-      <text x="6" y="13" fontSize="11" fill={lab}>ด้านข้าง — ทรงเห็ด (corona + หัว)</text>
+      <text x="6" y="13" fontSize="11" fill={lab}>ด้านข้าง</text>
 
       {/* after — skin body (mushroom) */}
       <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" stroke="#ef4444" strokeWidth="1.6" />
-      {/* glans tint overlay for a fuller head */}
-      <ellipse cx={x0 + len + 7 + glansLenA * 0.4} cy={cy} rx={glansLenA * 0.6} ry={tGlansA * 0.92} fill="url(#fg-glans)" opacity="0.6" />
       {/* corona ridge */}
       <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 4} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.2" opacity="0.55" />
       {/* highlight */}

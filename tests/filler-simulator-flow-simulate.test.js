@@ -80,16 +80,26 @@ describe('filler-simulator v2 source-grep (purity + wiring + Rev requirements)',
     expect(app).toMatch(/lazy\(\(\) => import\('\.\/pages\/FillerSimulator\.jsx'\)\)/);
   });
 
-  it('SG5: v2 — split-bar + glans card + theme/lang toggle; NO reveal-gate', () => {
+  it('SG5: v2 — split-bar + theme/lang toggle; NO reveal-gate; glans card REMOVED', () => {
     expect(page).toMatch(/glansPct/);            // split control
     expect(page).toMatch(/shaftCc/);             // split derive
-    expect(page).toMatch(/resGlans/);            // glans result card
+    expect(page).not.toMatch(/resGlans/);        // glans result card removed (debug round)
     expect(page).toMatch(/setTheme/);            // light/dark
     expect(page).toMatch(/setLang/);             // TH/EN
     // reveal-gate fully removed
     expect(page).not.toMatch(/แตะเพื่อดูภาพ/);
     expect(page).not.toMatch(/\brevealed\b/);
     expect(page).not.toMatch(/blur\(/);
+  });
+
+  it('SG7: debug-round fixes — 3D glans-independent, no egg/ทรงเห็ด, split clip', () => {
+    expect(g3d).toMatch(/visualLow/);          // 3D glans from damped visual Ø
+    expect(g3d).not.toMatch(/\/ 2, r\)/);      // NOT clamped to shaft radius
+    expect(g2d).not.toMatch(/fg-glans/);       // egg ellipse + its gradient removed
+    expect(g2d).not.toMatch(/ทรงเห็ด/);        // label simplified to "ด้านข้าง"
+    expect(g2d).toMatch(/visualLow/);          // 2D glans uses damped visual Ø
+    expect(page).toMatch(/whiteSpace: 'nowrap'/); // split segments clip
+    expect(page).toMatch(/bodyPct > 14/);         // label hidden when narrow (no spill)
   });
 
   it('SG6: i18n strings TH+EN present, ประมาณ wording, girth-not-length, no กะเกณ', () => {

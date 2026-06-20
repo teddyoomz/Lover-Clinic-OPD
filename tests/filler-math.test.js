@@ -191,4 +191,13 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc, glansCc });
     expect(e.glans.deltaLow).toBeCloseTo(0.25 * 1.8, 6);
   });
+  it('visual diameter is damped (gentler than measured) + independent of shaft', () => {
+    const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
+    expect(e.glans.visualLow).toBeCloseTo(e.glans.dg0 + 0.25 * 2 * 0.4, 6); // damp 0.4
+    expect(e.glans.visualLow).toBeLessThan(e.glans.dgLow); // gentler than measured
+    expect(e.glans.visualLow).toBeGreaterThan(e.glans.dg0); // still grows
+    const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
+    const b = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 30, glansCc: 2 });
+    expect(b.glans.visualLow).toBeCloseTo(a.glans.visualLow, 6); // independent of shaft
+  });
 });

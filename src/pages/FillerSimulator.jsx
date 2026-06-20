@@ -176,8 +176,8 @@ export default function FillerSimulator() {
               </div>
               <input className="fs-range glans" type="range" min={0} max={50} step={5} value={glansPct} onChange={(e) => setGlansPct(Number(e.target.value))} />
               <div style={{ height: 28, borderRadius: 8, overflow: 'hidden', display: 'flex', border: `1px solid ${c.line}`, marginTop: 7 }}>
-                <div style={{ width: `${bodyPct}%`, background: `linear-gradient(90deg, ${c.fire2}, ${c.fire})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11.5, fontWeight: 700, minWidth: 0, transition: 'width .12s' }}>{t('shaft')} {Math.round(shaftCc)}{t('cc')}</div>
-                <div style={{ width: `${100 - bodyPct}%`, background: `linear-gradient(90deg, ${c.amber}, ${c.ember})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11.5, fontWeight: 700, minWidth: 0, transition: 'width .12s' }}>{t('glans')} {Math.round(glansCc)}</div>
+                <div style={{ flex: `0 0 ${bodyPct}%`, background: `linear-gradient(90deg, ${c.fire2}, ${c.fire})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'flex-basis .12s' }}>{bodyPct > 14 ? `${t('shaft')} ${Math.round(shaftCc)}${t('cc')}` : ''}</div>
+                <div style={{ flex: `0 0 ${100 - bodyPct}%`, background: `linear-gradient(90deg, ${c.amber}, ${c.ember})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', transition: 'flex-basis .12s' }}>{(100 - bodyPct) > 14 ? `${t('glans')} ${Math.round(glansCc)}` : ''}</div>
               </div>
             </div>
           </div>
@@ -212,7 +212,6 @@ export default function FillerSimulator() {
             <ResultCard c={c} k={t('resGirth')} oldVal={`${t('before')} ${r1(est.c0)} ${t('unitCm')}`} newVal={`${r1(est.c1Low)} – ${r1(est.c1High)} ${t('unitCm')}`} delta={`+${r1(est.deltaCLow)} ${rangeTo} +${r1(est.deltaCHigh)}`} />
             <ResultCard c={c} k={t('resDia')} oldVal={`${t('before')} ${r1(est.d0)} ${t('unitCm')}`} newVal={`${r1(est.d1Low)} – ${r1(est.d1High)} ${t('unitCm')}`} delta={`+${r1(est.d1Low - est.d0)} ${rangeTo} +${r1(est.d1High - est.d0)}`} />
             <ResultCard c={c} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.label}`} newVal={est.condomLow.index === est.condomHigh.index ? est.condomLow.label : `${est.condomLow.label} – ${est.condomHigh.label}`} delta={sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
-            <ResultCard c={c} glans glansNote={t('noCondomEffect')} k={t('resGlans')} oldVal={`${t('before')} ${r1(est.glans.dg0)} ${t('unitCm')}`} newVal={`${r1(est.glans.dgLow)} – ${r1(est.glans.dgHigh)} ${t('unitCm')}`} delta={`+${r1(est.glans.deltaLow)} ${rangeTo} +${r1(est.glans.deltaHigh)}`} />
           </div>
           <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 11, lineHeight: 1.5 }}>{t('note')}</div>
         </div>

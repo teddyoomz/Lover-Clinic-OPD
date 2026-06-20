@@ -22,6 +22,9 @@ export const RANGES = {
 // Independent of shaft girth → does NOT change รอบวง / condom size.
 export const GLANS_DIAM_PER_CC = { low: 0.25, high: 0.32 }; // cm diameter per cc
 export const GLANS_CC = { min: 0.5, max: 4, step: 0.5, default: 2 };
+// the glans is ~5x more cc-responsive than the shaft; render the head growth gentler
+// (illustrative only) so a few cc doesn't look like it balloons. research rate kept above.
+export const GLANS_VISUAL_DAMP = 0.4;
 
 // real, sourced, mainstream condom nominal widths (mm), ascending. (ISO 4074)
 export const CONDOM_LADDER = [
@@ -90,6 +93,9 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
     dgHigh: dg0 + GLANS_DIAM_PER_CC.high * gc,
     deltaLow: GLANS_DIAM_PER_CC.low * gc,
     deltaHigh: GLANS_DIAM_PER_CC.high * gc,
+    // visual-only diameter (damped) — head grows believably, not ballooning; independent of shaft
+    visualLow: dg0 + GLANS_DIAM_PER_CC.low * gc * GLANS_VISUAL_DAMP,
+    visualHigh: dg0 + GLANS_DIAM_PER_CC.high * gc * GLANS_VISUAL_DAMP,
   };
   return {
     c0: C0,

@@ -14,8 +14,9 @@ function buildModel(group, material, est, lengthCm) {
   }
   const r = Math.max(girthToRadiusCm(est?.c1Low ?? 5.5), 0.3); // shaft radius (cm)
   const L = Math.max(lengthCm ?? 12.7, 4); // cm
-  // glans radius from glans Ø (SEPARATE scale) — at least the shaft radius
-  const glansR = Math.max((est?.glans?.dgLow ?? r * 2) / 2, r);
+  // glans radius from the (damped) glans Ø — INDEPENDENT of shaft, so injecting the
+  // shaft makes the shaft grow past the head (not the head following the shaft).
+  const glansR = Math.max((est?.glans?.visualLow ?? r * 2) / 2, 0.3);
 
   // shaft (cylinder along X)
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 48, 1, false), material);
