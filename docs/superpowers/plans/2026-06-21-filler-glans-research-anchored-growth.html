@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Glans Research-Anchored Growth — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Filler Glans Research-Anchored Growth — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Implement task-by-task. Spec: <code>docs/superpowers/specs/2026-06-21-filler-glans-research-anchored-growth-design.html</code>. Frontend-only, standalone filler bundle — NO Firestore, NO rules, NO deploy this turn.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make the glans (head) grow with injected cc per a research-anchored cube-root volume model (never plateaus), capped at 15 cc, with 2D/3D rendered at the exact math scale (like the shaft's size + length), plus matching web-refs + PDF updates.</p>
+  <p><strong>Architecture:</strong> One pure cube-root model in <code>fillerMath.js</code> anchored to the Kwak/Kim 2 cc glans data (durable +0.45 / peak +0.53 cm Ø); 2D side-view rewritten to a single px-per-cm scale; 3D already real-cm so math fix alone makes it exact; refs modal + PDF regenerated from the same source.</p>
+  <p><strong>Tech Stack:</strong> React, three.js (Filler3D), pure JS math, Vitest, node PDF generator. Build obfuscator hides numeric literals → keep constants as integer fractions.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Split slider capped at 15cc + head Ø readout (caption removed — user #2)</div>
+  <div style="max-width:520px;font-family:sans-serif">
+    <div style="font-size:13px;color:#444;margin-bottom:4px">แบ่งฟิลเลอร์ — หัว (ฉีดได้สูงสุด 15cc)</div>
+    <div style="height:14px;border-radius:7px;background:linear-gradient(90deg,#1e3a8a 0 62%,#f59e0b 62% 100%);position:relative">
+      <div style="position:absolute;top:-3px;left:62%;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid #f59e0b;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-top:6px">
+      <span style="color:#1e3a8a">▉ ลำตัว 8.0 cc</span><span style="color:#b45309">▉ หัว 10.0 cc</span>
+    </div>
+    <div style="margin-top:8px;font-size:13px;color:#333">ขนาดหัว: Ø <strong>5.2–5.4 ซม.</strong> <span style="color:#b45309">(+47–54%)</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">2D side-view — ONE px-per-cm scale (s) for shaft Ø + glans Ø + length (geometrically exact)</div>
+  <svg viewBox="0 0 480 150" width="100%">
+    <path d="M40 90 L250 90 Q255 78 262 60 C290 60 320 78 320 95 C320 112 290 130 262 130 Q255 112 250 100 L40 100 Q26 95 40 90 Z" fill="#c2825f" stroke="#7b4b37"/>
+    <text x="150" y="145" text-anchor="middle" font-size="11" fill="#666">len = lengthCm × s</text>
+    <text x="290" y="40" text-anchor="middle" font-size="11" fill="#666">glansØ × s</text>
+    <line x1="40" y1="70" x2="40" y2="110" stroke="#999" stroke-dasharray="3 3"/>
+    <text x="18" y="95" text-anchor="middle" font-size="11" fill="#666" transform="rotate(-90 18 95)">shaftØ×s</text>
+  </svg>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">cc → cube-root gain ×2 → single-source visualLow/visualHigh → exact-scale render + readout</div>
+  <svg viewBox="0 0 940 130" width="100%">
+    <rect x="8" y="46" width="140" height="42" rx="6" fill="#f0f4f8" stroke="#b9c6d6"/>
+    <text x="78" y="64" text-anchor="middle" font-size="12">split slider</text>
+    <text x="78" y="80" text-anchor="middle" font-size="11" fill="#666">glansCc 0–15</text>
+    <line x1="148" y1="67" x2="184" y2="67" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="186" y="30" width="210" height="74" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="291" y="50" text-anchor="middle" font-size="12" fill="#14532d">estimate() — fillerMath</text>
+    <text x="291" y="68" text-anchor="middle" font-size="11" fill="#166534">glansDiameterGain(cc,dg0,veff_durable)</text>
+    <text x="291" y="84" text-anchor="middle" font-size="11" fill="#166534">glansDiameterGain(cc,dg0,veff_peak)</text>
+    <line x1="396" y1="67" x2="432" y2="67" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="434" y="46" width="180" height="42" rx="6" fill="#f0f4f8" stroke="#b9c6d6"/>
+    <text x="524" y="64" text-anchor="middle" font-size="12">glans.visualLow/visualHigh</text>
+    <text x="524" y="80" text-anchor="middle" font-size="11" fill="#666">+ deltaLow/High, pctLow/High</text>
+    <line x1="614" y1="67" x2="650" y2="38" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="614" y1="67" x2="650" y2="67" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="614" y1="67" x2="650" y2="96" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="652" y="14" width="200" height="30" rx="6" fill="#fff" stroke="#999"/>
+    <text x="752" y="33" text-anchor="middle" font-size="11">FillerGraphic2D (single s scale)</text>
+    <rect x="652" y="52" width="200" height="30" rx="6" fill="#fff" stroke="#999"/>
+    <text x="752" y="71" text-anchor="middle" font-size="11">Filler3D (real cm, glansR=visualLow/2)</text>
+    <rect x="652" y="90" width="200" height="30" rx="6" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="752" y="109" text-anchor="middle" font-size="11" fill="#7c2d12">readout Ø X–Y cm (+A–B%)</text>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#888"/></marker></defs>
+  </svg>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility / change</th></tr>
+  <tr><td><code>src/lib/fillerMath.js</code></td><td>Replace glans block: cube-root model + constants; delete saturation/visual-gain/medical-ΔØ; <code>estimate().glans</code> returns visualLow/visualHigh + delta/pct.</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code></td><td>One px-per-cm scale <code>s</code> for shaft Ø, glans Ø, length, glansLen; cross-section one scale too.</td></tr>
+  <tr><td><code>src/components/Filler3D.jsx</code></td><td>Stale comment fix only (math makes it exact).</td></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code></td><td>Split slider max = min(totalCc, 15); clamp glansCc; head Ø readout (no caption).</td></tr>
+  <tr><td><code>src/lib/fillerStrings.js</code></td><td>Add <code>glansHeadSize</code> TH/EN (+ split cap note); remove any stale "ระยะคงตัว → ช่วงแรก" key.</td></tr>
+  <tr><td><code>src/lib/fillerRefs.js</code></td><td>Add Kim &amp; Kwak 2015 (PMC4550597) glans anchor + <code>GLANS_CAVEAT</code> (TH/EN).</td></tr>
+  <tr><td><code>scripts/render-filler-pdf.mjs</code> + <code>docs/filler-math-explainer.{html,pdf}</code></td><td>New glans section (formula + durable/peak anchors + real worked numbers from estimate() + caveat); regen.</td></tr>
+  <tr><td><code>scripts/verify-filler-bundle.mjs</code></td><td>Guards: 15cc cap present; no GLANS_SATURATION/glansVisualGain/glansHalfT remnants.</td></tr>
+  <tr><td><code>tests/filler-math.test.js</code> · <code>tests/filler-references.test.js</code></td><td>New-model assertions + refs/caveat assertions.</td></tr>
+</table>
+
+<h2>Derived constants (no guessing — locked here)</h2>
+<pre>Research anchors @ 2 cc (Kwak/Kim, PMC4550597 + PMC7807328):
+  peak (6mo)    +16.58 mm circ → ΔØ +0.528 cm → on ref glans Ø 3.5cm = +15.1%
+  durable (5yr) +14.10 mm circ → ΔØ +0.449 cm → on ref glans Ø 3.5cm = +12.8%  (16.58×0.85=14.1 ✓)
+
+Cube-root: ΔØ% = (1 + 2/veff)^(1/3) − 1  →  solve veff at 2 cc:
+  peak    : 1.151^3 = 1.5247 = 1+2/veff → veff_peak    = 3.81   (381/100)
+  durable : 1.128^3 = 1.4354 = 1+2/veff → veff_durable = 4.59   (459/100)
+
+Sanity (dg0=3.5): 2cc → durable +0.45 / peak +0.53cm ✓ ; 10cc → +1.65 / +1.88cm ; 15cc → +2.18 / +2.46cm (monotonic, no plateau).</pre>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: fillerMath glans model — failing tests first (TDD)</h3>
+<p><strong>Files:</strong> Test <code>tests/filler-math.test.js</code></p>
+<div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Add the failing glans tests</strong></label></div>
+<p>Append a <code>describe('glans cube-root model (research-anchored)')</code> block:</p>
+<pre><code class="language-js">import { estimate, glansDiameterGain, GLANS_FILL_VOLUME_CC, GLANS_SPLIT_MAX_CC } from '../src/lib/fillerMath.js';
+
+describe('glans cube-root model (research-anchored)', () => {
+  const DG0 = 3.5;
+  const g = (cc) => estimate({ lengthCm: 12.7, baseGirthCm: 11, glansCc: cc, baseGlansDiameterCm: DG0 }).glans;
+
+  it('cap constant is 15', () => { expect(GLANS_SPLIT_MAX_CC).toBe(15); });
+  it('2cc anchor: durable +0.45, peak +0.53 cm (±0.03)', () => {
+    const s = g(2);
+    expect(s.deltaLow).toBeCloseTo(0.45, 1);
+    expect(s.deltaHigh).toBeCloseTo(0.53, 1);
+  });
+  it('strictly increasing 0→15 (NO plateau)', () => {
+    expect(g(15).visualLow).toBeGreaterThan(g(10).visualLow);
+    expect(g(10).visualLow).toBeGreaterThan(g(5).visualLow);
+    expect(g(5).visualLow).toBeGreaterThan(g(2).visualLow);
+    expect(g(2).visualLow).toBeGreaterThan(g(0).visualLow);
+  });
+  it('diminishing per-cc (cube-root)', () => {
+    const d20 = g(2).deltaLow - g(0).deltaLow;
+    const d42 = g(4).deltaLow - g(2).deltaLow;
+    expect(d42).toBeLessThan(d20);
+  });
+  it('peak > durable for cc>0', () => {
+    expect(g(10).visualHigh).toBeGreaterThan(g(10).visualLow);
+  });
+  it('glansDiameterGain(0)=0, scales with dg0', () => {
+    expect(glansDiameterGain(0, DG0, GLANS_FILL_VOLUME_CC.durable)).toBe(0);
+    expect(glansDiameterGain(5, 7, GLANS_FILL_VOLUME_CC.peak))
+      .toBeCloseTo(2 * glansDiameterGain(5, 3.5, GLANS_FILL_VOLUME_CC.peak), 5);
+  });
+  it('glans independent of girth/condom', () => {
+    const a = estimate({ lengthCm: 12.7, baseGirthCm: 11, glansCc: 0 });
+    const b = estimate({ lengthCm: 12.7, baseGirthCm: 11, glansCc: 12 });
+    expect(b.c1Low).toBe(a.c1Low);
+    expect(b.condomWidthLow).toBe(a.condomWidthLow);
+  });
+});</code></pre>
+<div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run — expect FAIL</strong></label></div>
+<p>Run: <code>npx vitest run tests/filler-math.test.js</code> → FAIL (glansDiameterGain / GLANS_FILL_VOLUME_CC / GLANS_SPLIT_MAX_CC not exported; deltaLow shape differs).</p>
+</div>
+
+<div class="task">
+<h3>Task 2: fillerMath glans model — implement</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/fillerMath.js</code> (lines ~34–54 constants + ~122–138 estimate glans block).</p>
+<div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Replace the glans constants block</strong></label></div>
+<p>Delete <code>GLANS_DIAM_PER_CC</code>, <code>GLANS_SATURATION_CC</code>, <code>GLANS_VISUAL_MAX_DELTA</code>, <code>GLANS_VISUAL_HALF_CC</code>, <code>glansVisualGain</code>. Keep <code>GLANS_BASE_RATIO</code>. Replace with:</p>
+<pre><code class="language-js">// Glans (head) augmentation — research-anchored cube-root VOLUME-CONSERVATION model (spec 2026-06-21).
+// Filler IS the added volume (peer-reviewed mechanism); the head is compact → Ø grows as the cube
+// root of total volume → never plateaus, each cc adds a little less Ø. Anchored to the only published
+// glans dose (Kwak/Kim 2cc): durable +0.45cm Ø (5yr, +14.1mm circ) / peak +0.53cm Ø (6mo, +16.6mm circ).
+// veff = effective glans filler-compliance volume, calibrated so 2cc lands on those anchors at a typical
+// glans (Ø 3.5cm). >3mL is a volume-conservation extrapolation (no glans study exists above 3mL) —
+// see GLANS_CAVEAT in fillerRefs.js. Integer fractions so the build obfuscator hides the literals.
+export const GLANS_FILL_VOLUME_CC = { peak: 381 / 100, durable: 459 / 100 }; // cc
+export const GLANS_SPLIT_MAX_CC = 15; // head-injection cap (slider) — locks the exaggeration
+export const GLANS_CC = { min: 0, max: 15, step: 0.5, default: 0 };
+// initial glans baseline = ratio of shaft Ø; default 1.0 = shaft Ø.
+export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0 };
+export const glansDiameterGain = (glansCc, dg0, veff) => {
+  const d = Math.max(Number(dg0) || 0, 0);
+  const cc = Math.max(Number(glansCc) || 0, 0);
+  const v = Number(veff) || 1;
+  return d * (Math.cbrt(1 + cc / v) - 1);
+};</code></pre>
+<p><em>Note:</em> keep the existing <code>GLANS_BASE_RATIO</code> if already present — don't duplicate. Remove the old line <code>export const GLANS_CC = { min: 0.5, max: 4, ... }</code>.</p>
+<div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Replace the estimate() glans block</strong></label></div>
+<p>Replace the block that builds <code>const gc = Math.min(...GLANS_SATURATION_CC)</code> / <code>rawGc</code> / <code>glans = { dgLow, dgHigh, ... visualLow: ...glansVisualGain... }</code> with:</p>
+<pre><code class="language-js">  // glans (head) — independent of shaft girth / condom; default baseline = shaft Ø
+  const dg0 = num(baseGlansDiameterCm) > 0 ? num(baseGlansDiameterCm) : diameterFromGirth(C0);
+  const rawGc = Math.max(num(glansCc), 0); // FULL injected head cc — no saturation; capped only by the 15cc slider
+  const gainDurable = glansDiameterGain(rawGc, dg0, GLANS_FILL_VOLUME_CC.durable);
+  const gainPeak = glansDiameterGain(rawGc, dg0, GLANS_FILL_VOLUME_CC.peak);
+  const glans = {
+    dg0,
+    // cube-root volume-conservation Ø. visualLow = durable (settled), visualHigh = peak (~1mo).
+    // 2D + 3D both render visualLow (single source). Never plateaus; capped by the 15cc slider.
+    visualLow: dg0 + gainDurable,
+    visualHigh: dg0 + gainPeak,
+    deltaLow: gainDurable,
+    deltaHigh: gainPeak,
+    pctLow: dg0 > 0 ? (gainDurable / dg0) * 100 : 0,
+    pctHigh: dg0 > 0 ? (gainPeak / dg0) * 100 : 0,
+  };</code></pre>
+<div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 2.5: Grep for removed symbols + fix callers</strong></label></div>
+<pre><code class="language-bash">grep -rn "GLANS_SATURATION_CC\|GLANS_DIAM_PER_CC\|GLANS_VISUAL_MAX_DELTA\|GLANS_VISUAL_HALF_CC\|glansVisualGain\|glans.dgLow\|glans.dgHigh\|glans\.deltaHigh\b" src tests scripts</code></pre>
+<p>Update any remaining reader (FillerGraphic2D already falls back to <code>visualLow</code>; Filler3D uses <code>visualLow</code>). The 2D line <code>est?.glans?.visualLow ?? est?.glans?.dgLow ?? dg0</code> → simplify to <code>est?.glans?.visualLow ?? dg0</code> in Task 4.</p>
+<div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 3: Run — expect PASS</strong></label></div>
+<p>Run: <code>npx vitest run tests/filler-math.test.js</code> → PASS. Then <code>npm run build</code> → clean (catches any dangling import of removed symbols).</p>
+<div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/fillerMath.js tests/filler-math.test.js
+git commit -m "feat(filler): research-anchored cube-root glans model + 15cc cap"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 3: Slider 15cc cap + head readout (FillerSimulator)</h3>
+<p><strong>Files:</strong> Modify <code>src/pages/FillerSimulator.jsx</code> (import line ~7; glansCcEff ~192; split slider ~346–351; legend ~358–366).</p>
+<div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Import the cap + clamp glans</strong></label></div>
+<pre><code class="language-js">// add GLANS_SPLIT_MAX_CC to the existing fillerMath import
+import { /* …existing… */ GLANS_SPLIT_MAX_CC } from '../lib/fillerMath.js';
+// glansCcEff (~192): clamp to BOTH total and the 15cc cap
+const glansCcEff = Math.min(glansCc, totalCc, GLANS_SPLIT_MAX_CC);</code></pre>
+<div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Cap the split slider max + total-change clamp</strong></label></div>
+<pre><code class="language-jsx">// total slider onChange: clamp glans to min(v, 15)
+onChange={(e) => { const v = Number(e.target.value); setTotalCc(v); const cap = Math.min(v, GLANS_SPLIT_MAX_CC); if (glansCc > cap) setGlansCc(cap); }}
+// split (glans) slider:
+<input className="fs-range glans" type="range" min={0} max={Math.min(totalCc, GLANS_SPLIT_MAX_CC)} step={0.5}
+  value={glansCcEff} onChange={(e) => setGlansCc(Number(e.target.value))} aria-label={t('splitLabel')} /></code></pre>
+<div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Head Ø readout (no caption — user #2)</strong></label></div>
+<p>After the split legend (the line rendering <code>{t('glans')} {ccFmt(glansCcEff)} {t('cc')}</code>), add:</p>
+<pre><code class="language-jsx">{/* head size — durable→peak Ø, exact from math; caption intentionally removed (user #2) */}
+{est?.glans && (
+  &lt;div style={{ marginTop: 8, fontSize: 13, color: c.tx }}&gt;
+    {t('glansHeadSize')}: Ø {est.glans.visualLow.toFixed(1)}&ndash;{est.glans.visualHigh.toFixed(1)} {t('cmUnit')}
+    {glansCcEff &gt; 0 &amp;&amp; (
+      &lt;span style={{ color: c.amber }}&gt; (+{Math.round(est.glans.pctLow)}&ndash;{Math.round(est.glans.pctHigh)}%)&lt;/span&gt;
+    )}
+  &lt;/div&gt;
+)}</code></pre>
+<p><em>Read the file first</em> to confirm the legend location, the <code>c</code> color object keys (<code>c.tx</code>, <code>c.amber</code>) and the <code>t()</code> usage; match them exactly. If <code>t('cmUnit')</code> isn't a key yet, add it in Task 5.</p>
+<div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Manual check + commit</strong></label></div>
+<p>Run <code>npm run build</code> → clean. Commit: <code>git add src/pages/FillerSimulator.jsx &amp;&amp; git commit -m "feat(filler): 15cc head cap + durable→peak head readout"</code></p>
+</div>
+
+<div class="task">
+<h3>Task 4: 2D exact px-per-cm scale (FillerGraphic2D) — the core correctness fix (user #3)</h3>
+<p><strong>Files:</strong> Modify <code>src/components/FillerGraphic2D.jsx</code> (lines 11–12 scale fns; 64; 76–88 scale calc; 136–138 cross-section).</p>
+<div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Delete the 3 ad-hoc mappings</strong></label></div>
+<p>Remove <code>shaftHalfT</code> (line 11), <code>glansHalfT</code> (line 12), and the <code>MIN_SHAFT</code> constant usage / normalized length. Add a glans-length ratio const near the others:</p>
+<pre><code class="language-js">const GLANS_LEN_RATIO = 1.25; // glans length ÷ glans Ø (anatomical proportion)
+const S_VPAD = 6;             // px vertical padding inside the band</code></pre>
+<div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Single-scale side-view (replace lines ~73–84)</strong></label></div>
+<pre><code class="language-js">  const dgLo = est?.glans?.visualLow ?? dg0;            // (simplified — dgLow removed)
+  // real cm dims
+  const glansLenCmA = dgLo * GLANS_LEN_RATIO;
+  const totalXcm = Math.max(lengthCm + glansLenCmA, 0.1);
+  const maxOcm = Math.max(dLo, dgLo, 0.1);
+  const widthBudget = SIDE_W - X0 - RIGHT_MARGIN - GAP;          // 429
+  const heightBudget = SIDE_H - (S_VPAD + DASH_OUT) * 2;          // 150 (leaves room for the dashed outset)
+  const s = Math.min(widthBudget / totalXcm, heightBudget / maxOcm); // ONE px-per-cm
+  const cy = SIDE_CY;
+  const x0 = X0;
+  // after (real cm × s)
+  const tShaftA = (dLo / 2) * s;
+  const tGlansA = (dgLo / 2) * s;
+  const glansLenA = glansLenCmA * s;
+  const len = lengthCm * s;
+  // before (baseline) — SAME s + SAME length, smaller Ø
+  const tShaftB = (d0 / 2) * s;
+  const tGlansB = (dg0 / 2) * s;
+  const glansLenB = (dg0 * GLANS_LEN_RATIO) * s;
+  const lenB = len;</code></pre>
+<p>Update the baseline draw call to use <code>lenB</code> (same length) instead of <code>len - 4</code>: <code>mushPath(x0, cy, lenB, tShaftB, tGlansB, glansLenB)</code>.</p>
+<div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Cross-section single scale (replace lines 87–88)</strong></label></div>
+<pre><code class="language-js">  // cross-section (shaft only) — one scale so after:before radius == dLo:d0 exactly
+  const CS_R = 100; // max radius in the 240 viewBox
+  const sCs = CS_R / Math.max(dLo / 2, 0.1);
+  const csA = (dLo / 2) * sCs;   // = 100 (fills)
+  const csB = (d0 / 2) * sCs;    // proportionally smaller</code></pre>
+<div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Build + commit</strong></label></div>
+<p><code>npm run build</code> → clean. Commit: <code>git add src/components/FillerGraphic2D.jsx &amp;&amp; git commit -m "fix(filler): 2D single px-per-cm scale — shaft/glans/length geometrically exact"</code></p>
+</div>
+
+<div class="task">
+<h3>Task 5: Filler3D stale comment + fillerStrings + fillerRefs</h3>
+<p><strong>Files:</strong> <code>src/components/Filler3D.jsx</code> (line ~17), <code>src/lib/fillerStrings.js</code>, <code>src/lib/fillerRefs.js</code>.</p>
+<div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Filler3D comment</strong></label></div>
+<p>Line 17 comment "from the (damped) glans Ø" → "from the glans Ø (real cm, same world as the shaft — research cube-root model)". No code change (it already reads <code>visualLow</code> + auto-frames).</p>
+<div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: fillerStrings — add keys (read file, match TH/EN shape)</strong></label></div>
+<pre><code class="language-js">// in the TH map:  glansHeadSize: 'ขนาดหัว',   cmUnit: 'ซม.',
+// in the EN map:  glansHeadSize: 'Head size',  cmUnit: 'cm',
+// also update the split label to note the cap, e.g. TH splitLabel/aux → '… (หัวสูงสุด 15cc)' / EN '… (head max 15cc)'.
+// Remove any key carrying 'ระยะคงตัว → ช่วงแรก' if present (user #2).</code></pre>
+<div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: fillerRefs — verify author, add glans anchor + caveat</strong></label></div>
+<p>First confirm the author + exact title (Rule Q-honest, public citation):</p>
+<pre><code class="language-bash"># WebFetch https://pmc.ncbi.nlm.nih.gov/articles/PMC4550597/ → confirm first author(s) + full title</code></pre>
+<p>Insert into <code>FILLER_REFERENCES</code> right after the JSM 2024 glans meta (n:4), bump ISO to n:6:</p>
+<pre><code class="language-js">  {
+    n: 5, cite: 'PMC4550597', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4550597/',
+    ref: '&lt;verified authors&gt; (2015) · World J Mens Health', refEn: '&lt;verified authors&gt; (2015) · World J Mens Health',
+    title: 'Glans Penis Augmentation Using Hyaluronic Acid Gel as an Injectable Filler',
+  },
+  // …then ISO becomes n: 6</code></pre>
+<p>Add the exported caveat (single source for modal + PDF):</p>
+<pre><code class="language-js">export const GLANS_CAVEAT = {
+  th: 'งานวิจัยหัว (glans) ทุกชิ้นทดสอบที่ ≤3 mL (หลักๆ 2 mL). ช่วง 3–15 cc เป็นการประมาณตามหลักการคงปริมาตร (ฟิลเลอร์ = ปริมาตรที่เพิ่มเข้าไป) สอดคล้องกับงานวิจัยลำตัวที่ฉีด 20 mL แล้วยังโตต่อเนื่อง — ไม่ใช่ค่าจากงานวิจัยหัวโดยตรงเกิน 3 mL.',
+  en: 'All glans studies tested ≤3 mL (mostly 2 mL). The 3–15 cc range is a volume-conservation extrapolation (filler = added volume), consistent with shaft trials injecting 20 mL that keep growing — not a directly-studied glans dose above 3 mL.',
+};</code></pre>
+<div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Wire the caveat into the refs modal</strong></label></div>
+<p>In <code>FillerSimulator.jsx</code> references modal, render <code>GLANS_CAVEAT[lang]</code> (TH/EN) as a small note below the citation list. Read the modal to match its markup.</p>
+<div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Build + commit</strong></label></div>
+<p><code>npm run build</code> → clean. Commit: <code>git add src/components/Filler3D.jsx src/lib/fillerStrings.js src/lib/fillerRefs.js src/pages/FillerSimulator.jsx &amp;&amp; git commit -m "feat(filler): glans anchor citation + extrapolation caveat + strings; 3D comment"</code></p>
+</div>
+
+<div class="task">
+<h3>Task 6: PDF explainer — new glans section + real numbers (user #1)</h3>
+<p><strong>Files:</strong> <code>scripts/render-filler-pdf.mjs</code>, regen <code>docs/filler-math-explainer.{html,pdf}</code>.</p>
+<div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Read the generator + update the glans section</strong></label></div>
+<p>Update the glans portion to describe the cube-root volume model + the two anchors, and compute the worked example numbers by calling the real <code>estimate()</code> (import from <code>../src/lib/fillerMath.js</code>) for a sample (e.g. glansCc 2 / 10) so the PDF shows actual Ø + %. Import <code>GLANS_CAVEAT</code> from <code>../src/lib/fillerRefs.js</code> and render it. Remove any old "2 mL plateau" / saturating wording.</p>
+<div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Regenerate</strong></label></div>
+<p>Run: <code>node scripts/render-filler-pdf.mjs</code> → regenerates the HTML + PDF. Open the PDF; confirm the glans Ø/% numbers equal <code>estimate()</code> output for the example cc and the caveat appears.</p>
+<div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Commit</strong></label></div>
+<p><code>git add scripts/render-filler-pdf.mjs docs/filler-math-explainer.html docs/filler-math-explainer.pdf &amp;&amp; git commit -m "docs(filler): PDF glans section = cube-root model + real numbers + caveat"</code></p>
+</div>
+
+<div class="task">
+<h3>Task 7: verify-filler-bundle guards + filler-references test</h3>
+<p><strong>Files:</strong> <code>scripts/verify-filler-bundle.mjs</code>, <code>tests/filler-references.test.js</code>.</p>
+<div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Add regression guards (read file, match its assert style)</strong></label></div>
+<pre><code class="language-js">// fillerMath source must contain the cap + new gain, and NOT the removed symbols:
+assert(mathSrc.includes('GLANS_SPLIT_MAX_CC') && mathSrc.includes('glansDiameterGain'));
+assert(!/GLANS_SATURATION_CC|glansVisualGain|GLANS_VISUAL_MAX_DELTA/.test(mathSrc), 'old glans model remnant');
+// FillerSimulator must cap the split slider:
+assert(simSrc.includes('GLANS_SPLIT_MAX_CC'), 'split slider not capped');
+// FillerGraphic2D must use one scale, not the old mismatched fns:
+assert(!/glansHalfT|shaftHalfT/.test(g2dSrc), '2D still using mismatched ad-hoc scales');</code></pre>
+<div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: filler-references assertions</strong></label></div>
+<pre><code class="language-js">import { FILLER_REFERENCES, GLANS_CAVEAT } from '../src/lib/fillerRefs.js';
+it('includes the glans-augmentation anchor study', () => {
+  expect(FILLER_REFERENCES.some(r => r.cite === 'PMC4550597')).toBe(true);
+});
+it('exports the extrapolation caveat (TH+EN)', () => {
+  expect(GLANS_CAVEAT.th).toMatch(/3–15|ปริมาตร/);
+  expect(GLANS_CAVEAT.en).toMatch(/extrapolation|volume/);
+});</code></pre>
+<div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Run + commit</strong></label></div>
+<p><code>npm run verify:filler</code> → PASS; <code>npx vitest run tests/filler-references.test.js</code> → PASS. Commit both.</p>
+</div>
+
+<div class="task">
+<h3>Task 8: Rule Q-vis — rendered-pixel scale verification (2D + 3D)</h3>
+<p><strong>Files:</strong> none (verification). Uses Claude Preview / Chrome MCP per Rule S.</p>
+<div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Drive the live filler page</strong></label></div>
+<p>Open <code>?play=filler</code> on the dev server. For glansCc ∈ {2, 10, 15} (total ≥ that):</p>
+<ul>
+  <li><strong>2D:</strong> measure rendered shaft half-thickness px and glans half-thickness px → ratio must equal <code>est.glans.visualLow ÷ est.d1Low</code> (±2%); measure len px ÷ shaft-Ø px → equals <code>lengthCm ÷ d1Low</code> (±2%).</li>
+  <li><strong>3D:</strong> read the built model — <code>glansR ÷ shaft r</code> equals <code>visualLow ÷ (c1Low/π)</code>.</li>
+  <li>Confirm the head VISIBLY enlarges 2 → 10 → 15 cc (screenshot each — verify pixels, not the object model).</li>
+  <li>Confirm NO "ระยะคงตัว → ช่วงแรก" caption; readout shows the Ø range + %.</li>
+</ul>
+<div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Full filler suite + build</strong></label></div>
+<p><code>npx vitest run tests/filler-*.test.js</code> → all green; <code>npm run build</code> → clean; <code>npm run verify:filler</code> → ✅.</p>
+</div>
+
+<div class="task">
+<h3>Task 9: Standalone bundle safety + final commit</h3>
+<div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Confirm no firebase/OPD import crept in</strong></label></div>
+<p><code>npm run verify:filler</code> proves the standalone bundle has no firebase/OPD. Confirm the obfuscator scope (formula files only) is unchanged.</p>
+<div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Final state</strong></label></div>
+<p>All filler tests + full vitest green, build clean, verify:filler ✅. NO deploy this turn (await explicit "deploy filler", V18).</p>
+</div>
+
+<h2>Self-Review checklist (run before execution)</h2>
+<ul>
+  <li>Spec coverage: cube-root model (T2) · 15cc cap (T2/T3) · readout no-caption (T3) · 2D exact scale (T4) · 3D exact (T5) · web refs + caveat (T5) · PDF (T6) · guards (T7) · Rule Q-vis (T8). ✔ all mapped.</li>
+  <li>Type consistency: <code>glansDiameterGain</code>, <code>GLANS_FILL_VOLUME_CC.{peak,durable}</code>, <code>GLANS_SPLIT_MAX_CC</code>, <code>glans.{visualLow,visualHigh,deltaLow,deltaHigh,pctLow,pctHigh}</code> used identically across tasks. ✔</li>
+  <li>No placeholders except the two deliberate "read file to match pattern" notes (strings shape, modal markup) + the citation-author verify (a Rule Q-honest step, not a guess).</li>
+</ul>
+
+</body>
+</html>
