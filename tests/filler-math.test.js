@@ -229,13 +229,26 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
     const big = estimate({ lengthCm: 12.7, baseGirthCm: 12.0, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.0 * bigDia });
     expect(big.glans.dg0).toBeGreaterThan(a.glans.dg0);
   });
-  it('visual diameter is damped (gentler than measured) + independent of shaft', () => {
-    const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
-    expect(e.glans.visualLow).toBeCloseTo(e.glans.dg0 + 0.13 * 2 * 0.4, 6); // 2026-06-21 ΔØ/cc 0.13, damp 0.4
-    expect(e.glans.visualLow).toBeLessThan(e.glans.dgLow); // gentler than measured
-    expect(e.glans.visualLow).toBeGreaterThan(e.glans.dg0); // still grows
-    const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
-    const b = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 30, glansCc: 2 });
-    expect(b.glans.visualLow).toBeCloseTo(a.glans.visualLow, 6); // independent of shaft
+  it('visual diameter responds to the FULL injected head cc (continuous + saturating) + independent of shaft', () => {
+    // owner 2026-06-21 "marketing": the head VISIBLY bulges with head-cc, DECOUPLED from the 2mL
+    // medical plateau. PRIOR BUG (was `dg0 + 0.13*2*0.4`): visual used the saturated 2cc × 0.4 damp
+    // → +0.1cm Ø (≈+1.5px) + frozen above 2cc → user saw no head growth at 16cc.
+    const e2 = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
+    const e8 = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 8 });
+    const e16 = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 16 });
+    expect(e2.glans.visualLow).toBeGreaterThan(e2.glans.dg0);              // grows from baseline
+    expect(e8.glans.visualLow).toBeGreaterThan(e2.glans.visualLow);       // KEEPS growing above 2cc — the fix
+    expect(e16.glans.visualLow).toBeGreaterThan(e8.glans.visualLow);      // and above 8cc
+    // clearly-visible magnitude at a high dose (NOT the old +0.1cm): ≥ +1cm Ø at 16cc
+    expect(e16.glans.visualLow - e16.glans.dg0).toBeGreaterThan(1.0);
+    // saturating — the 8→16 increment is smaller than the 2→8 increment
+    expect(e16.glans.visualLow - e8.glans.visualLow).toBeLessThan(e8.glans.visualLow - e2.glans.visualLow);
+    // medical ΔØ STILL saturates at 2cc (honest) — unchanged by the visual decoupling
+    expect(e16.glans.dgLow).toBeCloseTo(e2.glans.dgLow, 6);
+    expect(e16.glans.deltaLow).toBeCloseTo(0.13 * 2, 6);
+    // visual is independent of shaft cc
+    const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 8 });
+    const b = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 30, glansCc: 8 });
+    expect(b.glans.visualLow).toBeCloseTo(a.glans.visualLow, 6);
   });
 });
