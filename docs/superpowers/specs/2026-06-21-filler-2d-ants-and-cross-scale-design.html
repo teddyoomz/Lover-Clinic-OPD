@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler 2D — Marching-Ants Baseline + Cross-Section Grow-Scale</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --tx-muted: #666; --ok:#16a34a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size:0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; }
+    th { background: var(--bg-meta); }
+    @keyframes specAnts { to { stroke-dashoffset: -9; } }
+    .spec-ants { animation: specAnts 0.6s linear infinite; }
+  </style>
+</head>
+<body>
+
+<h1>Filler 2D — Marching-Ants Baseline + Cross-Section Grow-Scale</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-21 · <strong>Status:</strong> Approved by user (Q answered) · <strong>Scope:</strong> <code>src/components/FillerGraphic2D.jsx</code> only (+ its source-grep test). Two small refinements on the just-shipped Model B 2D.
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>(1) The "เดิม" (baseline) dashed outline is static — the user wants it to animate as clockwise marching-ants, smooth (the "หลังฉีด" red outline keeps its existing breathe). (2) After the Model-B turn the cross-section is hard-pinned to max size (<code>csA = CS_MAX_R</code> always) — it must instead GROW with girth like the side-view thickness (small girth → small circle, big girth → fills), per the user's scale system.</p>
+
+<h2>Design</h2>
+<pre>1 · Marching ants on the BASELINE only
+   • &lt;style&gt;: @keyframes fgAnts { to { stroke-dashoffset: -9; } }   // -9 = one (5+4) dash cycle → seamless loop
+              .fg-ants { animation: fgAnts 0.6s linear infinite; }   // smooth, continuous
+              @media (prefers-reduced-motion: reduce){ .fg-ants{ animation:none } }
+   • add className="fg-ants" to the showBaseline paths ONLY:
+       - side-view baseline &lt;path&gt; (the faint "เดิม" mushroom outline)
+       - cross-section baseline &lt;circle&gt; (csB)
+   • clockwise: mushPath is drawn clockwise (top→right→head→bottom→left); negative dashoffset marches in the
+     draw direction = clockwise. (If the circle marches the wrong way visually, flip the offset sign for it.)
+   • the "หลังฉีด" red outline (fg-revBreathe) is UNCHANGED.
+
+2 · Cross-section grows with girth (replaces the always-max)
+   const CS_BASE = 44;   // px-per-cm for the cross-section; caps-at-fill near Ø4.5 (typical Ø3.3 → r≈73, sizeable)
+   const csScale = Math.min(CS_BASE, (CS_MAX_R * 2) / Math.max(dLo, 0.1)); // grows with Ø, never overflows the box
+   const csA = (dLo / 2) * csScale;     // AFTER — grows with girth, fills the box at large girth
+   const csB = (d0  / 2) * csScale;     // BEFORE — proportional → after:before == dLo:d0 EXACT</pre>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Baseline "เดิม" marches clockwise (white) · "หลังฉีด" static (red)</div>
+  <div style="background:#0f0f0f;border-radius:8px;padding:10px;">
+    <svg viewBox="0 0 300 110" width="100%">
+      <path d="M30 46 L196 46 Q206 38 224 28 C258 28 276 52 276 55 C276 58 258 82 224 82 Q206 72 196 64 L30 64 Q16 55 30 46 Z" fill="#c2825f"/>
+      <path d="M27 43 L196 43 Q207 35 226 24 C262 24 280 52 280 55 C280 58 262 86 226 86 Q207 75 196 67 L27 67 Q11 55 27 43 Z" fill="none" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="7 4"/>
+      <path class="spec-ants" d="M30 46 L196 46 Q206 38 224 28 C258 28 276 52 276 55 C276 58 258 82 224 82 Q206 72 196 64 L30 64 Q16 55 30 46 Z" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.3" stroke-dasharray="5 4"/>
+    </svg>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Cross-section grows with girth (small → medium → fills); after:before exact</div>
+  <div style="display:flex;gap:12px;">
+    <div style="flex:1;text-align:center;"><div style="background:#0f0f0f;border-radius:8px;height:110px;display:flex;align-items:center;justify-content:center;"><svg width="90" height="90"><circle cx="45" cy="45" r="26" fill="#bd7c5b"/></svg></div><div style="font-size:11px;color:#888;">เล็ก</div></div>
+    <div style="flex:1;text-align:center;"><div style="background:#0f0f0f;border-radius:8px;height:110px;display:flex;align-items:center;justify-content:center;"><svg width="90" height="90"><circle cx="45" cy="45" r="36" fill="#bd7c5b"/></svg></div><div style="font-size:11px;color:#888;">กลาง</div></div>
+    <div style="flex:1;text-align:center;"><div style="background:#0f0f0f;border-radius:8px;height:110px;display:flex;align-items:center;justify-content:center;"><svg width="90" height="90"><circle cx="45" cy="45" r="43" fill="#bd7c5b"/></svg></div><div style="font-size:11px;color:#888;">ใหญ่ (เต็มกล่อง)</div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">CSS keyframe → baseline outlines ·  dLo → csScale → csA/csB</div>
+  <table>
+    <tr><th>#</th><th>Step</th></tr>
+    <tr><td>1</td><td><code>@keyframes fgAnts</code> animates <code>stroke-dashoffset 0 → −9</code> (one dash cycle) linear infinite</td></tr>
+    <tr><td>2</td><td><code>.fg-ants</code> applied to the baseline <code>&lt;path&gt;</code> + baseline <code>&lt;circle&gt;</code> → they march clockwise</td></tr>
+    <tr><td>3</td><td>reduced-motion → animation none (a11y)</td></tr>
+    <tr><td>4</td><td><code>csScale = min(CS_BASE, box/dLo)</code> → grows with girth, caps at the box</td></tr>
+    <tr><td>5</td><td><code>csA=(dLo/2)·csScale</code> (after) · <code>csB=(d0/2)·csScale</code> (before) → after:before == dLo:d0</td></tr>
+  </table>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Marching ants on the "เดิม" baseline ONLY</strong> (user picked this) — clockwise, smooth (linear infinite), reduced-motion-safe; "หลังฉีด" keeps its breathe.</li>
+  <li><strong>Cross-section grows with girth</strong> (csScale = min(CS_BASE, box/dLo)) — not always-max; caps at fill; after:before exact.</li>
+  <li><strong>CS_BASE = 44</strong> — generous so typical girth is sizeable while still growing/capping (tunable after rendered-pixel check).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>The "เดิม" baseline dashed outline visibly marches clockwise + smooth (continuous, seamless loop); reduced-motion disables it.</li>
+  <li>The "หลังฉีด" red outline is unchanged (still breathes).</li>
+  <li>Cross-section AFTER circle radius grows with girth (small girth → smaller; large girth → fills the box ~r100); never overflows.</li>
+  <li>Cross-section before-radius ÷ after-radius == <code>d0 ÷ dLo</code> (exact).</li>
+  <li>Rendered-pixel verified in the live preview at small + large girth (cross grows) and the ants march.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Circle march direction</strong> — SVG circle winding may make the offset sign march counter-clockwise; verify rendered + flip the circle's offset if needed.</li>
+  <li><strong>CS_BASE tuning</strong> — 44 targets a sizeable typical; adjust by rendered-pixel if the user wants typical bigger/smaller.</li>
+</ul>
+
+</body>
+</html>
