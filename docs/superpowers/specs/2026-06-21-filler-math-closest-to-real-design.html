@@ -52,7 +52,7 @@
   <div class="fcard">
     <div class="hl">รอบวงหลังฉีด</div>
     <div class="big">+1.3 cm → 11.7 cm</div>
-    <div class="row"><span class="k">ถุงยางที่ใช้จริง</span><span class="v">55 – 57 mm — Large</span></div>
+    <div class="row"><span class="k">ถุงยางที่ใช้จริง</span><span class="v">55 – 57 mm</span></div>
     <div class="nb" style="text-align:right;margin-top:-4px">ระยะยาว 55 → สูงสุด 57 · ขยับขึ้น ~2 ไซต์จากเดิม</div>
     <div class="row"><span class="k">หัว (glans) · 2 mL</span><span class="v">Ø +0.35 cm</span></div>
     <div class="row"><span class="k">ความยาว (ผลพลอยได้)</span><span class="v">ตอนอ่อน +1.6 cm</span></div>
@@ -66,7 +66,7 @@
   <div class="fcard" style="max-width:320px">
     <div class="hl">รอบวงหลังฉีด</div>
     <div class="big">+1.5 cm → 13.0 cm</div>
-    <div class="row"><span class="k">ถุงยางที่ใช้จริง</span><span class="v">60 – 64 mm — Super Wide</span></div>
+    <div class="row"><span class="k">ถุงยางที่ใช้จริง</span><span class="v">60 – 64 mm</span></div>
     <div class="nb" style="text-align:right;margin-top:-4px">ระยะยาว 60 → สูงสุด 64</div>
     <div class="row"><span class="k">ความยาว (ผลพลอยได้)</span><span class="v">ตอนอ่อน +1.7 cm</span></div>
     <div class="note">ช่วงผลลัพธ์ ±1 cm · ประมาณจากงานวิจัย HA filler</div>
@@ -93,7 +93,7 @@
 <h2>Architecture</h2>
 <ul>
   <li><strong><code>src/lib/fillerMath.js</code></strong> (core — pure math, single source of truth): replace the 2 flat k-constants with the k-ladder + peak-fade map; keep the exact geometry engine; correct <code>CONDOM_LADDER</code> to the real 9-rung MyONE; FLOOR snap kept; drop the +2→72 extension (ceiling 64); glans ΔØ/cc → 0.17 with a 2mL saturation cap + glans fade; re-scaled volume constants; SE-Asian default + range constants; new flaccid/erect length-delta constants (display-only). New helpers: <code>girthGainCm(C0,L,V,k)</code>, <code>condomRangeForGirths(durableGirth, peakGirth)</code> (FLOOR-snaps both → returns {durableRung, peakRung, category}), <code>glansDeltaDiameter(doseMl)</code> (saturating). (The "beyond-mainstream" flag may still exist internally but is NOT surfaced in copy.)</li>
-  <li><strong><code>src/components/FillerSimulator.jsx</code></strong> (UI wiring): erect-input labels + SE-Asian defaults/ranges; girth headline = the peak number ONLY (NO durable girth line, NO "ช่วงแรก" wording anywhere); condom = <strong>ระยะยาว–สูงสุด range</strong> ("55 – 57 mm — Large", note "ระยะยาว 55 → สูงสุด 57"); glans dose as a {0,2,3} discrete control showing only the ΔØ value (NO decoupling / durability note); volume slider 5–30 (silent hard-cap, NO warning banner); ±1cm band; length secondary line ("ฟิลเลอร์ช่วยพยุงไม่ให้หดเข้า"). <strong>Cosmetic-shell discipline:</strong> all changes consume <code>fillerMath</code> + copy — no new data sources, no behavior beyond surfacing the new constants. (The durable girth is still computed — it feeds the condom range's lower rung — just not shown as a girth line.)</li>
+  <li><strong><code>src/components/FillerSimulator.jsx</code></strong> (UI wiring): erect-input labels + SE-Asian defaults/ranges; girth headline = the peak number ONLY (NO durable girth line, NO "ช่วงแรก" wording anywhere); condom RESULT = <strong>ระยะยาว–สูงสุด range, NUMBERS ONLY</strong> ("55 – 57 mm" — NO category name like Super Snug/Regular/Large/Super Wide in the result; note "ระยะยาว 55 → สูงสุด 57"). The customer's size-pick <strong>dropdown</strong> (an input) keeps its named sizes UNCHANGED. glans dose as a {0,2,3} discrete control showing only the ΔØ value (NO decoupling / durability note); volume slider 5–30 (silent hard-cap, NO warning banner); ±1cm band; length secondary line ("ฟิลเลอร์ช่วยพยุงไม่ให้หดเข้า"). <strong>Cosmetic-shell discipline:</strong> all changes consume <code>fillerMath</code> + copy — no new data sources, no behavior beyond surfacing the new constants. (The durable girth is still computed — it feeds the condom range's lower rung — just not shown as a girth line.)</li>
   <li><strong><code>src/lib/fillerStrings.js</code></strong>: TH/EN copy for the girth headline, the condom <strong>ระยะยาว–สูงสุด</strong> range (Durable→"ระยะยาว", Peak→"สูงสุด"), glans value, the length line ("ฟิลเลอร์ช่วยพยุงไม่ให้หดเข้า ไม่ใช่ยืดออกจริง" — splint→"พยุงไม่ให้หด"), and the ±band/"ประมาณจากงานวิจัย" note. (Removed: volume-warning, beyond-mainstream, glans-decoupled/durability, the durable girth line, and all "ช่วงแรก" strings.)</li>
   <li><strong>Obfuscator note:</strong> <code>fillerMath.js</code> is in the build obfuscator scope (formula protection) — keep the new k/condom/glans constants as integer fractions (value-identical) so <code>numbersToExpressions</code> hides the literals, exactly as the current code does.</li>
 </ul>
@@ -104,6 +104,7 @@
   <li><strong>Framing Q2 = ERECT input</strong> — user enters erect girth+length; the geometric ΔC is computed on the erect base → the (smaller) erect gain. Optional flaccid path converts ×1.25 first.</li>
   <li><strong>Framing Q3 = FLOOR snap</strong> — research confirmed round-down is the correct retention rule (MyONE/ISO); keep FLOOR.</li>
   <li><strong>Condom = ระยะยาว–สูงสุด range</strong> (user revision 2026-06-21) — FLOOR-snap BOTH the durable girth and the peak girth and display the two rungs as a range ("55 – 57 mm", note "ระยะยาว 55 → สูงสุด 57"). Replaces the earlier durable-rung + neighbor display. Thai labels: Durable→"ระยะยาว", Peak→"สูงสุด".</li>
+  <li><strong>Result = condom NUMBERS only</strong> (user revision 2026-06-21) — the result card shows just the width numbers ("55 – 57 mm"), NO category name (Super Snug / Regular / Large / Super Wide). The named sizes remain ONLY in the customer's size-pick input dropdown (unchanged).</li>
   <li><strong>Copy trims (user revision 2026-06-21)</strong> — REMOVE the volume-migration warning, the "beyond-mainstream / แทบไม่มีขาย" condom note, the glans decoupled/durability note, and ALL "ช่วงแรก" wording. The math/constants are unchanged; this only changes what the card displays (more marketing-forward, fewer disclaimers — clinic owner's call).</li>
   <li><strong>Girth k:</strong> peak 1.90, durable(12mo) 1.22, full ladder (Yang2020 RCT / Ahn RCT / Wang2022 cohort).</li>
   <li><strong>Condom ladder corrected</strong> to the real MyONE 9-rung [45,47,49,51,53,55,57,60,64]; ceiling 64 (drop fictional 72).</li>
@@ -124,7 +125,7 @@ PEAK_FADE = { '1mo':1.00, '6mo':0.76, '12mo':0.71, '18mo':0.56 };  // retained f
 ERECT_FROM_FLACCID_GIRTH = c => c * 1.25;   // band 1.21-1.27 (5 cohorts); reject +50%. only if flaccid entered
 // CONDOM
 condomNW_mm = g => g * 5;                    // ISO 4074 half-circumference (exact)
-MYONE_LADDER = [45,47,49,51,53,55,57,60,64]; // real 9-rung
+MYONE_LADDER = [45,47,49,51,53,55,57,60,64]; // real 9-rung (widths). Named labels (Super Snug 45 / Regular 52 / Large 56 / Super Wide 64) kept ONLY for the input size-dropdown; the RESULT shows the width number only.
 CONDOM_CEILING_NW = 64;                       // ladder ceiling — just show 64, NO "beyond-mainstream" warning copy
 // snap = FLOOR (largest rung <= NW). condom DISPLAY = "durableRung – peakRung" range (FLOOR-snap BOTH the durable & peak girths)
 // GLANS (decoupled; saturating)
@@ -158,7 +159,7 @@ ERECT_LENGTH_DELTA_DURABLE   = 0.64; // peak 1.34 (fades)</pre>
 <ol>
   <li><code>fillerMath.estimate</code> with the SE-Asian erect defaults (C0=10.4, L=13.4, V=16, glans=2) returns peak girth gain ≈ +1.3cm and durable ≈ +0.85cm (matches Wang erect anchor), condom as a <strong>Durable–Peak range</strong> (durable rung 55 – peak rung 57), glans ΔØ ≈ +0.35cm.</li>
   <li>Doubling volume does NOT double the girth gain (saturation): gain(32mL) − gain(16mL) &lt; gain(16mL) − gain(0).</li>
-  <li>Condom uses the real ladder [45,47,49,51,53,55,57,60,64]; the durable + peak girths each FLOOR-snap and display as a range; ceiling 64 (the old +2→72 extension is gone); <strong>no "beyond-mainstream" warning copy is rendered</strong>.</li>
+  <li>Condom uses the real ladder [45,47,49,51,53,55,57,60,64]; the durable + peak girths each FLOOR-snap and display as a range; ceiling 64 (the old +2→72 extension is gone); <strong>no "beyond-mainstream" warning copy is rendered</strong>. The RESULT shows the <strong>width NUMBERS only</strong> (no Super Snug / Regular / Large / Super Wide category name); the customer's size-pick <strong>dropdown keeps its named sizes</strong> unchanged.</li>
   <li>Glans dose saturates: ΔØ(3mL) ≈ ΔØ(2mL); glans never changes the shaft girth or condom result; the glans row shows only the ΔØ value (no decoupling/durability note).</li>
   <li>Volume slider is hard-capped at 30mL (the old 50cc ceiling is gone); <strong>NO warning banner is rendered at any volume</strong>.</li>
   <li>The geometry L is the erect/stretched length; the flaccid-length splint gain is display-only and never enters the girth calc.</li>
