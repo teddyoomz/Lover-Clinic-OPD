@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler — review-CTA + popup, defaults, thinner dashed · Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; } h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; } code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1em; margin: 1em 0; } .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; } th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Filler — review-CTA + popup, defaults, thinner dashed · Implementation Plan</h1>
+<blockquote><strong>For agentic workers:</strong> inline execution (small, tightly-coupled, single page). Spec: <code>docs/superpowers/specs/2026-06-21-filler-review-button-and-defaults-design.html</code> (full Mockup + Flow there).</blockquote>
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add a prominent fire-CTA "ดูรีวิวจริง" button (under the results) → popup picks circum/nocircum (icons) → opens the loverclinic.com review URL in a new tab. Plus: defaults 5in/10cc, red dashed −50%.</p>
+  <p><strong>Architecture:</strong> all in the filler page. <code>fillerStrings.js</code> (6 keys) → <code>FillerSimulator.jsx</code> (button + popup + defaults) → <code>FillerGraphic2D.jsx</code> (strokeWidth).</p>
+  <p><strong>Tech:</strong> React/Vite, pure-client, vitest.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup"><div class="mockup-label">See the spec for the faithful dark-theme mock. Order under results:</div>
+<pre>[ ผลประเมิน · 56–59 มม. ... ]
+[ ★ ดูรีวิวจริง · ก่อน–หลัง เคสจริง → ]   ← NEW fire-gradient CTA (glow), under results
+[ โทร ] [ LINE ] [ Facebook ]            ← existing
+popup: [ดูรีวิวเคสจริง]  (📸 แบบขลิบ red-ring) (📸 แบบไม่ขลิบ gold-ring)  → new tab</pre></div>
+
+<h2>Flow</h2>
+<div class="mockup"><div class="mockup-label">CTA → popup → choice → window.open(url,'_blank','noopener,noreferrer')</div>
+<table><tr><th>Step</th><th>Action</th></tr>
+<tr><td>1</td><td>CTA click → <code>setReviewOpen(true)</code></td></tr>
+<tr><td>2</td><td>popup renders (overlay + dark card, fire border, 2 icon cards)</td></tr>
+<tr><td>3</td><td>choice → <code>window.open(REVIEW_URLS.circum|nocircum,'_blank','noopener,noreferrer')</code> + <code>setReviewOpen(false)</code></td></tr>
+<tr><td>4</td><td>close via X / backdrop / ESC</td></tr></table></div>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1 — fillerStrings.js: 6 keys (TH+EN)</h3>
+  <pre>reviewBtn:    'ดูรีวิวจริง'        / 'Real reviews'
+reviewBtnSub: 'ก่อน–หลัง เคสจริง'  / 'real before–after cases'
+reviewTitle:  'ดูรีวิวเคสจริง'      / 'Real case reviews'
+reviewSub:    'เลือกแบบที่ต้องการชม · ภาพก่อน–หลังจากเคสจริง' / 'pick which to view · real before–after'
+reviewCircum: 'แบบขลิบ'            / 'Circumcised'
+reviewNocircum:'แบบไม่ขลิบ'        / 'Uncircumcised'</pre>
+</div>
+
+<div class="task">
+  <h3>Task 2 — FillerSimulator.jsx</h3>
+  <ul>
+    <li>NEW const <code>REVIEW_URLS = { circum: 'https://loverclinic.com/review-enhance-circum/', nocircum: 'https://loverclinic.com/review-enhance-nocircum/' }</code> (module scope).</li>
+    <li>NEW state <code>const [reviewOpen, setReviewOpen] = useState(false);</code></li>
+    <li>defaults: <code>useState(13.4)</code> → <code>useState(12.7)</code> for <code>lengthCm</code> (=5 in); <code>useState(16)</code> → <code>useState(10)</code> for <code>totalCc</code>.</li>
+    <li>NEW review CTA rendered DIRECTLY AFTER the results card <code>&lt;/div&gt;</code> (the <code>card({marginTop:18...})</code> block) and BEFORE the contact-buttons row: a full-width button, <code>onClick={() =&gt; setReviewOpen(true)}</code>, style <code>background: linear-gradient(90deg, ${c.fire2 || '#dc2626'}, #f59e0b)</code>, <code>boxShadow: 0 0 0 3px ${c.fire}33, 0 8px 22px ${c.fire}55</code>, gold border, white bold text <code>★ {t('reviewBtn')}</code> + sub <code>{t('reviewBtnSub')}</code> + a → glyph.</li>
+    <li>NEW popup (render when <code>reviewOpen</code>): a normal-flow overlay <code>position:fixed; inset:0; background:rgba(0,0,0,.62); display:flex; align-items:center; justify-content:center; z-index:50</code> with <code>onClick</code> backdrop-close; inner card <code>background:c.card2; border:1.5px solid c.fire; borderRadius:16</code>, <code>onClick={e=&gt;e.stopPropagation()}</code>; title <code>{t('reviewTitle')}</code> + sub <code>{t('reviewSub')}</code> + X button; 2 choice cards (flex), each: a circular 📸 badge (red ring circum / gold ring nocircum) + label + <code>onClick={() =&gt; { window.open(REVIEW_URLS.circum, '_blank', 'noopener,noreferrer'); setReviewOpen(false); }}</code>. ESC → close via a <code>useEffect</code> keydown listener gated on <code>reviewOpen</code>.</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>Task 3 — FillerGraphic2D.jsx: red dashed −50%</h3>
+  <p>Line ~115 (side path) + ~137 (cross-section circle): the two <code>stroke="#ef4444" className="fg-revBreathe"</code> elements — <code>strokeWidth="1.7"</code> → <code>strokeWidth="0.85"</code>. Leave the legend swatch (line ~50, <code>strokeWidth="2"</code> on <code>stroke={line}</code>) and the baseline dashed (1.1) untouched.</p>
+</div>
+
+<div class="task">
+  <h3>Task 4 — tests (source-grep locks + i18n + flow)</h3>
+  <ul>
+    <li>NEW <code>tests/filler-review-button.test.js{,x}</code> (or extend flow-simulate): source-grep that FillerSimulator has the REVIEW_URLS (both exact URLs), reviewOpen state, the CTA rendered after <code>resultsHeader</code>/results and before the contact row, popup with both choice handlers + <code>window.open</code> + <code>noopener</code>, ESC/backdrop close; strings file has the 6 keys TH+EN; defaults <code>useState(12.7)</code> + <code>useState(10)</code>; FillerGraphic2D <code>strokeWidth="0.85"</code> present + no <code>"1.7"</code> red dashed remains.</li>
+    <li>Optional RTL: render FillerSimulator, click the CTA → popup appears with 2 choices; mock <code>window.open</code> → clicking แบบขลิบ calls it with the circum URL.</li>
+    <li>V21 fixups: any test asserting the OLD defaults (lengthCm 13.4 / totalCc 16) or red dashed <code>"1.7"</code> → update.</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>Task 5 — verify + commit</h3>
+  <p>filler suites green → full <code>npm test -- --run</code> 0 fail → <code>npm run build</code> + <code>npm run build:filler</code> clean + obfuscation spot-check + <code>npm run verify:filler</code> → Rule Q-vis L1 (Chrome MCP: CTA renders glowing under results; click → popup with 2 icon cards; default 5.0 นิ้ว / 10 cc; thinner dashed). Commit + push. NO deploy.</p>
+</div>
+
+</body>
+</html>

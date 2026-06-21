@@ -2,7 +2,7 @@
 // Shaft + GLANS split injection · realistic mushroom 2D/3D · TH/EN · light/dark · no 18+ gate.
 // v4: centered hero header (premium, not edge-stuck) + real clinic logo + result colors
 //     (new=green / baseline=red / delta=gold) + formal copy. Single source of truth = fillerMath.
-import { useMemo, useState, lazy, Suspense } from 'react';
+import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
 import {
   CONDOM_LADDER, RANGES, GLANS_BASE_RATIO,
   girthFromWidth, girthFromDiameter, diameterFromGirth,
@@ -149,19 +149,34 @@ function ResultCard({ k, oldVal, newVal, delta, c, card, goldGrad, hero, badge }
   );
 }
 
+// real before–after review pages on the clinic site (spec 2026-06-21)
+const REVIEW_URLS = {
+  circum: 'https://loverclinic.com/review-enhance-circum/',
+  nocircum: 'https://loverclinic.com/review-enhance-nocircum/',
+};
+
 export default function FillerSimulator() {
   const [lang, setLang] = useState('th');
   const [theme, setTheme] = useState('dark');
-  const [lengthCm, setLengthCm] = useState(13.4); // SE-Asian erect length default (spec 2026-06-21)
+  const [lengthCm, setLengthCm] = useState(12.7); // 5 in default (owner 2026-06-21)
   const [lengthUnit, setLengthUnit] = useState('inch');
   const [baseMode, setBaseMode] = useState('condom');
   const [baseDiameterCm, setBaseDiameterCm] = useState(3.3); // ~girth 10.4cm erect (spec 2026-06-21)
   const [condomIdx, setCondomIdx] = useState(2); // rung 52 มาตรฐาน ≈ SE-Asian erect girth 10.4cm (spec 2026-06-21 thai-sizes)
-  const [totalCc, setTotalCc] = useState(16); // clinical consensus default (spec 2026-06-21; was 10)
+  const [totalCc, setTotalCc] = useState(10); // default 10cc (owner 2026-06-21)
   const [glansCc, setGlansCc] = useState(0); // default split: shaft 10 · glans 0 — EXACT 0.5cc steps (same at every total)
   const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
   const [view, setView] = useState('2d');
+  const [reviewOpen, setReviewOpen] = useState(false); // review-picker popup (spec 2026-06-21)
   const [webglOk] = useState(() => webglSupported());
+
+  // ESC closes the review popup
+  useEffect(() => {
+    if (!reviewOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setReviewOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [reviewOpen]);
 
   const t = useMemo(() => makeT(lang), [lang]);
   const c = PAL[theme] || PAL.dark;
@@ -374,6 +389,35 @@ export default function FillerSimulator() {
             )}
           </div>
         </div>
+
+        {/* review CTA — BEFORE the results box (owner 2026-06-21); fire gradient, glow */}
+        <button onClick={() => setReviewOpen(true)} style={{ width: '100%', marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px 18px', borderRadius: 13, border: `1px solid ${c.amber}`, cursor: 'pointer', color: '#fff', fontFamily: 'inherit', background: `linear-gradient(90deg, ${c.fire2}, ${c.amber})`, boxShadow: `0 0 0 3px ${c.fire}33, 0 10px 26px ${c.fire}55` }}>
+          <span style={{ fontSize: 19, lineHeight: 1 }}>★</span>
+          <span style={{ fontWeight: 800, fontSize: 15.5 }}>{t('reviewBtn')} <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.92 }}>· {t('reviewBtnSub')}</span></span>
+          <span style={{ fontSize: 17, lineHeight: 1 }}>→</span>
+        </button>
+
+        {reviewOpen && (
+          <div onClick={() => setReviewOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: c.card2, border: `1.5px solid ${c.fire}`, borderRadius: 16, padding: 18, maxWidth: 380, width: '100%', boxShadow: `0 0 0 4px ${c.fire}22` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: c.tx }}>{t('reviewTitle')}</div>
+                  <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 3, lineHeight: 1.45 }}>{t('reviewSub')}</div>
+                </div>
+                <button onClick={() => setReviewOpen(false)} aria-label="close" style={{ background: 'transparent', border: 'none', color: c.tx2, fontSize: 22, cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit', padding: 0 }}>×</button>
+              </div>
+              <div style={{ display: 'flex', gap: 11, marginTop: 15 }}>
+                {[{ k: 'circum', ring: c.fire, label: t('reviewCircum') }, { k: 'nocircum', ring: c.amber, label: t('reviewNocircum') }].map((o) => (
+                  <button key={o.k} onClick={() => { window.open(REVIEW_URLS[o.k], '_blank', 'noopener,noreferrer'); setReviewOpen(false); }} style={{ flex: 1, background: c.card, border: `1px solid ${c.line}`, borderRadius: 12, padding: '15px 10px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+                    <div style={{ width: 42, height: 42, margin: '0 auto 7px', borderRadius: '50%', border: `2px solid ${o.ring}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 21 }}>📸</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: c.tx }}>{o.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* results */}
         <div style={card({ marginTop: 18, padding: '17px 18px' })}>

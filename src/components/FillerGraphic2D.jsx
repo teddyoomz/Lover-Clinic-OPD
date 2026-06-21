@@ -112,7 +112,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           {/* after — skin body (mushroom), SOLID + static (never animates) */}
           <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" />
           {/* after — red DASHED outline, OUTSET by DASH_OUT so it hugs the OUTER edge (never overlaps the body); breathe = opacity pulse on the LINE */}
-          {showAfter && <path d={mushPath(x0 - DASH_OUT, cy, len + DASH_OUT, tShaftA + DASH_OUT, tGlansA + DASH_OUT, glansLenA + DASH_OUT)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4" strokeOpacity="1" />}
+          {showAfter && <path d={mushPath(x0 - DASH_OUT, cy, len + DASH_OUT, tShaftA + DASH_OUT, tGlansA + DASH_OUT, glansLenA + DASH_OUT)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1" />}
           {/* corona ridge */}
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
@@ -134,7 +134,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
             </radialGradient>
           </defs>
           <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" />
-          {showAfter && <circle cx={ccx} cy={ccy} r={csA + DASH_OUT} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4" strokeOpacity="1" />}
+          {showAfter && <circle cx={ccx} cy={ccy} r={csA + DASH_OUT} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1" />}
           {showBaseline && <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />

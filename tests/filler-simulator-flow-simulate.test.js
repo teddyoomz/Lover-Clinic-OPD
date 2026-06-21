@@ -118,11 +118,11 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
   const page = read('src/pages/FillerSimulator.jsx');
   const g2d = read('src/components/FillerGraphic2D.jsx');
 
-  it('V3-1: slider min 5cc (cannot go below); default now 16cc (2026-06-21)', () => {
+  it('V3-1: slider min 5cc (cannot go below); default now 10cc (owner 2026-06-21)', () => {
     expect(RANGES.cc[0]).toBe(5);
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);      // slider cannot go below 5
-    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(16\)/); // default 16cc (clinical consensus)
-    expect(page).not.toMatch(/useState\(10\)/);           // old 10cc default removed
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/); // default 10cc (owner)
+    expect(page).not.toMatch(/setTotalCc\] = useState\(16\)/); // old 16cc default removed
   });
 
   it('V3-2: split display EXACT (ccFmt), never Math.round — 5cc 50/50 → 2.5/2.5 not 3/3', () => {
@@ -229,7 +229,7 @@ describe('filler-simulator v4 — centered header + result colors + dashed 2D + 
 
   it('V4-3: 2D "after" outline is THIN + DASHED + red (small growth not masked)', () => {
     // mushroom + cross-section "after" strokes: dashed, vivid red, width 1.7 (v7.4 — thinner again; v7.3 outset kept)
-    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4"/g) || [];
+    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4"/g) || [];
     expect(afterStrokes.length).toBeGreaterThanOrEqual(2); // side-view + cross-section
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.6"/); // old thick solid gone
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.5"/);
@@ -286,7 +286,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
   it('V5-3: 2D split into auto-scale sections (side-view + cross-section) without losing dashed-after / i18n / damped head', () => {
     expect(g2d).toMatch(/0 0 \$\{SIDE_W\} \$\{SIDE_H\}/);                         // v5.4: side-view own viewBox
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                                // v5.4: cross-section own square viewBox
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
@@ -297,7 +297,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
 
   it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
     // after-edge is a BOLD red dash (full opacity, v7) — both after-strokes carry strokeOpacity="1"
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
     // reflection highlight ellipse removed from the shaft
     expect(g2d).not.toMatch(/rgba\(255,242,234/);
     // equal column heights: stretch + graphic card is a flex column whose SVG wrapper fills
@@ -312,8 +312,8 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
   const g2d = read('src/components/FillerGraphic2D.jsx');
   const g3d = read('src/components/Filler3D.jsx');
 
-  it('V5.2-1: default filler is 16cc (2026-06-21; slider min still 5)', () => {
-    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(16\)/);
+  it('V5.2-1: default filler is 10cc (owner 2026-06-21; slider min still 5)', () => {
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);
   });
 
@@ -391,7 +391,7 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
   it('V5.3-1: default injection split is glans 0 (shaft gets the full default)', () => {
     expect(page).toMatch(/const \[glansCc, setGlansCc\] = useState\(0\)/);
     expect(page).not.toMatch(/const \[glansCc, setGlansCc\] = useState\(1\)/);
-    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(16\)/);  // 2026-06-21 total 16 → shaft 16
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);  // owner 2026-06-21 total 10 → shaft 10
   });
 
   it('V5.3-2: split-bar labels moved to an always-visible color-keyed legend (no clip/cram at small glans)', () => {
@@ -410,7 +410,7 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                   // own square SVG (v5.4)
     expect(g2d).toMatch(/const csA = clamp\(dLo \* 18, 48, 100\)/); // bigger + diameter-scaled (was *12, 22, 72)
     // V4-3 dashed-after stroke shape UNCHANGED → side-view + cross-section count still ≥2
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('V5.3-4: subtitle copy → "เพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น" (TH) + EN mirror; disclaimer keeps เพื่อการศึกษา', () => {
@@ -517,7 +517,7 @@ describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, N
 
   it('V5.6-1: red outline animates as its OWN fill:none element (side + cross) — NOT the skin body', () => {
     // the breathe class lives on fill:none OUTLINE-only elements → opacity/glow touch the LINE, not the skin fill
-    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="1.7" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
+    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
     // ANTI-REGRESSION (the v5.6-first bug): the SKIN-FILLED body must NEVER carry the animation, else the WHOLE shape fades
     expect(g2d).not.toMatch(/fill="url\(#fg-skin\)" className="fg-revBreathe"/);
     expect(g2d).not.toMatch(/fill="url\(#fg-cs\)" className="fg-revBreathe"/);
