@@ -1,33 +1,30 @@
 ---
-updated_at: "2026-06-21 EOD+1 — LINE OA url customer-id encodeURIComponent fix SHIPPED + DEPLOYED (deploy all); rotate-secrets dropped from Outstanding."
-status: "encodeURIComponent fix LIVE (lover-clinic-app.vercel.app) + filler v7 polish LIVE (loverclinic.vercel.app). full vitest 16917/0; build clean. firestore.rules/functions UNCHANGED."
+updated_at: "2026-06-21 EOD+2 — AV198 booking-flow card fix (DEPLOYED) + filler suite (OG/glans DEPLOYED · research-credit + full-titles + PDF NOT deployed)."
+status: "AV198 booking-flow fix + filler OG + glans-grows LIVE. Filler research-credit feature (ddf30470 + e7954197) committed, NOT deployed (2 commits ahead of prod). firestore.rules UNCHANGED all session → frontend-only, no Probe-Deploy-Probe."
 branch: "master"
-last_commit: "8a1078b6 — fix(deploy): isolate filler env so deploy:filler's OPD step uses its .vercel link"
+last_commit: "e7954197 — refine(filler): web full paper titles; PDF variables-first"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "OPD lover-clinic-f25j9j0h1 (lover-clinic-app.vercel.app) + filler loverclinic-osxf53p6n (loverclinic.vercel.app) — both LIVE; rules/functions UNCHANGED (no Probe-Deploy-Probe)"
-firestore_rules_version: "CHANGED + DEPLOYED (AV198 system-card guard: clients can't forge/delete a system card) — Probe-Deploy-Probe 13/13"
-tests: "full vitest 16914/0 (this session); AV198 feature: builder 8 + resolve 4 + RTL 8 + flow-sim 6 + av198 10 + Q4 3 = green; L2 e2e 14/0 real prod. Not re-run after."
+production_commit: "OPD lover-clinic-cc...? = lover-clinic-cbyvk92s8 (lover-clinic-app.vercel.app, AV198+glans LIVE) + filler loverclinic-ktnqy3f0o (loverclinic.vercel.app, OG+glans LIVE). BOTH lack the research-credit feature (ddf30470 + e7954197 not deployed)."
+firestore_rules_version: "UNCHANGED this session (all changes frontend-only → vercel-only, no Probe-Deploy-Probe)"
+tests: "full vitest 16956/0 (glans-fix turn) + filler targeted 147/0 (latest); build clean; verify:filler ✅. Not re-run after (per no-tests-at-session-end)."
 ---
 
-# Active — 2026-06-21 — Staff-chat System notification cards (AV198) LIVE
+# Active — 2026-06-21 EOD+2 — AV198 booking-flow card + filler suite
 
 ## State
-- `?play=filler` standalone is still LIVE (prior session); THIS session shipped the staff-chat "ระบบ" notification cards.
-- When an intake / follow-up form completes, `sendPushOnSubmit` ALSO writes a System card into the per-branch `be_staff_chat_messages` (sparkles icon, customer name+HN, clickable name → `/?backend=1&customer=<id>` new tab). Intake live-resolves to clickable+HN once registered (`brokerProClinicId`). Counts unread + plays the chat sound.
-- master `a62c20c4` (+ EOD docs); DEPLOYED (vercel + firebase functions + rules). full vitest 16914/0; build clean.
+- AV198 staff-chat intake card now resolves the BOOKING-FLOW registration (was stuck "รอลงทะเบียน" forever) — DEPLOYED + L2-verified real prod.
+- Filler simulator: OG share-preview fixed (absolute URLs, LINE/FB/WhatsApp now unfurl) + head (glans) now visibly grows with cc — both DEPLOYED. Research-credit footer button + verified-citations modal + math-explainer PDF — committed, NOT deployed.
+- master `e7954197`; 2 commits (ddf30470 + e7954197) ahead of prod.
 
-## What this session shipped (detail → checkpoint 2026-06-21-staff-chat-system-notification-cards.md)
-- `/brainstorming` (Visual Companion, Q1=A card/Q2=sparkles/Q3=intake-live-resolve/Q4=unread+sound) → spec → `/writing-plans` (14 tasks) → inline impl.
-- NEW `functions/staffChatNotify.js` (deterministic id) + `index.js` wire (before FCM, non-fatal, skip edits) + `src/lib/staffChatNotifyResolve.js` (live hook) + `StaffChatSystemCard.jsx` + `StaffChatMessage` early-branch + `useStaffChat`/`staffChatClient` guards + firestore.rules system-card immutability. AV198.
-- **8-round adversarial bug-hunt (Workflow, Ultracode) → CONVERGED** (R8 clean): fixed deleted-customer downgrade, no-tokens→no-card (CRITICAL), duplicate-on-retry (CRITICAL), contrast, rule-layer immutability, hook↔picker consistency; Q4-chime adjudicated INTENDED.
-- Verified: full vitest 16914/0 · build clean · L2 e2e 14/0 real prod (incl. intake flip) · Rule R diag (branchId 35/35) · Probe-Deploy-Probe 13/13.
+## What this session shipped (detail → checkpoint 2026-06-21-av198-bookingflow-and-filler.md)
+- **AV198 booking-flow fix** (`006fb322`, DEPLOYED): intake card watched only `opd_session.brokerProClinicId` (kiosk flow); the V118–V125 booking flow stamps `appt.customerId` + HARD-DELETES the session → card stuck. Fix = additive resolve via `be_appointments` `linkedOpdSessionId`. Heals live, no migration. e2e fixture mirrored the wrong assumption (V66 trap) → added booking-flow phase. AV198 amended.
+- **Filler OG** (`42e18dc8`, DEPLOYED): relative `og:image` → absolute https; +og:url/site_name/etc.; verify:filler regression guard.
+- **Filler glans** (`ef758dcd`, DEPLOYED): visual Ø decoupled from the 2mL medical plateau → head grows continuously+saturating with head-cc (was frozen). One math edit fixes 2D+3D. Rendered-pixel verified.
+- **Filler research-credit** (`ddf30470` + `e7954197`, NOT deployed): footer "📚 งานวิจัยอ้างอิง" button → modal of 5 VERIFIED citations (full paper titles, clickable PMC/Oxford/ISO links). Removed per-research→calc chip + footer phone-line. NEW `src/lib/fillerRefs.js` single-source (modal + PDF). Corrected 3 inherited citation errors (Zhang≠Wang · Ahn=girth RCT · glans +14.8mm).
+- **Math-explainer PDF** (`docs/filler-math-explainer.pdf`, regen via `node scripts/render-filler-pdf.mjs`): branded, real `estimate()` numbers, variables+sources first, clickable refs, 3 pages.
 
 ## Next action
-- Idle / await. Honest L1 gap: clicking the per-appt "ทัก LINE" button → LINE opens with the encoded url = USER hands-on (authed admin + a customer with linked LINE; byte-identical for normal LC- ids anyway).
-
-## What this turn shipped (2026-06-21 EOD+1)
-- `AdminDashboard.jsx:6524` LINE OA quick-link: `?customer=${encodeURIComponent(customerHN || customerId)}` (was raw). T1 one-liner; byte-identical for URL-safe LC- ids. NEW `tests/encode-customer-id-line-oa-url.test.js` 6/6 (source-grep lock + encode proof). full vitest 16917/0.
-- DEPLOYED ALL: `npm run deploy:filler` → OPD `lover-clinic-app.vercel.app` (encode fix + filler v7 polish) + standalone `loverclinic.vercel.app` (filler v7 polish, finally live). Both 200; public site verified no-firebase. Fixed a real bug in `scripts/deploy-filler.mjs` (env pollution broke the OPD step).
+- Idle / await. (Optional: `deploy filler` to ship the research-credit feature to both sites.)
 
 ## Outstanding user-triggered actions
-- (none). "Rotate LINE/FB secrets (AV195)" REMOVED per user 2026-06-21 — accepts the pre-WS1 exposure window (WS1 rule already blocks future reads of clinic_settings/chat_config; rotation would only have invalidated already-scraped values).
+- **"deploy filler"** → ships ddf30470 + e7954197 (research-credit button + full titles) to lover-clinic-app.vercel.app + loverclinic.vercel.app (frontend-only, no Probe-Deploy-Probe).
