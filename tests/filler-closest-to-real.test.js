@@ -38,8 +38,8 @@ describe('condom ladder (Thai-familiar + world)', () => {
 });
 
 describe('volume range', () => {
-  it('cc range is [5, 30] (was 5–50)', () => {
-    expect(RANGES.cc).toEqual([5, 30]);
+  it('cc range is [5, 50] (raised to 50 per owner 2026-06-21)', () => {
+    expect(RANGES.cc).toEqual([5, 50]);
   });
 });
 
@@ -61,11 +61,12 @@ describe('estimate — erect-state + saturation', () => {
     expect(e.deltaCLow).toBeLessThan(1.0);
     expect(e.c1High).toBeGreaterThan(e.c1Low); // peak > durable
   });
-  it('condom RESULT at defaults = raw computed mm 56–59 + length by-product 1.6cm (2026-06-21 thai-sizes)', () => {
+  it('condom RESULT at defaults = raw computed mm 56–59 + length by-product ~1.6–2.4cm (2026-06-21)', () => {
     const e = estimate(base);
     expect(e.condomWidthLow).toBe(56);  // round(c1Low * 5) — NOT floored to a ladder rung
     expect(e.condomWidthHigh).toBe(59); // round(c1High * 5)
-    expect(e.lengthGainCm).toBeCloseTo(1.6, 5);
+    expect(e.lengthGainLow).toBeCloseTo(1.6, 1);  // durable (ระยะคงตัว)
+    expect(e.lengthGainHigh).toBeCloseTo(2.4, 1); // peak (ช่วงแรก)
   });
   it('dose-response SATURATES (doubling cc does NOT double the gain)', () => {
     const g16 = estimate({ ...base, shaftCc: 16 }).deltaCHigh;
@@ -98,5 +99,38 @@ describe('source-grep: the under-promise constants are gone', () => {
     expect(mod.K_REALISTIC).toBeUndefined();
     expect(mod.K_OPTIMISTIC).toBeUndefined();
     expect(mod.REAL_MAX_W).toBeUndefined(); // beyond-72 extension removed
+  });
+});
+
+// systematic-debugging 2026-06-21: the flaccid-length box used to show a FLAT 1.6 for every input.
+// It must now VARY (dose-dependent + saturating) or it isn't a result. Locks the fix permanently.
+describe('flaccid length — dose-dependent + saturating', () => {
+  const at = (shaftCc) => estimate({ lengthCm: 13.4, baseGirthCm: 10.4, shaftCc, glansCc: 0 });
+  it('VARIES with injected shaft volume (no more flat constant)', () => {
+    expect(at(50).lengthGainLow).toBeGreaterThan(at(16).lengthGainLow);
+    expect(at(16).lengthGainLow).toBeGreaterThan(at(5).lengthGainLow);
+    expect(at(50).lengthGainHigh).toBeGreaterThan(at(16).lengthGainHigh);
+  });
+  it('SATURATES toward the plateau (durable ≤ 2.0, peak ≤ 3.0) — never blows up', () => {
+    expect(at(50).lengthGainLow).toBeLessThanOrEqual(2.0);
+    expect(at(50).lengthGainHigh).toBeLessThanOrEqual(3.0);
+    expect(at(1e6).lengthGainHigh).toBeLessThanOrEqual(3.0);
+  });
+  it('peak > durable; ZERO when no SHAFT filler (glans filler does not splint the shaft)', () => {
+    expect(at(16).lengthGainHigh).toBeGreaterThan(at(16).lengthGainLow);
+    expect(at(0).lengthGainLow).toBe(0);
+    expect(at(0).lengthGainHigh).toBe(0);
+    expect(estimate({ lengthCm: 13.4, baseGirthCm: 10.4, shaftCc: 0, glansCc: 16 }).lengthGainHigh).toBe(0);
+  });
+  it('the old flat FLACCID_LENGTH_GAIN_CM + lengthGainCm field are gone', async () => {
+    const mod = await import('../src/lib/fillerMath.js');
+    expect(mod.FLACCID_LENGTH_GAIN_CM).toBeUndefined();
+    expect(at(16).lengthGainCm).toBeUndefined();
+  });
+  it('CLASSIFIER: NO shaft-driven result field is static — every one varies with shaftCc (length was the last static one)', () => {
+    const lo = at(5), hi = at(30);
+    for (const f of ['condomWidthLow', 'condomWidthHigh', 'c1Low', 'c1High', 'd1Low', 'd1High', 'lengthGainLow', 'lengthGainHigh']) {
+      expect(hi[f]).not.toBe(lo[f]);
+    }
   });
 });

@@ -162,7 +162,7 @@ describe('fillerMath — constants/ranges sanity', () => {
   it('k + ranges + ladder', () => {
     expect(K_DURABLE).toBe(1.22); // 2026-06-21 closest-to-real (was K_REALISTIC 1.8)
     expect(K_PEAK).toBe(1.9);     // 2026-06-21 closest-to-real (was K_OPTIMISTIC 2.3)
-    expect(RANGES.cc).toEqual([5, 30]); // 2026-06-21 clinical range (was [5,50])
+    expect(RANGES.cc).toEqual([5, 50]); // 2026-06-21: raised back to 50 per owner
     expect(RANGES.lengthCm).toEqual([6.35, 25.4]); // 2.5–10 in
     expect(CONDOM_LADDER.map((r) => r.w)).toEqual([45, 49, 52, 54, 56, 58, 60, 64, 69, 72]); // 2026-06-21 thai-sizes
   });

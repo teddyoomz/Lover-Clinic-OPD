@@ -669,13 +669,15 @@ describe('filler-simulator 2026-06-21 — Thai dropdown + computed-mm result + l
     expect(page).toMatch(/est\.condomWidthLow === est\.condomWidthHigh/);
     expect(page).toMatch(/delta=\{t\('pickClosest'\)\}/);
   });
-  it('length by-product box is rendered right after the condom hero (resLength + lengthWarn + lengthGainCm)', () => {
+  it('length by-product box is rendered right after the condom hero (resLength + lengthWarn + varying durable–peak range)', () => {
     const condomIdx = page.indexOf("k={t('resCondom')}");
     const lenIdx = page.indexOf("t('resLength')");
     const girthIdx = page.indexOf("k={t('resGirth')}");
     expect(lenIdx).toBeGreaterThan(condomIdx); // length AFTER condom
     expect(lenIdx).toBeLessThan(girthIdx);     // and BEFORE girth
-    expect(page).toMatch(/est\.lengthGainCm/);
+    expect(page).toMatch(/est\.lengthGainLow/);  // 2026-06-21: varies (durable)
+    expect(page).toMatch(/est\.lengthGainHigh/); // varies (peak)
+    expect(page).not.toMatch(/est\.lengthGainCm/); // old flat field gone
     expect(page).toMatch(/t\('lengthWarn'\)/);
   });
   it('range-legend + note are NO LONGER rendered (owner revision); disclaimer stays', () => {

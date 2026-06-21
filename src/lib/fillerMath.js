@@ -13,14 +13,20 @@ export const PI = Math.PI;
 export const K_DURABLE = 122 / 100;  // 1.22 — 12-month durable = LOW end of the girth range
 export const K_PEAK = 190 / 100;     // 1.90 — ~1-month peak    = HIGH end of the girth range
 export const CM_PER_INCH = 254 / 100;
-// flaccid-length by-product: ~+1.6cm — an anti-retraction splint (filler holds it from retracting),
-// NOT true erect elongation (spec 2026-06-21). Integer fraction so the obfuscator hides the literal.
-export const FLACCID_LENGTH_GAIN_CM = 16 / 10;
+// flaccid-length by-product — anti-retraction splint (filler holds the flaccid penis from retracting),
+// NOT true erect elongation. DOSE-DEPENDENT + SATURATING in injected SHAFT volume (research: PMC9809476 +
+// PMC8987147 — flaccid length +2.55cm peak/1mo → +1.65cm durable/12mo at ~15-21mL; glans filler does NOT
+// splint the shaft). gain = MAX·(1 − e^(−shaftCc/HALF)). Integer fractions so the obfuscator hides them.
+export const FLACCID_LEN_MAX_DURABLE = 20 / 10; // 2.0cm plateau — durable (ระยะคงตัว)
+export const FLACCID_LEN_MAX_PEAK = 30 / 10;    // 3.0cm plateau — ~1-month peak (ช่วงแรก)
+export const FLACCID_LEN_HALF_CC = 10;          // shaftCc giving ~63% of the plateau (saturation rate)
+export const flaccidLengthGain = (shaftCc, max) =>
+  max * (1 - Math.exp(-Math.max(Number(shaftCc) || 0, 0) / FLACCID_LEN_HALF_CC));
 
 export const RANGES = {
   lengthCm: [6.35, 25.4], // 2.5 in .. 10 in — both units cap at 10 in (25.4 cm)
   diameterCm: [2.2, 4.1],
-  cc: [5, 30], // TOTAL filler — clinical range 5–30cc (was 5–50; spec 2026-06-21). split shaft + glans
+  cc: [5, 50], // TOTAL filler — 5–50cc (raised back to 50 per owner 2026-06-21). split shaft + glans
 };
 
 // Glans (head) augmentation — closest-to-real (spec 2026-06-21): central ΔØ 0.17 cm/cc, band 0.13–0.24
@@ -133,7 +139,9 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
     // The customer reads this number and picks the closest real condom themselves (spec 2026-06-21).
     condomWidthLow: Math.round(c1Low * 5),
     condomWidthHigh: Math.round(c1High * 5),
-    lengthGainCm: FLACCID_LENGTH_GAIN_CM,
+    // flaccid-length by-product — varies with injected SHAFT volume, saturating; durable–peak (ระยะคงตัว→ช่วงแรก)
+    lengthGainLow: flaccidLengthGain(V, FLACCID_LEN_MAX_DURABLE),
+    lengthGainHigh: flaccidLengthGain(V, FLACCID_LEN_MAX_PEAK),
     glans,
   };
 }

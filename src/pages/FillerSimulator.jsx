@@ -383,7 +383,7 @@ export default function FillerSimulator() {
             {/* length by-product — right after the condom box (spec 2026-06-21 thai-sizes + length-box) */}
             <div style={{ ...cardInner, flexBasis: '100%', padding: '13px 15px' }}>
               <div style={{ fontSize: 12, color: c.tx2, marginBottom: 5, fontWeight: 600 }}>{t('resLength')}</div>
-              <div style={{ fontSize: 18.5, fontWeight: 800, color: c.green, fontVariantNumeric: 'tabular-nums' }}>~+{r1(est.lengthGainCm)} {t('unitCm')}</div>
+              <div style={{ fontSize: 18.5, fontWeight: 800, color: c.green, fontVariantNumeric: 'tabular-nums' }}>~+{r1(est.lengthGainLow)} – +{r1(est.lengthGainHigh)} {t('unitCm')}</div>
               <div style={{ fontSize: 11, color: c.fire2, marginTop: 4, lineHeight: 1.4 }}>{t('lengthWarn')}</div>
             </div>
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resGirth')} oldVal={`${t('before')} ${r1(est.c0)} ${t('unitCm')}`} newVal={`${r1(est.c1Low)} – ${r1(est.c1High)} ${t('unitCm')}`} delta={`+${r1(est.deltaCLow)} ${rangeTo} +${r1(est.deltaCHigh)}`} />
