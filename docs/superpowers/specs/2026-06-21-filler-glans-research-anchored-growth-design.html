@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Glans Research-Anchored Growth — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#16a34a; --info:#2563eb; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size:0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .slider { height:14px; border-radius:7px; background:linear-gradient(90deg,#1e3a8a 0 62%, #f59e0b 62% 100%); position:relative; }
+    .thumb { position:absolute; top:-3px; width:20px; height:20px; border-radius:50%; background:#fff; border:2px solid #f59e0b; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  </style>
+</head>
+<body>
+
+<h1>Filler Simulator — Research-Anchored Glans (Head) Growth</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-21 · <strong>Status:</strong> Approved by user (Q&amp;A locked below) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-21-filler-glans-research-anchored-growth.html (next) · <strong>Scope:</strong> filler files only (frontend, standalone bundle) — no Firestore, no rules, no deploy this turn.
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The current glans model treats the head as <em>saturating at ~2 mL</em> (a hidden "medical ΔØ" plateau + a separate saturating "visual" exponential). The owner's clinic routinely injects <strong>up to 10 cc into the glans and it visibly grows</strong> — so a plateau is wrong. Filler is not a black hole: <strong>"the gel physically occupies space within the tissue… the filler itself is the volume increase."</strong> The "2 mL plateau" was a misreading of the literature: <strong>2 mL is simply the only glans dose ever studied</strong> (no published glans study exceeds 3 mL), not a point where growth stops.</p>
+<p>Fix: replace the dual saturating model with <strong>one honest, research-anchored, volume-conservation (cube-root) model</strong> that keeps growing with injected cc, anchored to the measured 2 cc data point, capped at a <strong>15 cc</strong> head-injection lock (to bound the exaggeration). The 2D/3D head + a numeric durable→peak readout must reflect this real ratio.</p>
+
+<h2>Research basis (verified 2026-06-21 via WebSearch/WebFetch)</h2>
+<table>
+  <tr><th>Finding</th><th>Value</th><th>Source</th></tr>
+  <tr><td>Glans HA, all published doses</td><td>2–3 mL only (Kim, Kwak, Abdallah, Littara, Alahwany)</td><td>PMC7807328 review</td></tr>
+  <tr><td>Glans circ increase @ 2 mL (peak, 6 mo)</td><td>+16.58 mm (≈ +0.53 cm Ø)</td><td>Kwak et al. / PMC4550597</td></tr>
+  <tr><td>Glans circ increase @ 2 mL (durable, 5 yr)</td><td>+14.10 mm (≈ +0.45 cm Ø) = 15% resorption (16.58×0.85=14.1 ✓)</td><td>PMC4550597 5-yr</td></tr>
+  <tr><td>Mechanism (peer-reviewed)</td><td>"the filler itself IS the volume increase; does not rely on the body generating new tissue"</td><td>shaft girth literature</td></tr>
+  <tr><td>No-plateau at high volume (cross-validation)</td><td>shaft 20.6 mL→+3.9 cm circ (Ahn); 21.5 mL→+3.4 cm (Zhang) — size keeps scaling</td><td>PMC8987147 / PMC9809476</td></tr>
+  <tr><td>Glans independent of shaft girth</td><td>glans filler does not change shaft girth / condom size</td><td>anatomy + all glans studies</td></tr>
+</table>
+<p><strong>Honest caveat (Rule Q-honest):</strong> ≤ 3 mL is directly study-anchored; <strong>3–15 cc is a volume-conservation extrapolation</strong> (no glans study exists above 3 mL) — cross-validated by the shaft trials that inject 20 mL and keep growing. This caveat ships in the references modal + PDF.</p>
+
+<h2>The model</h2>
+<p>Head is a compact body, so injected volume → diameter grows as the <strong>cube root</strong> of total volume (never plateaus; each cc adds a little less Ø — real tissue physics, same volume-geometry family as the existing shaft model). Two curves (durable / peak) anchored to the two 2 cc data points.</p>
+<pre>glansDiameterGain(cc, dg0, veff) = dg0 · ( cbrt(1 + max(cc,0)/veff) − 1 )
+
+veff calibrated so 2 cc lands on the study Ø change at the default glans baseline (dg0 ≈ 3.5 cm):
+  peak    : 2 cc → +0.53 cm Ø (+15.1%)  → veff_peak    ≈ 3.81
+  durable : 2 cc → +0.45 cm Ø (+12.8%)  → veff_durable ≈ 4.60
+(exact veff recomputed + locked by the 2-cc anchor test in the plan; integer-fraction literals so the build obfuscator hides them.)
+
+Scales with the user's chosen baseline (glansBaseRatio × shaft Ø) because dg0 multiplies the gain.
+DELETE: GLANS_SATURATION_CC plateau · GLANS_VISUAL_MAX_DELTA · GLANS_VISUAL_HALF_CC · glansVisualGain · the dgLow/dgHigh "medical" split.
+KEEP field names visualLow/visualHigh (now = durable / peak Ø) so the 2D/3D consumers need no change (minimal diff).
+Glans stays independent of girth / condom (unchanged).</pre>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Growth curve — durable (settled) vs peak, research anchors + 15cc lock</div>
+  <svg viewBox="0 0 640 280" width="100%">
+    <line x1="60" y1="230" x2="600" y2="230" stroke="#999" stroke-width="1"/>
+    <line x1="60" y1="30" x2="60" y2="230" stroke="#999" stroke-width="1"/>
+    <line x1="580" y1="30" x2="580" y2="230" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="580" y="24" text-anchor="middle" font-size="11" fill="#dc2626">ล็อค 15cc</text>
+    <text x="60" y="248" text-anchor="middle" font-size="11" fill="#666">0</text>
+    <text x="129" y="248" text-anchor="middle" font-size="11" fill="#666">2</text>
+    <text x="407" y="248" text-anchor="middle" font-size="11" fill="#666">10</text>
+    <text x="580" y="248" text-anchor="middle" font-size="11" fill="#666">15</text>
+    <text x="330" y="268" text-anchor="middle" font-size="12" fill="#222">cc ที่ฉีดเข้าหัว</text>
+    <text x="20" y="130" text-anchor="middle" font-size="12" fill="#222" transform="rotate(-90 20 130)">หัวโตขึ้น ΔØ (cm)</text>
+    <polyline points="60,230 129,182 233,138 303,111 407,76 476,53 580,28" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+    <polyline points="60,230 129,189 233,150 303,125 407,92 476,71 580,47" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="4 3"/>
+    <circle cx="129" cy="182" r="4" fill="#16a34a"/>
+    <text x="137" y="179" font-size="11" fill="#16a34a">งานวิจัย 2cc → +0.53cm peak / +0.45cm durable</text>
+    <circle cx="407" cy="76" r="4" fill="#222"/>
+    <text x="399" y="72" text-anchor="end" font-size="11" fill="#666">คลินิก 10cc → ~+1.7cm</text>
+    <text x="330" y="14" text-anchor="middle" font-size="11" fill="#666">━ durable (settled)   ┈ peak (1 เดือนแรก)</text>
+  </svg>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Head proportion — real Ø at 0 / 2 / 10 / 15 cc (baseline Ø3.5cm)</div>
+  <div style="display:flex;justify-content:space-around;align-items:flex-end;">
+    <div style="text-align:center"><svg width="50" height="50"><circle cx="25" cy="38" r="12.3" fill="#fde2e2" stroke="#999" stroke-width="2"/></svg><div style="font-size:12px;color:#666">0cc · Ø3.5</div></div>
+    <div style="text-align:center"><svg width="56" height="56"><circle cx="28" cy="42" r="13.9" fill="#fde2e2" stroke="#2563eb" stroke-width="2"/></svg><div style="font-size:12px;color:#666">2cc · Ø3.95</div></div>
+    <div style="text-align:center"><svg width="72" height="72"><circle cx="36" cy="50" r="18.5" fill="#fecdd3" stroke="#16a34a" stroke-width="2.5"/></svg><div style="font-size:12px;color:#666">10cc · Ø5.3</div></div>
+    <div style="text-align:center"><svg width="78" height="78"><circle cx="39" cy="54" r="20.6" fill="#fecdd3" stroke="#16a34a" stroke-width="2.5"/></svg><div style="font-size:12px;color:#666">15cc · Ø5.85</div></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">UI — split slider capped at 15cc + durable→peak head readout (selected: ภาพ + ตัวเลขช่วง)</div>
+  <div style="max-width:520px">
+    <div style="font-size:13px;color:#444;margin-bottom:4px">แบ่งฟิลเลอร์ — หัว (ฉีดได้สูงสุด 15cc)</div>
+    <div class="slider"><div class="thumb" style="left:62%"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-top:6px">
+      <span style="color:#1e3a8a">▉ ลำตัว 8.0 cc</span>
+      <span style="color:#b45309">▉ หัว 10.0 cc</span>
+    </div>
+    <div style="margin-top:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;font-size:14px;color:#7c2d12">
+      หัว Ø ≈ <strong>5.2 – 5.4 cm</strong>&nbsp;&nbsp;(<strong>+47% – +54%</strong>)
+    </div>
+    <div style="font-size:11px;color:#9a6b4f;margin-top:6px">(เอาคำอธิบาย "ระยะคงตัว → ช่วงแรก (1 เดือน)" ออกตามที่ผู้ใช้สั่ง — เหลือแค่ตัวเลขช่วง)</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">cc → cube-root gain (×2) → render + readout (single source visualLow/visualHigh)</div>
+  <svg viewBox="0 0 920 130" width="100%">
+    <rect x="8" y="46" width="150" height="42" rx="6" fill="#f0f4f8" stroke="#b9c6d6"/>
+    <text x="83" y="64" text-anchor="middle" font-size="12" fill="#222">split slider</text>
+    <text x="83" y="80" text-anchor="middle" font-size="11" fill="#666">glansCc (0–15)</text>
+    <line x1="158" y1="67" x2="196" y2="67" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="198" y="30" width="190" height="74" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="293" y="52" text-anchor="middle" font-size="12" fill="#14532d">estimate() — fillerMath</text>
+    <text x="293" y="70" text-anchor="middle" font-size="11" fill="#166534">glansDiameterGain(cc,dg0,veff_durable)</text>
+    <text x="293" y="86" text-anchor="middle" font-size="11" fill="#166534">glansDiameterGain(cc,dg0,veff_peak)</text>
+    <line x1="388" y1="67" x2="426" y2="67" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="428" y="46" width="170" height="42" rx="6" fill="#f0f4f8" stroke="#b9c6d6"/>
+    <text x="513" y="64" text-anchor="middle" font-size="12" fill="#222">glans.visualLow / visualHigh</text>
+    <text x="513" y="80" text-anchor="middle" font-size="11" fill="#666">+ deltaLow/High, pctLow/High</text>
+    <line x1="598" y1="67" x2="636" y2="40" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="598" y1="67" x2="636" y2="67" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="598" y1="67" x2="636" y2="94" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="638" y="14" width="180" height="32" rx="6" fill="#fff" stroke="#999"/>
+    <text x="728" y="34" text-anchor="middle" font-size="12" fill="#222">FillerGraphic2D (mushroom)</text>
+    <rect x="638" y="52" width="180" height="32" rx="6" fill="#fff" stroke="#999"/>
+    <text x="728" y="72" text-anchor="middle" font-size="12" fill="#222">Filler3D (glans bulb)</text>
+    <rect x="638" y="90" width="180" height="32" rx="6" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="728" y="110" text-anchor="middle" font-size="12" fill="#7c2d12">readout Ø X–Y cm (+A–B%)</text>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#888"/></marker></defs>
+  </svg>
+</div>
+
+<h2>Architecture (file changes)</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/lib/fillerMath.js</code></td><td>Replace glans block: new <code>GLANS_FILL_VOLUME_CC = {peak, durable}</code> + <code>glansDiameterGain()</code>; <code>GLANS_SPLIT_MAX_CC = 15</code>; <code>GLANS_CC.max</code> 4→15. Delete <code>GLANS_SATURATION_CC</code>, <code>GLANS_VISUAL_*</code>, <code>glansVisualGain</code>, dgLow/dgHigh. <code>estimate().glans</code> returns visualLow/visualHigh (durable/peak Ø) + deltaLow/High + pctLow/High.</td></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code></td><td>Split slider <code>max = Math.min(totalCc, 15)</code> (clamp glansCc on total change); add durable→peak head Ø readout near the split legend.</td></tr>
+  <tr><td><code>src/lib/fillerStrings.js</code></td><td>Strings for the head readout (TH/EN), 15cc cap label.</td></tr>
+  <tr><td><code>src/lib/fillerRefs.js</code></td><td>Add Kim &amp; Kwak 2015 (WJMH, PMC4550597) as the glans anchor; add honest "≤3mL studied / 3–15cc extrapolated" caveat string.</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code></td><td><strong>EXACT-SCALE fix (user #3).</strong> Today it uses 3 mismatched ad-hoc mappings — <code>shaftHalfT=22+(d−2)·14</code>, <code>glansHalfT=24+(d−2)·15</code>, cross-section <code>d·18</code> — + a normalized length-stretch, so a shaft and glans of the same Ø render at different px. Replace with ONE px-per-cm scale <code>s</code> computed per render to fit the band, then draw <strong>shaft Ø, glans Ø, length, glansLen, AND cross-section radius ALL at <code>s</code></strong> (in cm × s). Result: glans-to-shaft Ø ratio + length-to-girth ratio are geometrically exact to the math — mirroring the 3D's uniform auto-fit. (The whole drawing scales uniformly to fit; internal proportions stay true.)</td></tr>
+  <tr><td><code>src/components/Filler3D.jsx</code></td><td>Already real-cm + auto-framed: <code>glansR = visualLow/2</code> cm, shaft <code>r = girthToRadiusCm(c1Low)</code> cm, length <code>L</code> cm, camera auto-fits — so glans:shaft:length proportions are ALREADY exact once the math gives a true <code>visualLow</code>. Change = none beyond the math; update the stale "(damped) glans Ø" comment; confirm pixel growth at 2/10/15cc.</td></tr>
+  <tr><td><code>tests/filler-math.test.js</code> (+ filler-references)</td><td>2cc anchor (durable +0.45 / peak +0.53cm), monotonic 0→15 (no plateau), peak&gt;durable, 15cc cap, glans independent of girth, cube-root shape. Update any test asserting the old saturating constants.</td></tr>
+  <tr><td><code>docs/filler-math-explainer.{html,pdf}</code> + <code>scripts/render-filler-pdf.mjs</code></td><td><strong>(user #1)</strong> Regen so the PDF's GLANS section + worked-example numbers come from the NEW <code>estimate()</code>: cube-root formula, durable/peak anchors, real computed Ø/% at the example cc, + the ≤3mL/extrapolation caveat. PDF math + the website refs modal (<code>fillerRefs.js</code>) both reflect the new model — single source, must not drift.</td></tr>
+  <tr><td><code>scripts/verify-filler-bundle.mjs</code></td><td>Regression guard: 15cc cap present, no <code>GLANS_SATURATION</code>/<code>glansVisualGain</code> remnant.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Research-first:</strong> user — "ไปหางานวิจัยมา เอาที่ใกล้เคียงที่สุด … หาอัตราจริงแล้วค่อยมาทำสูตร math". Done: glans anchored to Kwak/Kim 2 cc data; cube-root volume-conservation beyond.</li>
+  <li><strong>Curve = cube-root (volume conservation), never plateaus</strong> — the 2 mL "plateau" was a misread; head grows with every cc, diminishing per-cc (real physics).</li>
+  <li><strong>Cap = 15 cc</strong> head injection (split slider max) — "ล็อคความเวอร์".</li>
+  <li><strong>Readout = ภาพ + ตัวเลขช่วง (durable→peak)</strong> — visual head grows AND a numeric Ø + % range, consistent with the app's durable→peak ranges.</li>
+  <li><strong>Glans independent of girth/condom</strong> — unchanged (anatomically + research correct).</li>
+  <li><strong>Honest caveat shipped</strong> — ≤3mL study-anchored; 3–15cc geometric extrapolation (cross-validated by 20mL shaft trials).</li>
+  <li><strong>(user #1) Research updated in BOTH places</strong> — the website "งานวิจัยอ้างอิง" modal (<code>fillerRefs.js</code>) AND the PDF explainer (math + worked numbers, regenerated from real <code>estimate()</code>). Single source; must not drift.</li>
+  <li><strong>(user #2) Remove the "ระยะคงตัว → ช่วงแรก (1 เดือน)" caption</strong> from the UI head readout — keep only the numeric range.</li>
+  <li><strong>(user #3) 2D + 3D scale must match the math EXACTLY — like the shaft's bigness AND length.</strong> 2D: ONE px-per-cm scale for shaft Ø, glans Ø, AND length (no more 3 mismatched ad-hoc mappings). 3D: already real-cm + auto-framed → exact once math is fixed. The glans must render at its true size relative to the shaft.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><code>estimate({glansCc:2})</code> → glans durable ΔØ ≈ +0.45 cm and peak ≈ +0.53 cm (±0.03) on the default baseline.</li>
+  <li>Glans Ø is <strong>strictly increasing</strong> from 0→15 cc (no plateau): ΔØ(10) &gt; ΔØ(5) &gt; ΔØ(2), and ΔØ(15) &gt; ΔØ(10).</li>
+  <li>Per-cc gain <strong>diminishes</strong> (cube-root): ΔØ(4)−ΔØ(2) &lt; ΔØ(2)−ΔØ(0).</li>
+  <li>peak &gt; durable at every cc &gt; 0.</li>
+  <li>Split slider cannot set glans &gt; 15 cc even when total &gt; 15.</li>
+  <li>Changing glansCc does NOT change girth / condom width outputs.</li>
+  <li>2D mushroom + 3D bulb visibly enlarge at 2 / 10 / 15 cc (rendered-pixel verified).</li>
+  <li><strong>(user #3) 2D exact scale:</strong> shaft Ø, glans Ø, and length are all rendered at ONE px-per-cm; the measured glans-Ø-px ÷ shaft-Ø-px equals the math <code>glans.visualLow ÷ d1Low</code> ratio (±2%), and length-px ÷ shaft-Ø-px equals <code>lengthCm ÷ d1Low</code> (±2%). Rendered-pixel verified.</li>
+  <li><strong>(user #3) 3D exact scale:</strong> in the built model, glansR ÷ shaft-r equals <code>visualLow ÷ (c1Low/π)</code> (math ratio). Rendered-pixel verified at 2/10/15cc.</li>
+  <li><strong>(user #2)</strong> No "ระยะคงตัว → ช่วงแรก (1 เดือน)" caption appears under the head readout — only the numeric range.</li>
+  <li><strong>(user #1)</strong> Website refs modal AND the PDF both show the new glans model + the anchor source + the ≤3mL/extrapolation caveat; the PDF's glans worked-example numbers equal <code>estimate()</code> output for that example cc.</li>
+  <li><code>verify:filler</code> passes; no <code>GLANS_SATURATION</code> / <code>glansVisualGain</code> / <code>glansHalfT</code>-mismatch remnants; full filler tests green.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Extrapolation honesty</strong> — biggest risk is over-claiming at 10–15 cc where no glans study exists. Mitigated by the explicit caveat + cube-root (conservative, diminishing) + shaft cross-validation. Do NOT present 10–15 cc numbers as "proven".</li>
+  <li><strong>Default baseline assumption</strong> — veff is calibrated at dg0 ≈ 3.5 cm so the 2 cc anchor reproduces the study's absolute Ø; for other baselines it scales by ratio (defensible). The 2-cc anchor test pins the exact veff.</li>
+  <li><strong>Obfuscator</strong> — keep constants as integer fractions (e.g. <code>381/100</code>) so <code>numbersToExpressions</code> hides them, per the existing fillerMath convention.</li>
+  <li><strong>Visual shape choice</strong> — 2D/3D render the <em>durable</em> Ø (honest settled look); the readout shows the full durable→peak range. (If owner prefers the visual to show peak, it's a one-line swap.)</li>
+  <li><strong>2D exact-scale = uniform per-render fit</strong> — a single <code>s</code> (px/cm) chosen so the current model fills the band keeps internal proportions geometrically true (glans-vs-shaft, length-vs-girth), then auto-fits absolute size — exactly mirroring how the 3D auto-frames. A fixed absolute px/cm can't fit the full input range (2.5–10 in length × full girth × +15cc head) in a fixed viewBox, so per-render uniform scale is the correct analog. Cross-section keeps the same <code>s</code> for consistency.</li>
+</ul>
+
+</body>
+</html>
