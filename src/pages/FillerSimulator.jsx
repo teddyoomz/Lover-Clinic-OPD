@@ -434,7 +434,7 @@ export default function FillerSimulator() {
         <div style={card({ marginTop: 18, padding: '17px 18px' })}>
           <div style={{ ...sectionLabel, marginBottom: 14 }}>{t('resultsHeader')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 11 }}>
-            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal="" newVal={est.condomWidthLow === est.condomWidthHigh ? `${est.condomWidthLow} ${lang === 'th' ? 'มม.' : 'mm'}` : `${est.condomWidthLow} – ${est.condomWidthHigh} ${lang === 'th' ? 'มม.' : 'mm'}`} delta={t('pickClosest')} />
+            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condomWidth0} ${lang === 'th' ? 'มม.' : 'mm'}`} newVal={est.condomWidthLow === est.condomWidthHigh ? `${est.condomWidthLow} ${lang === 'th' ? 'มม.' : 'mm'}` : `${est.condomWidthLow} – ${est.condomWidthHigh} ${lang === 'th' ? 'มม.' : 'mm'}`} delta={t('pickClosest')} />
             {/* length by-product — right after the condom box (spec 2026-06-21 thai-sizes + length-box) */}
             <div style={{ ...cardInner, flexBasis: '100%', padding: '13px 15px' }}>
               <div style={{ fontSize: 12, color: c.tx2, marginBottom: 5, fontWeight: 600 }}>{t('resLength')}</div>

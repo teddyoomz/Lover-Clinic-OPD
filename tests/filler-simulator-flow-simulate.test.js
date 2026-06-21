@@ -624,7 +624,7 @@ describe('filler-simulator v5.7 — condom CAPS at 64 (2026-06-21: past-64 exten
     expect(condomForGirth(20).w).toBe(72);            // capped at top rung 72
   });
 
-  it('V5.7-3: condom RESULT = raw computed mm (condomWidthLow/High) + pickClosest hint, no sizesUp/เดิม — 2026-06-21 thai-sizes', () => {
+  it('V5.7-3: condom RESULT = raw computed mm (condomWidthLow/High) + pickClosest hint, no sizesUp/beyond — 2026-06-21 thai-sizes', () => {
     expect(page).toMatch(/est\.condomWidthLow/);
     expect(page).toMatch(/est\.condomWidthHigh/);
     expect(page).toMatch(/delta=\{t\('pickClosest'\)\}/);
@@ -699,8 +699,9 @@ describe('filler-simulator 2026-06-21 — Thai dropdown + computed-mm result + l
     expect(page).toMatch(/\$\{cd\.w\} \$\{lang === 'th'/);
     expect(page).not.toMatch(/girthFromWidth\(cd\.w\)/); // girth suffix removed from the option
   });
-  it('condom RESULT card = raw computed mm range (no เดิม, no sizesUp) + pickClosest', () => {
-    expect(page).toMatch(/k=\{t\('resCondom'\)\} oldVal=""/);
+  it('condom RESULT card shows baseline เดิม (condomWidth0 = the selected size) → raw mm range + pickClosest (user 2026-06-21 reversal)', () => {
+    expect(page).not.toMatch(/k=\{t\('resCondom'\)\} oldVal=""/);  // baseline restored per the user
+    expect(page).toMatch(/k=\{t\('resCondom'\)\} oldVal=\{`\$\{t\('before'\)\} \$\{est\.condomWidth0\}/);
     expect(page).toMatch(/est\.condomWidthLow === est\.condomWidthHigh/);
     expect(page).toMatch(/delta=\{t\('pickClosest'\)\}/);
   });

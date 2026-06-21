@@ -154,6 +154,7 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
     sizesUpHigh: condomHigh.index - condom0.index,
     // RESULT (UI): raw computed nominal width (mm), rounded to nearest mm — NOT floored to a ladder rung.
     // The customer reads this number and picks the closest real condom themselves (spec 2026-06-21).
+    condomWidth0: Math.round(C0 * 5),     // baseline nominal width (mm) — in condom-mode == the rung the user selected (round-trips girthFromWidth)
     condomWidthLow: Math.round(c1Low * 5),
     condomWidthHigh: Math.round(c1High * 5),
     // flaccid-length by-product — varies with injected SHAFT volume, saturating; durable–peak (ระยะคงตัว→ช่วงแรก)

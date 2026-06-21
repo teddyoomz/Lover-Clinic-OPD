@@ -66,12 +66,20 @@ describe('estimate — erect-state + saturation', () => {
     expect(e.deltaCLow).toBeLessThan(1.0);
     expect(e.c1High).toBeGreaterThan(e.c1Low); // peak > durable
   });
-  it('condom RESULT at defaults = raw computed mm 56–59 + length by-product ~1.6–2.4cm (2026-06-21)', () => {
+  it('condom RESULT at defaults = baseline 52 → raw computed mm 56–59 + length by-product ~1.6–2.4cm (2026-06-21)', () => {
     const e = estimate(base);
+    expect(e.condomWidth0).toBe(52);    // baseline เดิม = round(10.4*5) = the selected 52 rung (user 2026-06-21 reversal)
     expect(e.condomWidthLow).toBe(56);  // round(c1Low * 5) — NOT floored to a ladder rung
     expect(e.condomWidthHigh).toBe(59); // round(c1High * 5)
     expect(e.lengthGainLow).toBeCloseTo(1.6, 1);  // durable (ระยะคงตัว)
     expect(e.lengthGainHigh).toBeCloseTo(2.4, 1); // peak (ช่วงแรก)
+  });
+  it('condom baseline เดิม (condomWidth0) round-trips the rung the user selected in condom-mode (user 2026-06-21)', () => {
+    for (const rung of CONDOM_LADDER) {
+      const e = estimate({ ...base, baseGirthCm: rung.w / 5 }); // condom-mode: baseGirth = girthFromWidth(rung.w)
+      expect(e.condomWidth0).toBe(rung.w);                 // shows EXACTLY the size the user picked
+      expect(e.condomWidth0).toBe(Math.round(e.c0 * 5));   // SSOT: baseline width = round(baseline girth * 5)
+    }
   });
   it('dose-response SATURATES (doubling cc does NOT double the gain)', () => {
     const g16 = estimate({ ...base, shaftCc: 16 }).deltaCHigh;
