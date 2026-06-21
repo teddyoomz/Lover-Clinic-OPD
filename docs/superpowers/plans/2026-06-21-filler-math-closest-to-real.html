@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Math Closest-to-Real Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Filler Math Closest-to-Real Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> implement task-by-task; steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-06-21-filler-math-closest-to-real-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Re-calibrate the penile-filler simulator to the research-grounded closest-to-real model (girth k-ladder, erect-state, corrected condom ladder, glans 0.17 + saturation, volume cap, SE-Asian defaults) — fitting ENTIRELY into the EXISTING UI/theme/positions; only the math + defaults + displayed values/copy change.</p>
+  <p><strong>Architecture:</strong> The existing UI already renders a Low–High range across 3 result cards (condom hero / girth / diameter) + a condom-size dropdown. We map Low=ระยะคงตัว (durable, k1.22) and High=ขนาดใหญ่ที่สุด(ช่วงแรก) (peak, k1.90) onto that existing range. <code>fillerMath.js</code> (single source of truth) carries every constant + the geometry engine; <code>FillerSimulator.jsx</code> changes only defaults + 3 display tweaks; <code>fillerStrings.js</code> carries the new copy. NO layout/theme/card-structure changes.</p>
+  <p><strong>Tech Stack:</strong> React (pure-client public page <code>?play=filler</code>), Vitest, vite build obfuscator (formula files). No Firestore / auth / PII.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>The EXISTING dark-theme result cards (real <code>ResultCard</code> shapes from <code>FillerSimulator.jsx</code>) with the NEW values. Layout/colors/positions UNCHANGED — only the numbers + the condom shows widths (numbers) + a range legend is added.</p>
+<div class="mockup">
+  <div class="mockup-label">Existing results section · dark theme · NEW values (erect girth 10.4cm, len 13.4cm, 16cc)</div>
+  <div style="background:#0f0f0f;border:1px solid #2a1c1c;border-radius:16px;padding:17px 18px;max-width:560px;color:#ededed;font-family:'Sarabun',sans-serif">
+    <div style="font-size:13px;color:#8b9099;font-weight:600;margin-bottom:14px">ผลการประเมินขนาด (เดิม → ภายหลังการฉีด)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:11px">
+      <!-- hero condom card -->
+      <div style="flex-basis:100%;border-radius:14px;padding:15px 18px;border:1.5px solid #ef4444;background:#161616;box-shadow:0 0 0 3px #ef44441f,0 10px 28px #ef444422">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:13.5px;font-weight:800;color:#ededed">ขนาดถุงยางอนามัยที่เหมาะสม</span>
+          <span style="font-size:10px;font-weight:800;color:#fff;background:linear-gradient(90deg,#dc2626,#ef4444);border-radius:999px;padding:3px 10px">แนะนำ</span>
+        </div>
+        <div style="font-size:12.5px;color:#ef4444">เดิม 52 มม.</div>
+        <div style="font-size:30px;font-weight:900;color:#22c55e;margin-top:4px;line-height:1.12">→ 55 – 57 มม.</div>
+        <div style="font-size:15px;font-weight:800;margin-top:4px;color:#fcd34d">+2 ถึง +3 ขนาด</div>
+      </div>
+      <!-- girth card -->
+      <div style="flex:1;min-width:160px;border:1px solid #3a2a1c;border-radius:16px;background:#161616;padding:13px 15px">
+        <div style="font-size:12px;color:#8b9099;margin-bottom:5px;font-weight:600">เส้นรอบวง (ลำตัว)</div>
+        <div style="font-size:12px;color:#ef4444">เดิม 10.4 ซม.</div>
+        <div style="font-size:18.5px;font-weight:800;color:#22c55e;margin-top:3px">→ 11.2 – 11.7 ซม.<span style="font-size:13px;font-weight:800;margin-left:8px;color:#fcd34d">+0.8 ถึง +1.3</span></div>
+      </div>
+      <!-- diameter card -->
+      <div style="flex:1;min-width:160px;border:1px solid #3a2a1c;border-radius:16px;background:#161616;padding:13px 15px">
+        <div style="font-size:12px;color:#8b9099;margin-bottom:5px;font-weight:600">เส้นผ่านศูนย์กลาง</div>
+        <div style="font-size:12px;color:#ef4444">เดิม 3.3 ซม.</div>
+        <div style="font-size:18.5px;font-weight:800;color:#22c55e;margin-top:3px">→ 3.6 – 3.7 ซม.<span style="font-size:13px;font-weight:800;margin-left:8px;color:#fcd34d">+0.3 ถึง +0.4</span></div>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:#8b9099;margin-top:10px">ค่าซ้าย = <b style="color:#cfd6dd">ระยะคงตัว</b> · ค่าขวา = <b style="color:#cfd6dd">ขนาดใหญ่ที่สุด(ช่วงแรก)</b></div>
+    <div style="font-size:11.5px;color:#8b9099;margin-top:8px;line-height:1.5">ฟิลเลอร์เพิ่มเส้นรอบวงและส่วนหัว · เพิ่มความยาวตอนอ่อน ~+1.6 ซม. (พยุงไม่ให้หด ไม่ใช่ยืดออกจริง) · คงอยู่ ~12–18 เดือนแล้วสลายตามเวลา · ขนาดถุงยางอ้างอิงเส้นรอบวงลำตัว · ค่าทั้งหมดเป็นการประมาณ ±~1 ซม.</div>
+  </div>
+</div>
+<p><strong>Input dropdown (unchanged — keeps names):</strong> Super Snug 45 / 47 / 49 / 51 / Regular 53 / 55 / Large 57 / 60 / Super Wide 64. Condom RESULT shows width numbers only.</p>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Data flow — same render pipeline, new math (Low=durable, High=peak)</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>What changes</th></tr>
+    <tr><td>1</td><td>Inputs (FillerSimulator state)</td><td>defaults: lengthCm 12.7→<b>13.4</b> (erect), totalCc 10→<b>16</b>, condomIdx 2→<b>3</b> (~10.4cm erect), baseDiameterCm 3.0→<b>3.3</b>. cc slider max 50→<b>30</b>.</td></tr>
+    <tr><td>2</td><td><code>estimate()</code> geometry</td><td><code>geo = √(C0²+4πV/L)−C0</code> UNCHANGED (C0=baseGirth, L=length = erect). Saturating dose-response is automatic.</td></tr>
+    <tr><td>3</td><td>k applied</td><td>Low rung uses <b>K_DURABLE=1.22</b> (was K_REALISTIC 1.80), High rung uses <b>K_PEAK=1.90</b> (was K_OPTIMISTIC 2.30). So est.c1Low=durable, est.c1High=peak.</td></tr>
+    <tr><td>4</td><td>condom</td><td>ladder→real 9-rung [45,47,49,51,53,55,57,60,64]; FLOOR snap kept; cap at 64 (drop +2→72 + beyond flag). est.condomLow/High = durable/peak rungs.</td></tr>
+    <tr><td>5</td><td>glans</td><td>ΔØ/cc 0.25–0.32→<b>0.13–0.24</b>, capped at the 2mL plateau (3mL≈2mL). Visual-only (drives 2D/3D; no glans result card).</td></tr>
+    <tr><td>6</td><td>display (FillerSimulator)</td><td><code>r1</code> round-DOWN→<b>round-NEAREST</b> (kill the under-promise). Condom result shows <code>.w</code> numbers (not <code>.label</code>); dropdown keeps <code>.label</code>. Drop <code>beyondStd</code>. Add range legend + updated note.</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+<tr><th>File</th><th>Responsibility / change</th></tr>
+<tr><td><code>src/lib/fillerMath.js</code></td><td>Single source of truth. New K_DURABLE/K_PEAK, corrected CONDOM_LADDER, condom cap-64, glans 0.13–0.24 + 2mL saturation, RANGES.cc→[5,30]. Geometry engine + integer-fraction obfuscation pattern preserved.</td></tr>
+<tr><td><code>src/pages/FillerSimulator.jsx</code></td><td>r1 round-nearest; new defaults (length/cc/condomIdx/diameter); condom result → width numbers; drop beyondStd; add range-legend line + updated note slot. NO theme/layout/card-structure change.</td></tr>
+<tr><td><code>src/lib/fillerStrings.js</code></td><td>New copy: <code>rangeLegend</code> string (ระยะคงตัว/ขนาดใหญ่ที่สุด(ช่วงแรก)), updated <code>note</code> (accurate length-splint + durability), drop reliance on <code>beyondStd</code> (string may stay unused). TH + EN.</td></tr>
+<tr><td><code>tests/filler-closest-to-real.test.js</code> (NEW)</td><td>Lock every new constant + behavior (k-ladder, erect-state anchor, condom ladder/cap, glans saturation, volume cap, round-nearest, source-grep).</td></tr>
+<tr><td>existing filler tests (<code>tests/*filler*</code>)</td><td>V21 fixups — they lock the OLD values (k1.8/2.3, ladder 45–64+72, glans 0.25–0.32, floor-round, cc 5–50). Update to the new values + mark.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: fillerMath.js — girth k-ladder + condom ladder + cap-64</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/fillerMath.js</code> (K constants ~13-14, CONDOM_LADDER ~36-45, condomForGirth ~71-86, RANGES ~17-21)</li>
+    <li>Test: <code>tests/filler-closest-to-real.test.js</code> (NEW)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-javascript">// tests/filler-closest-to-real.test.js
+import { describe, it, expect } from 'vitest';
+import { K_DURABLE, K_PEAK, CONDOM_LADDER, condomForGirth, condomIndexForGirth, RANGES, estimate } from '../src/lib/fillerMath.js';
+
+describe('girth k-ladder (closest-to-real)', () => {
+  it('K_DURABLE = 1.22 (12-mo durable, Low end)', () => { expect(K_DURABLE).toBeCloseTo(1.22, 5); });
+  it('K_PEAK = 1.90 (1-mo peak, High end)', () => { expect(K_PEAK).toBeCloseTo(1.90, 5); });
+  it('peak > durable (range orientation)', () => { expect(K_PEAK).toBeGreaterThan(K_DURABLE); });
+});
+describe('condom ladder (real MyONE 9-rung)', () => {
+  it('widths are exactly [45,47,49,51,53,55,57,60,64]', () => {
+    expect(CONDOM_LADDER.map(c => c.w)).toEqual([45,47,49,51,53,55,57,60,64]);
+  });
+  it('dropdown labels keep names (Super Snug / Regular / Large / Super Wide)', () => {
+    const labels = CONDOM_LADDER.map(c => c.label).join(' ');
+    expect(labels).toMatch(/Super Snug/); expect(labels).toMatch(/Regular/);
+    expect(labels).toMatch(/Large/); expect(labels).toMatch(/Super Wide/);
+  });
+  it('FLOOR snap: girth 10.4cm (NW 52) -> rung 51 (largest <=52)', () => {
+    expect(CONDOM_LADDER[condomIndexForGirth(10.4)].w).toBe(51);
+  });
+  it('caps at 64 with NO beyond flag (girth 14cm -> w 64, beyond false)', () => {
+    const r = condomForGirth(14);
+    expect(r.w).toBe(64); expect(r.beyond).toBe(false);
+  });
+});
+describe('volume range', () => {
+  it('cc max is 30 (was 50)', () => { expect(RANGES.cc[1]).toBe(30); expect(RANGES.cc[0]).toBe(5); });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run to verify fail</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/filler-closest-to-real.test.js</code> · Expected: FAIL (K_DURABLE undefined, ladder mismatch, beyond true at 14cm, cc max 50).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement in fillerMath.js</strong></label></div>
+<pre><code class="language-javascript">// Replace K_REALISTIC / K_OPTIMISTIC block. Integer fractions so the obfuscator hides the literals.
+// Low end of the displayed range = DURABLE (12-mo "ระยะคงตัว"); High end = PEAK (~1-mo "ขนาดใหญ่ที่สุด(ช่วงแรก)").
+// Research: Yang2020 RCT + Wang2022 cohort, geometry efficiency at flaccid L 9.16cm. (spec 2026-06-21)
+export const K_DURABLE = 122 / 100;   // 1.22  (was K_REALISTIC 1.80)
+export const K_PEAK    = 190 / 100;   // 1.90  (was K_OPTIMISTIC 2.30)
+
+// RANGES.cc max 50 -> 30 (real clinical range; spec)
+export const RANGES = {
+  lengthCm: [6.35, 25.4],
+  diameterCm: [2.2, 4.1],
+  cc: [5, 30],
+};
+
+// Real MyONE Custom Fit 9-rung ladder (widths) — labels kept for the input size-dropdown.
+export const CONDOM_LADDER = [
+  { label: 'Super Snug 45', w: 45 },
+  { label: '47', w: 47 },
+  { label: '49', w: 49 },
+  { label: '51', w: 51 },
+  { label: 'Regular 53', w: 53 },
+  { label: '55', w: 55 },
+  { label: 'Large 57', w: 57 },
+  { label: '60', w: 60 },
+  { label: 'Super Wide 64', w: 64 },
+];
+</code></pre>
+<p>Then SIMPLIFY <code>condomForGirth</code> (drop the +2→72 extension + beyond flag; cap at the top rung):</p>
+<pre><code class="language-javascript">// FLOOR snap (retention rule — confirmed correct). Cap at the largest real rung (64). No "beyond" warning.
+export function condomForGirth(girthCm) {
+  const index = condomIndexForGirth(girthCm); // existing FLOOR helper, unchanged
+  const rung = CONDOM_LADDER[index];
+  return { index, label: rung.label, w: rung.w, beyond: false };
+}
+</code></pre>
+<p>Delete the now-unused <code>LADDER_MAX_W</code> / <code>BEYOND_STEP</code> / <code>REAL_MAX_W</code> consts.</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run to verify pass</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/filler-closest-to-real.test.js</code> · Expected: PASS (the k + ladder + cc + condom blocks).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/fillerMath.js tests/filler-closest-to-real.test.js
+git commit -m "feat(filler): k-ladder (durable 1.22 / peak 1.90) + real condom ladder + cap-64 + cc 5-30"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: fillerMath.js — estimate uses k-ladder + glans 0.17 saturating</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/fillerMath.js</code> (estimate ~92-134, GLANS_DIAM_PER_CC ~26)</li>
+    <li>Test: <code>tests/filler-closest-to-real.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Add failing tests</strong></label></div>
+<pre><code class="language-javascript">describe('estimate — erect-state + saturation', () => {
+  const base = { lengthCm: 13.4, baseGirthCm: 10.4, shaftCc: 16, glansCc: 0 };
+  it('peak gain ~ +1.3cm, durable ~ +0.85cm at SE-Asian erect defaults', () => {
+    const e = estimate(base);
+    expect(e.deltaCHigh).toBeGreaterThan(1.1); expect(e.deltaCHigh).toBeLessThan(1.5); // peak
+    expect(e.deltaCLow).toBeGreaterThan(0.7);  expect(e.deltaCLow).toBeLessThan(1.0);  // durable
+    expect(e.c1High).toBeGreaterThan(e.c1Low); // peak > durable
+  });
+  it('dose-response SATURATES (doubling cc < doubles gain)', () => {
+    const g16 = estimate({ ...base, shaftCc: 16 }).deltaCHigh;
+    const g32 = estimate({ ...base, shaftCc: 32 }).deltaCHigh;
+    const g0  = estimate({ ...base, shaftCc: 0  }).deltaCHigh;
+    expect(g32 - g16).toBeLessThan(g16 - g0);
+  });
+  it('glans ΔØ saturates at the 2mL plateau (3mL ≈ 2mL)', () => {
+    const g2 = estimate({ ...base, glansCc: 2 }).glans;
+    const g3 = estimate({ ...base, glansCc: 3 }).glans;
+    expect(g3.dgHigh).toBeCloseTo(g2.dgHigh, 3);
+  });
+  it('glans 2mL gives ΔØ ≈ +0.26–0.48cm (central ~0.35)', () => {
+    const g = estimate({ ...base, glansCc: 2 }).glans;
+    expect(g.dgHigh - g.dg0).toBeGreaterThan(0.25);
+    expect(g.dgHigh - g.dg0).toBeLessThan(0.5);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Verify fail</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/filler-closest-to-real.test.js</code> · Expected: FAIL (estimate still uses K_REALISTIC/K_OPTIMISTIC 1.8/2.3, glans 0.25–0.32 not saturating).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code class="language-javascript">// GLANS — central 0.17 cm Ø/cc, band 0.13-0.24 (2024 706-pt pool). Integer fractions for the obfuscator.
+export const GLANS_DIAM_PER_CC = { low: 13 / 100, high: 24 / 100 }; // was 25/100, 32/100
+export const GLANS_SATURATION_CC = 2; // dose plateau: 3mL ≈ 2mL (no dose-response above ~2mL)
+
+// inside estimate(): use the k-ladder + saturate glans
+const deltaCLow  = K_DURABLE * g;   // durable (was K_REALISTIC)
+const deltaCHigh = K_PEAK    * g;   // peak    (was K_OPTIMISTIC)
+// ...
+const gc = Math.min(Math.max(num(glansCc), 0), GLANS_SATURATION_CC); // cap at 2mL plateau
+// dgLow/dgHigh/visualLow/visualHigh keep their existing formulas but use the capped gc
+</code></pre>
+<p>Leave the geometry (<code>dCgeo</code>), diameter, and visual-damp logic exactly as-is. Only the two delta multipliers + the glans <code>gc</code> cap + the GLANS_DIAM_PER_CC values change.</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Verify pass</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/filler-closest-to-real.test.js</code> · Expected: PASS all estimate blocks.</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/fillerMath.js tests/filler-closest-to-real.test.js
+git commit -m "feat(filler): estimate uses k-ladder; glans 0.13-0.24/cc saturating at 2mL"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: FillerSimulator.jsx — round-nearest, defaults, condom numbers, drop beyondStd, range legend</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/pages/FillerSimulator.jsx</code> (r1 :16, defaults :155-161, condom ResultCard :388, results note/legend :385-392)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: round-NEAREST + defaults</strong></label></div>
+<pre><code class="language-javascript">// :16 — kill the under-promise: round DOWN -> round NEAREST
+const r1 = (x) => (Math.round((Number(x) || 0) * 10) / 10).toFixed(1);
+
+// defaults (SE-Asian erect)
+const [lengthCm, setLengthCm] = useState(13.4);   // erect SE-Asian (was 12.7)
+const [baseDiameterCm, setBaseDiameterCm] = useState(3.3); // ~girth 10.4 (was 3.0)
+const [condomIdx, setCondomIdx] = useState(3);    // rung 51, ~erect girth 10.4 (was 2)
+const [totalCc, setTotalCc] = useState(16);       // clinical consensus (was 10)
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: condom RESULT = width numbers; drop beyondStd</strong></label></div>
+<pre><code class="language-javascript">// :388 hero condom card — show .w (numbers) not .label; remove the beyond branch.
+&lt;ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad}
+  k={t('resCondom')}
+  oldVal={`${t('before')} ${est.condom0.w} ${lang === 'th' ? 'มม.' : 'mm'}`}
+  newVal={est.condomLow.w === est.condomHigh.w
+    ? `${est.condomLow.w} ${lang === 'th' ? 'มม.' : 'mm'}`
+    : `${est.condomLow.w} – ${est.condomHigh.w} ${lang === 'th' ? 'มม.' : 'mm'}`}
+  delta={sizesUp(est.sizesUpLow, est.sizesUpHigh)} /&gt;
+</code></pre>
+<p>(The girth + diameter cards already use <code>r1(...)</code> + the Low–High range — leave them; they now read durable–peak automatically.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: add the range legend line</strong></label></div>
+<pre><code class="language-javascript">// :392 — ABOVE the existing note, add the range-legend line (Low=durable, High=peak):
+&lt;div style={{ fontSize: 11.5, color: c.tx2, marginTop: 12, lineHeight: 1.5 }}
+  dangerouslySetInnerHTML={{ __html: t('rangeLegend') }} /&gt;
+&lt;div style={{ fontSize: 11.5, color: c.tx2, marginTop: 8, lineHeight: 1.5 }}&gt;{t('note')}&lt;/div&gt;
+</code></pre>
+<p>(<code>rangeLegend</code> carries the bold ระยะคงตัว / ขนาดใหญ่ที่สุด(ช่วงแรก) — see Task 4. Use the existing <code>c.tx2</code> muted color + same spacing so it blends into the theme.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: build sanity</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean (no syntax/import error; filler chunk emits + 3D lazy chunk present).</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/FillerSimulator.jsx
+git commit -m "feat(filler): round-nearest + erect defaults + condom width-numbers + range legend"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: fillerStrings.js — rangeLegend + accurate note (TH + EN)</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/lib/fillerStrings.js</code> (th ~30-31, en ~78-79)</li></ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: add rangeLegend + rewrite note</strong></label></div>
+<pre><code class="language-javascript">// th: add rangeLegend; rewrite note to the research-accurate, trimmed copy (no migration/beyond warning;
+//     correct length = flaccid splint +~1.6cm; durability ~12-18mo; condom from shaft girth).
+rangeLegend: 'ค่าซ้าย = &lt;b&gt;ระยะคงตัว&lt;/b&gt; · ค่าขวา = &lt;b&gt;ขนาดใหญ่ที่สุด(ช่วงแรก)&lt;/b&gt;',
+note: 'ฟิลเลอร์เพิ่มเส้นรอบวงและส่วนหัว · เพิ่มความยาวตอนอ่อน ~+1.6 ซม. (ฟิลเลอร์ช่วยพยุงไม่ให้หดเข้า ไม่ใช่ยืดออกจริง) · คงอยู่ประมาณ 12–18 เดือนแล้วสลายตัวลงตามเวลา · ขนาดถุงยางอนามัยอ้างอิงจากเส้นรอบวงลำตัว · ค่าทั้งหมดเป็นการประมาณ ±~1 ซม.',
+// en mirror:
+rangeLegend: 'left = &lt;b&gt;durable (ระยะคงตัว)&lt;/b&gt; · right = &lt;b&gt;peak/early (ขนาดใหญ่ที่สุด)&lt;/b&gt;',
+note: 'Filler increases girth and glans dimensions · adds ~+1.6cm FLACCID length (an anti-retraction splint, not true elongation) · persists ~12–18 months then gradually resorbs · condom size references the shaft girth · all values are estimates ±~1cm',
+</code></pre>
+<p>Leave <code>beyondStd</code> in place (now unused — harmless) and the <code>disclaimer</code> unchanged.</p>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/fillerStrings.js
+git commit -m "feat(filler): rangeLegend (ระยะคงตัว/ขนาดใหญ่ที่สุด) + research-accurate note"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: V21 fixups — update existing filler tests that lock the OLD values</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: every <code>tests/*filler*</code> test that asserts the old k (1.8/2.3), old ladder (52/54/56/58/62/72), old glans (0.25–0.32), round-DOWN, or cc max 50.</li></ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Find the locks</strong></label></div>
+  <p>Run: <code>npm test -- --run $(node -e "...")</code> — practically: run the full filler suite and read the reds.</p>
+  <p>Run: <code>grep -rln "2.37\|3.32\|K_REALISTIC\|K_OPTIMISTIC\|Super snug 45\|Regular 52\|XXL 64\|REAL_MAX_W\|0.25\|0.32\|Math.floor" tests/ | grep -i filler</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Update each lock to the new value</strong></label></div>
+  <p>For each red: flip the asserted constant/label/round to the new value, add a one-line marker comment <code>// 2026-06-21 closest-to-real recalibration (spec 2026-06-21)</code>. Anti-regression: where a test asserted an old value, assert the NEW value AND that the old value is gone.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Run the filler suite green</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/filler-closest-to-real.test.js</code> + each touched filler test. Expected: all PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/
+git commit -m "test(filler): V21 fixups — lock the closest-to-real constants (k-ladder/ladder/glans/round/cc)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Full verify — suite + build + obfuscated-identical + Rule Q-vis L1</h3>
+  <p><strong>Files:</strong> none (verification).</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Full vitest</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> · Expected: 0 fail (only the filler files changed; everything else untouched).</p>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Build + obfuscated-identical</strong></label></div>
+  <p>Run: <code>npm run build</code> (clean) + <code>npm run verify:filler</code> (no firebase/OPD, 3D chunk present). Serve <code>dist</code> and confirm the obfuscated build computes the SAME numbers as dev (the formula values are integer-fraction-hidden but value-identical).</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Rule Q-vis L1 (real browser)</strong></label></div>
+  <p>Claude Preview / Chrome MCP on <code>?play=filler</code>: at the SE-Asian defaults the condom hero shows "→ 55 – 57 มม." (numbers, no name), girth "→ 11.2 – 11.7 ซม.", range legend reads "ค่าซ้าย = ระยะคงตัว · ค่าขวา = ขนาดใหญ่ที่สุด(ช่วงแรก)", the dropdown still lists named sizes (Super Snug 45 … Super Wide 64), volume slider max = 30, no "เกินมาตรฐาน" appears, theme/layout unchanged. Screenshot (Rule Q-vis — look at the pixels).</p>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Commit (state)</strong></label></div>
+<pre><code class="language-bash">git add -A && git commit -m "chore(filler): closest-to-real recalibration verified (suite+build+L1)"</code></pre>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> k-ladder ✓(T1/T2) · condom ladder+cap-64 ✓(T1) · numbers-only result + dropdown-names ✓(T3) · glans 0.17+saturation ✓(T2) · volume 5–30 ✓(T1) · SE-Asian defaults ✓(T3) · round-nearest (kill under-promise) ✓(T3) · range labels ระยะคงตัว/ขนาดใหญ่ที่สุด(ช่วงแรก) ✓(T4) · length-splint note ✓(T4) · warnings removed ✓(T3/T4) · fit existing UI ✓(no layout change).</li>
+  <li><strong>Erect-state:</strong> handled by feeding erect girth/length into the unchanged geometry (defaults are erect) — no separate erect branch needed; the smaller erect gain is automatic.</li>
+  <li><strong>Glans-as-continuous-slider vs spec's discrete {0,2,3}:</strong> reconciled per "keep existing UI" — the split slider stays; saturation is applied in the math (cap at 2mL plateau). No UI control change.</li>
+  <li><strong>Length output:</strong> the existing UI has no length result card; the +1.6cm flaccid-splint surfaces in the note copy (not a new card) to honor "fit existing UI".</li>
+  <li><strong>Type consistency:</strong> K_DURABLE/K_PEAK used in T1 + T2; condomForGirth returns {index,label,w,beyond} consistently; est.condomLow/High.w used in T3.</li>
+</ul>
+
+</body>
+</html>
