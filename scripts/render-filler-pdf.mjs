@@ -5,8 +5,8 @@
 // formulas → then the worked example. Output: docs/filler-math-explainer.pdf
 import fs from 'node:fs';
 import { chromium } from 'playwright';
-import { estimate, diameterFromGirth, K_DURABLE, K_PEAK, GLANS_VISUAL_MAX_DELTA, GLANS_VISUAL_HALF_CC, GLANS_DIAM_PER_CC, GLANS_SATURATION_CC, FLACCID_LEN_HALF_CC, FLACCID_LEN_MAX_DURABLE, FLACCID_LEN_MAX_PEAK } from '../src/lib/fillerMath.js';
-import { FILLER_REFERENCES } from '../src/lib/fillerRefs.js';
+import { estimate, diameterFromGirth, K_DURABLE, K_PEAK, GLANS_FILL_VOLUME_CC, FLACCID_LEN_HALF_CC, FLACCID_LEN_MAX_DURABLE, FLACCID_LEN_MAX_PEAK } from '../src/lib/fillerMath.js';
+import { FILLER_REFERENCES, GLANS_CAVEAT } from '../src/lib/fillerRefs.js';
 
 const b64 = (p) => 'data:image/png;base64,' + fs.readFileSync(p).toString('base64');
 const logoDark = b64('public/lover-clinic-logo-dark.png');
@@ -22,13 +22,14 @@ const e = estimate({ lengthCm: L, baseGirthCm: C0, shaftCc: SHAFT, glansCc: HEAD
 const gGeom = (e.c1Low - C0) / K_DURABLE;
 const f1 = (x) => x.toFixed(1), f2 = (x) => x.toFixed(2);
 
-function curvePath(half, w, h, xmax) {
+// cube-root ΔØ curve (durable) over 0..xmax cc, normalized to the box height by the value at xmax.
+function curvePath(veff, w, h, xmax) {
+  const top = Math.cbrt(1 + xmax / veff) - 1;
   const pts = [];
-  for (let i = 0; i <= 60; i++) { const x = (i / 60) * xmax; const y = 1 - Math.exp(-x / half); pts.push([(x / xmax) * w, h - y * h]); }
+  for (let i = 0; i <= 60; i++) { const x = (i / 60) * xmax; const y = (Math.cbrt(1 + x / veff) - 1) / top; pts.push([(x / xmax) * w, h - y * h]); }
   return 'M' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L');
 }
-const CURVE = curvePath(GLANS_VISUAL_HALF_CC, 230, 96, 24);
-const halfX = (GLANS_VISUAL_HALF_CC / 24) * 230;
+const CURVE = curvePath(GLANS_FILL_VOLUME_CC.durable, 230, 96, 15);
 
 const html = `<!doctype html><html lang="th"><head><meta charset="utf-8">
 <style>
@@ -104,10 +105,9 @@ td.r { text-align:right; font-family:'JetBrains Mono',monospace; } td b { color:
         <tr><th style="width:27%">ตัวแปร / โมเดล</th><th style="width:22%">ค่าที่ใช้</th><th>ที่มา</th></tr>
         <tr><td>โมเดลรอบวง (cylinder-shell)</td><td class="mono" style="font-size:11px">√(C₀²+4πV/L)</td><td>เรขาคณิต first-principles (พื้นที่หน้าตัด A=C²/4π) — ไม่ใช่ค่าจากวิจัย</td></tr>
         <tr><td>ตัวปรับ k (คงตัว / พีค)</td><td class="mono" style="font-size:11px">1.22 / 1.90</td><td>คาลิเบรตจาก RCT การฉีดเพิ่มรอบวง ${refLink(1, 3)} (12 เดือน k≈1.22, ~1 เดือน k≈1.90)</td></tr>
-        <tr><td>ΔØ ส่วนหัว (แพทย์)</td><td class="mono" style="font-size:11px">0.13–0.24 cm/cc<br>อิ่มตัว 2 mL</td><td>meta-analysis ขยายส่วนหัว 706 ราย ${refLink(4)} (+14.8 mm รอบวงหัว → ΔØ ~0.47 cm ที่ plateau)</td></tr>
+        <tr><td>ΔØ ส่วนหัว (cube-root)</td><td class="mono" style="font-size:11px">∛(1+cc/veff)<br>veff ${f2(GLANS_FILL_VOLUME_CC.durable)}/${f2(GLANS_FILL_VOLUME_CC.peak)}</td><td>คาลิเบรตจากงานวิจัยขยายส่วนหัว ${refLink(6)} (Moon 2015: 2cc → +14.1–16.6 มม.รอบวง ≈ +0.45–0.53 cm Ø) · โตตามปริมาตร ไม่ตัน · meta-analysis 706 ราย ${refLink(4)} ยืนยัน</td></tr>
         <tr><td>ความยาวตอนอ่อน</td><td class="mono" style="font-size:11px">+2.0 / +3.0 cm<br>half 10 cc</td><td>cohort วัดความยาวตอนอ่อน ${refLink(2)} (+2.55cm พีค → +1.65cm คงตัว ที่ ~15–21 mL)</td></tr>
         <tr><td>ความกว้างถุงยาง</td><td class="mono" style="font-size:11px">รอบวง × 5</td><td>มาตรฐาน ISO 4074 ${refLink(5)} (nominal width = ครึ่งรอบวง)</td></tr>
-        <tr><td>ภาพส่วนหัว (visual)</td><td class="mono" style="font-size:11px">1−e^(−cc/6)</td><td>เส้นโค้งอิ่มตัว <b>เชิงภาพ (marketing)</b> — ไม่อ้างวิจัย; ตัวเลขแพทย์แยกต่างหากด้านบน</td></tr>
       </table>
       <ol class="refs" style="margin:11px 0 0 17px">
         ${FILLER_REFERENCES.map((r) => `<li>${r.refEn} <a href="${r.url}" class="reflink pmc">${r.cite} ↗</a><br><span class="ti">“${r.title}”</span></li>`).join('\n        ')}
@@ -145,21 +145,19 @@ td.r { text-align:right; font-family:'JetBrains Mono',monospace; } td b { color:
       <p class="note">มาตรฐาน ISO 4074 ${refLink(5)}: nominal width = ครึ่งรอบวง · ผลลัพธ์โชว์ mm ดิบ (ปัดเศษ) แล้ว snap แบบ <b>floor</b> = ไซส์ใหญ่สุดที่ยังกระชับ (กันหลุด)</p>
     </div>
     <div class="sec">
-      <h2><span class="num">3</span> ส่วนหัว (glans) — มี 2 ตัวเลขแยกกัน</h2>
+      <h2><span class="num">3</span> ส่วนหัว (glans) — โมเดลคงปริมาตร (cube-root)</h2>
       <div class="split">
         <div class="txt">
-          <p class="desc"><span class="tag med">ทางการแพทย์</span> ΔØ = ${GLANS_DIAM_PER_CC.low}–${GLANS_DIAM_PER_CC.high} cm/cc แต่ <b>อิ่มตัวที่ ${GLANS_SATURATION_CC}cc</b> (วิจัย: หัวพีคที่ ~2mL ฉีดเกินไม่โตเพิ่ม ${refLink(4)}) · ไม่กระทบรอบวง/ถุงยาง</p>
-          <p class="desc" style="margin-top:8px"><span class="tag vis">ภาพที่วาด</span> โตตาม cc จริงแบบต่อเนื่อง + ค่อยๆ อิ่มตัว (เพื่อให้เห็นหัวตอบสนอง slider):</p>
-          <div class="formula">Ø หัว <span class="op">=</span> Ø₀ <span class="op">+</span> max·(1 <span class="op">−</span> e^(<span class="op">−</span><span class="var">cc</span>/${GLANS_VISUAL_HALF_CC}))<br><span style="color:#9b9098;font-size:11px">max = ${f1(GLANS_VISUAL_MAX_DELTA.low)} cm (ต่ำ) · ${f1(GLANS_VISUAL_MAX_DELTA.high)} cm (สูง) · half = ${GLANS_VISUAL_HALF_CC}cc</span></div>
+          <p class="desc"><span class="tag med">หลักการ</span> ฟิลเลอร์ = ปริมาตรที่เพิ่มเข้าไป (งานวิจัยยืนยัน) · หัวเป็นทรงตัน → <b>Ø โตตามรากที่สามของปริมาตร</b> = โตเรื่อยๆ ไม่ตัน แต่ละ cc เพิ่มน้อยลง · ไม่กระทบรอบวง/ถุงยาง · ล็อคสูงสุด 15cc</p>
+          <div class="formula">Ø หัว <span class="op">=</span> Ø₀ <span class="op">×</span> ∛(1 <span class="op">+</span> <span class="var">cc</span>/veff)<br><span style="color:#9b9098;font-size:11px">veff = ${f2(GLANS_FILL_VOLUME_CC.durable)} (คงตัว) · ${f2(GLANS_FILL_VOLUME_CC.peak)} (พีค) · คาลิเบรต 2cc → +0.45/+0.53cm Ø</span></div>
+          <p class="note"><b>anchor:</b> 2cc → หัวโต +14.1–16.6 มม.รอบวง (Moon 2015 ${refLink(6)}) · เกิน 3 mL = ประมาณตามหลักคงปริมาตร (ยังไม่มีวิจัยหัวเกิน 3mL) สอดคล้องกับวิจัยลำตัว ~20mL ที่โตต่อเนื่อง</p>
         </div>
         <svg class="diagram" width="250" height="128" viewBox="0 0 250 128">
           <line x1="14" y1="106" x2="244" y2="106" stroke="#cdbfb4" stroke-width="1"/>
           <line x1="14" y1="10" x2="14" y2="106" stroke="#cdbfb4" stroke-width="1"/>
           <path d="${CURVE}" transform="translate(14,10)" fill="none" stroke="#e23744" stroke-width="2.4"/>
-          <line x1="${14 + halfX}" y1="10" x2="${14 + halfX}" y2="106" stroke="#b3121f" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
-          <text x="${14 + halfX}" y="120" text-anchor="middle" class="svglabel">half=${GLANS_VISUAL_HALF_CC}cc</text>
-          <text x="244" y="120" text-anchor="end" class="svglabel">cc ส่วนหัว →</text>
-          <text x="20" y="20" class="svglabel" style="fill:#e23744;font-weight:700">ΔØ หัว (เส้นโค้งอิ่มตัว)</text>
+          <text x="244" y="120" text-anchor="end" class="svglabel">cc ส่วนหัว (0–15) →</text>
+          <text x="20" y="20" class="svglabel" style="fill:#e23744;font-weight:700">ΔØ หัว (cube-root — โตเรื่อยๆ)</text>
         </svg>
       </div>
     </div>
@@ -182,10 +180,9 @@ td.r { text-align:right; font-family:'JetBrains Mono',monospace; } td b { color:
       <tr><td>รอบวงใหม่</td><td class="mono" style="font-size:11px">C₀ + (1.22 / 1.90)·g</td><td class="r"><b>${f1(e.c1Low)} – ${f1(e.c1High)} cm</b></td></tr>
       <tr><td>ขนาดถุงยาง</td><td class="mono" style="font-size:11px">รอบวง × 5</td><td class="r"><b>${e.condomWidthLow} – ${e.condomWidthHigh} mm</b> <span style="color:#7a716a">(จาก 52)</span></td></tr>
       <tr><td>ความยาวตอนอ่อน</td><td class="mono" style="font-size:11px">2.0 / 3.0 ·(1−e^(−${SHAFT}/10))</td><td class="r"><b>+${f1(e.lengthGainLow)} – ${f1(e.lengthGainHigh)} cm</b></td></tr>
-      <tr><td>ส่วนหัว — แพทย์</td><td class="mono" style="font-size:11px">min(${HEAD},2) → +0.13–0.24×2</td><td class="r">+${f2(e.glans.dgLow - e.glans.dg0)} – ${f2(e.glans.dgHigh - e.glans.dg0)} cm <span style="color:#7a716a">(อิ่มตัว)</span></td></tr>
-      <tr><td>ส่วนหัว — ภาพที่วาด</td><td class="mono" style="font-size:11px">${f2(e.glans.dg0)} + 1.6·(1−e^(−${HEAD}/6))</td><td class="r"><b>${f2(e.glans.dg0)} → ${f2(e.glans.visualLow)} cm</b></td></tr>
+      <tr><td>ส่วนหัว (cube-root)</td><td class="mono" style="font-size:11px">${f2(e.glans.dg0)}·∛(1+${HEAD}/veff)</td><td class="r"><b>+${f2(e.glans.deltaLow)} – +${f2(e.glans.deltaHigh)} cm</b> <span style="color:#7a716a">(Ø ${f2(e.glans.visualLow)}–${f2(e.glans.visualHigh)})</span></td></tr>
     </table>
-    <div class="disc">⚠️ ทุกค่าเป็น <b>การประมาณ ±~1 cm</b> เพื่อการสื่อสาร/จำลองเท่านั้น · ฟิลเลอร์อยู่ ~12–18 เดือนแล้วค่อยๆ สลาย · "ส่วนหัว" ในภาพปรับเพื่อการมองเห็น ไม่กระทบรอบวง/ถุงยาง · ผลจริงขึ้นกับสรีระแต่ละบุคคล</div>
+    <div class="disc">⚠️ ทุกค่าเป็น <b>การประมาณ ±~1 cm</b> เพื่อการสื่อสาร/จำลองเท่านั้น · ฟิลเลอร์อยู่ ~12–18 เดือนแล้วค่อยๆ สลาย · ส่วนหัวโตตามปริมาตร (cube-root) ไม่กระทบรอบวง/ถุงยาง · ${GLANS_CAVEAT.th} · ผลจริงขึ้นกับสรีระแต่ละบุคคล</div>
     <div class="footer">
       <span>© Lover Clinic · เอกสารอธิบายโมเดลคำนวณ Filler Simulator</span>
       <img src="${logoLight}" alt="">

@@ -4,14 +4,14 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { FILLER_REFERENCES } from '../src/lib/fillerRefs.js';
+import { FILLER_REFERENCES, GLANS_CAVEAT } from '../src/lib/fillerRefs.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
 describe('fillerRefs — verified citations', () => {
-  it('R1 has exactly 5 references, each fully formed', () => {
-    expect(FILLER_REFERENCES).toHaveLength(5);
+  it('R1 has exactly 6 references, each fully formed', () => {
+    expect(FILLER_REFERENCES).toHaveLength(6);
     FILLER_REFERENCES.forEach((r, i) => {
       expect(r.n).toBe(i + 1);
       expect(r.url).toMatch(/^https:\/\//);
@@ -20,7 +20,7 @@ describe('fillerRefs — verified citations', () => {
   });
   it('R2 URLs point to the verified hosts (PMC / Oxford / ISO)', () => {
     const hosts = FILLER_REFERENCES.map((r) => new URL(r.url).host);
-    expect(hosts.filter((h) => h === 'pmc.ncbi.nlm.nih.gov')).toHaveLength(3);
+    expect(hosts.filter((h) => h === 'pmc.ncbi.nlm.nih.gov')).toHaveLength(4);
     expect(hosts).toContain('academic.oup.com');
     expect(hosts).toContain('www.iso.org');
   });
@@ -34,8 +34,17 @@ describe('fillerRefs — verified citations', () => {
     expect(FILLER_REFERENCES[4].title).toMatch(/condom/i);
     expect(FILLER_REFERENCES[4].ref).toMatch(/ISO 4074/);
     expect(FILLER_REFERENCES.map((r) => r.cite)).toEqual([
-      'PMC7230452', 'PMC9809476', 'PMC8987147', 'J Sex Med 2024; 21(10):878', 'ISO 4074',
+      'PMC7230452', 'PMC9809476', 'PMC8987147', 'J Sex Med 2024; 21(10):878', 'ISO 4074', 'PMC4550597',
     ]);
+  });
+  it('R4 glans anchor (Moon 2015, PMC4550597) + extrapolation caveat (TH+EN)', () => {
+    const moon = FILLER_REFERENCES.find((r) => r.cite === 'PMC4550597');
+    expect(moon).toBeTruthy();
+    expect(moon.ref).toMatch(/Moon/);
+    expect(moon.refEn).toMatch(/Moon/);
+    expect(moon.title).toMatch(/Glans Penis Augmentation/);
+    expect(GLANS_CAVEAT.th).toMatch(/3–15|ปริมาตร/);
+    expect(GLANS_CAVEAT.en).toMatch(/extrapolation|volume/);
   });
 });
 

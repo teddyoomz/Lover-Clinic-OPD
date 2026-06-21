@@ -18,7 +18,7 @@ describe('filler-simulator v2 flow (Rule I — split shaft/glans, one source)', 
     expect(shaftCc).toBeCloseTo(10.2, 6);
     expect(glansCc).toBeCloseTo(1.8, 6);
     expect(e.c1Low).toBeGreaterThan(e.c0);                 // shaft grew
-    expect(e.glans.dgLow).toBeGreaterThan(e.glans.dg0);    // glans grew
+    expect(e.glans.visualLow).toBeGreaterThan(e.glans.dg0);    // glans grew
     expect(e.condom0.label).toBe('มาตรฐาน');
   });
 
@@ -27,7 +27,7 @@ describe('filler-simulator v2 flow (Rule I — split shaft/glans, one source)', 
     const dia = diameterFromGirth(10.4);
     const viaDiameter = estimate({ lengthCm: 12.7, baseGirthCm: girthFromDiameter(dia), shaftCc: 10, glansCc: 2 });
     expect(viaDiameter.c1Low).toBeCloseTo(viaCondom.c1Low, 6);
-    expect(viaDiameter.glans.dgLow).toBeCloseTo(viaCondom.glans.dgLow, 6);
+    expect(viaDiameter.glans.visualLow).toBeCloseTo(viaCondom.glans.visualLow, 6);
   });
 
   it('F3: glans cc does NOT change shaft girth / condom (flow)', () => {
@@ -36,14 +36,21 @@ describe('filler-simulator v2 flow (Rule I — split shaft/glans, one source)', 
     const b = estimate({ lengthCm: 12.7, baseGirthCm: base, shaftCc: 12, glansCc: 4 });
     expect(b.c1Low).toBeCloseTo(a.c1Low, 6);
     expect(b.condomLow.w).toBe(a.condomLow.w);
-    expect(b.glans.dgLow).toBeGreaterThan(a.glans.dgLow);
+    expect(b.glans.visualLow).toBeGreaterThan(a.glans.visualLow);
   });
 
   it('F4: 2D scale + 3D radius + glans both derive from est (single source)', () => {
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 16, glansCc: 2 });
     expect(girthToRadiusCm(e.c1Low)).toBeCloseTo(e.c1Low / (2 * Math.PI), 6);
     expect(e.d1Low).toBeCloseTo(e.c1Low / Math.PI, 6);
-    expect(e.glans.dgLow).toBeGreaterThan(0);
+    expect(e.glans.visualLow).toBeGreaterThan(0);
+  });
+
+  it('F5: glans cube-root — head Ø keeps growing 2→10→15cc (no plateau) + 15cc cap', () => {
+    const g = (cc) => estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: cc, baseGlansDiameterCm: 3.5 }).glans.visualLow;
+    expect(g(10)).toBeGreaterThan(g(2));
+    expect(g(15)).toBeGreaterThan(g(10));
+    expect(Math.min(20, 15)).toBe(15); // the simulator clamps the split to 15 — 20cc requested → 15cc
   });
 });
 
@@ -90,6 +97,16 @@ describe('filler-simulator v2 source-grep (purity + wiring + Rev requirements)',
     expect(page).not.toMatch(/แตะเพื่อดูภาพ/);
     expect(page).not.toMatch(/\brevealed\b/);
     expect(page).not.toMatch(/blur\(/);
+  });
+
+  it('SG6b: glans v2 — split slider capped at 15cc + head Ø readout (cube-root, no durable→peak caption)', () => {
+    expect(page).toMatch(/GLANS_SPLIT_MAX_CC/);                       // 15cc cap imported + wired
+    expect(page).toMatch(/Math\.min\(totalCc, GLANS_SPLIT_MAX_CC\)/); // split slider max capped
+    expect(page).toMatch(/glansHeadSize/);                            // head Ø readout label
+    expect(page).toMatch(/est\.glans\.visualLow/);                    // readout derived from the math
+    expect(page).not.toMatch(/ระยะคงตัว → ช่วงแรก/);                   // caption removed (user #2)
+    expect(math).toMatch(/glansDiameterGain/);                       // cube-root model present
+    expect(math).not.toMatch(/glansVisualGain|GLANS_SATURATION_CC/);  // old saturating model gone
   });
 
   it('SG7: debug-round fixes — 3D glans-independent, no egg/ทรงเห็ด, split clip', () => {
@@ -142,11 +159,15 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
     expect((total - glans) + glans).toBe(5);
   });
 
-  it('V3-3: 2D length auto-stretches (no static clamp) — fills viewBox width at max length (v5.2)', () => {
-    expect(g2d).not.toMatch(/, 100, 198\)/);   // old cap (~7.8in) removed
-    expect(g2d).not.toMatch(/lenToPx/);        // static clamp helper removed → dynamic
-    expect(g2d).toMatch(/maxShaftLen = SIDE_W - x0 - RIGHT_MARGIN - GAP - glansLenA/); // smart fill-to-width (v5.4: VIEW_W→SIDE_W)
-    expect(g2d).toMatch(/lenFrac/);            // length → 0..1 over the real range
+  it('V3-3 (Model B): length auto-fills box + thickness grows at ONE scale (glans:shaft exact) + old head', () => {
+    expect(g2d).not.toMatch(/, 100, 198\)/);                                      // old cap removed
+    expect(g2d).not.toMatch(/const PX_PER_CM|const s = Math\.min\(widthBudget/);  // not the fixed / auto-fit-whole approaches
+    expect(g2d).toMatch(/const thickScale = Math\.min\(THICK_BASE/);              // ONE thickness scale (grows + auto-shrink-to-band)
+    expect(g2d).toMatch(/const tShaftA = \(dLo \/ 2\) \* thickScale/);             // shaft Ø at thickScale
+    expect(g2d).toMatch(/const tGlansA = \(dgLo \/ 2\) \* thickScale/);            // glans Ø at the SAME scale → exact ratio
+    expect(g2d).toMatch(/const glansLenA = tGlansA \* GLANS_LEN_RATIO/);           // old mushroom head (length ∝ half-thickness)
+    expect(g2d).toMatch(/const len = MIN_SHAFT \+ lenFrac \* \(maxShaftLen - MIN_SHAFT\)/); // length AUTO-FILLS the box
+    expect(g2d).toMatch(/const maxShaftLen = SIDE_W - x0 - RIGHT_MARGIN - GAP - glansLenA/);
   });
 
   it('V3-4: REAL clinic logo — white(dark)/black(light) static asset img, theme-contrasting', () => {
@@ -167,9 +188,9 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
     expect(page).toMatch(/setGlansCc/);
     expect(page).toMatch(/const \[glansCc, setGlansCc\] = useState\(0\)/); // glansCc default 0 (v5.3: shaft 10 · glans 0)
     expect(page).toMatch(/step={0\.5}/);                   // 0.5cc finest, same at every range
-    expect(page).toMatch(/max={totalCc}/);                 // glans up to total
+    expect(page).toMatch(/max={Math\.min\(totalCc, GLANS_SPLIT_MAX_CC\)}/); // glans up to total, capped 15cc
     expect(page).toMatch(/glansCcEff/);                    // clamped effective value
-    expect(page).toMatch(/if \(glansCc > v\) setGlansCc\(v\)/); // clamp on total shrink
+    expect(page).toMatch(/if \(glansCc > cap\) setGlansCc\(cap\)/); // clamp on total shrink (capped at 15)
     expect(page).not.toMatch(/setGlansPct/);               // old percent-step control gone
     expect(page).not.toMatch(/useState\(15\)/);            // old glansPct default gone
   });
@@ -229,7 +250,7 @@ describe('filler-simulator v4 — centered header + result colors + dashed 2D + 
 
   it('V4-3: 2D "after" outline is THIN + DASHED + red (small growth not masked)', () => {
     // mushroom + cross-section "after" strokes: dashed, vivid red, width 1.7 (v7.4 — thinner again; v7.3 outset kept)
-    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4"/g) || [];
+    const afterStrokes = g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\} strokeDasharray="7 4"/g) || [];
     expect(afterStrokes.length).toBeGreaterThanOrEqual(2); // side-view + cross-section
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.6"/); // old thick solid gone
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.5"/);
@@ -286,7 +307,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
   it('V5-3: 2D split into auto-scale sections (side-view + cross-section) without losing dashed-after / i18n / damped head', () => {
     expect(g2d).toMatch(/0 0 \$\{SIDE_W\} \$\{SIDE_H\}/);                         // v5.4: side-view own viewBox
     expect(g2d).toMatch(/viewBox="0 0 240 240"/);                                // v5.4: cross-section own square viewBox
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
+    expect((g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\} strokeDasharray="7 4"/g) || []).length).toBeGreaterThanOrEqual(2); // V4-3 dashed kept (side + cross)
     expect(g2d).toMatch(/tr\('g2dSide'\)/);                                       // V3-7 i18n kept
     expect(g2d).toMatch(/visualLow/);                                            // V3 damped head kept
     expect(g2d).not.toMatch(/viewBox="0 0 380 236"/);                            // old small canvas gone
@@ -297,7 +318,7 @@ describe('filler-simulator v5 — glans baseline slider + bigger 2D (40/60) + mo
 
   it('V5-4: faint dashed edges + no reflection highlight + equal-height columns', () => {
     // after-edge is a BOLD red dash (full opacity, v7) — both after-strokes carry strokeOpacity="1"
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\} strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
     // reflection highlight ellipse removed from the shaft
     expect(g2d).not.toMatch(/rgba\(255,242,234/);
     // equal column heights: stretch + graphic card is a flex column whose SVG wrapper fills
@@ -317,17 +338,23 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);
   });
 
-  it('V7.4-1: baseline (เดิม) dash alpha raised to 0.35 (both themes) — more visible vs skin', () => {
-    expect(g2d).toMatch(/rgba\(15,23,42,0\.35\)/);    // light theme baseline (v7.4)
-    expect(g2d).toMatch(/rgba\(255,255,255,0\.35\)/); // dark theme baseline (v7.4)
-    expect(g2d).not.toMatch(/rgba\(15,23,42,0\.21\)/);  // v5.6 value superseded by v7.4
-    expect(g2d).not.toMatch(/rgba\(255,255,255,0\.25\)/); // v5.6 value superseded by v7.4
+  it('V7.4-1: baseline (เดิม) opacity 0.75 (both themes); theme-tuned widths — dark baseline −10%, light red +15%', () => {
+    expect(g2d).toMatch(/rgba\(15,23,42,0\.75\)/);    // light theme baseline opacity 75%
+    expect(g2d).toMatch(/rgba\(255,255,255,0\.75\)/); // dark theme baseline opacity 75%
+    expect(g2d).not.toMatch(/rgba\(15,23,42,0\.35\)/);  // 0.35 superseded
+    expect(g2d).not.toMatch(/rgba\(255,255,255,0\.35\)/); // 0.35 superseded
+    // baseline width: light 1.375, dark −10% = 1.2375 ; red width: light +15% = 0.9775, dark 0.85
+    expect(g2d).toMatch(/const baselineStrokeW = 1\.2375;/);                       // both themes (light reduced to match dark)
+    expect(g2d).toMatch(/const afterStrokeW = theme === 'light' \? 1\.07525 : 0\.85;/); // light +15% then +10%
+    expect((g2d.match(/stroke=\{beforeStroke\} strokeWidth=\{baselineStrokeW\}/g) || []).length).toBe(2); // baseline path + circle
+    expect((g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\}/g) || []).length).toBe(2);          // red path + circle
   });
 
-  it('V5.2-3: 2D side-view SMART auto-stretch — fills the viewBox width at max length', () => {
-    expect(g2d).toMatch(/import \{ diameterFromGirth, RANGES \}/);        // length range for the fraction
-    expect(g2d).toMatch(/const maxShaftLen = SIDE_W - x0 - RIGHT_MARGIN - GAP - glansLenA/); // v5.4: VIEW_W→SIDE_W
+  it('V5.2-3 (Model B): 2D side-view length AUTO-FILLS the box (10in fills); thickness one scale', () => {
+    expect(g2d).toMatch(/const lenFrac = Math\.max\(0, Math\.min\(1,/);  // length normalized → fills width
     expect(g2d).toMatch(/const len = MIN_SHAFT \+ lenFrac \* \(maxShaftLen - MIN_SHAFT\)/);
+    expect(g2d).toMatch(/const thickScale = Math\.min\(THICK_BASE/);
+    expect(g2d).not.toMatch(/const PX_PER_CM|const s = Math\.min\(widthBudget/);
     expect(g2d).toMatch(/SIDE_W = 480/);
   });
 
@@ -406,11 +433,19 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
     expect(page).toMatch(/\{t\('glans'\)\} \{ccFmt\(glansCcEff\)\}/);
   });
 
-  it('V5.3-3: cross-section big + own SVG + auto-scales with diameter', () => {
-    expect(g2d).toMatch(/viewBox="0 0 240 240"/);                   // own square SVG (v5.4)
-    expect(g2d).toMatch(/const csA = clamp\(dLo \* 18, 48, 100\)/); // bigger + diameter-scaled (was *12, 22, 72)
-    // V4-3 dashed-after stroke shape UNCHANGED → side-view + cross-section count still ≥2
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
+  it('V5.3-3 (ants+scale): cross-section GROWS with girth (caps at box) + after:before exact + baseline marches', () => {
+    expect(g2d).toMatch(/viewBox="0 0 240 240"/);
+    expect(g2d).toMatch(/const csScale = Math\.min\(CS_BASE, \(CS_MAX_R \* 2\) \/ Math\.max\(dLo, 0\.1\)\)/); // grows with Ø, caps at box
+    expect(g2d).toMatch(/const csA = \(dLo \/ 2\) \* csScale/);     // AFTER grows with girth (not pinned to max)
+    expect(g2d).toMatch(/const csB = \(d0 \/ 2\) \* csScale/);      // before proportional → exact ratio
+    expect(g2d).not.toMatch(/const csA = CS_MAX_R\b/);              // no longer pinned to max
+    // marching ants on the BASELINE only — clockwise, smooth (seamless -9 loop), reduced-motion-safe
+    expect(g2d).toMatch(/@keyframes fgAnts \{ to \{ stroke-dashoffset: -9; \} \}/);
+    expect(g2d).toMatch(/\.fg-ants \{ animation: fgAnts 0\.6s linear infinite; \}/);
+    expect(g2d).toMatch(/prefers-reduced-motion: reduce\) \{ \.fg-revBreathe, \.fg-ants \{ animation: none/);
+    expect((g2d.match(/showBaseline && <(path|circle) className="fg-ants"/g) || []).length).toBe(2); // baseline path + circle only
+    // the after (red) outline UNCHANGED (still breathes) → ≥2 dashed-after strokes
+    expect((g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\} strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('V5.3-4: subtitle copy → "เพื่อช่วยให้เห็นภาพได้ชัดเจนยิ่งขึ้น" (TH) + EN mirror; disclaimer keeps เพื่อการศึกษา', () => {
@@ -517,7 +552,7 @@ describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, N
 
   it('V5.6-1: red outline animates as its OWN fill:none element (side + cross) — NOT the skin body', () => {
     // the breathe class lives on fill:none OUTLINE-only elements → opacity/glow touch the LINE, not the skin fill
-    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
+    expect((g2d.match(/fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth=\{afterStrokeW\} strokeDasharray="7 4" strokeOpacity="1"/g) || []).length).toBe(2);
     // ANTI-REGRESSION (the v5.6-first bug): the SKIN-FILLED body must NEVER carry the animation, else the WHOLE shape fades
     expect(g2d).not.toMatch(/fill="url\(#fg-skin\)" className="fg-revBreathe"/);
     expect(g2d).not.toMatch(/fill="url\(#fg-cs\)" className="fg-revBreathe"/);
@@ -544,8 +579,8 @@ describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, N
     // v7.2 (2026-06-20): user — the red drop-shadow glow bled onto the warm skin-tone model
     // ("เอา glow ออกไป มันทำให้สีโมเดล 2D เพี้ยน เหลือแค่กระพริบ breathing"). Keep ONLY the
     // opacity breathe (bold → GONE → bold); remove the glow entirely.
-    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%,40%\{opacity:1\} 56%\{opacity:0\} 68%\{opacity:0\} 84%,100%\{opacity:1\} \}/);
-    expect(g2d).toMatch(/56%\{opacity:0\}/);                        // line FULLY disappears (the requested beat)
+    expect(g2d).toMatch(/@keyframes fgRevBreathe \{ 0%,35%\{opacity:1\} 50%\{opacity:0\} 79%\{opacity:0\} 90%,100%\{opacity:1\} \}/);
+    expect(g2d).toMatch(/50%\{opacity:0\} 79%\{opacity:0\}/);       // line FULLY disappears for ~1s (50→79% of 3.4s)
     // ANTI-REGRESSION: no glow keyframes, no drop-shadow filter anywhere in the 2D model
     expect(g2d).not.toMatch(/fgRevGlow/);
     expect(g2d).not.toMatch(/drop-shadow/);
@@ -553,8 +588,8 @@ describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, N
     expect(g2d).toMatch(/\.fg-revBreathe \{ animation: fgRevBreathe 3\.4s ease-in-out infinite; \}/);
   });
 
-  it('V5.6-3: prefers-reduced-motion guard disables the animation (a11y — static = original look)', () => {
-    expect(g2d).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.fg-revBreathe \{ animation: none; \} \}/);
+  it('V5.6-3: prefers-reduced-motion guard disables BOTH animations (a11y — breathe + marching ants)', () => {
+    expect(g2d).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.fg-revBreathe, \.fg-ants \{ animation: none; \} \}/);
   });
 
   it('V7-4: red line is FULL opacity (strokeOpacity 1) at all times + 2D-only (Filler3D has no dashed line, untouched)', () => {
@@ -629,7 +664,7 @@ describe('filler-simulator v6 — 2D dash toggles (double as legend) + auto-scal
   it('V6-5: toggle strings present (TH + EN)', () => {
     expect(strings).toMatch(/g2dToggleAfter: 'หลังฉีด'/);
     expect(strings).toMatch(/g2dToggleBaseline: 'เดิม'/);
-    expect(strings).toMatch(/g2dDashToggleHint: 'เส้นประ'/);
+    expect(strings).toMatch(/g2dDashToggleHint: 'เส้นประ · กดเพื่อ เปิด\/ปิด'/);
     expect(strings).toMatch(/g2dToggleAfter: 'after'/);
   });
 });

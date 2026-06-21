@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   K_DURABLE, K_PEAK, CONDOM_LADDER, condomForGirth, condomIndexForGirth,
-  GLANS_DIAM_PER_CC, GLANS_SATURATION_CC, RANGES, estimate,
+  RANGES, estimate,
 } from '../src/lib/fillerMath.js';
 
 describe('girth k-ladder (closest-to-real)', () => {
@@ -43,12 +43,17 @@ describe('volume range', () => {
   });
 });
 
-describe('glans calibration', () => {
-  it('ΔØ/cc band 0.13–0.24 (was 0.25–0.32)', () => {
-    expect(GLANS_DIAM_PER_CC.low).toBeCloseTo(0.13, 5);
-    expect(GLANS_DIAM_PER_CC.high).toBeCloseTo(0.24, 5);
+describe('glans calibration (cube-root volume model)', () => {
+  it('2cc anchor on Ø3.5: durable +0.45 / peak +0.53 cm Ø (Moon 2015)', () => {
+    const g = estimate({ lengthCm: 13.4, baseGirthCm: 10.4, shaftCc: 16, glansCc: 2, baseGlansDiameterCm: 3.5 }).glans;
+    expect(g.deltaLow).toBeCloseTo(0.45, 1);
+    expect(g.deltaHigh).toBeCloseTo(0.53, 1);
   });
-  it('saturation cap = 2mL', () => { expect(GLANS_SATURATION_CC).toBe(2); });
+  it('NO plateau — 10cc Ø > 3cc Ø > 2cc Ø (keeps growing per cc)', () => {
+    const g = (cc) => estimate({ lengthCm: 13.4, baseGirthCm: 10.4, shaftCc: 16, glansCc: cc, baseGlansDiameterCm: 3.5 }).glans.visualLow;
+    expect(g(3)).toBeGreaterThan(g(2));
+    expect(g(10)).toBeGreaterThan(g(3));
+  });
 });
 
 describe('estimate — erect-state + saturation', () => {
@@ -74,16 +79,16 @@ describe('estimate — erect-state + saturation', () => {
     const g0 = estimate({ ...base, shaftCc: 0 }).deltaCHigh;
     expect(g32 - g16).toBeLessThan(g16 - g0);
   });
-  it('glans ΔØ saturates at the 2mL plateau (3mL ≈ 2mL)', () => {
-    const g2 = estimate({ ...base, glansCc: 2 }).glans;
-    const g3 = estimate({ ...base, glansCc: 3 }).glans;
-    expect(g3.dgHigh).toBeCloseTo(g2.dgHigh, 5);
-    expect(g3.dgLow).toBeCloseTo(g2.dgLow, 5);
+  it('glans does NOT plateau — 3mL Ø > 2mL Ø (cube-root volume model)', () => {
+    const g2 = estimate({ ...base, glansCc: 2, baseGlansDiameterCm: 3.5 }).glans;
+    const g3 = estimate({ ...base, glansCc: 3, baseGlansDiameterCm: 3.5 }).glans;
+    expect(g3.visualHigh).toBeGreaterThan(g2.visualHigh);
+    expect(g3.visualLow).toBeGreaterThan(g2.visualLow);
   });
-  it('glans 2mL gives ΔØ ≈ +0.26–0.48cm (central ~0.35)', () => {
-    const g = estimate({ ...base, glansCc: 2 }).glans;
-    expect(g.dgHigh - g.dg0).toBeGreaterThan(0.25);
-    expect(g.dgHigh - g.dg0).toBeLessThan(0.5);
+  it('glans 2mL gives ΔØ ≈ +0.45–0.53cm (Moon 2015 anchor)', () => {
+    const g = estimate({ ...base, glansCc: 2, baseGlansDiameterCm: 3.5 }).glans;
+    expect(g.deltaHigh).toBeGreaterThan(0.4);
+    expect(g.deltaHigh).toBeLessThan(0.6);
   });
   it('glans is decoupled — does NOT change the shaft girth / condom result', () => {
     const no = estimate({ ...base, glansCc: 0 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PI, K_DURABLE, K_PEAK, CM_PER_INCH, RANGES, CONDOM_LADDER,
-  GLANS_DIAM_PER_CC, GLANS_CC, GLANS_BASE_RATIO,
+  GLANS_CC, GLANS_BASE_RATIO, GLANS_FILL_VOLUME_CC, GLANS_SPLIT_MAX_CC, glansDiameterGain,
   widthFromGirth, girthFromWidth, diameterFromGirth, girthFromDiameter, girthToRadiusCm,
   cmToInch, inchToCm, condomIndexForGirth, condomForGirth, estimate,
 } from '../src/lib/fillerMath.js';
@@ -169,22 +169,26 @@ describe('fillerMath — constants/ranges sanity', () => {
 });
 
 describe('fillerMath v2 — glans (head) augmentation', () => {
-  it('glans constants', () => {
-    expect(GLANS_DIAM_PER_CC).toEqual({ low: 0.13, high: 0.24 }); // 2026-06-21 (706-pt pool; was 0.25/0.32)
-    expect(GLANS_CC).toEqual({ min: 0.5, max: 4, step: 0.5, default: 2 });
+  it('glans constants (cube-root model)', () => {
+    expect(GLANS_CC).toEqual({ min: 0, max: 15, step: 0.5, default: 0 });
+    expect(GLANS_SPLIT_MAX_CC).toBe(15);
+    expect(GLANS_FILL_VOLUME_CC.peak).toBeCloseTo(3.81, 2);
+    expect(GLANS_FILL_VOLUME_CC.durable).toBeCloseTo(4.59, 2);
+    expect(GLANS_FILL_VOLUME_CC.peak).toBeLessThan(GLANS_FILL_VOLUME_CC.durable); // smaller veff → peak grows more
   });
-  it('ANCHOR: glans Ø 3.1 + 2cc → ~3.36–3.58 cm (706-pt pool ΔØ/cc 0.13–0.24)', () => {
-    const e = estimate({ lengthCm: 11, baseGirthCm: 9.74, shaftCc: 0, glansCc: 2, baseGlansDiameterCm: 3.1 });
-    expect(e.glans.dgLow).toBeCloseTo(3.36, 2); // 3.1 + 0.13*2
-    expect(e.glans.dgHigh).toBeCloseTo(3.58, 2); // 3.1 + 0.24*2
-    expect(e.glans.deltaLow).toBeCloseTo(0.26, 2);
+  it('ANCHOR: glans Ø 3.5 + 2cc → durable +0.45 / peak +0.53 cm Ø (Moon 2015 +14.1/+16.6mm circ)', () => {
+    const e = estimate({ lengthCm: 11, baseGirthCm: 9.74, shaftCc: 0, glansCc: 2, baseGlansDiameterCm: 3.5 });
+    expect(e.glans.deltaLow).toBeCloseTo(0.45, 1);   // durable +12.8%
+    expect(e.glans.deltaHigh).toBeCloseTo(0.53, 1);  // peak +15.1%
+    expect(e.glans.pctLow).toBeCloseTo(12.8, 0);
+    expect(e.glans.pctHigh).toBeCloseTo(15.1, 0);
   });
-  it('band low ≤ high; 0cc → no change', () => {
+  it('0cc → no change; durable ≤ peak', () => {
     const e0 = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 0 });
-    expect(e0.glans.dgLow).toBe(e0.glans.dg0);
-    expect(e0.glans.dgHigh).toBe(e0.glans.dg0);
+    expect(e0.glans.visualLow).toBe(e0.glans.dg0);
+    expect(e0.glans.visualHigh).toBe(e0.glans.dg0);
     const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 3 });
-    expect(e.glans.dgLow).toBeLessThanOrEqual(e.glans.dgHigh);
+    expect(e.glans.visualLow).toBeLessThanOrEqual(e.glans.visualHigh);
   });
   it('glans baseline defaults to shaft Ø when not provided', () => {
     const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
@@ -210,7 +214,8 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
     expect(shaftCc).toBeCloseTo(10.2, 6);
     expect(glansCc).toBeCloseTo(1.8, 6);
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc, glansCc });
-    expect(e.glans.deltaLow).toBeCloseTo(0.13 * 1.8, 6); // 2026-06-21 ΔØ/cc 0.13
+    expect(e.glans.deltaLow).toBeGreaterThan(0);            // head grows with the 1.8cc
+    expect(e.glans.visualLow).toBeGreaterThan(e.glans.dg0);
   });
   it('glans baseline ratio (v5): dg0 = ratio × shaft Ø; scales with diameter; condom unchanged', () => {
     expect(GLANS_BASE_RATIO).toEqual({ min: 0.75, max: 1.25, step: 0.05, default: 1.0 });
@@ -229,26 +234,26 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
     const big = estimate({ lengthCm: 12.7, baseGirthCm: 12.0, shaftCc: 5, glansCc: 2, baseGlansDiameterCm: 1.0 * bigDia });
     expect(big.glans.dg0).toBeGreaterThan(a.glans.dg0);
   });
-  it('visual diameter responds to the FULL injected head cc (continuous + saturating) + independent of shaft', () => {
-    // owner 2026-06-21 "marketing": the head VISIBLY bulges with head-cc, DECOUPLED from the 2mL
-    // medical plateau. PRIOR BUG (was `dg0 + 0.13*2*0.4`): visual used the saturated 2cc × 0.4 damp
-    // → +0.1cm Ø (≈+1.5px) + frozen above 2cc → user saw no head growth at 16cc.
-    const e2 = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
-    const e8 = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 8 });
-    const e16 = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 16 });
-    expect(e2.glans.visualLow).toBeGreaterThan(e2.glans.dg0);              // grows from baseline
-    expect(e8.glans.visualLow).toBeGreaterThan(e2.glans.visualLow);       // KEEPS growing above 2cc — the fix
-    expect(e16.glans.visualLow).toBeGreaterThan(e8.glans.visualLow);      // and above 8cc
-    // clearly-visible magnitude at a high dose (NOT the old +0.1cm): ≥ +1cm Ø at 16cc
-    expect(e16.glans.visualLow - e16.glans.dg0).toBeGreaterThan(1.0);
-    // saturating — the 8→16 increment is smaller than the 2→8 increment
-    expect(e16.glans.visualLow - e8.glans.visualLow).toBeLessThan(e8.glans.visualLow - e2.glans.visualLow);
-    // medical ΔØ STILL saturates at 2cc (honest) — unchanged by the visual decoupling
-    expect(e16.glans.dgLow).toBeCloseTo(e2.glans.dgLow, 6);
-    expect(e16.glans.deltaLow).toBeCloseTo(0.13 * 2, 6);
+  it('STRICTLY INCREASING 0→15 (no plateau) + diminishing per-cc + ≥+1cm at 10cc + independent of shaft', () => {
+    // research-anchored cube-root volume model (spec 2026-06-21): head grows with EVERY cc, never
+    // plateaus (the OLD "saturates at 2mL" was a misread), each cc adds a little less Ø. Capped 15cc.
+    const g = (cc) => estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: cc, baseGlansDiameterCm: 3.5 }).glans;
+    expect(g(2).visualLow).toBeGreaterThan(g(0).visualLow);              // grows from baseline
+    expect(g(8).visualLow).toBeGreaterThan(g(2).visualLow);             // KEEPS growing above 2cc — the fix
+    expect(g(15).visualLow).toBeGreaterThan(g(10).visualLow);          // all the way to the 15cc cap
+    expect(g(10).visualLow - g(10).dg0).toBeGreaterThan(1.0);          // clinic 10cc looks big (≥ +1cm Ø)
+    // diminishing per-cc (cube-root): the 8→15 increment < the 2→8 increment
+    expect(g(15).visualLow - g(8).visualLow).toBeLessThan(g(8).visualLow - g(2).visualLow);
     // visual is independent of shaft cc
     const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 8 });
     const b = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 30, glansCc: 8 });
     expect(b.glans.visualLow).toBeCloseTo(a.glans.visualLow, 6);
+  });
+  it('removed: GLANS_DIAM_PER_CC / GLANS_SATURATION_CC / glansVisualGain no longer exported', async () => {
+    const mod = await import('../src/lib/fillerMath.js');
+    expect(mod.GLANS_DIAM_PER_CC).toBeUndefined();
+    expect(mod.GLANS_SATURATION_CC).toBeUndefined();
+    expect(mod.glansVisualGain).toBeUndefined();
+    expect(mod.GLANS_VISUAL_MAX_DELTA).toBeUndefined();
   });
 });

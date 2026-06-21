@@ -54,8 +54,8 @@ describe('filler defaults + thinner dashed', () => {
     expect(page).toMatch(/const \[lengthCm, setLengthCm\] = useState\(12\.7\)/);
     expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);
   });
-  it('red dashed "after" outline is −50% (0.85), no 1.7 remains', () => {
-    expect((g2d.match(/stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4"/g) || []).length).toBe(2);
+  it('red dashed "after" outline is theme-tuned (afterStrokeW), no 1.7 remains', () => {
+    expect((g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\} strokeDasharray="7 4"/g) || []).length).toBe(2);
     expect(g2d).not.toMatch(/stroke="#ef4444" strokeWidth="1\.7"/);
   });
 });

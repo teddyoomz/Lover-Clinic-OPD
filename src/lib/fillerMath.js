@@ -31,27 +31,30 @@ export const RANGES = {
   cc: [5, 50], // TOTAL filler — 5–50cc (raised back to 50 per owner 2026-06-21). split shaft + glans
 };
 
-// Glans (head) augmentation — closest-to-real (spec 2026-06-21): central ΔØ 0.17 cm/cc, band 0.13–0.24
-// (2024 J Sex Med meta, 706 pts — glans circ +14.8mm VERIFIED → ΔØ ~0.47cm at the 2mL plateau; 0.24×2≈0.48).
-// SATURATES at the ~2mL plateau (3mL ≈ 2mL).
-// Independent of shaft girth → does NOT change รอบวง / condom size.
-export const GLANS_DIAM_PER_CC = { low: 13 / 100, high: 24 / 100 }; // cm diameter per cc
-export const GLANS_SATURATION_CC = 2; // dose plateau — no added ΔØ above ~2mL (no dose-response)
-export const GLANS_CC = { min: 0.5, max: 4, step: 0.5, default: 2 };
+// Glans (head) augmentation — research-anchored cube-root VOLUME-CONSERVATION model (spec 2026-06-21).
+// Filler IS the added volume (peer-reviewed mechanism); the head is compact → Ø grows as the CUBE ROOT
+// of total volume → never plateaus, each cc adds a little less Ø (real tissue physics). Anchored to the
+// only published glans dose (Moon 2015, WJMH 33(2):50, 2cc): durable +0.45cm Ø (5yr, +14.1mm circ) /
+// peak +0.53cm Ø (6mo, +16.6mm circ) on a typical glans (Ø ~3.5cm). veff = effective glans
+// filler-compliance volume, calibrated so 2cc lands on those anchors (peak +15.1% / durable +12.8% Ø).
+// >3mL is a volume-conservation EXTRAPOLATION (no glans study exists above 3mL) — cross-validated by
+// 20mL shaft trials that keep growing; see GLANS_CAVEAT in fillerRefs.js. The OLD "saturates at 2mL"
+// was a misread (2mL is just the only dose ever studied). Independent of shaft girth → does NOT change
+// รอบวง / condom. Integer fractions so the build obfuscator hides the literals.
+export const GLANS_FILL_VOLUME_CC = { peak: 381 / 100, durable: 459 / 100 }; // effective glans volume (cc)
+export const GLANS_SPLIT_MAX_CC = 15; // head-injection cap (split slider) — locks the exaggeration
+export const GLANS_CC = { min: 0, max: 15, step: 0.5, default: 0 };
 // initial glans (head) baseline size — a ratio of the shaft Ø; default 1.0 = shaft Ø (today's value).
 // Multiplies diameterFromGirth(baseGirthCm), so the baseline head scales with the chosen diameter.
 export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0 };
-// VISUAL-ONLY glans growth (owner 2026-06-21 "marketing"): the head VISIBLY bulges with the
-// FULL injected head-cc — continuous + saturating — DECOUPLED from the medical ΔØ (which
-// honestly plateaus at GLANS_SATURATION_CC=2mL, reported by dgLow/dgHigh but NOT shown to the
-// user; glans is independent of girth/condom). This exists purely so the customer SEES the head
-// respond to the split slider above 2cc. PRIOR BUG: visual used the 2mL-saturated cc × 0.4 damp
-// → +0.1cm Ø (≈+1.5px) + frozen above 2cc → imperceptible. Gain saturates so a big dose bulges
-// believably, not absurdly. Integer fractions so the build obfuscator hides the literals.
-export const GLANS_VISUAL_MAX_DELTA = { low: 16 / 10, high: 24 / 10 }; // cm Ø plateau (visual only)
-export const GLANS_VISUAL_HALF_CC = 6; // head cc giving ~63% of the visual plateau
-export const glansVisualGain = (glansCc, max) =>
-  max * (1 - Math.exp(-Math.max(Number(glansCc) || 0, 0) / GLANS_VISUAL_HALF_CC));
+// cube-root volume-conservation Ø gain: dg0 · (∛(1 + cc/veff) − 1). Never plateaus; diminishing per-cc.
+// Both the 2D mushroom + the 3D glans bulb render the resulting Ø (single source).
+export const glansDiameterGain = (glansCc, dg0, veff) => {
+  const d = Math.max(Number(dg0) || 0, 0);
+  const cc = Math.max(Number(glansCc) || 0, 0);
+  const v = Number(veff) || 1;
+  return d * (Math.cbrt(1 + cc / v) - 1);
+};
 
 // Thai-familiar + world condom nominal-width ladder (mm), ascending (spec 2026-06-21).
 // 45–56 = Thai retail (Durex/Onetouch/Okamoto; 52 = everyday standard — no 51/53);
@@ -121,20 +124,19 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
   const condomHigh = condomForGirth(c1High);
   // glans (head) — independent of shaft girth / condom; default baseline = shaft Ø
   const dg0 = num(baseGlansDiameterCm) > 0 ? num(baseGlansDiameterCm) : diameterFromGirth(C0);
-  const gc = Math.min(Math.max(num(glansCc), 0), GLANS_SATURATION_CC); // MEDICAL ΔØ saturates at the ~2mL plateau (3mL ≈ 2mL)
-  const rawGc = Math.max(num(glansCc), 0); // VISUAL uses the FULL injected head cc → responds above 2cc (the bug fix)
+  const rawGc = Math.max(num(glansCc), 0); // FULL injected head cc — no saturation; capped only by the 15cc slider
+  const gainDurable = glansDiameterGain(rawGc, dg0, GLANS_FILL_VOLUME_CC.durable);
+  const gainPeak = glansDiameterGain(rawGc, dg0, GLANS_FILL_VOLUME_CC.peak);
   const glans = {
     dg0,
-    // medical ΔØ — honest, plateaus at 2mL (independent of shaft girth / condom). NOT displayed.
-    dgLow: dg0 + GLANS_DIAM_PER_CC.low * gc,
-    dgHigh: dg0 + GLANS_DIAM_PER_CC.high * gc,
-    deltaLow: GLANS_DIAM_PER_CC.low * gc,
-    deltaHigh: GLANS_DIAM_PER_CC.high * gc,
-    // visual-only diameter — head bulges believably with the FULL head cc (continuous +
-    // saturating), so moving the split slider above 2cc keeps enlarging the head. Both the
-    // 2D mushroom + the 3D glans bulb read visualLow (single source).
-    visualLow: dg0 + glansVisualGain(rawGc, GLANS_VISUAL_MAX_DELTA.low),
-    visualHigh: dg0 + glansVisualGain(rawGc, GLANS_VISUAL_MAX_DELTA.high),
+    // cube-root volume-conservation Ø. visualLow = durable (settled), visualHigh = peak (~1mo).
+    // 2D + 3D both render visualLow (single source). Never plateaus; capped by the 15cc slider.
+    visualLow: dg0 + gainDurable,
+    visualHigh: dg0 + gainPeak,
+    deltaLow: gainDurable,
+    deltaHigh: gainPeak,
+    pctLow: dg0 > 0 ? (gainDurable / dg0) * 100 : 0,
+    pctHigh: dg0 > 0 ? (gainPeak / dg0) * 100 : 0,
   };
   return {
     c0: C0,

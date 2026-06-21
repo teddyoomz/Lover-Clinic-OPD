@@ -43,5 +43,11 @@ if (/property="og:image"\s+content="\//.test(indexHtml))
 if (!/property="og:url"\s+content="https:\/\/loverclinic\.vercel\.app\//.test(indexHtml))
   hits.push('og:url missing/relative — needed for reliable share unfurl');
 
+// favicon = the clinic icon (same as the OPD site lover-clinic-app), NOT the generic favicon.svg (regression guard)
+if (!/rel="icon"[^>]*href="\/icon-192\.png"/.test(indexHtml))
+  hits.push('favicon is not /icon-192.png (the clinic icon) — filler site shows a wrong/generic icon');
+if (!walk('dist-filler').some((f) => /[\\/]icon-192\.png$/.test(f)))  // walk full tree — `files` is filtered to .js/.html
+  hits.push('icon-192.png not emitted into dist-filler (copy it into public-filler/)');
+
 if (hits.length) { console.error('❌ filler bundle verification FAILED:\n  ' + hits.join('\n  ')); process.exit(1); }
 console.log(`✅ dist-filler verified: ${files.length} files · no firebase/OPD · formula obfuscated · 3D present.`);

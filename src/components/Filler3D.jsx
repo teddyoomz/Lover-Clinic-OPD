@@ -14,8 +14,9 @@ function buildModel(group, material, est, lengthCm) {
   }
   const r = Math.max(girthToRadiusCm(est?.c1Low ?? 5.5), 0.3); // shaft radius (cm)
   const L = Math.max(lengthCm ?? 12.7, 4); // cm
-  // glans radius from the (damped) glans Ø — INDEPENDENT of shaft, so injecting the
-  // shaft makes the shaft grow past the head (not the head following the shaft).
+  // glans radius from the glans Ø (real cm, same world as the shaft — the research cube-root model;
+  // spec 2026-06-21). INDEPENDENT of shaft, so injecting the shaft grows the shaft past the head
+  // (not the head following the shaft). Scale is EXACT: glansR ÷ r == visualLow ÷ (c1Low/π).
   const glansR = Math.max((est?.glans?.visualLow ?? r * 2) / 2, 0.3);
 
   // shaft (cylinder along X)

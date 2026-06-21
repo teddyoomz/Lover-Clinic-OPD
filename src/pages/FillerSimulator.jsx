@@ -4,7 +4,7 @@
 //     (new=green / baseline=red / delta=gold) + formal copy. Single source of truth = fillerMath.
 import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
 import {
-  CONDOM_LADDER, RANGES, GLANS_BASE_RATIO,
+  CONDOM_LADDER, RANGES, GLANS_BASE_RATIO, GLANS_SPLIT_MAX_CC,
   girthFromWidth, girthFromDiameter, diameterFromGirth,
   cmToInch, inchToCm, estimate,
 } from '../lib/fillerMath.js';
@@ -189,7 +189,7 @@ export default function FillerSimulator() {
     : girthFromDiameter(baseDiameterCm);
 
   // split: glansCc is the direct 0.5-step control; shaft gets the rest. Clamp glans ≤ total.
-  const glansCcEff = Math.min(glansCc, totalCc);
+  const glansCcEff = Math.min(glansCc, totalCc, GLANS_SPLIT_MAX_CC); // head capped at 15cc (exaggeration lock)
   const shaftCc = totalCc - glansCcEff;
   // baseline head Ø = ratio × shaft Ø → scales with the chosen diameter (default 1.0 = shaft Ø)
   const baseGlansDiameterCm = glansBaseRatio * diameterFromGirth(baseGirthCm);
@@ -343,12 +343,12 @@ export default function FillerSimulator() {
                 <span style={{ fontSize: 14, color: c.tx }}>{t('totalFiller')}</span>
                 <span className="fs-num" style={{ fontSize: 14, fontWeight: 700, color: '#fff', background: `linear-gradient(90deg, ${c.fire2}, ${c.fire})`, borderRadius: 8, padding: '5px 11px' }}>{totalCc} {t('cc')}</span>
               </div>
-              <input className="fs-range" type="range" min={RANGES.cc[0]} max={RANGES.cc[1]} step={1} value={totalCc} onChange={(e) => { const v = Number(e.target.value); setTotalCc(v); if (glansCc > v) setGlansCc(v); }} aria-label={t('totalFiller')} />
+              <input className="fs-range" type="range" min={RANGES.cc[0]} max={RANGES.cc[1]} step={1} value={totalCc} onChange={(e) => { const v = Number(e.target.value); setTotalCc(v); const cap = Math.min(v, GLANS_SPLIT_MAX_CC); if (glansCc > cap) setGlansCc(cap); }} aria-label={t('totalFiller')} />
 
               <div style={{ margin: '15px 0 8px' }}>
                 <span style={{ fontSize: 14, color: c.tx }}>{t('splitLabel')}</span>
               </div>
-              <input className="fs-range glans" type="range" min={0} max={totalCc} step={0.5} value={glansCcEff} onChange={(e) => setGlansCc(Number(e.target.value))} aria-label={t('splitLabel')} />
+              <input className="fs-range glans" type="range" min={0} max={Math.min(totalCc, GLANS_SPLIT_MAX_CC)} step={0.5} value={glansCcEff} onChange={(e) => setGlansCc(Number(e.target.value))} aria-label={t('splitLabel')} />
               {/* clean proportion strip — NO in-segment text. Labels live in the legend below so they
                   NEVER clip/cram when a segment is narrow (small-glans display bug fix). */}
               <div style={{ height: 14, borderRadius: 7, overflow: 'hidden', display: 'flex', border: `1px solid ${c.line}`, marginTop: 10 }}>
@@ -366,6 +366,15 @@ export default function FillerSimulator() {
                   {t('glans')} {ccFmt(glansCcEff)} {t('cc')}
                 </span>
               </div>
+              {/* head size readout — durable→peak Ø, exact from the cube-root math; NO durable→peak caption (user #2) */}
+              {est?.glans && (
+                <div className="fs-num" style={{ marginTop: 9, fontSize: 13, color: c.tx }}>
+                  {t('glansHeadSize')}: Ø {r1(est.glans.visualLow)}–{r1(est.glans.visualHigh)} {t('unitCm')}
+                  {glansCcEff > 0 && (
+                    <span style={{ color: c.amber, fontWeight: 700 }}> (+{Math.round(est.glans.pctLow)}–{Math.round(est.glans.pctHigh)}%)</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

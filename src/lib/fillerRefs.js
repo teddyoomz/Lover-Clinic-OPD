@@ -37,4 +37,20 @@ export const FILLER_REFERENCES = [
     ref: 'ISO 4074 · มาตรฐานสากล', refEn: 'ISO 4074 · International Standard',
     title: 'Natural rubber latex male condoms — Requirements and test methods',
   },
+  {
+    // Glans (head) augmentation anchor — foundational + dose source for the cube-root glans model.
+    // Verified 2026-06-21: first author Du Geon Moon, WJMH 2015;33(2):50-61. 2cc → glans circ
+    // +16.58mm peak (6mo) → +14.10mm durable (5yr, 15% resorption). All glans studies used ≤3 mL.
+    n: 6, cite: 'PMC4550597', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4550597/',
+    ref: 'Moon DG และคณะ (2015) · World J Mens Health', refEn: 'Moon DG et al. (2015) · World J Mens Health',
+    title: 'Glans Penis Augmentation Using Hyaluronic Acid Gel as an Injectable Filler',
+  },
 ];
+
+// Honest caveat for the glans model (SINGLE SOURCE — shown in the in-app references modal AND the PDF
+// explainer). All published glans studies tested ≤3 mL; 3–15 cc is a volume-conservation extrapolation,
+// cross-validated by 20 mL shaft trials that keep growing — NOT a directly-studied glans dose.
+export const GLANS_CAVEAT = {
+  th: 'งานวิจัยขยายส่วนหัว (glans) ทุกชิ้นทดสอบที่ ≤3 mL (หลักๆ 2 mL). ช่วง 3–15 cc เป็นการประมาณตามหลักการคงปริมาตร (ฟิลเลอร์ = ปริมาตรที่เพิ่มเข้าไป) สอดคล้องกับงานวิจัยลำตัวที่ฉีด ~20 mL แล้วยังโตต่อเนื่อง — ไม่ใช่ค่าจากงานวิจัยหัวโดยตรงเกิน 3 mL.',
+  en: 'All glans-augmentation studies tested ≤3 mL (mostly 2 mL). The 3–15 cc range is a volume-conservation extrapolation (filler = added volume), consistent with shaft trials injecting ~20 mL that keep growing — not a directly-studied glans dose above 3 mL.',
+};

@@ -7,9 +7,8 @@
 import { useState } from 'react';
 import { diameterFromGirth, RANGES } from '../lib/fillerMath.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const shaftHalfT = (d) => clamp(22 + (d - 2) * 14, 16, 64); // shaft Ø → px (fills the side band)
-const glansHalfT = (d) => clamp(24 + (d - 2) * 15, 18, 78); // glans Ø → px (separate)
+const GLANS_LEN_RATIO = 1.25; // glans length ÷ glans HALF-thickness (mushroom shape — unchanged from old)
+const S_VPAD = 6;             // px vertical padding inside the band
 
 const SIDE_W = 480;   // side-view viewBox width
 const SIDE_H = 168;   // side-view viewBox height (tight band — minimal dead space)
@@ -17,8 +16,11 @@ const SIDE_CY = 84;   // shape centered in the band
 const X0 = 30;        // shaft start x
 const GAP = 7;        // sulcus gap
 const RIGHT_MARGIN = 14;
-const MIN_SHAFT = 150; // shaft px at the shortest length
 const DASH_OUT = 3;    // px the red "หลังฉีด" dashed outline sits OUTSIDE the body edge (hugs the outer edge, never overlaps the real silhouette)
+const MIN_SHAFT = 150; // shaft px at the shortest length (length auto-fill floor — short isn't tiny)
+const THICK_BASE = 26; // base px-per-cm for thickness — generous (typical Ø3.3 → ~86px full, the old beloved look)
+const CS_MAX_R = 100;  // cross-section: the AFTER circle radius that FILLS the 240 viewBox (at large girth)
+const CS_BASE = 44;    // cross-section px-per-cm — grows with girth; caps-at-fill near Ø4.5 (typical Ø3.3 → r≈73)
 
 function mushPath(x0, cy, len, tShaft, tGlans, glansLen) {
   const xS = x0 + len;
@@ -61,31 +63,43 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const d0 = est?.d0 ?? diameterFromGirth(10.4);
   const dLo = est?.d1Low ?? d0;
   const dg0 = est?.glans?.dg0 ?? d0;
-  const dgLo = est?.glans?.visualLow ?? est?.glans?.dgLow ?? dg0;
+  const dgLo = est?.glans?.visualLow ?? dg0;
 
   const lab = theme === 'light' ? '#5b6675' : '#9b938f';
   const labStrong = theme === 'light' ? '#1e293b' : '#ededed';
   // baseline (เดิม) edge — soft pale dash (alpha 0.35, both themes)
-  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.35)';
+  const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.75)' : 'rgba(255,255,255,0.75)';
+  // dashed-line thickness — theme-tuned (user 2026-06-21): dark baseline −10%, light "หลังฉีด" +15%
+  const baselineStrokeW = 1.2375;                             // both themes −10% (light reduced to match dark)
+  const afterStrokeW = theme === 'light' ? 1.07525 : 0.85;    // light +15% then +10% (0.85 × 1.265) · dark 0.85
   // centered-faint clinic watermark (theme-aware logo) — travels with any screenshot / SVG copy
   const wmLogo = theme === 'light' ? '/lover-clinic-logo-light.png' : '/lover-clinic-logo-dark.png';
 
-  // side-view thicknesses + auto-stretch length→width (10in fills the band width)
+  // Model B (space-maximised): LENGTH auto-fills the box width (10in = full); THICKNESS grows with the
+  // value at ONE proportional scale (→ glans Ø : shaft Ø EXACT), auto-shrinking BOTH together only if the
+  // biggest Ø would overflow the band (so it never clips, ratio preserved); glans length ∝ glans
+  // HALF-thickness (old mushroom shape). Cross-section auto-fills its box. (spec 2026-06-21 — Model B)
   const cy = SIDE_CY;
   const x0 = X0;
-  const tShaftA = shaftHalfT(dLo);
-  const tShaftB = shaftHalfT(d0);
-  const tGlansA = glansHalfT(dgLo);
-  const tGlansB = glansHalfT(dg0);
-  const glansLenA = tGlansA * 1.25;
-  const glansLenB = tGlansB * 1.25;
-  const lenFrac = clamp((lengthCm - RANGES.lengthCm[0]) / (RANGES.lengthCm[1] - RANGES.lengthCm[0]), 0, 1);
+  // thickness — one scale for BOTH Ø; grows with value, never clips the band
+  const maxHalf = SIDE_H / 2 - (S_VPAD + DASH_OUT);                     // band half-budget (room for the dashed outset)
+  const thickScale = Math.min(THICK_BASE, (maxHalf * 2) / Math.max(dLo, dgLo, 0.1)); // px per cm (thickness)
+  const tShaftA = (dLo / 2) * thickScale;
+  const tGlansA = (dgLo / 2) * thickScale;
+  const glansLenA = tGlansA * GLANS_LEN_RATIO;                          // old mushroom shape (length ∝ half-thickness)
+  const tShaftB = (d0 / 2) * thickScale;
+  const tGlansB = (dg0 / 2) * thickScale;
+  const glansLenB = tGlansB * GLANS_LEN_RATIO;
+  // length — auto-fill the box width (10in fills; short floors at MIN_SHAFT)
+  const lenFrac = Math.max(0, Math.min(1, (lengthCm - RANGES.lengthCm[0]) / (RANGES.lengthCm[1] - RANGES.lengthCm[0])));
   const maxShaftLen = SIDE_W - x0 - RIGHT_MARGIN - GAP - glansLenA;
   const len = MIN_SHAFT + lenFrac * (maxShaftLen - MIN_SHAFT);
+  const lenB = len;
 
-  // cross-section — BIG, auto-scales with diameter; own square viewBox, centered, container-scaled
-  const csA = clamp(dLo * 18, 48, 100);
-  const csB = clamp(d0 * 18, 48, 100);
+  // cross-section (shaft only) — GROWS with girth (one scale, caps at the box); after:before radius == dLo:d0 exact
+  const csScale = Math.min(CS_BASE, (CS_MAX_R * 2) / Math.max(dLo, 0.1));
+  const csA = (dLo / 2) * csScale;
+  const csB = (d0 / 2) * csScale;
   const ccx = 120;
   const ccy = 120;
 
@@ -94,9 +108,11 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', gap: 12 }}>
       <style>{`
-        @keyframes fgRevBreathe { 0%,40%{opacity:1} 56%{opacity:0} 68%{opacity:0} 84%,100%{opacity:1} }
+        @keyframes fgRevBreathe { 0%,35%{opacity:1} 50%{opacity:0} 79%{opacity:0} 90%,100%{opacity:1} }
         .fg-revBreathe { animation: fgRevBreathe 3.4s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) { .fg-revBreathe { animation: none; } }
+        @keyframes fgAnts { to { stroke-dashoffset: -9; } }
+        .fg-ants { animation: fgAnts 0.6s linear infinite; }
+        @media (prefers-reduced-motion: reduce) { .fg-revBreathe, .fg-ants { animation: none; } }
       `}</style>
       {/* side view */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -112,11 +128,11 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           {/* after — skin body (mushroom), SOLID + static (never animates) */}
           <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" />
           {/* after — red DASHED outline, OUTSET by DASH_OUT so it hugs the OUTER edge (never overlaps the body); breathe = opacity pulse on the LINE */}
-          {showAfter && <path d={mushPath(x0 - DASH_OUT, cy, len + DASH_OUT, tShaftA + DASH_OUT, tGlansA + DASH_OUT, glansLenA + DASH_OUT)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1" />}
+          {showAfter && <path d={mushPath(x0 - DASH_OUT, cy, len + DASH_OUT, tShaftA + DASH_OUT, tGlansA + DASH_OUT, glansLenA + DASH_OUT)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth={afterStrokeW} strokeDasharray="7 4" strokeOpacity="1" />}
           {/* corona ridge */}
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
-          {showBaseline && <path d={mushPath(x0 + 2, cy, len - 4, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />}
+          {showBaseline && <path className="fg-ants" d={mushPath(x0, cy, lenB, tShaftB, tGlansB, glansLenB)} fill="none" stroke={beforeStroke} strokeWidth={baselineStrokeW} strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="192" y="66" width="96" height="36" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         </svg>
@@ -134,8 +150,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
             </radialGradient>
           </defs>
           <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" />
-          {showAfter && <circle cx={ccx} cy={ccy} r={csA + DASH_OUT} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth="0.85" strokeDasharray="7 4" strokeOpacity="1" />}
-          {showBaseline && <circle cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth="1.1" strokeDasharray="5 4" />}
+          {showAfter && <circle cx={ccx} cy={ccy} r={csA + DASH_OUT} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth={afterStrokeW} strokeDasharray="7 4" strokeOpacity="1" />}
+          {showBaseline && <circle className="fg-ants" cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth={baselineStrokeW} strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         </svg>
