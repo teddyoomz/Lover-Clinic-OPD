@@ -33,5 +33,15 @@ for (const re of FORMULA) if (re.test(blob)) hits.push('Formula constant NOT obf
 const has3D = /WebGLRenderer/.test(blob) && files.some((f) => /Filler3D/.test(f));
 if (!has3D) hits.push('3D MISSING — three.js / Filler3D lazy chunk not emitted (dynamic import broken?)');
 
+// Open Graph share-preview: og:image + og:url MUST be ABSOLUTE https URLs, or
+// LINE / WhatsApp / FB show a bare text card (relative og:image is not resolved).
+const indexHtml = files.filter((f) => f.endsWith('index.html')).map((f) => readFileSync(f, 'utf8')).join('\n');
+if (!/property="og:image"\s+content="https:\/\/loverclinic\.vercel\.app\/og-image\.png"/.test(indexHtml))
+  hits.push('og:image is not the absolute https://loverclinic.vercel.app/og-image.png (relative → bare share card)');
+if (/property="og:image"\s+content="\//.test(indexHtml))
+  hits.push('og:image is a RELATIVE path — crawlers (LINE/WhatsApp/FB) will not fetch it');
+if (!/property="og:url"\s+content="https:\/\/loverclinic\.vercel\.app\//.test(indexHtml))
+  hits.push('og:url missing/relative — needed for reliable share unfurl');
+
 if (hits.length) { console.error('❌ filler bundle verification FAILED:\n  ' + hits.join('\n  ')); process.exit(1); }
 console.log(`✅ dist-filler verified: ${files.length} files · no firebase/OPD · formula obfuscated · 3D present.`);

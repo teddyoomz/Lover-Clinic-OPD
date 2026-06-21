@@ -5,14 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Lover Clinic — จำลองผลการฉีดเพิ่มขนาด</title>
     <link rel="icon" href="/favicon.svg" />
-    <!-- Open Graph / share preview (LINE / Facebook) -->
+    <!-- Open Graph / share preview (LINE / Messenger / WhatsApp / Facebook).
+         og:image + og:url MUST be ABSOLUTE https URLs — LINE / WhatsApp / FB
+         crawlers do NOT resolve a relative og:image (a relative path → bare
+         text card). This file builds ONLY into the standalone served at
+         loverclinic.vercel.app, so the domain is hardcoded-canonical. -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lover Clinic" />
+    <meta property="og:url" content="https://loverclinic.vercel.app/" />
     <meta property="og:title" content="Lover Clinic — จำลองผลการฉีดเพิ่มขนาด" />
     <meta property="og:description" content="ประเมินรอบวง ขนาดถุงยาง และภาพจำลองเสมือนจริงจากปริมาณฟิลเลอร์ — โดย Lover Clinic" />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image" content="https://loverclinic.vercel.app/og-image.png" />
+    <meta property="og:image:secure_url" content="https://loverclinic.vercel.app/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Lover Clinic — เครื่องมือจำลองผลฉีดฟิลเลอร์" />
+    <meta property="og:locale" content="th_TH" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Lover Clinic — จำลองผลการฉีดเพิ่มขนาด" />
+    <meta name="twitter:description" content="ประเมินรอบวง ขนาดถุงยาง และภาพจำลองเสมือนจริงจากปริมาณฟิลเลอร์ — โดย Lover Clinic" />
+    <meta name="twitter:image" content="https://loverclinic.vercel.app/og-image.png" />
     <!-- No inline JS → CSP script-src 'self' stays clean. Theme defaults dark
          (FillerSimulator useState('dark')); dark body bg = no first-paint flash. -->
     <style>html,body{margin:0;padding:0;min-height:100%;background:#050505;}</style>
