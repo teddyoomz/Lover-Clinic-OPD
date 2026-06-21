@@ -79,14 +79,19 @@
     <div class="card">
       <label>เลือกขนาดถุงยางอนามัย (ปัจจุบันของคุณ)</label>
       <select><option>52 มม. (มาตรฐาน)</option></select>
-      <div style="font-size:10.5px;color:#6a6a6a;margin-top:6px;">ตัวเลือก: 45 (กระชับพิเศษ) · 49 (กระชับ) · <span style="color:#86efac">52 (มาตรฐาน)</span> · 54 · 56 (ใหญ่) · 58 · 60 (ใหญ่พิเศษ) · 64 · 69 · 72 (ใหญ่สุดในโลก)</div>
+      <div style="font-size:10.5px;color:#6a6a6a;margin-top:6px;">ตัวเลือก: 45 (กระชับพิเศษ) · 49 (กระชับ) · <span style="color:#86efac">52 (มาตรฐาน)</span> · 54 · 56 (ใหญ่) · 58 · 60 (ใหญ่พิเศษ) · 64 · 69 · 72</div>
     </div>
     <div class="hero">
       <label>ขนาดถุงยางอนามัยที่เหมาะสม <span class="pill">แนะนำ</span></label>
       <div class="big">56 – 59 มม.</div>
       <div class="hint">ค่าที่คำนวนได้ · เลือกถุงยางไซส์ใกล้เคียงค่านี้</div>
     </div>
-    <div class="row3">
+    <div class="mini len" style="margin:10px 0;">
+      <div class="ml">ความยาว (ตอนอ่อน)</div>
+      <div class="mv">~+1.6 ซม.</div>
+      <div class="warn">พยุงไม่ให้หด ไม่ใช่ยืดจริง</div>
+    </div>
+    <div class="row3" style="grid-template-columns:1fr 1fr;">
       <div class="mini">
         <div class="ml">เส้นรอบวง (ลำตัว)</div>
         <div class="mv">11.3 – 11.7</div>
@@ -97,14 +102,7 @@
         <div class="mv">3.6 – 3.7</div>
         <div style="font-size:10px;color:#7a7a7a;">เดิม 3.3 ซม.</div>
       </div>
-      <div class="mini len">
-        <div class="ml">ความยาว (ตอนอ่อน)</div>
-        <div class="mv">~+1.6 ซม.</div>
-        <div class="warn">พยุงไม่ให้หด ไม่ใช่ยืดจริง</div>
-      </div>
     </div>
-    <div class="legend">ค่าซ้าย = ระยะคงตัว · ค่าขวา = ขนาดใหญ่ที่สุด(ช่วงแรก)</div>
-    <div class="note">ฟิลเลอร์เพิ่มเส้นรอบวงและส่วนหัว · คงอยู่ประมาณ 12–18 เดือนแล้วสลายตัวลงตามเวลา · ค่าทั้งหมดเป็นการประมาณการ ±~1 ซม.</div>
   </div>
 </div>
 
@@ -134,22 +132,24 @@
   <ul>
     <li>Default <code>condomIdx</code> → index of the <code>52</code> rung (index 2 in the new ladder).</li>
     <li>Condom hero ResultCard → render <code>{est.condomWidthLow} – {est.condomWidthHigh} มม.</code> (single number when equal) + sub-line <code>t('pickClosest')</code>. Remove the <code>oldVal</code> (เดิม) + the <code>delta</code> (sizesUp) on the condom card only.</li>
-    <li>Add a 4th result card (length): label <code>t('resLength')</code>, value <code>~+{r1(est.lengthGainCm)} ซม.</code>, warning sub-line <code>t('lengthWarn')</code>. Place it in the small-cards row (รอบวง · เส้นผ่าศูนย์กลาง · ความยาว).</li>
+    <li>Add a length box DIRECTLY AFTER the condom hero (above รอบวง/เส้นผ่าศูนย์กลาง): label <code>t('resLength')</code>, value <code>~+{r1(est.lengthGainCm)} ซม.</code>, warning sub-line <code>t('lengthWarn')</code>.</li>
+    <li>REMOVE from render: the range-legend line (<code>t('rangeLegend')</code>) AND the note line (<code>t('note')</code>). Keep the bottom <code>t('disclaimer')</code>.</li>
   </ul>
   <p><strong>src/lib/fillerStrings.js</strong></p>
   <ul>
     <li>NEW keys (TH+EN): <code>pickClosest</code> ("เลือกถุงยางไซส์ใกล้เคียงค่านี้" / "pick a condom closest to this"), <code>resLength</code> ("ความยาว (ตอนอ่อน)" / "length (flaccid)"), <code>lengthWarn</code> ("พยุงไม่ให้หด ไม่ใช่ยืดจริง" / "anti-retraction splint, not true elongation").</li>
-    <li>Trim the length sentence from <code>note</code> (now its own card); keep durability + disclaimer.</li>
+    <li><code>rangeLegend</code> + <code>note</code> keys are no longer rendered — may stay as dead data OR be removed (the source-grep tests grep the strings file, so removing requires the V21 fixups below). Keep them as data to minimize churn.</li>
   </ul>
   <p><strong>Tests</strong> — extend <code>tests/filler-closest-to-real.test.js</code> + V21-fix the ladder/result/length locks in <code>filler-math</code> + <code>filler-simulator-flow-simulate</code>.</p>
 </div>
 
 <h2>Decisions (locked via Q&amp;A with user)</h2>
 <ul>
-  <li><strong>Q1 = comprehensive world ladder:</strong> dropdown <code>[45,49,52,54,56,58,60,64,69,72]</code> — Thai-familiar middle + global-large up to the world max 72 mm (My.Size Pro 72). Default rung = 52 (มาตรฐาน).</li>
+  <li><strong>Q1 = comprehensive world ladder:</strong> dropdown <code>[45,49,52,54,56,58,60,64,69,72]</code> — Thai-familiar middle + global-large up to 72 mm. Default rung = 52 (มาตรฐาน). Labels = number + Thai descriptor on anchors (กระชับพิเศษ/กระชับ/มาตรฐาน/ใหญ่/ใหญ่พิเศษ); plain number for the rest. <strong>NO "ใหญ่สุดในโลก"</strong> on 72 (owner revision).</li>
   <li><strong>Q2 = range mm only:</strong> condom result shows the computed nominal-width range "<code>{low} – {high} มม.</code>" + "เลือกไซส์ใกล้เคียงเอง". No เดิม, no "+N ขนาด", no ladder floor/clamp.</li>
-  <li><strong>Q3 = 4th card:</strong> length by-product is a 4th result card (alongside รอบวง / เส้นผ่าศูนย์กลาง) with the warning sub-line. Value fixed ~+1.6 cm.</li>
-  <li><strong>Unchanged:</strong> theme, layout, 2D/3D graphics, sliders, the girth/diameter/glans math + defaults, range-legend, disclaimer.</li>
+  <li><strong>Q3 = length box right after the condom box:</strong> the length by-product box is placed DIRECTLY AFTER the condom hero (above รอบวง / เส้นผ่าศูนย์กลาง), with the warning sub-line. Value fixed ~+1.6 cm.</li>
+  <li><strong>Owner revision — remove from the screen:</strong> the range-legend ("ค่าซ้าย = ระยะคงตัว · ค่าขวา = ขนาดใหญ่ที่สุด(ช่วงแรก)") AND the note ("ฟิลเลอร์เพิ่มเส้นรอบวงและส่วนหัว · คงอยู่ประมาณ 12–18 เดือน… ±~1 ซม.") are NO LONGER RENDERED. The bottom legal disclaimer stays.</li>
+  <li><strong>Unchanged:</strong> theme, layout, 2D/3D graphics, sliders, the girth/diameter/glans math + defaults, disclaimer.</li>
 </ul>
 
 <h2>Acceptance Criteria</h2>

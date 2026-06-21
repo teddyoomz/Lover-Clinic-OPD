@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler — Thai dropdown + computed-mm result + length box · Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1em; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; } th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Filler — Thai dropdown + computed-mm result + length box · Implementation Plan</h1>
+
+<blockquote><strong>For agentic workers:</strong> inline execution (small, tightly-coupled). Spec: <code>docs/superpowers/specs/2026-06-21-filler-thai-sizes-length-byproduct-design.html</code> (full Mockup + Flow there).</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Switch the condom dropdown to Thai-familiar+world sizes, show the condom RESULT as the raw computed mm range (no ladder floor), and surface the flaccid-length by-product as its own box right after the condom box. Nothing else changes.</p>
+  <p><strong>Architecture:</strong> data (ladder) + display only. <code>fillerMath.js</code> (ladder + 3 new result fields) → <code>FillerSimulator.jsx</code> (default rung, dropdown render, condom card, length box, remove legend+note) → <code>fillerStrings.js</code> (3 keys) → tests (new locks + V21 fixups).</p>
+  <p><strong>Tech:</strong> React/Vite, pure JS math, vitest.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">See the spec for the faithful dark-theme BEFORE→AFTER. Result order (AFTER):</div>
+  <pre>[ ขนาดถุงยางที่เหมาะสม · 56 – 59 มม. · "เลือกถุงยางไซส์ใกล้เคียงค่านี้" ]   ← hero, raw mm, no เดิม/no +N
+[ ความยาว (ตอนอ่อน) · ~+1.6 ซม. · ⚠ พยุงไม่ให้หด ไม่ใช่ยืดจริง ]            ← NEW box, right after condom
+[ เส้นรอบวง 11.3–11.7 ]   [ เส้นผ่าศูนย์กลาง 3.6–3.7 ]                       ← unchanged
+(range-legend + note REMOVED · disclaimer stays)</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">dropdown(Thai) → girth → estimate(unchanged) → raw-mm condom + length box</div>
+  <table>
+    <tr><th>Step</th><th>Action</th></tr>
+    <tr><td>1</td><td>select rung → <code>baseGirthCm = LADDER[idx].w / 5</code> (direct, no snap)</td></tr>
+    <tr><td>2</td><td><code>estimate()</code> unchanged → <code>c1Low</code>, <code>c1High</code></td></tr>
+    <tr><td>3</td><td>condom card = <code>round(c1Low·5)</code>–<code>round(c1High·5)</code> มม. + pickClosest</td></tr>
+    <tr><td>4</td><td>length box = <code>~+lengthGainCm</code> + lengthWarn</td></tr>
+  </table>
+</div>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1 — fillerMath.js: ladder + length constant + raw-mm/length result fields</h3>
+  <ul>
+    <li><code>CONDOM_LADDER</code> → 10 rungs, Thai descriptor in <code>label</code> (blank where none): 45 กระชับพิเศษ · 49 กระชับ · 52 มาตรฐาน · 54 · 56 ใหญ่ · 58 · 60 ใหญ่พิเศษ · 64 · 69 · 72.</li>
+    <li>NEW <code>export const FLACCID_LENGTH_GAIN_CM = 16 / 10;</code> (integer-fraction → obfuscator-hidden).</li>
+    <li><code>estimate()</code> return: add <code>condomWidthLow: Math.round(c1Low * 5)</code>, <code>condomWidthHigh: Math.round(c1High * 5)</code>, <code>lengthGainCm: FLACCID_LENGTH_GAIN_CM</code>. Keep <code>condom0</code> + the floored <code>condomLow/High/sizesUp*</code> (unused by UI; keeps other contracts).</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>Task 2 — FillerSimulator.jsx</h3>
+  <ul>
+    <li><code>useState(3)</code> → <code>useState(2)</code> for <code>condomIdx</code> (rung 52). Update comment.</li>
+    <li>Dropdown option (line ~307): <code>{`${cd.w} ${lang==='th'?'มม.':'mm'}${cd.label ? ` (${cd.label})` : ''}`}</code> (drop the leading brand-label + girth suffix).</li>
+    <li>Condom hero ResultCard (line ~388): <code>oldVal=""</code>, <code>newVal={est.condomWidthLow === est.condomWidthHigh ? \`${est.condomWidthLow} ${มม}\` : \`${est.condomWidthLow} – ${est.condomWidthHigh} ${มม}\`}</code>, <code>delta={t('pickClosest')}</code>. (ResultCard: guard <code>{oldVal && ...}</code> so empty เดิม renders nothing.)</li>
+    <li>NEW length box right AFTER the hero, before girth/dia (flexBasis 100%): label <code>t('resLength')</code>, value <code>~+{r1(est.lengthGainCm)} {t('unitCm')}</code>, warning <code>t('lengthWarn')</code> (amber <code>c.fire2</code>/muted).</li>
+    <li>DELETE the two divs at lines ~392–393 (<code>t('rangeLegend')</code> + <code>t('note')</code>). Keep the disclaimer.</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>Task 3 — fillerStrings.js</h3>
+  <p>Add TH+EN: <code>pickClosest</code> ("เลือกถุงยางไซส์ใกล้เคียงค่านี้" / "pick the condom closest to this"), <code>resLength</code> ("ความยาว (ตอนอ่อน)" / "length (flaccid)"), <code>lengthWarn</code> ("พยุงไม่ให้หด ไม่ใช่ยืดจริง" / "anti-retraction splint, not true elongation"). Keep <code>rangeLegend</code>+<code>note</code> as dead data (no churn to SG6).</p>
+</div>
+
+<div class="task">
+  <h3>Task 4 — tests (new locks + V21 fixups)</h3>
+  <ul>
+    <li><code>filler-closest-to-real.test.js</code>: ladder widths → new 10; labels assert Thai descriptors; FLOOR snap 10.4→52; cap test → top 72; "old rungs gone" → assert no 47/51/53; estimate condom → assert <code>condomWidthLow/High</code> (raw mm) + <code>lengthGainCm===1.6</code>.</li>
+    <li><code>filler-math.test.js</code>: recompute condomForGirth + estimate floored values for the new ladder (compute via node first).</li>
+    <li><code>filler-simulator-flow-simulate.test.js</code>: default <code>useState(2)</code>; condom result source-grep → <code>condomWidthLow</code>; rangeLegend/note NOT rendered; length box present.</li>
+    <li>Marker comments <code>// 2026-06-21 thai-sizes + length-box</code>.</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>Task 5 — verify + commit</h3>
+  <p>filler suites green → full <code>npm test -- --run</code> 0 fail → <code>npm run build</code> clean → obfuscation spot-check → Rule Q-vis L1 (dev server: dropdown 45..72, result "56 – 59 มม." + pickClosest, length box after condom, no legend/note, theme unchanged). Commit + push. NO deploy.</p>
+</div>
+
+</body>
+</html>
