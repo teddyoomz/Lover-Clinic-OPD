@@ -13,13 +13,13 @@ describe('filler-simulator v2 flow (Rule I — split shaft/glans, one source)', 
   it('F1: split total 12 · glans% 15 → shaft 10.2 / glans 1.8 → both grow; condom from shaft', () => {
     const total = 12, gp = 0.15;
     const shaftCc = total * (1 - gp), glansCc = total * gp;
-    const baseGirthCm = girthFromWidth(CONDOM_LADDER[2].w); // Regular 52 → 10.4
+    const baseGirthCm = girthFromWidth(CONDOM_LADDER[4].w); // Regular 53 → 10.6 (2026-06-21 ladder)
     const e = estimate({ lengthCm: 12.7, baseGirthCm, shaftCc, glansCc });
     expect(shaftCc).toBeCloseTo(10.2, 6);
     expect(glansCc).toBeCloseTo(1.8, 6);
     expect(e.c1Low).toBeGreaterThan(e.c0);                 // shaft grew
     expect(e.glans.dgLow).toBeGreaterThan(e.glans.dg0);    // glans grew
-    expect(e.condom0.label).toBe('Regular 52');
+    expect(e.condom0.label).toBe('Regular 53');
   });
 
   it('F2: condom-mode and Ø-mode give identical estimate for the same C0', () => {
@@ -103,14 +103,14 @@ describe('filler-simulator v2 source-grep (purity + wiring + Rev requirements)',
     expect(page).not.toMatch(/bodyPct > 14/);     // buggy in-segment width-gate REMOVED
   });
 
-  it('SG6: i18n strings TH+EN present, ประมาณ wording, girth-not-length, no กะเกณ', () => {
+  it('SG6: i18n strings TH+EN present, ประมาณ wording, length-splint copy, no กะเกณ', () => {
     expect(strings).toMatch(/STRINGS\s*=\s*\{[\s\S]*th:/);
     expect(strings).toMatch(/en:\s*\{/);
     expect(strings).toMatch(/ประมาณ/);
     expect(strings).not.toMatch(/กะเกณ/);
-    expect(strings).toMatch(/ไม่เพิ่ม[\s\S]*ความยาว/); // girth not length (TH note)
+    expect(strings).toMatch(/พยุงไม่ให้หด/);          // 2026-06-21: filler DOES add flaccid length (splint), not "no length"
     expect(strings).toMatch(/glans/i);               // EN keys
-    expect(strings).toMatch(/6–24/);                 // duration note
+    expect(strings).toMatch(/12–18/);                // 2026-06-21 durability note (was 6–24)
   });
 });
 
@@ -118,11 +118,11 @@ describe('filler-simulator v3 — bug fixes + redesign (regression locks)', () =
   const page = read('src/pages/FillerSimulator.jsx');
   const g2d = read('src/components/FillerGraphic2D.jsx');
 
-  it('V3-1: slider min 5cc (cannot go below); default now 10cc (v5.2)', () => {
+  it('V3-1: slider min 5cc (cannot go below); default now 16cc (2026-06-21)', () => {
     expect(RANGES.cc[0]).toBe(5);
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);      // slider cannot go below 5
-    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/); // default 10cc
-    expect(page).not.toMatch(/useState\(12\)/);           // old default removed
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(16\)/); // default 16cc (clinical consensus)
+    expect(page).not.toMatch(/useState\(10\)/);           // old 10cc default removed
   });
 
   it('V3-2: split display EXACT (ccFmt), never Math.round — 5cc 50/50 → 2.5/2.5 not 3/3', () => {
@@ -312,8 +312,8 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
   const g2d = read('src/components/FillerGraphic2D.jsx');
   const g3d = read('src/components/Filler3D.jsx');
 
-  it('V5.2-1: default filler is 10cc (slider min still 5)', () => {
-    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);
+  it('V5.2-1: default filler is 16cc (2026-06-21; slider min still 5)', () => {
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(16\)/);
     expect(page).toMatch(/min=\{RANGES\.cc\[0\]\}/);
   });
 
@@ -345,22 +345,22 @@ describe('filler-simulator v5.4 — round-DOWN results (safety) + auto-scale lay
   const g2d = read('src/components/FillerGraphic2D.jsx');
   const math = read('src/lib/fillerMath.js');
 
-  it('V5.4-1: condom snap is FLOOR (largest size that fits) — conservative, under-promise', () => {
+  it('V5.4-1: condom snap is FLOOR (largest size that fits) — retention rule (2026-06-21 ladder)', () => {
     expect(math).toMatch(/CONDOM_LADDER\[i\]\.w <= req\) bi = i/);   // floor to the largest fitting size
-    expect(math).not.toMatch(/Math\.abs\(CONDOM_LADDER\[i\]\.w - req\)/); // old nearest-snap gone
-    // behaviour: 55mm req (girth 11.0) floors to 54, not nearest-tie 56
-    expect(condomForGirth(11.0).w).toBe(54);
-    expect(condomForGirth(11.5).w).toBe(56);
-    expect(condomForGirth(10.4).w).toBe(52); // exact rung unaffected
+    expect(math).not.toMatch(/Math\.abs\(CONDOM_LADDER\[i\]\.w - req\)/); // no nearest-snap
+    // behaviour on the real MyONE 9-rung ladder [45,47,49,51,53,55,57,60,64]:
+    expect(condomForGirth(11.0).w).toBe(55); // NW 55 → 55
+    expect(condomForGirth(11.5).w).toBe(57); // NW 57.5 → floor 57
+    expect(condomForGirth(10.4).w).toBe(51); // NW 52 → floor 51
   });
 
-  it('V5.4-2: numeric result display rounds DOWN (Math.floor, not Math.round)', () => {
-    expect(page).toMatch(/const r1 = \(x\) => \(Math\.floor\(/);
-    expect(page).not.toMatch(/const r1 = \(x\) => \(Math\.round\(/);
-    // floor at 1 decimal under-states (10.46 → 10.4, never 10.5)
-    const r1 = (x) => (Math.floor((Number(x) || 0) * 10) / 10).toFixed(1);
-    expect(r1(10.46)).toBe('10.4');
-    expect(r1(2.99)).toBe('2.9');
+  it('V5.4-2: numeric result display rounds NEAREST (Math.round, not Math.floor) — 2026-06-21 closest-to-real', () => {
+    expect(page).toMatch(/const r1 = \(x\) => \(Math\.round\(/);
+    expect(page).not.toMatch(/const r1 = \(x\) => \(Math\.floor\(/);
+    // round-nearest at 1 decimal (10.46 → 10.5, 2.99 → 3.0)
+    const r1 = (x) => (Math.round((Number(x) || 0) * 10) / 10).toFixed(1);
+    expect(r1(10.46)).toBe('10.5');
+    expect(r1(2.99)).toBe('3.0');
   });
 
   it('V5.4-3: controls box distributes to fill its height (no empty bottom on desktop/iPad)', () => {
@@ -388,10 +388,10 @@ describe('filler-simulator v5.3 — default glans 0 + split-bar legend fix + big
   const g3d = read('src/components/Filler3D.jsx');
   const strings = read('src/lib/fillerStrings.js');
 
-  it('V5.3-1: default injection split is shaft 10 · glans 0 (glansCc default 0)', () => {
+  it('V5.3-1: default injection split is glans 0 (shaft gets the full default)', () => {
     expect(page).toMatch(/const \[glansCc, setGlansCc\] = useState\(0\)/);
     expect(page).not.toMatch(/const \[glansCc, setGlansCc\] = useState\(1\)/);
-    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(10\)/);  // total still 10 → shaft 10
+    expect(page).toMatch(/const \[totalCc, setTotalCc\] = useState\(16\)/);  // 2026-06-21 total 16 → shaft 16
   });
 
   it('V5.3-2: split-bar labels moved to an always-visible color-keyed legend (no clip/cram at small glans)', () => {
@@ -505,10 +505,10 @@ describe('filler-simulator R9 (v5.5) — formula obfuscation + logo watermark + 
   });
 
   it('R9-9: calibration constants written as integer fractions (obfuscation-friendly, value-identical)', () => {
-    expect(math).toMatch(/K_REALISTIC = 180 \/ 100/);   // v6: recalibrated 2.37→1.8 (RCT-anchored)
-    expect(math).toMatch(/K_OPTIMISTIC = 230 \/ 100/);  // v6: recalibrated 3.32→2.3
-    expect(math).not.toMatch(/K_REALISTIC = 1\.8;/);    // integer-fraction form, never the float literal
-    // runtime value still exact (covered by filler-math.test.js: K_REALISTIC === 1.8)
+    expect(math).toMatch(/K_DURABLE = 122 \/ 100/);   // 2026-06-21: durable 1.22 (was K_REALISTIC 180/100)
+    expect(math).toMatch(/K_PEAK = 190 \/ 100/);      // 2026-06-21: peak 1.90 (was K_OPTIMISTIC 230/100)
+    expect(math).not.toMatch(/K_DURABLE = 1\.22;/);   // integer-fraction form, never the float literal
+    // runtime value still exact (covered by filler-math.test.js: K_DURABLE === 1.22)
   });
 });
 
@@ -564,34 +564,34 @@ describe('filler-simulator v5.6→v7.2 — red dashed: BOLD + breathing blink, N
   });
 });
 
-describe('filler-simulator v5.7 — condom size extends past XXL 64 (+2mm steps) + เกินมาตรฐาน tag', () => {
+describe('filler-simulator v5.7 — condom CAPS at 64 (2026-06-21: past-64 extension + เกินมาตรฐาน removed)', () => {
   const math = read('src/lib/fillerMath.js');
   const page = read('src/pages/FillerSimulator.jsx');
   const strings = read('src/lib/fillerStrings.js');
 
-  it('V5.7-1: fillerMath.condomForGirth has the beyond-ladder branch (LADDER_MAX_W + BEYOND_STEP + floor + flag)', () => {
-    expect(math).toMatch(/export const LADDER_MAX_W = CONDOM_LADDER\[CONDOM_LADDER\.length - 1\]\.w/);
-    expect(math).toMatch(/export const BEYOND_STEP = 2/);
-    expect(math).toMatch(/if \(req >= LADDER_MAX_W \+ BEYOND_STEP\)/);
-    expect(math).toMatch(/Math\.floor\(req \/ BEYOND_STEP\) \* BEYOND_STEP/);
-    expect(math).toMatch(/label: String\(w\), w, beyond: w > REAL_MAX_W/);  // v6: เกินมาตรฐาน only past 72
-    expect(math).toMatch(/export const REAL_MAX_W = 72/);
-    expect(math).toMatch(/beyond: false/);   // in-ladder path flagged too
+  it('V5.7-1: beyond-ladder branch REMOVED (no LADDER_MAX_W / BEYOND_STEP / REAL_MAX_W) — 2026-06-21', () => {
+    expect(math).not.toMatch(/LADDER_MAX_W/);
+    expect(math).not.toMatch(/BEYOND_STEP/);
+    expect(math).not.toMatch(/REAL_MAX_W/);
+    expect(math).not.toMatch(/beyond: w >/);
+    // FLOOR snap kept; condomForGirth just floors + returns beyond:false
+    expect(math).toMatch(/CONDOM_LADDER\[i\]\.w <= req\) bi = i/);
+    expect(math).toMatch(/beyond: false/);
   });
 
-  it('V5.7-2: behaviour — 66–72 real sizes (+2 grid, floor); เกินมาตรฐาน only past 72', () => {
-    expect(condomForGirth(13.2).w).toBe(66);
-    expect(condomForGirth(13.2).beyond).toBe(false);  // 66 is a real ISO size, not เกินมาตรฐาน
-    expect(condomForGirth(14.4).w).toBe(72);          // 72 = real ISO max
-    expect(condomForGirth(14.4).beyond).toBe(false);
-    expect(condomForGirth(17.5).w).toBe(86);          // 87.5 floor → 86
-    expect(condomForGirth(17.5).beyond).toBe(true);   // 86 > 72 → เกินมาตรฐาน
-    expect(condomForGirth(12.8).beyond).toBe(false);  // XXL 64 boundary stays standard
-    expect(condomForGirth(20).w).toBe(100);           // far beyond, not capped
+  it('V5.7-2: behaviour — caps at the top rung 64, NEVER beyond (2026-06-21)', () => {
+    expect(condomForGirth(13.2).w).toBe(64);          // >64 floors to 64
+    expect(condomForGirth(13.2).beyond).toBe(false);
+    expect(condomForGirth(14.4).w).toBe(64);
+    expect(condomForGirth(17.5).w).toBe(64);          // far beyond → still 64
+    expect(condomForGirth(17.5).beyond).toBe(false);
+    expect(condomForGirth(12.8).beyond).toBe(false);  // 64 boundary
+    expect(condomForGirth(20).w).toBe(64);            // capped (was 100)
   });
 
-  it('V5.7-3: ResultCard delta shows เกินมาตรฐาน when result is beyond (not +N ขนาด)', () => {
-    expect(page).toMatch(/\(est\.condomLow\.beyond \|\| est\.condomHigh\.beyond\) \? t\('beyondStd'\) : sizesUp\(/);
+  it('V5.7-3: ResultCard condom delta is ALWAYS sizesUp (the เกินมาตรฐาน branch was removed) — 2026-06-21', () => {
+    expect(page).toMatch(/delta=\{sizesUp\(est\.sizesUpLow, est\.sizesUpHigh\)\}/);
+    expect(page).not.toMatch(/est\.condomLow\.beyond \|\| est\.condomHigh\.beyond/);
   });
 
   it('V5.7-4: beyondStd string present (TH + EN, keeps "เกินมาตรฐาน")', () => {

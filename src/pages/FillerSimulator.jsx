@@ -13,7 +13,7 @@ import FillerGraphic2D from '../components/FillerGraphic2D.jsx';
 
 const Filler3D = lazy(() => import('../components/Filler3D.jsx'));
 
-const r1 = (x) => (Math.floor((Number(x) || 0) * 10) / 10).toFixed(1); // round DOWN (conservative — under-promise results)
+const r1 = (x) => (Math.round((Number(x) || 0) * 10) / 10).toFixed(1); // round NEAREST (closest-to-real — spec 2026-06-21)
 // exact cc display — round to 2 decimals + trim trailing zeros (2.5 stays 2.5, 5 stays 5).
 const ccFmt = (x) => String(Math.round((Number(x) || 0) * 100) / 100);
 
@@ -152,12 +152,12 @@ function ResultCard({ k, oldVal, newVal, delta, c, card, goldGrad, hero, badge }
 export default function FillerSimulator() {
   const [lang, setLang] = useState('th');
   const [theme, setTheme] = useState('dark');
-  const [lengthCm, setLengthCm] = useState(12.7); // 5 inch default
+  const [lengthCm, setLengthCm] = useState(13.4); // SE-Asian erect length default (spec 2026-06-21)
   const [lengthUnit, setLengthUnit] = useState('inch');
   const [baseMode, setBaseMode] = useState('condom');
-  const [baseDiameterCm, setBaseDiameterCm] = useState(3.0);
-  const [condomIdx, setCondomIdx] = useState(2); // Regular 52
-  const [totalCc, setTotalCc] = useState(10); // default 10cc (min RANGES.cc[0]=5 — cannot go below)
+  const [baseDiameterCm, setBaseDiameterCm] = useState(3.3); // ~girth 10.4cm erect (spec 2026-06-21)
+  const [condomIdx, setCondomIdx] = useState(3); // rung 51 ≈ SE-Asian erect girth 10.4cm (spec 2026-06-21)
+  const [totalCc, setTotalCc] = useState(16); // clinical consensus default (spec 2026-06-21; was 10)
   const [glansCc, setGlansCc] = useState(0); // default split: shaft 10 · glans 0 — EXACT 0.5cc steps (same at every total)
   const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
   const [view, setView] = useState('2d');
@@ -385,11 +385,12 @@ export default function FillerSimulator() {
         <div style={card({ marginTop: 18, padding: '17px 18px' })}>
           <div style={{ ...sectionLabel, marginBottom: 14 }}>{t('resultsHeader')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 11 }}>
-            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.label}`} newVal={est.condomLow.index === est.condomHigh.index ? est.condomLow.label : `${est.condomLow.label} – ${est.condomHigh.label}`} delta={(est.condomLow.beyond || est.condomHigh.beyond) ? t('beyondStd') : sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
+            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.w} ${lang === 'th' ? 'มม.' : 'mm'}`} newVal={est.condomLow.w === est.condomHigh.w ? `${est.condomLow.w} ${lang === 'th' ? 'มม.' : 'mm'}` : `${est.condomLow.w} – ${est.condomHigh.w} ${lang === 'th' ? 'มม.' : 'mm'}`} delta={sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resGirth')} oldVal={`${t('before')} ${r1(est.c0)} ${t('unitCm')}`} newVal={`${r1(est.c1Low)} – ${r1(est.c1High)} ${t('unitCm')}`} delta={`+${r1(est.deltaCLow)} ${rangeTo} +${r1(est.deltaCHigh)}`} />
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resDia')} oldVal={`${t('before')} ${r1(est.d0)} ${t('unitCm')}`} newVal={`${r1(est.d1Low)} – ${r1(est.d1High)} ${t('unitCm')}`} delta={`+${r1(est.d1Low - est.d0)} ${rangeTo} +${r1(est.d1High - est.d0)}`} />
           </div>
-          <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 12, lineHeight: 1.5 }}>{t('note')}</div>
+          <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 12, lineHeight: 1.5, fontWeight: 600 }}>{t('rangeLegend')}</div>
+          <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 8, lineHeight: 1.5 }}>{t('note')}</div>
         </div>
 
         {/* footer — contact buttons (call · LINE OA · Facebook) */}

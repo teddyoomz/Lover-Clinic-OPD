@@ -5,25 +5,26 @@
 
 export const PI = Math.PI;
 
-// girth model calibration (geometry × k). RCT (16.4mL HA, baseline girth 7.87cm):
-// +2.5cm @1mo / +1.9 @6mo / +1.4 @18mo (J Clin Med 2020, PMC7230452) → implied efficiency
-// k ≈ 1.7–2.5. v6: tightened to k 1.8 (durable ~6mo) – 2.3 (early-peak ~1mo) — narrower +
-// clinically anchored (was 2.37–3.32, too wide → looked unreliable). Integer fractions
-// (value-identical) so the build obfuscator's numbersToExpressions hides the literal values.
-export const K_REALISTIC = 180 / 100;  // durable (~6mo) — low end of the girth band
-export const K_OPTIMISTIC = 230 / 100; // early-peak (~1mo) — high end of the girth band
+// girth model calibration (geometry × k). Closest-to-real recalibration (spec 2026-06-21):
+// research loop (9 rounds + adversarial) → Yang2020 RCT (PMC7230452) + Wang2022 cohort (PMC9809476);
+// geometry efficiency at flaccid L 9.16cm gives DURABLE(12mo) k≈1.22, PEAK(~1mo) k≈1.90.
+// The displayed Low–High range = DURABLE (ระยะคงตัว) → PEAK (ขนาดใหญ่ที่สุด/ช่วงแรก).
+// Integer fractions (value-identical) so the build obfuscator's numbersToExpressions hides the literals.
+export const K_DURABLE = 122 / 100;  // 1.22 — 12-month durable = LOW end of the girth range
+export const K_PEAK = 190 / 100;     // 1.90 — ~1-month peak    = HIGH end of the girth range
 export const CM_PER_INCH = 254 / 100;
 
 export const RANGES = {
   lengthCm: [6.35, 25.4], // 2.5 in .. 10 in — both units cap at 10 in (25.4 cm)
   diameterCm: [2.2, 4.1],
-  cc: [5, 50], // TOTAL filler — clinical minimum 5cc (cannot go below); split shaft + glans
+  cc: [5, 30], // TOTAL filler — clinical range 5–30cc (was 5–50; spec 2026-06-21). split shaft + glans
 };
 
-// Glans (head) augmentation — empirical, research-grounded (approximate, ±~30%).
-// 2 cc → glans Ø +0.5 cm (+16%); ~0.25 cm Ø per cc (Kim/Abdallah/Kwak cohorts).
+// Glans (head) augmentation — closest-to-real (spec 2026-06-21): central ΔØ 0.17 cm/cc, band 0.13–0.24
+// (2024 J Sex Med meta, 706 pts, +10.96mm circ → ΔØ/cc ~0.17). SATURATES at the ~2mL plateau (3mL ≈ 2mL).
 // Independent of shaft girth → does NOT change รอบวง / condom size.
-export const GLANS_DIAM_PER_CC = { low: 25 / 100, high: 32 / 100 }; // cm diameter per cc
+export const GLANS_DIAM_PER_CC = { low: 13 / 100, high: 24 / 100 }; // cm diameter per cc
+export const GLANS_SATURATION_CC = 2; // dose plateau — no added ΔØ above ~2mL (no dose-response)
 export const GLANS_CC = { min: 0.5, max: 4, step: 0.5, default: 2 };
 // initial glans (head) baseline size — a ratio of the shaft Ø; default 1.0 = shaft Ø (today's value).
 // Multiplies diameterFromGirth(baseGirthCm), so the baseline head scales with the chosen diameter.
@@ -32,16 +33,18 @@ export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0
 // (illustrative only) so a few cc doesn't look like it balloons. research rate kept above.
 export const GLANS_VISUAL_DAMP = 4 / 10;
 
-// real, sourced, mainstream condom nominal widths (mm), ascending. (ISO 4074)
+// Real MyONE Custom Fit 9-rung nominal-width ladder (mm), ascending (spec 2026-06-21; ISO 4074 + onecondoms).
+// Labels keep the named sizes for the INPUT size-dropdown; the RESULT shows the width number only.
 export const CONDOM_LADDER = [
-  { label: 'Super snug 45', w: 45 },
-  { label: 'Close fit 49', w: 49 },
-  { label: 'Regular 52', w: 52 },
-  { label: 'Regular+ 54', w: 54 },
-  { label: 'Large 56', w: 56 },
-  { label: 'Large+ 58', w: 58 },
-  { label: 'XL 60', w: 60 },
-  { label: 'XXL 64', w: 64 },
+  { label: 'Super Snug 45', w: 45 },
+  { label: '47', w: 47 },
+  { label: '49', w: 49 },
+  { label: '51', w: 51 },
+  { label: 'Regular 53', w: 53 },
+  { label: '55', w: 55 },
+  { label: 'Large 57', w: 57 },
+  { label: '60', w: 60 },
+  { label: 'Super Wide 64', w: 64 },
 ];
 
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -58,8 +61,7 @@ export const cmToInch = (cm) => num(cm) / CM_PER_INCH;
 export const inchToCm = (inch) => num(inch) * CM_PER_INCH;
 
 // ---- condom snap: FLOOR — the largest nominal width that still fits within the girth.
-// Conservative by design: never recommends a size bigger than the girth strictly reaches,
-// so the predicted result is UNDER-promised (safety — user directive 2026-06-20). ----
+// FLOOR/round-down is the correct RETENTION rule (MyONE/ISO — snug keeps it from slipping; spec 2026-06-21). ----
 export function condomIndexForGirth(girthCm) {
   const req = num(girthCm) * 5;
   let bi = 0;
@@ -68,21 +70,13 @@ export function condomIndexForGirth(girthCm) {
   }
   return bi;
 }
-// Beyond the named ladder, sizes continue in +2mm steps (66, 68, 70, 72). Real ISO products
-// run 45–72mm, so 66–72 are REAL numbered sizes; "เกินมาตรฐาน 🔥" fires only past 72 (genuinely
-// beyond any product). User directive 2026-06-20: compute the real size past XXL 64, not capped.
-export const LADDER_MAX_W = CONDOM_LADDER[CONDOM_LADDER.length - 1].w; // 64
-export const BEYOND_STEP = 2;
-export const REAL_MAX_W = 72; // largest real ISO nominal width — เกินมาตรฐาน past this
+// Cap at the largest real commercial rung (64 mm "Super Wide"). No "beyond" warning (spec 2026-06-21 —
+// the old +2→72 extension + เกินมาตรฐาน flag were dropped per the owner's marketing-forward revision).
+// A girth requiring >64mm simply floors to the 64 rung (condomIndexForGirth returns the top index).
 export function condomForGirth(girthCm) {
-  const req = widthFromGirth(girthCm); // nominal width needed (mm) = girth * 5
-  if (req >= LADDER_MAX_W + BEYOND_STEP) {
-    const w = Math.floor(req / BEYOND_STEP) * BEYOND_STEP; // floor to the +2 grid (conservative)
-    const index = (CONDOM_LADDER.length - 1) + (w - LADDER_MAX_W) / BEYOND_STEP; // continued index → sizesUp stays meaningful
-    return { index, label: String(w), w, beyond: w > REAL_MAX_W }; // เกินมาตรฐาน only past 72mm
-  }
   const index = condomIndexForGirth(girthCm);
-  return { index, label: CONDOM_LADDER[index].label, w: CONDOM_LADDER[index].w, beyond: false };
+  const rung = CONDOM_LADDER[index];
+  return { index, label: rung.label, w: rung.w, beyond: false };
 }
 
 // geometric cylinder-shell growth (under-predicts real -> multiplied by k below)
@@ -95,8 +89,8 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
   // shaftCc (v2) with fillerCc (v1) back-compat alias
   const V = Math.max(num(shaftCc != null ? shaftCc : fillerCc), 0);
   const g = Math.max(dCgeo(C0, L, V), 0);
-  const deltaCLow = K_REALISTIC * g;
-  const deltaCHigh = K_OPTIMISTIC * g;
+  const deltaCLow = K_DURABLE * g;   // durable (ระยะคงตัว) = LOW end of the displayed range
+  const deltaCHigh = K_PEAK * g;     // peak (ขนาดใหญ่ที่สุด/ช่วงแรก) = HIGH end
   const c1Low = C0 + deltaCLow;
   const c1High = C0 + deltaCHigh;
   const condom0 = condomForGirth(C0);
@@ -104,7 +98,7 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
   const condomHigh = condomForGirth(c1High);
   // glans (head) — independent of shaft girth / condom; default baseline = shaft Ø
   const dg0 = num(baseGlansDiameterCm) > 0 ? num(baseGlansDiameterCm) : diameterFromGirth(C0);
-  const gc = Math.max(num(glansCc), 0);
+  const gc = Math.min(Math.max(num(glansCc), 0), GLANS_SATURATION_CC); // saturate at the ~2mL plateau (3mL ≈ 2mL)
   const glans = {
     dg0,
     dgLow: dg0 + GLANS_DIAM_PER_CC.low * gc,

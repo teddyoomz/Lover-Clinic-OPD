@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  PI, K_REALISTIC, K_OPTIMISTIC, CM_PER_INCH, RANGES, CONDOM_LADDER,
+  PI, K_DURABLE, K_PEAK, CM_PER_INCH, RANGES, CONDOM_LADDER,
   GLANS_DIAM_PER_CC, GLANS_CC, GLANS_BASE_RATIO,
   widthFromGirth, girthFromWidth, diameterFromGirth, girthFromDiameter, girthToRadiusCm,
   cmToInch, inchToCm, condomIndexForGirth, condomForGirth, estimate,
@@ -39,9 +39,10 @@ describe('fillerMath — units', () => {
   });
 });
 
-describe('fillerMath — condom snap (FLOOR — largest size that fits, conservative)', () => {
+describe('fillerMath — condom snap (FLOOR — largest size that fits; retention rule)', () => {
+  // 2026-06-21 closest-to-real: real MyONE 9-rung ladder [45,47,49,51,53,55,57,60,64].
   it('exact width snaps to that rung', () => {
-    expect(condomForGirth(10.4).w).toBe(52); // 52mm
+    expect(condomForGirth(10.4).w).toBe(51); // NW 52 → floor rung 51
     expect(condomForGirth(12.0).w).toBe(60); // 60mm exact
   });
   it('snap-back consistency: every ladder rung → girth → snaps back to itself', () => {
@@ -50,80 +51,58 @@ describe('fillerMath — condom snap (FLOOR — largest size that fits, conserva
       expect(condomForGirth(girth).w).toBe(rung.w);
     }
   });
-  it('verified examples (V10 realistic / optimistic girths)', () => {
-    expect(condomForGirth(11.67).w).toBe(58); // Large+
-    expect(condomForGirth(12.18).w).toBe(60); // XL
+  it('verified examples (real MyONE 9-rung floor)', () => {
+    expect(condomForGirth(11.67).w).toBe(57); // NW 58.35 → floor 57
+    expect(condomForGirth(12.18).w).toBe(60); // NW 60.9 → floor 60
   });
-  it('floor: between sizes → rounds DOWN to the size that fits (conservative)', () => {
-    // girth 11.0 → req 55mm, between 54 & 56 → floor → 54 (under-promise, safety)
-    expect(condomForGirth(11.0).w).toBe(54);
-    // girth 10.0 → req 50mm, between 49 & 52 → floor → 49
-    expect(condomForGirth(10.0).w).toBe(49);
-    // girth 11.5 → req 57.5mm, between 56 & 58 → floor → 56
-    expect(condomForGirth(11.5).w).toBe(56);
+  it('floor: between sizes → rounds DOWN to the rung that fits (retention)', () => {
+    expect(condomForGirth(11.0).w).toBe(55); // NW 55 → 55 (in ladder)
+    expect(condomForGirth(10.0).w).toBe(49); // NW 50 → floor 49
+    expect(condomForGirth(11.5).w).toBe(57); // NW 57.5 → floor 57
   });
-  it('clamps small girth to the smallest rung; large girth EXTENDS beyond (no longer capped)', () => {
-    expect(condomForGirth(5).w).toBe(45);          // tiny → smallest standard
+  it('clamps small girth to the smallest rung; large girth caps at the top rung 64 (no beyond)', () => {
+    expect(condomForGirth(5).w).toBe(45);          // tiny → smallest
     expect(condomForGirth(5).beyond).toBe(false);
-    expect(condomForGirth(20).w).toBe(100);        // huge → req 100 → beyond (was capped at 64)
-    expect(condomForGirth(20).beyond).toBe(true);
+    expect(condomForGirth(20).w).toBe(64);         // huge → caps at 64 (2026-06-21; was extended/beyond)
+    expect(condomForGirth(20).beyond).toBe(false);
   });
 });
 
-describe('fillerMath — beyond-ladder condom sizes (v6 — +2mm steps past XXL 64, floor, เกินมาตรฐาน)', () => {
-  it('at/under XXL 64 stays standard (not beyond)', () => {
-    expect(condomForGirth(12.8).w).toBe(64);       // req 64 exactly → XXL 64
+describe('fillerMath — condom cap at the top rung 64 (closest-to-real; no beyond-72 extension)', () => {
+  // 2026-06-21: the +2→72 extension + เกินมาตรฐาน flag were removed; a girth needing >64mm floors to 64.
+  it('at/under 64 stays in-ladder; over 64 caps at 64 with NO beyond flag', () => {
+    expect(condomForGirth(12.8).w).toBe(64);       // NW 64 exactly
     expect(condomForGirth(12.8).beyond).toBe(false);
-    expect(condomForGirth(13.0).w).toBe(64);       // req 65 → floors to 64 (not a full +2 step yet)
+    expect(condomForGirth(13.0).w).toBe(64);       // NW 65 → floors to 64
     expect(condomForGirth(13.0).beyond).toBe(false);
+    expect(condomForGirth(14.0).w).toBe(64);       // way over → still 64
+    expect(condomForGirth(14.0).index).toBe(8);    // top rung index (no +2 extension)
+    expect(condomForGirth(14.0).beyond).toBe(false);
   });
-  it('66–72 are REAL numbered sizes (beyond:false) — ISO products exist to 72mm', () => {
-    expect(condomForGirth(13.2).w).toBe(66);
-    expect(condomForGirth(13.2).beyond).toBe(false);  // real size ≤72 → NOT เกินมาตรฐาน
-    expect(condomForGirth(13.2).label).toBe('66');
-    expect(condomForGirth(14.4).w).toBe(72);          // req 72 → size 72 (real ISO max)
-    expect(condomForGirth(14.4).beyond).toBe(false);
-  });
-  it('past 72mm is เกินมาตรฐาน (beyond:true)', () => {
-    expect(condomForGirth(14.8).w).toBe(74);          // req 74 > 72 → beyond
-    expect(condomForGirth(14.8).beyond).toBe(true);
-    expect(condomForGirth(20).w).toBe(100);
-    expect(condomForGirth(20).beyond).toBe(true);
-  });
-  it('floors to the +2 grid (conservative)', () => {
-    expect(condomForGirth(17.5).w).toBe(86);       // req 87.5 → floor even → 86
-    expect(condomForGirth(17.5).label).toBe('86');
-    expect(condomForGirth(15.5).w).toBe(76);       // req 77.5 → 76
-    expect(condomForGirth(14.0).w).toBe(70);       // req 70 exact → 70
-  });
-  it('continued index → sizesUp stays meaningful (64=idx7, +1 idx per +2mm)', () => {
-    expect(condomForGirth(13.2).index).toBe(8);    // 66
-    expect(condomForGirth(14.0).index).toBe(10);   // 70
-  });
-  it('estimate flags the post-filler result beyond when girth exceeds the ladder', () => {
-    const e = estimate({ lengthCm: 12.7, baseGirthCm: girthFromWidth(52), shaftCc: 50, glansCc: 0 });
-    expect(e.condomHigh.beyond).toBe(true);        // big filler → result past 64
-    expect(e.condom0.beyond).toBe(false);          // base Regular 52 in-ladder
+  it('estimate NEVER flags beyond (the เกินมาตรฐาน flag was removed)', () => {
+    const e = estimate({ lengthCm: 12.7, baseGirthCm: girthFromWidth(60), shaftCc: 30, glansCc: 0 });
+    expect(e.condomHigh.beyond).toBe(false);
+    expect(e.condom0.beyond).toBe(false);
   });
 });
 
 describe('fillerMath — estimate (girth model, geometry × k)', () => {
-  it('ANCHOR: condom 52 (C0=10.4), L=11, V=16 → ΔC +1.5 / +1.9 (v6 k 1.8–2.3, RCT-anchored)', () => {
+  it('ANCHOR: C0=10.4, L=11, V=16 → ΔC durable +1.0 / peak +1.6 (k 1.22–1.90, RCT-anchored)', () => {
     const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, fillerCc: 16 });
-    expect(e.deltaCLow).toBeCloseTo(1.5, 1);
-    expect(e.deltaCHigh).toBeCloseTo(1.9, 1);
-    expect(e.c1Low).toBeCloseTo(11.9, 1);
-    expect(e.c1High).toBeCloseTo(12.3, 1);
-  });
-  it('mockup case: C0=10.4, L=11, V=10 → 11.4–11.6 / Ø 3.6–3.7 / condom 56→58 / +2..+3 (v6 k)', () => {
-    const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, fillerCc: 10 });
+    expect(e.deltaCLow).toBeCloseTo(1.0, 1);
+    expect(e.deltaCHigh).toBeCloseTo(1.6, 1);
     expect(e.c1Low).toBeCloseTo(11.4, 1);
-    expect(e.c1High).toBeCloseTo(11.6, 1);
-    expect(e.d1Low).toBeCloseTo(3.6, 1);
-    expect(e.d1High).toBeCloseTo(3.7, 1);
-    expect(e.condom0.w).toBe(52);
-    expect(e.condomLow.w).toBe(56);
-    expect(e.condomHigh.w).toBe(58);
+    expect(e.c1High).toBeCloseTo(12.0, 1);
+  });
+  it('mockup case: C0=10.4, L=11, V=10 → 11.1–11.4 / Ø 3.5–3.6 / condom 55→57 / +2..+3 (k 1.22–1.90)', () => {
+    const e = estimate({ lengthCm: 11, baseGirthCm: 10.4, fillerCc: 10 });
+    expect(e.c1Low).toBeCloseTo(11.1, 1);
+    expect(e.c1High).toBeCloseTo(11.4, 1);
+    expect(e.d1Low).toBeCloseTo(3.5, 1);
+    expect(e.d1High).toBeCloseTo(3.6, 1);
+    expect(e.condom0.w).toBe(51);
+    expect(e.condomLow.w).toBe(55);
+    expect(e.condomHigh.w).toBe(57);
     expect(e.sizesUpLow).toBe(2);
     expect(e.sizesUpHigh).toBe(3);
   });
@@ -141,8 +120,8 @@ describe('fillerMath — estimate (girth model, geometry × k)', () => {
     const d15 = estimate({ lengthCm: 15, baseGirthCm: 10.4, fillerCc: 16 }).deltaCLow;
     expect(d8).toBeGreaterThan(d11);
     expect(d11).toBeGreaterThan(d15);
-    expect(d8).toBeCloseTo(2.1, 1);   // v6 k 1.8 (was 2.7 @ k 2.37)
-    expect(d15).toBeCloseTo(1.1, 1);  // v6 k 1.8 (was 1.5)
+    expect(d8).toBeCloseTo(1.4, 1);   // 2026-06-21 k 1.22 durable (was 2.1 @ k 1.8)
+    expect(d15).toBeCloseTo(0.8, 1);  // 2026-06-21 k 1.22 durable
   });
   it('band ordering: low ≤ high always (matrix)', () => {
     for (let v = 1; v <= 50; v += 5)
@@ -180,24 +159,24 @@ describe('fillerMath — estimate (girth model, geometry × k)', () => {
 
 describe('fillerMath — constants/ranges sanity', () => {
   it('k + ranges + ladder', () => {
-    expect(K_REALISTIC).toBe(1.8);   // v6: recalibrated from 2.37 (RCT-anchored, narrower band)
-    expect(K_OPTIMISTIC).toBe(2.3);  // v6: recalibrated from 3.32
-    expect(RANGES.cc).toEqual([5, 50]); // v3 — clinical minimum 5cc (cannot go below)
+    expect(K_DURABLE).toBe(1.22); // 2026-06-21 closest-to-real (was K_REALISTIC 1.8)
+    expect(K_PEAK).toBe(1.9);     // 2026-06-21 closest-to-real (was K_OPTIMISTIC 2.3)
+    expect(RANGES.cc).toEqual([5, 30]); // 2026-06-21 clinical range (was [5,50])
     expect(RANGES.lengthCm).toEqual([6.35, 25.4]); // 2.5–10 in
-    expect(CONDOM_LADDER.map((r) => r.w)).toEqual([45, 49, 52, 54, 56, 58, 60, 64]);
+    expect(CONDOM_LADDER.map((r) => r.w)).toEqual([45, 47, 49, 51, 53, 55, 57, 60, 64]);
   });
 });
 
 describe('fillerMath v2 — glans (head) augmentation', () => {
   it('glans constants', () => {
-    expect(GLANS_DIAM_PER_CC).toEqual({ low: 0.25, high: 0.32 });
+    expect(GLANS_DIAM_PER_CC).toEqual({ low: 0.13, high: 0.24 }); // 2026-06-21 (706-pt pool; was 0.25/0.32)
     expect(GLANS_CC).toEqual({ min: 0.5, max: 4, step: 0.5, default: 2 });
   });
-  it('ANCHOR: glans Ø 3.1 + 2cc → ~3.6 cm (research Kim/Abdallah)', () => {
+  it('ANCHOR: glans Ø 3.1 + 2cc → ~3.36–3.58 cm (706-pt pool ΔØ/cc 0.13–0.24)', () => {
     const e = estimate({ lengthCm: 11, baseGirthCm: 9.74, shaftCc: 0, glansCc: 2, baseGlansDiameterCm: 3.1 });
-    expect(e.glans.dgLow).toBeCloseTo(3.6, 2); // 3.1 + 0.25*2
-    expect(e.glans.dgHigh).toBeCloseTo(3.74, 2); // 3.1 + 0.32*2
-    expect(e.glans.deltaLow).toBeCloseTo(0.5, 2);
+    expect(e.glans.dgLow).toBeCloseTo(3.36, 2); // 3.1 + 0.13*2
+    expect(e.glans.dgHigh).toBeCloseTo(3.58, 2); // 3.1 + 0.24*2
+    expect(e.glans.deltaLow).toBeCloseTo(0.26, 2);
   });
   it('band low ≤ high; 0cc → no change', () => {
     const e0 = estimate({ lengthCm: 11, baseGirthCm: 10.4, shaftCc: 5, glansCc: 0 });
@@ -230,7 +209,7 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
     expect(shaftCc).toBeCloseTo(10.2, 6);
     expect(glansCc).toBeCloseTo(1.8, 6);
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc, glansCc });
-    expect(e.glans.deltaLow).toBeCloseTo(0.25 * 1.8, 6);
+    expect(e.glans.deltaLow).toBeCloseTo(0.13 * 1.8, 6); // 2026-06-21 ΔØ/cc 0.13
   });
   it('glans baseline ratio (v5): dg0 = ratio × shaft Ø; scales with diameter; condom unchanged', () => {
     expect(GLANS_BASE_RATIO).toEqual({ min: 0.75, max: 1.25, step: 0.05, default: 1.0 });
@@ -251,7 +230,7 @@ describe('fillerMath v2 — glans (head) augmentation', () => {
   });
   it('visual diameter is damped (gentler than measured) + independent of shaft', () => {
     const e = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
-    expect(e.glans.visualLow).toBeCloseTo(e.glans.dg0 + 0.25 * 2 * 0.4, 6); // damp 0.4
+    expect(e.glans.visualLow).toBeCloseTo(e.glans.dg0 + 0.13 * 2 * 0.4, 6); // 2026-06-21 ΔØ/cc 0.13, damp 0.4
     expect(e.glans.visualLow).toBeLessThan(e.glans.dgLow); // gentler than measured
     expect(e.glans.visualLow).toBeGreaterThan(e.glans.dg0); // still grows
     const a = estimate({ lengthCm: 12.7, baseGirthCm: 10.4, shaftCc: 5, glansCc: 2 });
