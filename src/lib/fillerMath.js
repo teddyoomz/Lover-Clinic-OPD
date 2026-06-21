@@ -6,7 +6,8 @@
 export const PI = Math.PI;
 
 // girth model calibration (geometry × k). Closest-to-real recalibration (spec 2026-06-21):
-// research loop (9 rounds + adversarial) → Yang2020 RCT (PMC7230452) + Wang2022 cohort (PMC9809476);
+// research loop (9 rounds + adversarial) → Yang2020 RCT (PMC7230452) + Zhang2022 Asian-J-Androl (PMC9809476);
+// [verified 2026-06-21: PMC9809476 first author is ZHANG not "Wang"; full set in src/lib/fillerRefs.js]
 // geometry efficiency at flaccid L 9.16cm gives DURABLE(12mo) k≈1.22, PEAK(~1mo) k≈1.90.
 // The displayed Low–High range = DURABLE (ระยะคงตัว) → PEAK (ขนาดใหญ่ที่สุด/ช่วงแรก).
 // Integer fractions (value-identical) so the build obfuscator's numbersToExpressions hides the literals.
@@ -14,8 +15,9 @@ export const K_DURABLE = 122 / 100;  // 1.22 — 12-month durable = LOW end of t
 export const K_PEAK = 190 / 100;     // 1.90 — ~1-month peak    = HIGH end of the girth range
 export const CM_PER_INCH = 254 / 100;
 // flaccid-length by-product — anti-retraction splint (filler holds the flaccid penis from retracting),
-// NOT true erect elongation. DOSE-DEPENDENT + SATURATING in injected SHAFT volume (research: PMC9809476 +
-// PMC8987147 — flaccid length +2.55cm peak/1mo → +1.65cm durable/12mo at ~15-21mL; glans filler does NOT
+// NOT true erect elongation. DOSE-DEPENDENT + SATURATING in injected SHAFT volume (research: PMC9809476
+// Zhang2022 — flaccid length +2.55cm peak/1mo → +1.65cm durable/12mo at ~15-21mL; PMC8987147 Ahn2021 is a
+// GIRTH RCT not flaccid — verified 2026-06-21; glans filler does NOT
 // splint the shaft). gain = MAX·(1 − e^(−shaftCc/HALF)). Integer fractions so the obfuscator hides them.
 export const FLACCID_LEN_MAX_DURABLE = 20 / 10; // 2.0cm plateau — durable (ระยะคงตัว)
 export const FLACCID_LEN_MAX_PEAK = 30 / 10;    // 3.0cm plateau — ~1-month peak (ช่วงแรก)
@@ -30,7 +32,8 @@ export const RANGES = {
 };
 
 // Glans (head) augmentation — closest-to-real (spec 2026-06-21): central ΔØ 0.17 cm/cc, band 0.13–0.24
-// (2024 J Sex Med meta, 706 pts, +10.96mm circ → ΔØ/cc ~0.17). SATURATES at the ~2mL plateau (3mL ≈ 2mL).
+// (2024 J Sex Med meta, 706 pts — glans circ +14.8mm VERIFIED → ΔØ ~0.47cm at the 2mL plateau; 0.24×2≈0.48).
+// SATURATES at the ~2mL plateau (3mL ≈ 2mL).
 // Independent of shaft girth → does NOT change รอบวง / condom size.
 export const GLANS_DIAM_PER_CC = { low: 13 / 100, high: 24 / 100 }; // cm diameter per cc
 export const GLANS_SATURATION_CC = 2; // dose plateau — no added ΔØ above ~2mL (no dose-response)

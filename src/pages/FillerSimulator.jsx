@@ -9,6 +9,7 @@ import {
   cmToInch, inchToCm, estimate,
 } from '../lib/fillerMath.js';
 import { makeT } from '../lib/fillerStrings.js';
+import { FILLER_REFERENCES } from '../lib/fillerRefs.js';
 import FillerGraphic2D from '../components/FillerGraphic2D.jsx';
 
 const Filler3D = lazy(() => import('../components/Filler3D.jsx'));
@@ -168,15 +169,16 @@ export default function FillerSimulator() {
   const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
   const [view, setView] = useState('2d');
   const [reviewOpen, setReviewOpen] = useState(false); // review-picker popup (spec 2026-06-21)
+  const [refsOpen, setRefsOpen] = useState(false);      // research-references popup
   const [webglOk] = useState(() => webglSupported());
 
-  // ESC closes the review popup
+  // ESC closes the open popup (review or references)
   useEffect(() => {
-    if (!reviewOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setReviewOpen(false); };
+    if (!reviewOpen && !refsOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') { setReviewOpen(false); setRefsOpen(false); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [reviewOpen]);
+  }, [reviewOpen, refsOpen]);
 
   const t = useMemo(() => makeT(lang), [lang]);
   const c = PAL[theme] || PAL.dark;
@@ -435,13 +437,44 @@ export default function FillerSimulator() {
           </div>
         </div>
 
-        {/* footer — contact buttons (call · LINE OA · Facebook) */}
+        {/* footer — contact buttons (call · LINE OA · Facebook) + research credit */}
         <div style={card({ marginTop: 18, padding: '15px 18px' })}>
           <ContactButtons variant="full" isLight={isLight} lang={lang} />
-          <div className="fs-num" style={{ textAlign: 'center', fontSize: 11, color: c.tx2, marginTop: 11 }}>
-            {CLINIC_CONTACT.telDisplay} · LINE OA · facebook.com/loverclinickorat
-          </div>
+          <button onClick={() => setRefsOpen(true)} style={{ width: '100%', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 14px', borderRadius: 11, border: `1px solid ${c.line}`, background: 'transparent', color: c.tx2, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <span style={{ fontSize: 15, lineHeight: 1 }}>📚</span>
+            <span style={{ fontWeight: 700, fontSize: 13, color: c.tx }}>{t('refsBtn')}</span>
+            <span style={{ fontSize: 11, opacity: 0.85 }}>· {t('refsBtnSub')}</span>
+          </button>
         </div>
+
+        {refsOpen && (
+          <div onClick={() => setRefsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: c.card2, border: `1.5px solid ${c.fire}`, borderRadius: 16, padding: 18, maxWidth: 440, width: '100%', maxHeight: '82vh', overflowY: 'auto', boxShadow: `0 0 0 4px ${c.fire}22` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: c.tx }}>📚 {t('refsTitle')}</div>
+                  <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 3, lineHeight: 1.45 }}>{t('refsSub')}</div>
+                </div>
+                <button onClick={() => setRefsOpen(false)} aria-label="close" style={{ background: 'transparent', border: 'none', color: c.tx2, fontSize: 22, cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit', padding: 0 }}>×</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 14 }}>
+                {FILLER_REFERENCES.map((r) => (
+                  <button key={r.n} onClick={() => window.open(r.url, '_blank', 'noopener,noreferrer')} style={{ display: 'flex', gap: 11, textAlign: 'left', background: c.card, border: `1px solid ${c.line}`, borderRadius: 12, padding: '12px 13px', cursor: 'pointer', fontFamily: 'inherit', alignItems: 'flex-start' }}>
+                    <span style={{ flex: 'none', width: 24, height: 24, borderRadius: 7, background: `linear-gradient(135deg, ${c.fire2}, ${c.amber})`, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{r.n}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: c.tx }}>{lang === 'th' ? r.ref : r.refEn}</span>
+                      <span style={{ display: 'block', fontSize: 11.5, color: c.tx2, marginTop: 2, lineHeight: 1.4 }}>{lang === 'th' ? r.desc : r.descEn}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                        <span className="fs-num" style={{ fontSize: 10.5, color: c.fire, fontWeight: 700 }}>{r.cite} ↗</span>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 10.5, color: c.tx2, marginTop: 13, lineHeight: 1.5 }}>{t('refsNote')}</div>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: 16, background: c.disc, border: `1px solid ${c.discBd}`, borderRadius: 12, padding: '12px 15px', fontSize: 11.5, color: c.discTx, lineHeight: 1.55 }}>
           {lang === 'th' ? '🇹🇭 ' : '🇬🇧 '}{t('disclaimer')}
