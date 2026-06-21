@@ -125,15 +125,15 @@ function Seg({ options, value, onChange, c }) {
 function ResultCard({ k, oldVal, newVal, delta, c, card, goldGrad, hero, badge }) {
   if (hero) {
     return (
-      <div style={{ flexBasis: '100%', borderRadius: 14, padding: '15px 18px',
+      <div className="fs-hero-card" style={{ flexBasis: '100%', borderRadius: 18, padding: '17px 20px',
         border: `1.5px solid ${c.fire}`, background: c.card2,
-        boxShadow: `0 0 0 3px ${c.fire}1f, 0 10px 28px ${c.fire}22` }}>
+        boxShadow: `0 0 0 3px ${c.fire}1f, 0 10px 28px ${c.fire}22, 0 0 34px -8px ${c.fire}33` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13.5, fontWeight: 800, color: c.tx }}>{k}</span>
           {badge && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: '#fff', background: `linear-gradient(90deg,${c.fire2},${c.fire})`, borderRadius: 999, padding: '3px 10px' }}>{badge}</span>}
         </div>
         {oldVal && <div style={{ fontSize: 12.5, color: c.fire }}>{oldVal}</div>}
-        <div style={{ fontSize: 30, fontWeight: 900, color: c.green, fontVariantNumeric: 'tabular-nums', marginTop: 4, lineHeight: 1.12 }}>→ {newVal}</div>
+        <div style={{ fontSize: 36, fontWeight: 900, color: c.green, fontVariantNumeric: 'tabular-nums', marginTop: 4, lineHeight: 1.1 }}>→ {newVal}</div>
         <div style={{ fontSize: 15, fontWeight: 800, marginTop: 4, backgroundImage: goldGrad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', letterSpacing: '0.01em' }}>{delta}</div>
       </div>
     );
@@ -226,9 +226,13 @@ export default function FillerSimulator() {
   // card with gradient hairline border (padding-box solid + border-box ember gradient)
   const card = (extra = {}) => ({
     border: '1px solid transparent',
-    borderRadius: 16,
-    background: `linear-gradient(${c.card},${c.card}) padding-box, linear-gradient(135deg,${c.fire}55,${c.amber}22) border-box`,
-    boxShadow: softShadow,
+    borderRadius: 18,
+    background: isLight
+      ? `linear-gradient(${c.card},${c.card}) padding-box, linear-gradient(135deg,${c.fire}66,${c.amber}33) border-box`
+      : `linear-gradient(165deg, rgba(24,18,18,.80), rgba(11,11,11,.86)) padding-box, linear-gradient(135deg,${c.fire}99,${c.amber}44) border-box`,
+    backdropFilter: 'blur(12px) saturate(125%)',
+    WebkitBackdropFilter: 'blur(12px) saturate(125%)',
+    boxShadow: isLight ? softShadow : `${softShadow}, 0 0 34px -14px ${c.fire}55`,
     ...extra,
   });
   const cardInner = card({ background: `linear-gradient(${c.card2},${c.card2}) padding-box, linear-gradient(135deg,${c.fire}55,${c.amber}22) border-box`, boxShadow: 'none' });
@@ -237,7 +241,7 @@ export default function FillerSimulator() {
   return (
     <div style={{ background: c.bg, minHeight: '100vh', color: c.tx, overflowX: 'hidden', fontFamily: "'Sarabun', -apple-system, 'Segoe UI', sans-serif", transition: 'background-color .3s, color .3s' }}>
       <style>{`
-        .fs-shell{ max-width:1040px; margin:0 auto; padding:max(18px,env(safe-area-inset-top)) 18px 48px; }
+        .fs-shell{ max-width:1040px; margin:0 auto; padding:max(18px,env(safe-area-inset-top)) 18px 48px; position:relative; z-index:1; }
         .fs-grid{ display:grid; grid-template-columns:minmax(0,2fr) minmax(0,3fr); gap:18px; align-items:stretch; }
         .fs-controls{ order:1; } .fs-graphic{ order:2; }
         .fs-pill{ padding:4px 13px; border-radius:999px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:700;
@@ -253,17 +257,26 @@ export default function FillerSimulator() {
         .fs-contact:active{ transform:scale(.95); }
         .fs-btn:focus-visible, .fs-tgl:focus-visible, .fs-sel:focus-visible, .fs-range:focus-visible{
           outline:none; box-shadow:0 0 0 3px ${c.fire}55; }
-        .fs-range{ -webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:4px; background:${c.line}; outline:none; touch-action:pan-y; cursor:pointer; }
-        .fs-range::-webkit-slider-thumb{ -webkit-appearance:none; width:30px; height:30px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4), 0 0 0 5px ${c.fire}26; }
+        .fs-range{ -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:4px; background:linear-gradient(90deg,${c.fire2}40,${c.amber}2e); outline:none; touch-action:pan-y; cursor:pointer; }
+        .fs-range::-webkit-slider-thumb{ -webkit-appearance:none; width:30px; height:30px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 5px ${c.fire}2e, 0 0 18px ${c.fire}66; }
         .fs-range::-moz-range-thumb{ width:30px; height:30px; border-radius:50%; background:#fff; border:3px solid ${c.fire}; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4); }
-        .fs-range.glans::-webkit-slider-thumb{ border-color:${c.amber}; box-shadow:0 2px 6px rgba(0,0,0,.4), 0 0 0 5px ${c.amber}26; }
+        .fs-range.glans::-webkit-slider-thumb{ border-color:${c.amber}; box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 5px ${c.amber}2e, 0 0 18px ${c.amber}66; }
         .fs-range.glans::-moz-range-thumb{ border-color:${c.amber}; }
         .fs-sel{ width:100%; min-height:44px; background:${c.card2}; color:${c.tx}; border:1px solid ${c.line}; border-radius:10px; padding:10px 13px; font-size:15px; cursor:pointer; }
         .fs-num{ font-variant-numeric:tabular-nums; }
+        .fs-hero-card{ animation:fsHeroGlow 4.5s ease-in-out infinite; }
+        @keyframes fsHeroGlow{ 0%,100%{ box-shadow:0 0 0 3px ${c.fire}1f, 0 10px 28px ${c.fire}22, 0 0 34px -8px ${c.fire}33; } 50%{ box-shadow:0 0 0 3px ${c.fire}38, 0 12px 32px ${c.fire}3a, 0 0 54px -4px ${c.fire}66; } }
+        .fs-sheen{ position:relative; overflow:hidden; }
+        .fs-sheen::after{ content:''; position:absolute; inset:0; background:linear-gradient(110deg,transparent 32%,rgba(255,255,255,.24) 48%,transparent 64%); transform:translateX(-130%); animation:fsSheen 5.5s ease-in-out infinite; pointer-events:none; }
+        @keyframes fsSheen{ 0%,74%{ transform:translateX(-130%); } 90%,100%{ transform:translateX(130%); } }
         @media (max-width:820px){ .fs-grid{ grid-template-columns:1fr; } .fs-controls{ order:1; } .fs-graphic{ order:2; } }
         @media (max-width:560px){ .fs-shell{ padding:max(14px,env(safe-area-inset-top)) 13px 40px; } }
-        @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+        @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } .fs-hero-card, .fs-sheen::after{ animation:none !important; } }
       `}</style>
+
+      <div aria-hidden="true" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: isLight
+        ? 'radial-gradient(75% 45% at 50% -6%, rgba(220,38,38,.05), transparent 60%)'
+        : 'radial-gradient(70% 52% at 50% -8%, rgba(239,68,68,.13), transparent 56%), radial-gradient(55% 40% at 50% 112%, rgba(249,115,22,.07), transparent 60%)' }} />
 
       <div className="fs-shell">
         {/* ── centered hero header ─────────────────────────────── */}
@@ -278,7 +291,7 @@ export default function FillerSimulator() {
           <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', paddingTop: 8 }}>
             <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 14, maxWidth: 660 }}>
               <LoverMark c={c} isLight={isLight} h={46} />
-              <h1 style={{ margin: 0, fontSize: 'clamp(23px,5.2vw,35px)', fontWeight: 800, lineHeight: 1.22, letterSpacing: '-0.01em', backgroundImage: titleGrad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', display: 'inline-block' }}>{t('title')}</h1>
+              <h1 style={{ margin: 0, fontSize: 'clamp(24px,5.4vw,37px)', fontWeight: 800, lineHeight: 1.22, letterSpacing: '-0.01em', backgroundImage: titleGrad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', display: 'inline-block', filter: isLight ? 'none' : 'drop-shadow(0 0 16px rgba(239,68,68,.42))' }}>{t('title')}</h1>
               <div style={{ fontSize: 14, color: c.tx2, maxWidth: 560, lineHeight: 1.55 }}>{t('sub')}</div>
               <span className="fs-pill">🔒 {lang === 'th' ? 'ไม่จัดเก็บข้อมูล' : 'No data stored'}</span>
               {/* contact (header) — centered row, robust on mobile vs the wide logo */}
@@ -402,7 +415,7 @@ export default function FillerSimulator() {
         </div>
 
         {/* review CTA — BEFORE the results box (owner 2026-06-21); fire gradient, glow */}
-        <button onClick={() => setReviewOpen(true)} className="fs-contact" style={{ width: '100%', marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px 18px', borderRadius: 13, border: `1px solid ${c.amber}`, cursor: 'pointer', color: '#fff', fontFamily: 'inherit', background: `linear-gradient(90deg, ${c.fire2}, ${c.amber})`, boxShadow: `0 0 0 3px ${c.fire}33, 0 10px 26px ${c.fire}55` }}>
+        <button onClick={() => setReviewOpen(true)} className="fs-contact fs-sheen" style={{ width: '100%', marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px 18px', borderRadius: 13, border: `1px solid ${c.amber}`, cursor: 'pointer', color: '#fff', fontFamily: 'inherit', background: `linear-gradient(90deg, ${c.fire2}, ${c.amber})`, boxShadow: `0 0 0 3px ${c.fire}33, 0 10px 26px ${c.fire}55` }}>
           <span style={{ fontSize: 19, lineHeight: 1 }}>★</span>
           <span style={{ fontWeight: 800, fontSize: 15.5 }}>{t('reviewBtn')} <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.92 }}>· {t('reviewBtnSub')}</span></span>
           <span style={{ fontSize: 17, lineHeight: 1 }}>→</span>

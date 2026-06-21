@@ -93,10 +93,11 @@ describe('filler-simulator v2 source-grep (purity + wiring + Rev requirements)',
     expect(page).not.toMatch(/resGlans/);        // glans result card removed (debug round)
     expect(page).toMatch(/setTheme/);            // light/dark
     expect(page).toMatch(/setLang/);             // TH/EN
-    // reveal-gate fully removed
+    // reveal-gate fully removed (the tap-to-reveal content-blur). Inferno redesign uses
+    // backdrop-filter glass blur — that's allowed; only the reveal-gate `filter: blur(` is forbidden.
     expect(page).not.toMatch(/แตะเพื่อดูภาพ/);
     expect(page).not.toMatch(/\brevealed\b/);
-    expect(page).not.toMatch(/blur\(/);
+    expect(page).not.toMatch(/\bfilter:\s*['"`]?blur\(/);  // no content-hiding result-blur (backdrop glass blur OK)
   });
 
   it('SG6b: glans v2 — split slider capped at 15cc + head Ø readout (cube-root, no durable→peak caption)', () => {
