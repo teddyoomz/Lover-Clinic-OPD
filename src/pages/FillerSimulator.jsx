@@ -402,7 +402,7 @@ export default function FillerSimulator() {
         </div>
 
         {/* review CTA — BEFORE the results box (owner 2026-06-21); fire gradient, glow */}
-        <button onClick={() => setReviewOpen(true)} style={{ width: '100%', marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px 18px', borderRadius: 13, border: `1px solid ${c.amber}`, cursor: 'pointer', color: '#fff', fontFamily: 'inherit', background: `linear-gradient(90deg, ${c.fire2}, ${c.amber})`, boxShadow: `0 0 0 3px ${c.fire}33, 0 10px 26px ${c.fire}55` }}>
+        <button onClick={() => setReviewOpen(true)} className="fs-contact" style={{ width: '100%', marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '15px 18px', borderRadius: 13, border: `1px solid ${c.amber}`, cursor: 'pointer', color: '#fff', fontFamily: 'inherit', background: `linear-gradient(90deg, ${c.fire2}, ${c.amber})`, boxShadow: `0 0 0 3px ${c.fire}33, 0 10px 26px ${c.fire}55` }}>
           <span style={{ fontSize: 19, lineHeight: 1 }}>★</span>
           <span style={{ fontWeight: 800, fontSize: 15.5 }}>{t('reviewBtn')} <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.92 }}>· {t('reviewBtnSub')}</span></span>
           <span style={{ fontSize: 17, lineHeight: 1 }}>→</span>

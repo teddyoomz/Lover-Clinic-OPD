@@ -162,8 +162,8 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           ≥44px tap targets on desktop/iPad/mobile. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, rowGap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, lineHeight: 1.4, minWidth: 0 }}>
-          <span style={{ color: '#ef4444' }}>{tr('g2dLegShaft')}</span>
-          <span style={{ color: '#f59e0b' }}>{tr('g2dLegGlans')}</span>
+          <span style={{ color: theme === 'light' ? '#b91c1c' : '#ef4444' }}>{tr('g2dLegShaft')}</span>
+          <span style={{ color: theme === 'light' ? '#b45309' : '#f59e0b' }}>{tr('g2dLegGlans')}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
           <span style={{ fontSize: 10.5, color: lab, letterSpacing: '0.3px' }}>{tr('g2dDashToggleHint')}</span>

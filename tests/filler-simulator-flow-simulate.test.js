@@ -398,8 +398,8 @@ describe('filler-simulator v5.4 — round-DOWN results (safety) + auto-scale lay
     expect(g2d).toMatch(/justifyContent: 'space-evenly'/);   // side-view / cross-section / legend distribute
     expect(g2d).toMatch(/flex: 1, minHeight: 0/);            // fills the card area (desktop) / natural (mobile)
     // legend is real HTML now (i18n spans), not SVG <text> — never overflows
-    expect(g2d).toMatch(/<span style=\{\{ color: '#ef4444' \}\}>\{tr\('g2dLegShaft'\)\}/);
-    expect(g2d).toMatch(/<span style=\{\{ color: '#f59e0b' \}\}>\{tr\('g2dLegGlans'\)\}/);
+    expect(g2d).toMatch(/<span style=\{\{ color: theme === 'light' \? '#b91c1c' : '#ef4444' \}\}>\{tr\('g2dLegShaft'\)\}/);
+    expect(g2d).toMatch(/<span style=\{\{ color: theme === 'light' \? '#b45309' : '#f59e0b' \}\}>\{tr\('g2dLegGlans'\)\}/);
     expect(g2d).not.toMatch(/<text x="20" y="494"/);         // old SVG legend coords gone
   });
 
