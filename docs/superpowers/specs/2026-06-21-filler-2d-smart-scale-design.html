@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler 2D Smart Auto-Scale — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#16a34a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    .dev { background:#0f0f0f; border-radius:8px; padding:8px 12px; margin:6px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size:0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Filler 2D Smart Auto-Scale (Model B, space-maximised)</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-21 · <strong>Status:</strong> Approved by user (Model B + "ใช้พื้นที่คุ้มที่สุด") · <strong>Scope:</strong> <code>src/components/FillerGraphic2D.jsx</code> scale block only (+ its source-grep tests). Frontend-only, standalone filler bundle. Supersedes the "single fixed px/cm" approach from the cube-root spec.
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The cube-root-glans turn replaced the 2D scaling twice and broke two loved behaviours the user reported: (1) the <strong>auto-scale</strong> (10″ length fills the box so the drawing is always magnified as large as possible) was removed → fixed-scale made everything small; (2) the <strong>cross-section</strong> circle is now tiny vs its box. The user also flagged the head shape (already fixed) and wants exact glans:shaft proportion (the original ask). Goal: restore the old smart auto-scale, tuned to always use the available space, and keep the one real fix (unified thickness scale + old head shape).</p>
+
+<h2>The model (B — hybrid, space-maximised)</h2>
+<pre>SIDE-VIEW (viewBox 480×168, CSS width:100% → resolution-independent):
+ • thickness — ONE proportional scale for BOTH shaft Ø and glans Ø (→ glans:shaft EXACT):
+     maxHalf    = SIDE_H/2 − (S_VPAD + DASH_OUT)           // band half-budget, room for the dashed outset
+     THICK_BASE = 26 px/cm                                  // generous (typical Ø3.3 → ~86px full, the old look)
+     thickScale = min(THICK_BASE, (maxHalf*2) / max(dLo, dgLo))   // grows with value; if the biggest Ø would
+                                                            // overflow, scale BOTH down together → ratio still exact, never clips
+     tShaftA=(dLo/2)*thickScale ; tGlansA=(dgLo/2)*thickScale ; glansLenA = tGlansA * 1.25  // OLD mushroom shape
+ • length — AUTO-FILL the box width (10″ fills, short has a sensible floor):
+     lenFrac     = clamp((lengthCm − lenMin)/(lenMax − lenMin), 0, 1)
+     maxShaftLen = SIDE_W − X0 − RIGHT_MARGIN − GAP − glansLenA
+     len         = MIN_SHAFT + lenFrac*(maxShaftLen − MIN_SHAFT)   // 10″→maxShaftLen (full) ; min→MIN_SHAFT
+
+CROSS-SECTION (viewBox 240×240, CSS width:min(62%,250px)):
+ • AUTO-FILL the box — the AFTER circle fills, BEFORE is proportional (→ after:before == dLo:d0 EXACT):
+     csA = CS_MAX_R (≈100)         // after fills the box (was tiny)
+     csB = csA * (d0 / dLo)        // before proportional → exact ratio</pre>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Side-view — length auto-fills width · thickness grows with girth/cc (glans:shaft exact) · old head</div>
+  <div class="dev">
+    <div style="font-size:11px;color:#888;margin-bottom:3px">สั้น+ผอม (5″ · รอบวงเล็ก) — เล็กลงจริง</div>
+    <svg viewBox="0 0 480 110" width="100%"><rect x="14" y="46" width="250" height="22" rx="11" fill="#c2825f"/><path d="M264 46 Q272 40 286 32 C320 32 350 50 350 55 C350 60 320 78 286 78 Q272 70 264 64 Z" fill="#c2825f"/></svg>
+  </div>
+  <div class="dev">
+    <div style="font-size:11px;color:#888;margin-bottom:3px">ยาว+อ้วน (10″ · รอบวงใหญ่ · ฉีดหัว) — เต็มกล่อง + หนาขึ้น + หัวใหญ่ตามสัดส่วน</div>
+    <svg viewBox="0 0 480 110" width="100%"><rect x="14" y="33" width="380" height="44" rx="22" fill="#c2825f"/><path d="M394 33 Q406 22 426 10 C455 10 466 50 466 55 C466 60 455 100 426 100 Q406 88 394 77 Z" fill="#c2825f"/></svg>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Cross-section — AFTER fills the box (restored) · BEFORE proportional (exact ratio)</div>
+  <div class="dev" style="display:flex;justify-content:center;">
+    <svg viewBox="0 0 240 200" width="220"><circle cx="120" cy="100" r="92" fill="#bd7c5b" stroke="#e23744" stroke-dasharray="7 4" stroke-width="2"/><circle cx="120" cy="100" r="74" fill="none" stroke="rgba(255,255,255,.35)" stroke-dasharray="5 4"/></svg>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">est → thickScale (one scale, both Ø) + length auto-fill + cross auto-fill → render</div>
+  <svg viewBox="0 0 920 150" width="100%">
+    <rect x="8" y="56" width="150" height="40" rx="6" fill="#f0f4f8" stroke="#b9c6d6"/><text x="83" y="73" text-anchor="middle" font-size="12">est: dLo, dgLo, d0</text><text x="83" y="89" text-anchor="middle" font-size="11" fill="#666">+ lengthCm</text>
+    <line x1="158" y1="76" x2="196" y2="76" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="198" y="14" width="230" height="56" rx="6" fill="#dcfce7" stroke="#16a34a"/><text x="313" y="34" text-anchor="middle" font-size="12" fill="#14532d">thickScale = min(THICK_BASE,</text><text x="313" y="50" text-anchor="middle" font-size="11" fill="#166534">band/max(dLo,dgLo)) — grows, exact ratio</text><text x="313" y="64" text-anchor="middle" font-size="11" fill="#166534">tShaft/tGlans = (Ø/2)·thickScale</text>
+    <rect x="198" y="80" width="230" height="40" rx="6" fill="#fff7ed" stroke="#fed7aa"/><text x="313" y="98" text-anchor="middle" font-size="12" fill="#7c2d12">len = MIN_SHAFT + lenFrac·(fill−MIN)</text><text x="313" y="112" text-anchor="middle" font-size="11" fill="#9a6b4f">10″ → fills width</text>
+    <line x1="428" y1="76" x2="466" y2="76" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="468" y="14" width="180" height="40" rx="6" fill="#fff" stroke="#999"/><text x="558" y="38" text-anchor="middle" font-size="12">mushPath (old shape)</text>
+    <rect x="468" y="62" width="180" height="40" rx="6" fill="#fff" stroke="#999"/><text x="558" y="86" text-anchor="middle" font-size="12">csA fills · csB = csA·d0/dLo</text>
+    <line x1="648" y1="40" x2="686" y2="76" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/><line x1="648" y1="82" x2="686" y2="76" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect x="688" y="56" width="200" height="40" rx="6" fill="#f0f4f8" stroke="#b9c6d6"/><text x="788" y="74" text-anchor="middle" font-size="12">SVG viewBox + width:100%</text><text x="788" y="89" text-anchor="middle" font-size="11" fill="#666">→ responsive ทุก device</text>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#888"/></marker></defs>
+  </svg>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code></td><td>Replace the fixed <code>PX_PER_CM</code> block with: <code>thickScale</code> (one proportional scale, both Ø, auto-shrink-to-band) + length auto-fill (<code>lenFrac</code>/<code>MIN_SHAFT</code>/<code>maxShaftLen</code>, restored) + cross-section auto-fill (<code>csA</code> fills, <code>csB</code> proportional). Keep <code>glansLenA = tGlansA*1.25</code> (old head shape). Re-add <code>MIN_SHAFT</code> const.</td></tr>
+  <tr><td><code>tests/filler-simulator-flow-simulate.test.js</code></td><td>Re-point the V3-3 / V5.2-3 / V5.3-3 source-grep assertions from the fixed-<code>PX_PER_CM</code> shape to the new <code>thickScale</code> + length-auto-fill + cross-auto-fill shape.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Model B (hybrid) + space-maximised</strong> — user: "B แต่สามารถปรับให้แสดงให้ได้เต็มพื้นที่เสมอ ใช้พื้นที่ได้คุ้มที่สุด".</li>
+  <li><strong>Length auto-fills the box</strong> (10″ = full width; restored auto-scale) — "ขยายการแสดงผลให้ใหญ่ที่สุดเสมอ".</li>
+  <li><strong>Thickness grows with value, ONE scale for shaft+glans</strong> → glans:shaft Ø exact; auto-shrinks both together only when the biggest Ø would overflow the band.</li>
+  <li><strong>Cross-section auto-fills its box</strong> (the after-circle fills; before proportional) — restores "เคยจัดได้สวยงาม".</li>
+  <li><strong>Old mushroom head shape</strong> (glansLen ∝ half-thickness) — already fixed, kept.</li>
+  <li><strong>Responsive</strong> — SVG viewBox + width:100% + existing @media grid → best on every device, no per-device JS.</li>
+  <li><strong>Accepted trade-off</strong>: length px-scale ≠ thickness px-scale (length auto-fills, girth grows at its own scale) — the old beloved behaviour the user re-requested.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Length 10″ → the side-view shaft fills the box width (no wasted horizontal space); 2.5″ → visibly shorter.</li>
+  <li>Increasing girth or glans cc → the drawing is visibly THICKER / the head visibly BIGGER (grows with value).</li>
+  <li>glans-Ø-px ÷ shaft-Ø-px == <code>dgLo ÷ dLo</code> (one thickness scale) for any non-overflow config.</li>
+  <li>The biggest config (max girth + 15cc head) does NOT overflow the band (thickScale auto-shrinks, ratio preserved).</li>
+  <li>Cross-section AFTER circle fills its box (large, no wasted space); BEFORE radius ÷ AFTER radius == <code>d0 ÷ dLo</code>.</li>
+  <li>Head = old mushroom shape (glansLen ∝ half-thickness).</li>
+  <li>Renders well at desktop + mobile widths (SVG scales; rendered-pixel verified).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>THICK_BASE tuning</strong> — 26 px/cm targets the old visual size; verify rendered-pixel at typical + extreme girth so it neither looks thin nor clips. Adjust the constant if needed.</li>
+  <li><strong>Length not exact-to-girth</strong> — intentional (Model B). The filler effect is read from the after-vs-before dashed outlines + the numeric readouts, not the absolute length:girth px ratio.</li>
+  <li><strong>3D</strong> — unchanged; already real-cm + camera auto-frame (its own "fill the canvas"). Not in scope unless the user flags it.</li>
+</ul>
+
+</body>
+</html>
