@@ -72,6 +72,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   // dashed-line thickness — theme-tuned (user 2026-06-21): dark baseline −10%, light "หลังฉีด" +15%
   const baselineStrokeW = 1.2375;                             // both themes −10% (light reduced to match dark)
   const afterStrokeW = theme === 'light' ? 1.2903 : 1.02;     // +20% both themes (mobile visibility): light 1.07525×1.2 · dark 0.85×1.2
+  const afterStrokeColor = theme === 'light' ? '#15803d' : '#4ade80'; // "หลังฉีด" outline color — neon green (dark) / deep green (light) for clear contrast on both bg (user 2026-06-21)
   // centered-faint clinic watermark (theme-aware logo) — travels with any screenshot / SVG copy
   const wmLogo = theme === 'light' ? '/lover-clinic-logo-light.png' : '/lover-clinic-logo-dark.png';
 
@@ -128,7 +129,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
           {/* after — skin body (mushroom), SOLID + static (never animates) */}
           <path d={mushPath(x0, cy, len, tShaftA, tGlansA, glansLenA)} fill="url(#fg-skin)" />
           {/* after — red DASHED outline, OUTSET by DASH_OUT so it hugs the OUTER edge (never overlaps the body); breathe = opacity pulse on the LINE */}
-          {showAfter && <path d={mushPath(x0 - DASH_OUT, cy, len + DASH_OUT, tShaftA + DASH_OUT, tGlansA + DASH_OUT, glansLenA + DASH_OUT)} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth={afterStrokeW} strokeDasharray="7 4" strokeOpacity="1" />}
+          {showAfter && <path d={mushPath(x0 - DASH_OUT, cy, len + DASH_OUT, tShaftA + DASH_OUT, tGlansA + DASH_OUT, glansLenA + DASH_OUT)} fill="none" className="fg-revBreathe" stroke={afterStrokeColor} strokeWidth={afterStrokeW} strokeDasharray="7 4" strokeOpacity="1" />}
           {/* corona ridge */}
           <path d={`M${x0 + len} ${cy - tShaftA + 2} Q${x0 + len + 5} ${cy} ${x0 + len} ${cy + tShaftA - 2}`} fill="none" stroke="#6e4030" strokeWidth="1.4" opacity="0.5" />
           {/* before (baseline) — fainter pale dashed mushroom */}
@@ -150,7 +151,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
             </radialGradient>
           </defs>
           <circle cx={ccx} cy={ccy} r={csA} fill="url(#fg-cs)" />
-          {showAfter && <circle cx={ccx} cy={ccy} r={csA + DASH_OUT} fill="none" className="fg-revBreathe" stroke="#ef4444" strokeWidth={afterStrokeW} strokeDasharray="7 4" strokeOpacity="1" />}
+          {showAfter && <circle cx={ccx} cy={ccy} r={csA + DASH_OUT} fill="none" className="fg-revBreathe" stroke={afterStrokeColor} strokeWidth={afterStrokeW} strokeDasharray="7 4" strokeOpacity="1" />}
           {showBaseline && <circle className="fg-ants" cx={ccx} cy={ccy} r={csB} fill="none" stroke={beforeStroke} strokeWidth={baselineStrokeW} strokeDasharray="5 4" />}
           {/* clinic watermark — centered, faint, non-interactive */}
           <image href={wmLogo} x="78" y="104" width="84" height="32" opacity="0.1" preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
@@ -168,7 +169,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
           <span style={{ fontSize: 10.5, color: lab, letterSpacing: '0.3px' }}>{tr('g2dDashToggleHint')}</span>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <DashToggle on={showAfter} onClick={() => setShowAfter((v) => !v)} line="#ef4444" accent="#ef4444" dash="4 3" label={tr('g2dToggleAfter')} labStrong={labStrong} lab={lab} />
+            <DashToggle on={showAfter} onClick={() => setShowAfter((v) => !v)} line={afterStrokeColor} accent={afterStrokeColor} dash="4 3" label={tr('g2dToggleAfter')} labStrong={labStrong} lab={lab} />
             <DashToggle on={showBaseline} onClick={() => setShowBaseline((v) => !v)} line="#9b938f" accent="#9b938f" dash="5 4" label={tr('g2dToggleBaseline')} labStrong={labStrong} lab={lab} />
           </div>
         </div>
