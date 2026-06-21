@@ -1,30 +1,31 @@
 ---
-updated_at: "2026-06-21 EOD+2 — AV198 booking-flow card fix (DEPLOYED) + filler suite (OG/glans DEPLOYED · research-credit + full-titles + PDF NOT deployed)."
-status: "AV198 booking-flow fix + filler OG + glans-grows LIVE. Filler research-credit feature (ddf30470 + e7954197) committed, NOT deployed (2 commits ahead of prod). firestore.rules UNCHANGED all session → frontend-only, no Probe-Deploy-Probe."
+updated_at: "2026-06-22 EOD — Filler simulator big batch: research glans + 2D Model-B + Inferno bold redesign + neon-green outline — ALL DEPLOYED both sites."
+status: "All filler work LIVE on both lover-clinic-app.vercel.app (?play=filler) + loverclinic.vercel.app (standalone). 6 commits shipped + deployed this session. firestore.rules UNCHANGED all session → frontend-only, no Probe-Deploy-Probe. Idle."
 branch: "master"
-last_commit: "e7954197 — refine(filler): web full paper titles; PDF variables-first"
+last_commit: "423159cc — style(filler): หลังฉีด outline -> neon green"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "OPD lover-clinic-cc...? = lover-clinic-cbyvk92s8 (lover-clinic-app.vercel.app, AV198+glans LIVE) + filler loverclinic-ktnqy3f0o (loverclinic.vercel.app, OG+glans LIVE). BOTH lack the research-credit feature (ddf30470 + e7954197 not deployed)."
+production_commit: "423159cc DEPLOYED both sites this session (OPD lover-clinic-app.vercel.app + filler loverclinic.vercel.app). HEAD == prod, nothing pending."
 firestore_rules_version: "UNCHANGED this session (all changes frontend-only → vercel-only, no Probe-Deploy-Probe)"
-tests: "full vitest 16956/0 (glans-fix turn) + filler targeted 147/0 (latest); build clean; verify:filler ✅. Not re-run after (per no-tests-at-session-end)."
+tests: "full vitest 16971/0 (last run this turn, pre-deploy gate) + filler targeted 148/0; build clean; verify:filler ✅. Not re-run after (no-tests-at-session-end)."
 ---
 
-# Active — 2026-06-21 EOD+2 — AV198 booking-flow card + filler suite
+# Active — 2026-06-22 EOD — Filler simulator big batch (ALL DEPLOYED)
 
 ## State
-- AV198 staff-chat intake card now resolves the BOOKING-FLOW registration (was stuck "รอลงทะเบียน" forever) — DEPLOYED + L2-verified real prod.
-- Filler simulator: OG share-preview fixed (absolute URLs, LINE/FB/WhatsApp now unfurl) + head (glans) now visibly grows with cc — both DEPLOYED. Research-credit footer button + verified-citations modal + math-explainer PDF — committed, NOT deployed.
-- master `e7954197`; 2 commits (ddf30470 + e7954197) ahead of prod.
+- Penile-filler simulator got a full visual + math overhaul this session — ALL DEPLOYED to both sites (HEAD 423159cc == prod).
+- firestore.rules untouched all session → every deploy was frontend-only via `npm run deploy:filler` (no Probe-Deploy-Probe).
+- master `423159cc`; HEAD == prod, nothing pending.
 
-## What this session shipped (detail → checkpoint 2026-06-21-av198-bookingflow-and-filler.md)
-- **AV198 booking-flow fix** (`006fb322`, DEPLOYED): intake card watched only `opd_session.brokerProClinicId` (kiosk flow); the V118–V125 booking flow stamps `appt.customerId` + HARD-DELETES the session → card stuck. Fix = additive resolve via `be_appointments` `linkedOpdSessionId`. Heals live, no migration. e2e fixture mirrored the wrong assumption (V66 trap) → added booking-flow phase. AV198 amended.
-- **Filler OG** (`42e18dc8`, DEPLOYED): relative `og:image` → absolute https; +og:url/site_name/etc.; verify:filler regression guard.
-- **Filler glans** (`ef758dcd`, DEPLOYED): visual Ø decoupled from the 2mL medical plateau → head grows continuously+saturating with head-cc (was frozen). One math edit fixes 2D+3D. Rendered-pixel verified.
-- **Filler research-credit** (`ddf30470` + `e7954197`, NOT deployed): footer "📚 งานวิจัยอ้างอิง" button → modal of 5 VERIFIED citations (full paper titles, clickable PMC/Oxford/ISO links). Removed per-research→calc chip + footer phone-line. NEW `src/lib/fillerRefs.js` single-source (modal + PDF). Corrected 3 inherited citation errors (Zhang≠Wang · Ahn=girth RCT · glans +14.8mm).
-- **Math-explainer PDF** (`docs/filler-math-explainer.pdf`, regen via `node scripts/render-filler-pdf.mjs`): branded, real `estimate()` numbers, variables+sources first, clickable refs, 3 pages.
+## What this session shipped (detail → checkpoint 2026-06-22-filler-redesign-batch.md) — all DEPLOYED
+- **Research-anchored glans** (`c9e6077a`): cube-root volume model (Moon 2015 / PMC4550597 anchor, +0.45/+0.53cm @2cc), 15cc head-cc cap, durable→peak Ø readout, 2D Model-B smart auto-scale (length auto-fills + thickness/cross grow with value), marching-ants baseline, 1s red-breathe, theme dash widths, "กดเพื่อ เปิด/ปิด" caption, favicon = OPD clinic icon, PDF regen.
+- **Light-theme a11y** (`10d63575`): 2D legend red/amber → theme-aware (light failed AA 3.4→6.2:1); review-CTA hover/active.
+- **Condom card baseline** (`79f00ae1`): hero card now shows "เดิม {X} มม. → {new}"; new SSOT `estimate().condomWidth0` (= selected rung in condom-mode). Reverses the 2026-06-21 "no เดิม" spec.
+- **Inferno bold redesign** (`45c89f80`, cosmetic-only): ember atmosphere + glass cards + glowing borders + glowing title + bold sliders + pulsing hero showpiece + CTA sheen; reduced-motion safe. ZERO logic change.
+- **Red dashed +20%** (`560eee76`): mobile visibility (light 1.2903 / dark 1.02).
+- **Neon-green outline** (`423159cc`): "หลังฉีด" red→green (dark #4ade80 / light #15803d) — red blended into Inferno warm-dark bg. g2dLegKey wording แดง→เขียว. Verified both themes rendered.
 
 ## Next action
-- Idle / await. (Optional: `deploy filler` to ship the research-credit feature to both sites.)
+- Idle / await. Filler simulator complete + live on both sites.
 
 ## Outstanding user-triggered actions
-- **"deploy filler"** → ships ddf30470 + e7954197 (research-credit button + full titles) to lover-clinic-app.vercel.app + loverclinic.vercel.app (frontend-only, no Probe-Deploy-Probe).
+- None. (Optional: user may tweak the light-theme green shade if #15803d reads too dark.)
