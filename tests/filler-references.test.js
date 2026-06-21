@@ -15,7 +15,7 @@ describe('fillerRefs — verified citations', () => {
     FILLER_REFERENCES.forEach((r, i) => {
       expect(r.n).toBe(i + 1);
       expect(r.url).toMatch(/^https:\/\//);
-      expect(r.cite && r.ref && r.refEn && r.desc && r.descEn).toBeTruthy();
+      expect(r.cite && r.ref && r.refEn && r.title).toBeTruthy(); // full paper title (replaced desc)
     });
   });
   it('R2 URLs point to the verified hosts (PMC / Oxford / ISO)', () => {
@@ -30,7 +30,8 @@ describe('fillerRefs — verified citations', () => {
     expect(FILLER_REFERENCES[0].ref).toMatch(/Yang/);
     expect(FILLER_REFERENCES[1].ref).toMatch(/Zhang/);
     expect(FILLER_REFERENCES[2].ref).toMatch(/Ahn/);
-    expect(FILLER_REFERENCES[3].desc).toMatch(/706/);
+    expect(FILLER_REFERENCES[3].title).toMatch(/706/);          // full title carries the 706-patient detail
+    expect(FILLER_REFERENCES[4].title).toMatch(/condom/i);
     expect(FILLER_REFERENCES[4].ref).toMatch(/ISO 4074/);
     expect(FILLER_REFERENCES.map((r) => r.cite)).toEqual([
       'PMC7230452', 'PMC9809476', 'PMC8987147', 'J Sex Med 2024; 21(10):878', 'ISO 4074',
@@ -56,6 +57,10 @@ describe('FillerSimulator — footer research-credit button + requested removals
   it('S4 the per-reference "used for" mapping chip was REMOVED (user: don\'t map research→calc)', () => {
     expect(sim).not.toMatch(/refsUsed/);                 // no t('refsUsed') chip in the modal
     expect(sim).not.toMatch(/r\.usedTh|r\.usedEn/);      // cards don't render the per-paper mapping
+  });
+  it('S4b the modal shows the full paper TITLE instead of the short description', () => {
+    expect(sim).toMatch(/r\.title/);                     // full title rendered
+    expect(sim).not.toMatch(/r\.desc/);                  // short description removed from the card
   });
   it('S5 the footer phone/LINE/FB TEXT line was REMOVED (contact buttons stay)', () => {
     expect(sim).not.toMatch(/CLINIC_CONTACT\.telDisplay\} · LINE OA/);

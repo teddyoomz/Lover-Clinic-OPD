@@ -463,7 +463,7 @@ export default function FillerSimulator() {
                     <span style={{ flex: 'none', width: 24, height: 24, borderRadius: 7, background: `linear-gradient(135deg, ${c.fire2}, ${c.amber})`, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{r.n}</span>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: c.tx }}>{lang === 'th' ? r.ref : r.refEn}</span>
-                      <span style={{ display: 'block', fontSize: 11.5, color: c.tx2, marginTop: 2, lineHeight: 1.4 }}>{lang === 'th' ? r.desc : r.descEn}</span>
+                      <span style={{ display: 'block', fontSize: 11, color: c.tx2, marginTop: 3, lineHeight: 1.4, fontStyle: 'italic' }}>“{r.title}”</span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
                         <span className="fs-num" style={{ fontSize: 10.5, color: c.fire, fontWeight: 700 }}>{r.cite} ↗</span>
                       </span>
