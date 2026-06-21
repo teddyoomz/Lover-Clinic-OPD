@@ -13,13 +13,13 @@ describe('filler-simulator v2 flow (Rule I — split shaft/glans, one source)', 
   it('F1: split total 12 · glans% 15 → shaft 10.2 / glans 1.8 → both grow; condom from shaft', () => {
     const total = 12, gp = 0.15;
     const shaftCc = total * (1 - gp), glansCc = total * gp;
-    const baseGirthCm = girthFromWidth(CONDOM_LADDER[4].w); // Regular 53 → 10.6 (2026-06-21 ladder)
+    const baseGirthCm = girthFromWidth(CONDOM_LADDER[2].w); // มาตรฐาน 52 → 10.4 (2026-06-21 thai-sizes)
     const e = estimate({ lengthCm: 12.7, baseGirthCm, shaftCc, glansCc });
     expect(shaftCc).toBeCloseTo(10.2, 6);
     expect(glansCc).toBeCloseTo(1.8, 6);
     expect(e.c1Low).toBeGreaterThan(e.c0);                 // shaft grew
     expect(e.glans.dgLow).toBeGreaterThan(e.glans.dg0);    // glans grew
-    expect(e.condom0.label).toBe('Regular 53');
+    expect(e.condom0.label).toBe('มาตรฐาน');
   });
 
   it('F2: condom-mode and Ø-mode give identical estimate for the same C0', () => {
@@ -348,10 +348,10 @@ describe('filler-simulator v5.4 — round-DOWN results (safety) + auto-scale lay
   it('V5.4-1: condom snap is FLOOR (largest size that fits) — retention rule (2026-06-21 ladder)', () => {
     expect(math).toMatch(/CONDOM_LADDER\[i\]\.w <= req\) bi = i/);   // floor to the largest fitting size
     expect(math).not.toMatch(/Math\.abs\(CONDOM_LADDER\[i\]\.w - req\)/); // no nearest-snap
-    // behaviour on the real MyONE 9-rung ladder [45,47,49,51,53,55,57,60,64]:
-    expect(condomForGirth(11.0).w).toBe(55); // NW 55 → 55
-    expect(condomForGirth(11.5).w).toBe(57); // NW 57.5 → floor 57
-    expect(condomForGirth(10.4).w).toBe(51); // NW 52 → floor 51
+    // behaviour on the Thai+world ladder [45,49,52,54,56,58,60,64,69,72] (2026-06-21 thai-sizes):
+    expect(condomForGirth(11.0).w).toBe(54); // NW 55 → floor 54 (no 55 rung)
+    expect(condomForGirth(11.5).w).toBe(56); // NW 57.5 → floor 56 (no 57 rung)
+    expect(condomForGirth(10.4).w).toBe(52); // NW 52 → rung 52 (exact)
   });
 
   it('V5.4-2: numeric result display rounds NEAREST (Math.round, not Math.floor) — 2026-06-21 closest-to-real', () => {
@@ -579,18 +579,21 @@ describe('filler-simulator v5.7 — condom CAPS at 64 (2026-06-21: past-64 exten
     expect(math).toMatch(/beyond: false/);
   });
 
-  it('V5.7-2: behaviour — caps at the top rung 64, NEVER beyond (2026-06-21)', () => {
-    expect(condomForGirth(13.2).w).toBe(64);          // >64 floors to 64
+  it('V5.7-2: behaviour — floors on the Thai+world ladder, caps at top rung 72, NEVER beyond (2026-06-21 thai-sizes)', () => {
+    expect(condomForGirth(13.2).w).toBe(64);          // NW 66 → floor 64
     expect(condomForGirth(13.2).beyond).toBe(false);
-    expect(condomForGirth(14.4).w).toBe(64);
-    expect(condomForGirth(17.5).w).toBe(64);          // far beyond → still 64
+    expect(condomForGirth(14.4).w).toBe(72);          // NW 72 → rung 72 (world max, exact)
+    expect(condomForGirth(17.5).w).toBe(72);          // far beyond → caps at 72
     expect(condomForGirth(17.5).beyond).toBe(false);
     expect(condomForGirth(12.8).beyond).toBe(false);  // 64 boundary
-    expect(condomForGirth(20).w).toBe(64);            // capped (was 100)
+    expect(condomForGirth(20).w).toBe(72);            // capped at top rung 72
   });
 
-  it('V5.7-3: ResultCard condom delta is ALWAYS sizesUp (the เกินมาตรฐาน branch was removed) — 2026-06-21', () => {
-    expect(page).toMatch(/delta=\{sizesUp\(est\.sizesUpLow, est\.sizesUpHigh\)\}/);
+  it('V5.7-3: condom RESULT = raw computed mm (condomWidthLow/High) + pickClosest hint, no sizesUp/เดิม — 2026-06-21 thai-sizes', () => {
+    expect(page).toMatch(/est\.condomWidthLow/);
+    expect(page).toMatch(/est\.condomWidthHigh/);
+    expect(page).toMatch(/delta=\{t\('pickClosest'\)\}/);
+    expect(page).not.toMatch(/delta=\{sizesUp\(est\.sizesUpLow, est\.sizesUpHigh\)\}/); // condom no longer uses sizesUp
     expect(page).not.toMatch(/est\.condomLow\.beyond \|\| est\.condomHigh\.beyond/);
   });
 
@@ -647,5 +650,42 @@ describe('filler-simulator v7.1 — condom HERO card (top + most prominent) in t
     expect(page).toMatch(/flexBasis: '100%'/);                              // hero = full-width (most prominent)
     expect(strings).toMatch(/recommended: 'แนะนำ'/);
     expect(strings).toMatch(/recommended: 'Recommended'/);
+  });
+});
+
+describe('filler-simulator 2026-06-21 — Thai dropdown + computed-mm result + length box', () => {
+  const page = read('src/pages/FillerSimulator.jsx');
+  const strings = read('src/lib/fillerStrings.js');
+
+  it('default condom rung = index 2 (52 มาตรฐาน)', () => {
+    expect(page).toMatch(/useState\(2\); \/\/ rung 52/);
+  });
+  it('dropdown option = number + descriptor (no English brand label, no girth suffix)', () => {
+    expect(page).toMatch(/\$\{cd\.w\} \$\{lang === 'th'/);
+    expect(page).not.toMatch(/girthFromWidth\(cd\.w\)/); // girth suffix removed from the option
+  });
+  it('condom RESULT card = raw computed mm range (no เดิม, no sizesUp) + pickClosest', () => {
+    expect(page).toMatch(/k=\{t\('resCondom'\)\} oldVal=""/);
+    expect(page).toMatch(/est\.condomWidthLow === est\.condomWidthHigh/);
+    expect(page).toMatch(/delta=\{t\('pickClosest'\)\}/);
+  });
+  it('length by-product box is rendered right after the condom hero (resLength + lengthWarn + lengthGainCm)', () => {
+    const condomIdx = page.indexOf("k={t('resCondom')}");
+    const lenIdx = page.indexOf("t('resLength')");
+    const girthIdx = page.indexOf("k={t('resGirth')}");
+    expect(lenIdx).toBeGreaterThan(condomIdx); // length AFTER condom
+    expect(lenIdx).toBeLessThan(girthIdx);     // and BEFORE girth
+    expect(page).toMatch(/est\.lengthGainCm/);
+    expect(page).toMatch(/t\('lengthWarn'\)/);
+  });
+  it('range-legend + note are NO LONGER rendered (owner revision); disclaimer stays', () => {
+    expect(page).not.toMatch(/\{t\('rangeLegend'\)\}/);
+    expect(page).not.toMatch(/\{t\('note'\)\}/);
+    expect(page).toMatch(/t\('disclaimer'\)/);
+  });
+  it('new i18n keys present (TH + EN)', () => {
+    for (const k of ['pickClosest', 'resLength', 'lengthWarn']) expect(strings).toMatch(new RegExp(`${k}:`));
+    expect(strings).toMatch(/lengthWarn: 'พยุงไม่ให้หด/);
+    expect(strings).toMatch(/lengthWarn: 'anti-retraction/);
   });
 });

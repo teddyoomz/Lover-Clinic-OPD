@@ -11,28 +11,29 @@ describe('girth k-ladder (closest-to-real)', () => {
   it('peak > durable (range orientation)', () => { expect(K_PEAK).toBeGreaterThan(K_DURABLE); });
 });
 
-describe('condom ladder (real MyONE 9-rung)', () => {
-  it('widths are exactly [45,47,49,51,53,55,57,60,64]', () => {
-    expect(CONDOM_LADDER.map((c) => c.w)).toEqual([45, 47, 49, 51, 53, 55, 57, 60, 64]);
+describe('condom ladder (Thai-familiar + world)', () => {
+  // 2026-06-21 thai-sizes: INPUT dropdown only; the RESULT shows raw computed mm.
+  it('widths are exactly [45,49,52,54,56,58,60,64,69,72] (Thai-retail + global-large)', () => {
+    expect(CONDOM_LADDER.map((c) => c.w)).toEqual([45, 49, 52, 54, 56, 58, 60, 64, 69, 72]);
   });
-  it('dropdown labels keep names (Super Snug / Regular / Large / Super Wide)', () => {
+  it('dropdown labels keep Thai descriptors (กระชับ / มาตรฐาน / ใหญ่), no English brand names', () => {
     const labels = CONDOM_LADDER.map((c) => c.label).join(' ');
-    expect(labels).toMatch(/Super Snug/);
-    expect(labels).toMatch(/Regular/);
-    expect(labels).toMatch(/Large/);
-    expect(labels).toMatch(/Super Wide/);
+    expect(labels).toMatch(/กระชับ/);
+    expect(labels).toMatch(/มาตรฐาน/);
+    expect(labels).toMatch(/ใหญ่/);
+    expect(labels).not.toMatch(/Super Snug|Regular|Large/);
   });
-  it('FLOOR snap: girth 10.4cm (NW 52) -> rung 51 (largest <=52)', () => {
-    expect(CONDOM_LADDER[condomIndexForGirth(10.4)].w).toBe(51);
+  it('FLOOR snap: girth 10.4cm (NW 52) -> rung 52 (มาตรฐาน, exact)', () => {
+    expect(CONDOM_LADDER[condomIndexForGirth(10.4)].w).toBe(52);
   });
-  it('caps at 64 with NO beyond flag (girth 14cm -> w 64, beyond false)', () => {
-    const r = condomForGirth(14);
-    expect(r.w).toBe(64);
+  it('caps at the top rung 72 with NO beyond flag (girth 20cm -> w 72, beyond false)', () => {
+    const r = condomForGirth(20);
+    expect(r.w).toBe(72);
     expect(r.beyond).toBe(false);
   });
-  it('the old fictional rungs/extension are gone (no 52/54/56/58/62/66+ widths)', () => {
+  it('the Thai-removed odd sizes are gone (no 47/51/53)', () => {
     const ws = CONDOM_LADDER.map((c) => c.w);
-    [52, 54, 56, 58, 62, 66, 68, 70, 72].forEach((w) => expect(ws).not.toContain(w));
+    [47, 51, 53].forEach((w) => expect(ws).not.toContain(w));
   });
 });
 
@@ -60,10 +61,11 @@ describe('estimate — erect-state + saturation', () => {
     expect(e.deltaCLow).toBeLessThan(1.0);
     expect(e.c1High).toBeGreaterThan(e.c1Low); // peak > durable
   });
-  it('condom at defaults: durable rung 55, peak rung 57 (range 55–57)', () => {
+  it('condom RESULT at defaults = raw computed mm 56–59 + length by-product 1.6cm (2026-06-21 thai-sizes)', () => {
     const e = estimate(base);
-    expect(e.condomLow.w).toBe(55);
-    expect(e.condomHigh.w).toBe(57);
+    expect(e.condomWidthLow).toBe(56);  // round(c1Low * 5) — NOT floored to a ladder rung
+    expect(e.condomWidthHigh).toBe(59); // round(c1High * 5)
+    expect(e.lengthGainCm).toBeCloseTo(1.6, 5);
   });
   it('dose-response SATURATES (doubling cc does NOT double the gain)', () => {
     const g16 = estimate({ ...base, shaftCc: 16 }).deltaCHigh;
@@ -86,7 +88,7 @@ describe('estimate — erect-state + saturation', () => {
     const no = estimate({ ...base, glansCc: 0 });
     const yes = estimate({ ...base, glansCc: 2 });
     expect(yes.c1Low).toBeCloseTo(no.c1Low, 10);
-    expect(yes.condomHigh.w).toBe(no.condomHigh.w);
+    expect(yes.condomWidthHigh).toBe(no.condomWidthHigh);
   });
 });
 

@@ -131,7 +131,7 @@ function ResultCard({ k, oldVal, newVal, delta, c, card, goldGrad, hero, badge }
           <span style={{ fontSize: 13.5, fontWeight: 800, color: c.tx }}>{k}</span>
           {badge && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: '#fff', background: `linear-gradient(90deg,${c.fire2},${c.fire})`, borderRadius: 999, padding: '3px 10px' }}>{badge}</span>}
         </div>
-        <div style={{ fontSize: 12.5, color: c.fire }}>{oldVal}</div>
+        {oldVal && <div style={{ fontSize: 12.5, color: c.fire }}>{oldVal}</div>}
         <div style={{ fontSize: 30, fontWeight: 900, color: c.green, fontVariantNumeric: 'tabular-nums', marginTop: 4, lineHeight: 1.12 }}>→ {newVal}</div>
         <div style={{ fontSize: 15, fontWeight: 800, marginTop: 4, backgroundImage: goldGrad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', letterSpacing: '0.01em' }}>{delta}</div>
       </div>
@@ -156,7 +156,7 @@ export default function FillerSimulator() {
   const [lengthUnit, setLengthUnit] = useState('inch');
   const [baseMode, setBaseMode] = useState('condom');
   const [baseDiameterCm, setBaseDiameterCm] = useState(3.3); // ~girth 10.4cm erect (spec 2026-06-21)
-  const [condomIdx, setCondomIdx] = useState(3); // rung 51 ≈ SE-Asian erect girth 10.4cm (spec 2026-06-21)
+  const [condomIdx, setCondomIdx] = useState(2); // rung 52 มาตรฐาน ≈ SE-Asian erect girth 10.4cm (spec 2026-06-21 thai-sizes)
   const [totalCc, setTotalCc] = useState(16); // clinical consensus default (spec 2026-06-21; was 10)
   const [glansCc, setGlansCc] = useState(0); // default split: shaft 10 · glans 0 — EXACT 0.5cc steps (same at every total)
   const [glansBaseRatio, setGlansBaseRatio] = useState(GLANS_BASE_RATIO.default); // head baseline = ratio × shaft Ø
@@ -193,12 +193,6 @@ export default function FillerSimulator() {
   const bodyPct = 100 - glansPct;
   const showGraphic3D = view === '3d' && webglOk;
 
-  const sizesUp = (lo, hi) => {
-    const a = Math.max(0, lo), b = Math.max(0, hi);
-    if (b <= 0) return t('sameSize');
-    if (a === b) return `+${a} ${t('sizesUnit')}`;
-    return `+${a} ${lang === 'th' ? 'ถึง' : 'to'} +${b} ${t('sizesUnit')}`;
-  };
   const rangeTo = lang === 'th' ? 'ถึง' : 'to';
 
   // theme-driven visual tokens
@@ -304,7 +298,7 @@ export default function FillerSimulator() {
               {baseMode === 'condom' ? (
                 <select className="fs-sel" value={condomIdx} onChange={(e) => setCondomIdx(Number(e.target.value))} aria-label={t('baseSize')}>
                   {CONDOM_LADDER.map((cd, i) => (
-                    <option key={cd.w} value={i}>{`${cd.label} (${cd.w} ${lang === 'th' ? 'มม.' : 'mm'} · ${t('resGirth').split(' ')[0]} ${r1(girthFromWidth(cd.w))})`}</option>
+                    <option key={cd.w} value={i}>{`${cd.w} ${lang === 'th' ? 'มม.' : 'mm'}${cd.label && lang === 'th' ? ` (${cd.label})` : ''}`}</option>
                   ))}
                 </select>
               ) : (
@@ -385,12 +379,16 @@ export default function FillerSimulator() {
         <div style={card({ marginTop: 18, padding: '17px 18px' })}>
           <div style={{ ...sectionLabel, marginBottom: 14 }}>{t('resultsHeader')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 11 }}>
-            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal={`${t('before')} ${est.condom0.w} ${lang === 'th' ? 'มม.' : 'mm'}`} newVal={est.condomLow.w === est.condomHigh.w ? `${est.condomLow.w} ${lang === 'th' ? 'มม.' : 'mm'}` : `${est.condomLow.w} – ${est.condomHigh.w} ${lang === 'th' ? 'มม.' : 'mm'}`} delta={sizesUp(est.sizesUpLow, est.sizesUpHigh)} />
+            <ResultCard hero badge={t('recommended')} c={c} card={cardInner} goldGrad={goldGrad} k={t('resCondom')} oldVal="" newVal={est.condomWidthLow === est.condomWidthHigh ? `${est.condomWidthLow} ${lang === 'th' ? 'มม.' : 'mm'}` : `${est.condomWidthLow} – ${est.condomWidthHigh} ${lang === 'th' ? 'มม.' : 'mm'}`} delta={t('pickClosest')} />
+            {/* length by-product — right after the condom box (spec 2026-06-21 thai-sizes + length-box) */}
+            <div style={{ ...cardInner, flexBasis: '100%', padding: '13px 15px' }}>
+              <div style={{ fontSize: 12, color: c.tx2, marginBottom: 5, fontWeight: 600 }}>{t('resLength')}</div>
+              <div style={{ fontSize: 18.5, fontWeight: 800, color: c.green, fontVariantNumeric: 'tabular-nums' }}>~+{r1(est.lengthGainCm)} {t('unitCm')}</div>
+              <div style={{ fontSize: 11, color: c.fire2, marginTop: 4, lineHeight: 1.4 }}>{t('lengthWarn')}</div>
+            </div>
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resGirth')} oldVal={`${t('before')} ${r1(est.c0)} ${t('unitCm')}`} newVal={`${r1(est.c1Low)} – ${r1(est.c1High)} ${t('unitCm')}`} delta={`+${r1(est.deltaCLow)} ${rangeTo} +${r1(est.deltaCHigh)}`} />
             <ResultCard c={c} card={cardInner} goldGrad={goldGrad} k={t('resDia')} oldVal={`${t('before')} ${r1(est.d0)} ${t('unitCm')}`} newVal={`${r1(est.d1Low)} – ${r1(est.d1High)} ${t('unitCm')}`} delta={`+${r1(est.d1Low - est.d0)} ${rangeTo} +${r1(est.d1High - est.d0)}`} />
           </div>
-          <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 12, lineHeight: 1.5, fontWeight: 600 }}>{t('rangeLegend')}</div>
-          <div style={{ fontSize: 11.5, color: c.tx2, marginTop: 8, lineHeight: 1.5 }}>{t('note')}</div>
         </div>
 
         {/* footer — contact buttons (call · LINE OA · Facebook) */}

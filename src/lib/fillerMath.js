@@ -13,6 +13,9 @@ export const PI = Math.PI;
 export const K_DURABLE = 122 / 100;  // 1.22 — 12-month durable = LOW end of the girth range
 export const K_PEAK = 190 / 100;     // 1.90 — ~1-month peak    = HIGH end of the girth range
 export const CM_PER_INCH = 254 / 100;
+// flaccid-length by-product: ~+1.6cm — an anti-retraction splint (filler holds it from retracting),
+// NOT true erect elongation (spec 2026-06-21). Integer fraction so the obfuscator hides the literal.
+export const FLACCID_LENGTH_GAIN_CM = 16 / 10;
 
 export const RANGES = {
   lengthCm: [6.35, 25.4], // 2.5 in .. 10 in — both units cap at 10 in (25.4 cm)
@@ -33,18 +36,21 @@ export const GLANS_BASE_RATIO = { min: 0.75, max: 1.25, step: 0.05, default: 1.0
 // (illustrative only) so a few cc doesn't look like it balloons. research rate kept above.
 export const GLANS_VISUAL_DAMP = 4 / 10;
 
-// Real MyONE Custom Fit 9-rung nominal-width ladder (mm), ascending (spec 2026-06-21; ISO 4074 + onecondoms).
-// Labels keep the named sizes for the INPUT size-dropdown; the RESULT shows the width number only.
+// Thai-familiar + world condom nominal-width ladder (mm), ascending (spec 2026-06-21).
+// 45–56 = Thai retail (Durex/Onetouch/Okamoto; 52 = everyday standard — no 51/53);
+// 58–72 = global large (MyONE 58/60/64, Pasante Super King 69, My.Size Pro 72 = world max).
+// `label` = Thai descriptor for the INPUT dropdown ONLY (blank where none); the RESULT shows the raw computed mm.
 export const CONDOM_LADDER = [
-  { label: 'Super Snug 45', w: 45 },
-  { label: '47', w: 47 },
-  { label: '49', w: 49 },
-  { label: '51', w: 51 },
-  { label: 'Regular 53', w: 53 },
-  { label: '55', w: 55 },
-  { label: 'Large 57', w: 57 },
-  { label: '60', w: 60 },
-  { label: 'Super Wide 64', w: 64 },
+  { label: 'กระชับพิเศษ', w: 45 },
+  { label: 'กระชับ', w: 49 },
+  { label: 'มาตรฐาน', w: 52 },
+  { label: '', w: 54 },
+  { label: 'ใหญ่', w: 56 },
+  { label: '', w: 58 },
+  { label: 'ใหญ่พิเศษ', w: 60 },
+  { label: '', w: 64 },
+  { label: '', w: 69 },
+  { label: '', w: 72 },
 ];
 
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -123,6 +129,11 @@ export function estimate({ lengthCm, baseGirthCm, shaftCc, fillerCc, glansCc = 0
     condomHigh,
     sizesUpLow: condomLow.index - condom0.index,
     sizesUpHigh: condomHigh.index - condom0.index,
+    // RESULT (UI): raw computed nominal width (mm), rounded to nearest mm — NOT floored to a ladder rung.
+    // The customer reads this number and picks the closest real condom themselves (spec 2026-06-21).
+    condomWidthLow: Math.round(c1Low * 5),
+    condomWidthHigh: Math.round(c1High * 5),
+    lengthGainCm: FLACCID_LENGTH_GAIN_CM,
     glans,
   };
 }
