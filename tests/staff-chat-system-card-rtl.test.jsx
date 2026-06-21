@@ -1,14 +1,23 @@
 // AV198 — StaffChatSystemCard render + the pending→registered LIVE FLIP (the
 // user's must-work case). The real useSystemCardCustomer hook runs; firebase is
-// mocked so the test drives the onSnapshot callback + getCustomer resolution.
+// mocked so the test drives the onSnapshot callbacks + getCustomer resolution.
+// Two listeners now: the opd_session (kiosk/queue brokerProClinicId) AND the
+// linked appointment (booking-flow customerId) — the mock routes them by ref kind.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 
-let snapCb = null;
+let sessionSnapCb = null;  // opd_session single-doc listener
+let apptSnapCb = null;     // be_appointments query listener
 let unsubCalls = 0;
 vi.mock('firebase/firestore', () => ({
-  doc: (...a) => ({ path: a.slice(1).join('/') }),
-  onSnapshot: (_ref, cb) => { snapCb = cb; return () => { unsubCalls++; snapCb = null; }; },
+  doc: (...a) => ({ __kind: 'doc', path: a.slice(1).join('/') }),
+  collection: (...a) => ({ __kind: 'collection', path: a.slice(1).join('/') }),
+  where: (field, op, val) => ({ __kind: 'where', field, op, val }),
+  query: (coll, ...clauses) => ({ __kind: 'query', coll, clauses }),
+  onSnapshot: (ref, cb) => {
+    if (ref && ref.__kind === 'query') apptSnapCb = cb; else sessionSnapCb = cb;
+    return () => { unsubCalls++; };
+  },
 }));
 vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 const getCustomerMock = vi.fn();
@@ -17,7 +26,8 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({ getCustomer: (...a) => getCust
 import { StaffChatSystemCard } from '../src/components/staffchat/StaffChatSystemCard.jsx';
 
 const TS = { toMillis: () => 1700000000000 };
-beforeEach(() => { snapCb = null; unsubCalls = 0; getCustomerMock.mockReset(); });
+const apptSnap = (customerId) => ({ docs: customerId ? [{ data: () => ({ customerId }) }] : [] });
+beforeEach(() => { sessionSnapCb = null; apptSnapCb = null; unsubCalls = 0; getCustomerMock.mockReset(); });
 
 describe('StaffChatSystemCard', () => {
   it('R1 follow-up → clickable sky link + HN; href /?backend=1&customer=, target=_blank rel=noopener', async () => {
@@ -39,17 +49,40 @@ describe('StaffChatSystemCard', () => {
     expect(screen.getByText('กรอกข้อมูลรับเข้าเสร็จแล้ว')).toBeTruthy();
   });
 
-  it('R3 intake LIVE FLIP: session gets brokerProClinicId → card becomes clickable + HN', async () => {
+  it('R3 intake LIVE FLIP (kiosk/queue): session gets brokerProClinicId → card becomes clickable + HN', async () => {
     getCustomerMock.mockResolvedValue({ firstname: 'สมชาย', lastname: 'ใจดี', hn_no: 'LC-26000180' });
     render(<StaffChatSystemCard message={{ id: 'm3', createdAt: TS, system: { kind: 'intake', customerId: null, sessionId: 'S3', nameSnapshot: 'สมชาย ใจดี', hnSnapshot: null } }} />);
     expect(screen.getByText('รอลงทะเบียน')).toBeTruthy();
-    expect(typeof snapCb).toBe('function'); // intake subscribed to its session
-    await act(async () => { snapCb({ exists: () => true, data: () => ({ brokerProClinicId: 'LC-26000180' }) }); });
+    expect(typeof sessionSnapCb).toBe('function'); // intake subscribed to its session
+    await act(async () => { sessionSnapCb({ exists: () => true, data: () => ({ brokerProClinicId: 'LC-26000180' }) }); });
     const link = await screen.findByTestId('system-card-customer-link');
     expect(link.getAttribute('href')).toBe('/?backend=1&customer=LC-26000180');
     expect(screen.getByTestId('system-card-hn').textContent).toMatch(/LC-26000180/);
     expect(getCustomerMock).toHaveBeenCalledWith('LC-26000180');
     expect(screen.queryByText('รอลงทะเบียน')).toBeNull();
+  });
+
+  it('R9 intake LIVE FLIP (booking-flow): session DELETED + linked appointment gets customerId → card flips (prod bug นาย ปรัชญา / LC-26000176)', async () => {
+    getCustomerMock.mockResolvedValue({ firstname: 'ปรัชญา', lastname: 'มนเทียรอาสน์', hn_no: 'LC-26000176' });
+    render(<StaffChatSystemCard message={{ id: 'm9', createdAt: TS, system: { kind: 'intake', customerId: null, sessionId: 'BL-1782029621467', nameSnapshot: 'นาย ปรัชญา มนเทียรอาสน์', hnSnapshot: null } }} />);
+    expect(screen.getByText('รอลงทะเบียน')).toBeTruthy();
+    expect(typeof apptSnapCb).toBe('function'); // intake ALSO subscribed to the linked appointment
+    // session is gone (booking-flow hard-deletes it on save) — the SESSION listener says exists:false
+    await act(async () => { sessionSnapCb({ exists: () => false, data: () => ({}) }); });
+    expect(screen.getByText('รอลงทะเบียน')).toBeTruthy(); // still pending — session gone
+    // the durable signal: the linked appointment now carries customerId
+    await act(async () => { apptSnapCb(apptSnap('LC-26000176')); });
+    const link = await screen.findByTestId('system-card-customer-link');
+    expect(link.getAttribute('href')).toBe('/?backend=1&customer=LC-26000176');
+    expect(screen.getByTestId('system-card-hn').textContent).toMatch(/LC-26000176/);
+    expect(getCustomerMock).toHaveBeenCalledWith('LC-26000176');
+    expect(screen.queryByText('รอลงทะเบียน')).toBeNull();
+  });
+
+  it('R10 intake subscribes to BOTH the session AND the linked appointment', () => {
+    render(<StaffChatSystemCard message={{ id: 'm10', createdAt: TS, system: { kind: 'intake', customerId: null, sessionId: 'S10', nameSnapshot: 'a b', hnSnapshot: null } }} />);
+    expect(typeof sessionSnapCb).toBe('function');
+    expect(typeof apptSnapCb).toBe('function');
   });
 
   it('R4 customer NAME link is sky, NEVER red (Thai culture)', async () => {
@@ -60,10 +93,11 @@ describe('StaffChatSystemCard', () => {
     expect(link.className).not.toMatch(/text-red/);
   });
 
-  it('R5 follow-up does NOT subscribe to a session (customerId known)', () => {
+  it('R5 follow-up does NOT subscribe to a session OR an appointment (customerId known)', () => {
     getCustomerMock.mockResolvedValue({ firstname: 'A', lastname: 'B', hn_no: 'X' });
     render(<StaffChatSystemCard message={{ id: 'm5', createdAt: TS, system: { kind: 'followup', customerId: 'LC-1', sessionId: 'S5', nameSnapshot: 'A B', hnSnapshot: 'X' } }} />);
-    expect(snapCb).toBeNull(); // no onSnapshot — direct customerId
+    expect(sessionSnapCb).toBeNull(); // no onSnapshot — direct customerId
+    expect(apptSnapCb).toBeNull();
   });
 
   it('R6 customer DELETED after registration (getCustomer→null) → downgrades to plain name + ไม่พบข้อมูลลูกค้า, NO 404 link', async () => {
@@ -85,9 +119,9 @@ describe('StaffChatSystemCard', () => {
   it('R8 brokerProClinicId CLEARED on the session → card reverts to pending (hook mirrors the pure picker)', async () => {
     getCustomerMock.mockResolvedValue({ firstname: 'A', lastname: 'B', hn_no: 'LC-9' });
     render(<StaffChatSystemCard message={{ id: 'm8', createdAt: TS, system: { kind: 'intake', customerId: null, sessionId: 'S8', nameSnapshot: 'A B', hnSnapshot: null } }} />);
-    await act(async () => { snapCb({ exists: () => true, data: () => ({ brokerProClinicId: 'LC-9' }) }); }); // register → resolve
+    await act(async () => { sessionSnapCb({ exists: () => true, data: () => ({ brokerProClinicId: 'LC-9' }) }); }); // register → resolve
     expect(await screen.findByTestId('system-card-customer-link')).toBeTruthy();
-    await act(async () => { snapCb({ exists: () => true, data: () => ({ brokerProClinicId: null }) }); });    // clear → revert
+    await act(async () => { sessionSnapCb({ exists: () => true, data: () => ({ brokerProClinicId: null }) }); });    // clear → revert
     expect(await screen.findByText('รอลงทะเบียน')).toBeTruthy();
     expect(screen.queryByTestId('system-card-customer-link')).toBeNull();
   });

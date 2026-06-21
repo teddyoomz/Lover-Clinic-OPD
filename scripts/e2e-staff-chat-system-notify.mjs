@@ -25,9 +25,12 @@ const CUST = 'TEST-CUST-AV198';
 const SESS = `TEST-SESS-AV198-${Date.now()}`;
 
 // the client-side picker contract (unit-tested in tests/staff-chat-system-notify-resolve.test.js)
-function pick(card, sessionData) {
+// MUST mirror src/lib/staffChatNotifyResolve.js pickSystemCardCustomerId exactly:
+// system.customerId → appointment.customerId (booking-flow) → session.brokerProClinicId (kiosk).
+function pick(card, sessionData, apptData) {
   const sys = card && card.system; if (!sys) return null;
   if (sys.customerId) return String(sys.customerId);
+  if (apptData && apptData.customerId) return String(apptData.customerId);
   if (sessionData && sessionData.brokerProClinicId) return String(sessionData.brokerProClinicId);
   return null;
 }
@@ -84,6 +87,26 @@ async function main() {
   ok(resolveCustomerName(custSnap.data()).includes('อีทูอี'), 'live name resolves from be_customers');
   ok(resolveCustomerHN(custSnap.data()) === 'LC-AV198', 'live HN resolves from be_customers');
 
+  console.log('Phase 4b — BOOKING-FLOW intake: session DELETED on save → card FLIPS via the linked appointment (prod bug 2026-06-21, นาย ปรัชญา / LC-26000176)');
+  const BL_SESS = `TEST-SESS-AV198-BL-${Date.now()}`;
+  const BL_APPT = `TEST-APPT-AV198-${Date.now()}`;
+  const blCard = buildStaffChatNotification({
+    kind: 'intake', sessionId: BL_SESS, branchId: BR,
+    session: { patientData: { prefix: 'นาย', firstName: 'ปรัชญา', lastName: 'มนเทียรอาสน์' } }, customer: null,
+  });
+  await writeStaffChatNotification(db, BASE, FieldValue, blCard);
+  writtenIds.push(blCard.id);
+  // booking-flow: the opd_session is HARD-DELETED on handleOpdClick save → it never exists for the listener.
+  const blSessSnap = await db.doc(`${BASE}/opd_sessions/${BL_SESS}`).get();
+  ok(!blSessSnap.exists, 'booking-flow session does NOT exist (hard-deleted on save) — brokerProClinicId path is dead here');
+  ok(pick(blCard, blSessSnap.exists ? blSessSnap.data() : null, null) === null, 'pick → null with no session + no appt (pending)');
+  // registration stamps appt.customerId keyed by linkedOpdSessionId (the durable signal the fix watches)
+  await db.doc(`${BASE}/be_appointments/${BL_APPT}`).set({ id: BL_APPT, customerId: CUST, linkedOpdSessionId: BL_SESS, branchId: BR, status: 'confirmed', _av198_test: true });
+  const aq = await db.collection(`${BASE}/be_appointments`).where('linkedOpdSessionId', '==', BL_SESS).limit(1).get();
+  ok(!aq.empty, 'appointment found by the EXACT client query: where(linkedOpdSessionId == sessionId)');
+  const apptData = aq.empty ? null : aq.docs[0].data();
+  ok(pick(blCard, null, apptData) === CUST, 'pick → TEST-CUST via the linked appointment (the booking-flow FLIP)');
+
   console.log('Phase 5 — FOLLOWUP card resolves immediately');
   const followCard = buildStaffChatNotification({
     kind: 'followup', sessionId: `${SESS}-fu`, branchId: BR,
@@ -98,13 +121,15 @@ async function main() {
   for (const id of writtenIds) await db.doc(`${BASE}/be_staff_chat_messages/${id}`).delete();
   await db.doc(`${BASE}/opd_sessions/${SESS}`).delete();
   await db.doc(`${BASE}/be_customers/${CUST}`).delete();
+  await db.doc(`${BASE}/be_appointments/${BL_APPT}`).delete();
   const auditId = `av198-e2e-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
   await db.doc(`${BASE}/be_admin_audit/${auditId}`).set({ kind: 'av198-staff-chat-system-notify-e2e', pass, fail, writtenIds, appliedAt: FieldValue.serverTimestamp() });
   const leftover = await db.collection(`${BASE}/be_staff_chat_messages`).where('branchId', '==', BR).get();
   ok(leftover.empty, `zero leftover TEST cards (found ${leftover.size})`);
   const sLeft = await db.doc(`${BASE}/opd_sessions/${SESS}`).get();
   const cLeft = await db.doc(`${BASE}/be_customers/${CUST}`).get();
-  ok(!sLeft.exists && !cLeft.exists, 'TEST session + customer cleaned up');
+  const aLeft = await db.doc(`${BASE}/be_appointments/${BL_APPT}`).get();
+  ok(!sLeft.exists && !cLeft.exists && !aLeft.exists, 'TEST session + customer + appointment cleaned up');
 
   console.log(`\nRESULT: PASS ${pass} · FAIL ${fail} · audit ${auditId}`);
   process.exit(fail === 0 ? 0 : 1);

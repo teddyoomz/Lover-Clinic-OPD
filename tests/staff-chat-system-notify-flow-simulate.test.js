@@ -3,7 +3,10 @@
 // REAL pure pieces (no React). Firebase mocked so the resolve module imports.
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('firebase/firestore', () => ({ doc: () => ({}), onSnapshot: () => () => {} }));
+vi.mock('firebase/firestore', () => ({
+  doc: () => ({}), onSnapshot: () => () => {},
+  collection: () => ({}), query: () => ({}), where: () => ({}),
+}));
 vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 vi.mock('../src/lib/scopedDataLayer.js', () => ({ getCustomer: vi.fn() }));
 
@@ -27,8 +30,22 @@ describe('staff-chat system-notify flow-simulate', () => {
       session: { patientData: { firstName: 'สมชาย', lastName: 'ใจดี' } }, customer: null, idFactory: () => 'CHAT-2',
     });
     expect(card.system.customerId).toBeNull();
-    expect(pickSystemCardCustomerId(card, { exists: true })).toBeNull();          // before registration
-    expect(pickSystemCardCustomerId(card, { brokerProClinicId: 'LC-180' })).toBe('LC-180'); // after handleOpdClick
+    expect(pickSystemCardCustomerId(card, { exists: true }, null)).toBeNull();          // before registration
+    expect(pickSystemCardCustomerId(card, { brokerProClinicId: 'LC-180' }, null)).toBe('LC-180'); // after handleOpdClick (kiosk/queue)
+  });
+
+  it('F7 intake booking-flow: session DELETED on save → flips via the LINKED APPOINTMENT customerId', () => {
+    // Prod bug 2026-06-21 (นาย ปรัชญา / LC-26000176): handleOpdClick for a
+    // booking-flow session stamps appt.customerId (keyed by linkedOpdSessionId)
+    // + hard-deletes the opd_session — so brokerProClinicId is NEVER set + the
+    // session is gone. The durable resolve signal is the appointment.
+    const card = buildStaffChatNotification({
+      kind: 'intake', sessionId: 'BL-1782029621467', branchId: 'BR1',
+      session: { patientData: { prefix: 'นาย', firstName: 'ปรัชญา', lastName: 'มนเทียรอาสน์' } }, customer: null, idFactory: () => 'CHAT-7',
+    });
+    expect(card.system.customerId).toBeNull();
+    expect(pickSystemCardCustomerId(card, null, null)).toBeNull();                       // session gone, appt not yet stamped
+    expect(pickSystemCardCustomerId(card, null, { customerId: 'LC-26000176' })).toBe('LC-26000176'); // appt stamped → FLIP
   });
 
   it('F3 edit is never carded (caller guard: !session.updatedAt)', () => {

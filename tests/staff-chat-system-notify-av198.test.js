@@ -90,6 +90,16 @@ describe('AV198 — staff-chat System notification card invariants', () => {
     expect(s).toMatch(/setMissing\(true\)/);    // round-1 fix: deleted-customer downgrade
   });
 
+  it('A11 intake ALSO resolves via the linked appointment (booking-flow: session hard-deleted on save) — not only brokerProClinicId', () => {
+    const s = read('src/lib/staffChatNotifyResolve.js');
+    // pure picker prefers appointment.customerId over session.brokerProClinicId
+    expect(s).toMatch(/if \(apptData && apptData\.customerId\) return String\(apptData\.customerId\)/);
+    // the hook subscribes to be_appointments by linkedOpdSessionId (the durable, branch-agnostic signal)
+    expect(s).toMatch(/be_appointments/);
+    expect(s).toMatch(/where\('linkedOpdSessionId', '==', sessionId\)/);
+    expect(s).toMatch(/system-card appointment listener/); // appt listener error LOGGED, not swallowed
+  });
+
   it('A7 the AV198 invariant is recorded in the audit skill', () => {
     const s = read('.agents/skills/audit-anti-vibe-code/SKILL.md');
     expect(s).toMatch(/AV198/);
