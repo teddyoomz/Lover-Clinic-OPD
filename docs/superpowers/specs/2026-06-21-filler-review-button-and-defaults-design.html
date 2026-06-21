@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Sim — review-CTA button + popup, new defaults, thinner dashed line</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; } th { background: var(--bg-meta); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    /* faithful dark-theme mock */
+    .fsim { background:#0d0d0d; border-radius:14px; padding:16px; max-width:420px; font-family:'Segoe UI',sans-serif; }
+    .fsim .res { background:#161616; border:1px solid #b91c1c; border-radius:11px; padding:10px 12px; }
+    .fsim .res .h { font-size:11px; color:#9a9a9a; } .fsim .res .b { font-size:20px; font-weight:800; color:#22c55e; }
+    .fsim .revbtn { display:flex; align-items:center; justify-content:center; gap:9px; margin:11px 0; padding:14px; border-radius:12px; font-weight:800; font-size:15px; color:#fff;
+      background:linear-gradient(90deg,#dc2626,#f59e0b); box-shadow:0 0 0 3px #ef444433, 0 8px 22px #dc262566; border:1px solid #f59e0b; }
+    .fsim .revbtn .sub { font-size:10px; font-weight:600; opacity:.92; }
+    .fsim .contact { display:flex; gap:7px; } .fsim .contact span { flex:1; text-align:center; font-size:11px; font-weight:700; color:#fff; padding:9px 0; border-radius:9px; }
+    .fsim .modal { background:#141414; border:1.5px solid #b91c1c; border-radius:16px; padding:16px; box-shadow:0 0 0 4px #ef444422; }
+    .fsim .modal h4 { margin:0 0 3px; color:#fff; font-size:16px; } .fsim .modal p { margin:0 0 13px; color:#9a9a9a; font-size:11px; }
+    .fsim .choice { display:flex; gap:11px; } .fsim .card { flex:1; background:#1d1d1d; border:1px solid #333; border-radius:12px; padding:15px 10px; text-align:center; }
+    .fsim .card .t { font-size:14px; font-weight:800; color:#fff; } .fsim .card .u { font-size:9px; color:#6a6a6a; margin-top:4px; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Sim — review-CTA button + popup, new defaults, thinner dashed line</h1>
+
+<blockquote><strong>Date:</strong> 2026-06-21 · <strong>Status:</strong> Approved by user (Q&amp;A locked) · <strong>Scope:</strong> the public <code>?play=filler</code> page only · <strong>Plan:</strong> docs/superpowers/plans/2026-06-21-filler-review-button-and-defaults.html</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Three owner-driven changes to the public filler simulator. The simulator is a lead-gen toy — the owner wants a prominent, on-theme CTA to funnel players to the clinic's real before–after review pages, plus two small calibration tweaks.</p>
+<ol>
+  <li><strong>Review CTA (the design item).</strong> A single eye-catching button that, to save space, opens a popup to choose which review set to view — circumcised (<code>https://loverclinic.com/review-enhance-circum/</code>) vs uncircumcised (<code>https://loverclinic.com/review-enhance-nocircum/</code>). It must be beautiful/on-theme, prominent, and enticing.</li>
+  <li><strong>New defaults:</strong> length <strong>5 inches (12.7 cm)</strong>, total filler <strong>10 cc</strong>.</li>
+  <li><strong>Thinner red dashed "after" outline:</strong> reduce its stroke width by a further 50% (1.7 → 0.85).</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Placement A (chosen) — review button under the results card, above โทร/LINE/FB</div>
+  <div class="fsim">
+    <div class="res"><div class="h">ขนาดถุงยางอนามัยที่เหมาะสม</div><div class="b">→ 56 – 59 มม.</div></div>
+    <div class="revbtn">★ <div>ดูรีวิวจริง <span class="sub">ก่อน–หลัง เคสจริง</span></div> →</div>
+    <div class="contact"><span style="background:#dc2626;">โทร</span><span style="background:#06C755;">LINE</span><span style="background:#1877f2;">Facebook</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Popup (style 1: fire gradient red→gold, glow) — choose circum / nocircum, opens in a new tab</div>
+  <div class="fsim">
+    <div class="modal">
+      <h4>ดูรีวิวเคสจริง</h4>
+      <p>เลือกแบบที่ต้องการชม · ภาพก่อน–หลังจากเคสจริง</p>
+      <div class="choice">
+        <div class="card"><div class="t">แบบขลิบ</div><div class="u">review-enhance-circum</div></div>
+        <div class="card"><div class="t">แบบไม่ขลิบ</div><div class="u">review-enhance-nocircum</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Click review CTA → popup → choose → open the matching review URL in a new tab</div>
+  <table>
+    <tr><th>#</th><th>Action</th></tr>
+    <tr><td>1</td><td>user sees their estimated result → the glowing "ดูรีวิวจริง" CTA sits right below it</td></tr>
+    <tr><td>2</td><td>click → <code>setReviewOpen(true)</code> → modal renders (dark, fire border, 2 choice cards)</td></tr>
+    <tr><td>3a</td><td>click "แบบขลิบ" → <code>window.open('https://loverclinic.com/review-enhance-circum/', '_blank', 'noopener,noreferrer')</code> + close modal</td></tr>
+    <tr><td>3b</td><td>click "แบบไม่ขลิบ" → open <code>…/review-enhance-nocircum/</code> in a new tab + close modal</td></tr>
+    <tr><td>4</td><td>close also via X / backdrop / ESC (low-friction toy modal — backdrop-close is fine here, no form)</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/pages/FillerSimulator.jsx</code></td><td>(1) NEW <code>reviewOpen</code> state + the fire-CTA button rendered right AFTER the results card and BEFORE the contact-buttons row + a <code>ReviewPopup</code> (inline component or block): centered overlay, dark <code>c.card2</code> + fire border, title + 2 choice cards, each <code>window.open(url,'_blank','noopener,noreferrer')</code>; close on X / backdrop / ESC. (2) defaults: <code>useState(12.7)</code> for <code>lengthCm</code> (5 in), <code>useState(10)</code> for <code>totalCc</code>.</td></tr>
+  <tr><td><code>src/lib/fillerStrings.js</code></td><td>NEW keys (TH+EN): <code>reviewBtn</code> ("ดูรีวิวจริง" / "Real reviews"), <code>reviewBtnSub</code> ("ก่อน–หลัง เคสจริง" / "real before–after cases"), <code>reviewTitle</code> ("ดูรีวิวเคสจริง" / "Real case reviews"), <code>reviewSub</code> ("เลือกแบบที่ต้องการชม · ภาพก่อน–หลังจากเคสจริง" / "pick which to view · real before–after"), <code>reviewCircum</code> ("แบบขลิบ" / "Circumcised"), <code>reviewNocircum</code> ("แบบไม่ขลิบ" / "Uncircumcised").</td></tr>
+  <tr><td><code>src/components/FillerGraphic2D.jsx</code></td><td>red dashed "after" outline <code>strokeWidth="1.7"</code> → <code>"0.85"</code> (both occurrences — side + cross-section).</td></tr>
+</table>
+<p>The two review URLs are constants (e.g. <code>REVIEW_URLS = { circum: '…/review-enhance-circum/', nocircum: '…/review-enhance-nocircum/' }</code>) in FillerSimulator.jsx. External links open in a new tab with <code>noopener,noreferrer</code>.</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> review button placed UNDER the results card, above the contact-buttons row (peak-interest moment).</li>
+  <li><strong>Q2 = style 1:</strong> fire gradient red→gold + glow + gold border (the most prominent / on-theme).</li>
+  <li><strong>One button → popup</strong> with 2 choices (circum / nocircum) to save space (owner). Each opens the matching loverclinic.com review URL in a new tab.</li>
+  <li><strong>Defaults:</strong> length 5 in (12.7 cm), filler 10 cc.</li>
+  <li><strong>Red dashed outline:</strong> −50% thickness (1.7 → 0.85).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>A prominent fire-gradient "ดูรีวิวจริง" button renders directly below the results card + above โทร/LINE/FB.</li>
+  <li>Click → a dark fire-bordered popup with two choices; "แบบขลิบ" opens <code>…/review-enhance-circum/</code> and "แบบไม่ขลิบ" opens <code>…/review-enhance-nocircum/</code> in a NEW tab (noopener,noreferrer); X/backdrop/ESC close it.</li>
+  <li>On first load the length slider reads 5.0 นิ้ว and the filler slider reads 10 cc.</li>
+  <li>The red dashed "after" outline strokeWidth is 0.85 (no 1.7 remains).</li>
+  <li>Theme/layout/math otherwise unchanged; full vitest green; build + verify:filler + obfuscation clean; Rule Q-vis L1 matches this mockup.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>External URLs</strong> are hardcoded to <code>loverclinic.com</code> — if the review paths change, update the constant. Open in a new tab so the toy session is preserved.</li>
+  <li><strong>Default 10 cc / 12.7 cm</strong> changes the default displayed result (smaller than the prior 16 cc / 13.4 cm) — intended (owner's chosen defaults).</li>
+  <li><strong>Modal backdrop-close</strong> is allowed here (public toy, no form) — differs from the OPD AV78 explicit-close rule, which applies to data-entry modals, not this 2-choice picker.</li>
+</ul>
+
+</body>
+</html>
