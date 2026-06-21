@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Sim — Thai-familiar condom dropdown + computed-mm result + length by-product</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    /* faithful dark-theme mock (matches the real ?play=filler screen) */
+    .fsim { background:#0d0d0d; border-radius:14px; padding:18px; color:#e7e7e7; font-family:'Segoe UI',sans-serif; max-width:420px; }
+    .fsim .card { background:#161616; border:1px solid #262626; border-radius:12px; padding:14px; margin:10px 0; }
+    .fsim label { font-size:12px; color:#9a9a9a; }
+    .fsim select { width:100%; margin-top:6px; background:#0d0d0d; color:#e7e7e7; border:1px solid #333; border-radius:8px; padding:9px 10px; font-size:14px; }
+    .fsim .hero { background:#161616; border:1px solid #b91c1c; border-radius:12px; padding:14px; }
+    .fsim .pill { display:inline-block; background:#3a0d0d; color:#fca5a5; font-size:11px; padding:2px 8px; border-radius:20px; margin-left:6px; }
+    .fsim .big { font-size:30px; font-weight:800; color:#22c55e; margin:6px 0 2px; }
+    .fsim .hint { font-size:12px; color:#8a8a8a; }
+    .fsim .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+    .fsim .mini { background:#161616; border:1px solid #262626; border-radius:10px; padding:10px; }
+    .fsim .mini .ml { font-size:11px; color:#9a9a9a; }
+    .fsim .mini .mv { font-size:16px; font-weight:700; color:#fb923c; margin-top:3px; }
+    .fsim .mini.len { border-color:#7c5e10; }
+    .fsim .mini.len .mv { color:#facc15; }
+    .fsim .warn { font-size:10.5px; color:#facc15; margin-top:5px; line-height:1.4; }
+    .fsim .legend { font-size:11px; color:#9a9a9a; font-weight:600; margin:10px 2px 4px; }
+    .fsim .note { font-size:10.5px; color:#7a7a7a; line-height:1.5; }
+  </style>
+</head>
+<body>
+
+<h1>Filler Sim — Thai-familiar condom dropdown + computed-mm result + length by-product</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-21 · <strong>Status:</strong> Approved by user (Q&amp;A locked) · <strong>Builds on:</strong> the 2026-06-21 closest-to-real recalibration (shipped) · <strong>Plan:</strong> docs/superpowers/plans/2026-06-21-filler-thai-sizes-length-byproduct.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Two owner-driven refinements to the just-shipped <code>?play=filler</code> simulator. The math (girth k-ladder, glans, defaults) stays exactly as shipped — only the condom <em>mapping</em> + one new result row change.</p>
+<ol>
+  <li><strong>Thai-familiar condom dropdown.</strong> The current INPUT dropdown uses the real MyONE 9-rung ladder (45/47/49/<b>51</b>/<b>53</b>/55/57/60/64). Thai customers don't recognize 51/53 — in Thailand <b>52</b> is the everyday standard. The dropdown (where a customer selects their CURRENT size) must use sizes Thai customers recognize, extended up through the genuinely-largest sizes sold in the world so any customer can state their real current size.</li>
+  <li><strong>Result = closest computed size (mm), not a ladder rung.</strong> The condom RESULT must show the size closest to the actual computed girth (raw nominal width, rounded to the nearest mm) as a range — NOT floored to a retail rung. The customer reads the number and picks the closest real condom themselves. (Owner, verbatim: "เอา size มาตรฐานมาอ้างอิงแค่ใช้ตรง dropdown ... แต่ตรงที่แสดงผล ให้แสดงผลไซส์ใกล้ที่คำนวนได้ที่สุด แล้วให้คนที่รู้ข้อมูลนี้ ไปเลือก size ถุงยางเอง".) This also removes the old "clamp at the top rung" problem.</li>
+  <li><strong>Surface the length by-product.</strong> Filler adds ~+1.6 cm FLACCID length (an anti-retraction splint, not true erect elongation). Today that fact is buried in the footnote — surface it as a dedicated 4th result card WITH the warning (owner: "แสดงผลพลอยได้ที่เป็นความยาวด้วยพร้อมคำเตือนเหมือนตอน spec").</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">BEFORE — current (shipped): MyONE ladder, result floored to a rung, length only in footnote</div>
+  <div class="fsim">
+    <div class="card">
+      <label>เลือกขนาดถุงยางอนามัย (ปัจจุบัน)</label>
+      <select><option>51 (Regular 53...)</option></select>
+      <div style="font-size:10.5px;color:#6a6a6a;margin-top:6px;">ตัวเลือก: 45 · 47 · 49 · <span style="color:#f87171">51</span> · <span style="color:#f87171">53</span> · 55 · 57 · 60 · 64 (คนไทยไม่คุ้น 51/53)</div>
+    </div>
+    <div class="hero">
+      <label>ขนาดถุงยางอนามัยที่เหมาะสม <span class="pill">แนะนำ</span></label>
+      <div style="font-size:12px;color:#9a9a9a;margin-top:4px;">เดิม 51 มม. →</div>
+      <div class="big" style="color:#22c55e;">55 – 57 มม.</div>
+      <div class="hint">+2 ถึง +3 ขนาด <span style="color:#f87171;">(ติดเพดาน ladder)</span></div>
+    </div>
+    <div class="note">ฟิลเลอร์เพิ่มเส้นรอบวงและส่วนหัว · เพิ่มความยาวตอนอ่อน ~+1.6 ซม. (พยุงไม่ให้หดเข้า ไม่ใช่ยืดออกจริง) · … <span style="color:#f87171;">← ความยาวซ่อนอยู่ในหมายเหตุ</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">AFTER — proposed: Thai-familiar+world dropdown · result = computed mm range · length = 4th card</div>
+  <div class="fsim">
+    <div class="card">
+      <label>เลือกขนาดถุงยางอนามัย (ปัจจุบันของคุณ)</label>
+      <select><option>52 มม. (มาตรฐาน)</option></select>
+      <div style="font-size:10.5px;color:#6a6a6a;margin-top:6px;">ตัวเลือก: 45 (กระชับพิเศษ) · 49 (กระชับ) · <span style="color:#86efac">52 (มาตรฐาน)</span> · 54 · 56 (ใหญ่) · 58 · 60 (ใหญ่พิเศษ) · 64 · 69 · 72 (ใหญ่สุดในโลก)</div>
+    </div>
+    <div class="hero">
+      <label>ขนาดถุงยางอนามัยที่เหมาะสม <span class="pill">แนะนำ</span></label>
+      <div class="big">56 – 59 มม.</div>
+      <div class="hint">ค่าที่คำนวนได้ · เลือกถุงยางไซส์ใกล้เคียงค่านี้</div>
+    </div>
+    <div class="row3">
+      <div class="mini">
+        <div class="ml">เส้นรอบวง (ลำตัว)</div>
+        <div class="mv">11.3 – 11.7</div>
+        <div style="font-size:10px;color:#7a7a7a;">เดิม 10.4 ซม.</div>
+      </div>
+      <div class="mini">
+        <div class="ml">เส้นผ่านศูนย์กลาง</div>
+        <div class="mv">3.6 – 3.7</div>
+        <div style="font-size:10px;color:#7a7a7a;">เดิม 3.3 ซม.</div>
+      </div>
+      <div class="mini len">
+        <div class="ml">ความยาว (ตอนอ่อน)</div>
+        <div class="mv">~+1.6 ซม.</div>
+        <div class="warn">พยุงไม่ให้หด ไม่ใช่ยืดจริง</div>
+      </div>
+    </div>
+    <div class="legend">ค่าซ้าย = ระยะคงตัว · ค่าขวา = ขนาดใหญ่ที่สุด(ช่วงแรก)</div>
+    <div class="note">ฟิลเลอร์เพิ่มเส้นรอบวงและส่วนหัว · คงอยู่ประมาณ 12–18 เดือนแล้วสลายตัวลงตามเวลา · ค่าทั้งหมดเป็นการประมาณการ ±~1 ซม.</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Input dropdown (Thai ladder) → girth → estimate → computed-mm result + length card</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>What happens</th></tr>
+    <tr><td>1</td><td>เลือกไซส์ปัจจุบัน (dropdown)</td><td>customer picks a rung from the Thai-familiar+world ladder, e.g. <code>52 (มาตรฐาน)</code> → <code>baseGirthCm = 52 / 5 = 10.4</code> (direct map; NO floor-snap on input)</td></tr>
+    <tr><td>2</td><td>estimate(...)</td><td>UNCHANGED math: <code>g = dCgeo(C0,L,V)</code> · durable <code>c1Low = C0 + K_DURABLE·g</code> · peak <code>c1High = C0 + K_PEAK·g</code></td></tr>
+    <tr><td>3</td><td>condom result (NEW)</td><td><code>widthLow = round(c1Low·5)</code>, <code>widthHigh = round(c1High·5)</code> — raw computed nominal width, rounded to nearest mm. NO ladder floor. Render <code>"{widthLow} – {widthHigh} มม."</code> + hint "เลือกไซส์ใกล้เคียงเอง". No เดิม, no +N.</td></tr>
+    <tr><td>4</td><td>length by-product card (NEW)</td><td>fixed <code>FLACCID_LENGTH_GAIN_CM ≈ 1.6</code> → 4th card "ความยาว (ตอนอ่อน) ~+1.6 ซม." + warning "พยุงไม่ให้หด ไม่ใช่ยืดจริง"</td></tr>
+    <tr><td>5</td><td>girth / diameter cards</td><td>UNCHANGED (เดิม → durable–peak range)</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+  <p><strong>src/lib/fillerMath.js</strong></p>
+  <ul>
+    <li><code>CONDOM_LADDER</code> → real-world widths <code>[45,49,52,54,56,58,60,64,69,72]</code> with Thai-descriptor labels (กระชับพิเศษ/กระชับ/มาตรฐาน/ใหญ่/ใหญ่พิเศษ/…/ใหญ่สุดในโลก). 45–56 = Thai retail (Durex/Onetouch/Okamoto); 58–72 = global large (MyONE 58/60/64, Pasante Super King 69, My.Size Pro 72 = world max). Integer-fraction values NOT needed (widths are integers) but labels are plain data — still hidden by the obfuscator only where numeric.</li>
+    <li>NEW <code>FLACCID_LENGTH_GAIN_CM = 16 / 10</code> (= 1.6; integer-fraction so the obfuscator's <code>numbersToExpressions</code> hides it).</li>
+    <li><code>estimate(...)</code> result fields: add <code>condomWidthLow = Math.round(c1Low·5)</code>, <code>condomWidthHigh = Math.round(c1High·5)</code>, <code>lengthGainCm = FLACCID_LENGTH_GAIN_CM</code>. Keep <code>condom0</code> (base = selected). The floored <code>condomLow/condomHigh/sizesUp*</code> are no longer read by the UI — keep or drop (drop to stay lean; check no other reader).</li>
+    <li><code>condomForGirth</code> / <code>condomIndexForGirth</code> stay (still map the dropdown selection → index, and the base width); they're no longer used for the RESULT. The "beyond" field is already always false.</li>
+  </ul>
+  <p><strong>src/pages/FillerSimulator.jsx</strong></p>
+  <ul>
+    <li>Default <code>condomIdx</code> → index of the <code>52</code> rung (index 2 in the new ladder).</li>
+    <li>Condom hero ResultCard → render <code>{est.condomWidthLow} – {est.condomWidthHigh} มม.</code> (single number when equal) + sub-line <code>t('pickClosest')</code>. Remove the <code>oldVal</code> (เดิม) + the <code>delta</code> (sizesUp) on the condom card only.</li>
+    <li>Add a 4th result card (length): label <code>t('resLength')</code>, value <code>~+{r1(est.lengthGainCm)} ซม.</code>, warning sub-line <code>t('lengthWarn')</code>. Place it in the small-cards row (รอบวง · เส้นผ่าศูนย์กลาง · ความยาว).</li>
+  </ul>
+  <p><strong>src/lib/fillerStrings.js</strong></p>
+  <ul>
+    <li>NEW keys (TH+EN): <code>pickClosest</code> ("เลือกถุงยางไซส์ใกล้เคียงค่านี้" / "pick a condom closest to this"), <code>resLength</code> ("ความยาว (ตอนอ่อน)" / "length (flaccid)"), <code>lengthWarn</code> ("พยุงไม่ให้หด ไม่ใช่ยืดจริง" / "anti-retraction splint, not true elongation").</li>
+    <li>Trim the length sentence from <code>note</code> (now its own card); keep durability + disclaimer.</li>
+  </ul>
+  <p><strong>Tests</strong> — extend <code>tests/filler-closest-to-real.test.js</code> + V21-fix the ladder/result/length locks in <code>filler-math</code> + <code>filler-simulator-flow-simulate</code>.</p>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = comprehensive world ladder:</strong> dropdown <code>[45,49,52,54,56,58,60,64,69,72]</code> — Thai-familiar middle + global-large up to the world max 72 mm (My.Size Pro 72). Default rung = 52 (มาตรฐาน).</li>
+  <li><strong>Q2 = range mm only:</strong> condom result shows the computed nominal-width range "<code>{low} – {high} มม.</code>" + "เลือกไซส์ใกล้เคียงเอง". No เดิม, no "+N ขนาด", no ladder floor/clamp.</li>
+  <li><strong>Q3 = 4th card:</strong> length by-product is a 4th result card (alongside รอบวง / เส้นผ่าศูนย์กลาง) with the warning sub-line. Value fixed ~+1.6 cm.</li>
+  <li><strong>Unchanged:</strong> theme, layout, 2D/3D graphics, sliders, the girth/diameter/glans math + defaults, range-legend, disclaimer.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Dropdown lists exactly <code>45,49,52,54,56,58,60,64,69,72</code> (no 47/51/53) with Thai-descriptor labels; default selected = 52.</li>
+  <li>Condom result = <code>round(c1Low·5)</code>–<code>round(c1High·5)</code> mm (raw, never floored to a rung); at defaults shows <code>56 – 59 มม.</code> with "เลือกไซส์ใกล้เคียงเอง" and NO เดิม / NO +N.</li>
+  <li>A 4th result card shows "ความยาว (ตอนอ่อน) ~+1.6 ซม." + warning "พยุงไม่ให้หด ไม่ใช่ยืดจริง".</li>
+  <li>Theme/layout/sliders/2D/3D/girth/diameter unchanged; full vitest green; build clean; obfuscated build value-identical; Rule Q-vis L1 screenshot matches this mockup.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Result &gt; biggest dropdown size:</strong> fine now — the result is raw mm (e.g. could read "73 – 78 มม." for a huge base+filler); the customer just picks the closest real product. No clamp, no "beyond" tag (intended).</li>
+  <li><strong>Label verbosity:</strong> 10 rungs with Thai descriptors — keep labels short; descriptor only on anchors if the row feels long. Owner can tweak copy.</li>
+  <li><strong>Length value fixed vs range:</strong> fixed ~+1.6 (matches the shipped spec/footnote + ±~1 disclaimer). Not dose-scaled (the splint effect is roughly constant).</li>
+</ul>
+
+</body>
+</html>
