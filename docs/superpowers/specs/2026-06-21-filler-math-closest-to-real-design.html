@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filler Math — Closest-to-Real Recalibration Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --up:#b91c1c; --down:#1d4ed8; --same:#555; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #0f1115; color:#e6e6e6; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.82em; line-height:1.45; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .up{color:var(--up);font-weight:600} .down{color:var(--down);font-weight:600} .same{color:var(--same)}
+    /* result-card mockup (dark, matches the filler sim aesthetic) */
+    .fcard{background:#16181d;color:#f2f2f2;border-radius:14px;padding:18px;max-width:430px;border:1px solid #2a2d34;font-size:14px}
+    .fcard .hl{font-size:13px;color:#9aa3ad;letter-spacing:.04em;text-transform:uppercase}
+    .fcard .big{font-size:30px;font-weight:800;color:#ff5a5a;line-height:1.1;margin:2px 0}
+    .fcard .dur{font-size:13px;color:#cfd6dd;margin-top:2px}
+    .fcard .row{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid #2a2d34}
+    .fcard .k{color:#9aa3ad} .fcard .v{font-weight:700}
+    .fcard .nb{color:#9aa3ad;font-size:12px}
+    .fcard .warn{background:#3a2412;color:#ffcd9a;border-radius:8px;padding:7px 10px;font-size:12px;margin-top:10px}
+    .fcard .note{color:#8a929b;font-size:11.5px;margin-top:10px;line-height:1.5}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+
+<h1>Filler Math — Closest-to-Real Recalibration</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-21 · <strong>Status:</strong> Approved by user ("OK") · <strong>Scope:</strong> <code>src/lib/fillerMath.js</code> + <code>src/components/FillerSimulator.jsx</code> + <code>src/lib/fillerStrings.js</code> + tests · <strong>Surface:</strong> public toy <code>?play=filler</code> (no PII / Firestore / auth) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-06-21-filler-math-closest-to-real.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The penile-filler size simulator was deliberately <strong>biased low</strong> ("ปัดเศษออกเอาต่ำไว้ก่อน" — floor the condom snap, anchor k at the low end). The user reversed that directive: <em>research as thoroughly as possible, then compute as close to reality as the evidence allows</em>. We ran an exhaustive cited research program — 5-facet baseline → 3-skeptic adversarial verification → a loop-until-dry research loop (9 rounds, converged when a round changed no constant), ~17 agents, every number traced to a primary source (RCTs, large cohorts, meta-analyses, ISO 4074, manufacturer data). This spec encodes the resulting closest-to-real calibration.</p>
+<p><strong>Three UX framings were locked with the user before research:</strong> (1) the headline shows the <strong>PEAK</strong> (~1-month) result, with the durable value shown alongside for honesty; (2) the user enters <strong>ERECT</strong> girth + length (condoms are sized to erect girth); (3) condom snap = <strong>FLOOR</strong>/round-down (research confirmed this is the correct retention rule) with the next-up neighbor shown.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Result card · desktop · loaded (erect girth 10.4cm, length 13.4cm, 16mL shaft, 2mL glans · SE-Asian default)</div>
+  <div class="fcard">
+    <div class="hl">รอบวงหลังฉีด · ช่วงแรก (~1 เดือน)</div>
+    <div class="big">+1.2 cm → 11.6 cm</div>
+    <div class="dur">คงเหลือจริง (~12 เดือน): <b>+0.8 cm → 11.2 cm</b> &nbsp;·&nbsp; HA ยุบ ~29% ใน 1 ปี</div>
+    <div class="row"><span class="k">ถุงยางที่ใช้จริง (ระยะยาว)</span><span class="v">55 mm — Large</span></div>
+    <div class="nb" style="text-align:right;margin-top:-4px">ขยับขึ้น ~2 ไซต์จากเดิม · ไซต์ถัดไป 57 mm (หลวมขึ้นถ้าบีบ) · ช่วงแรกอาจถึง 57</div>
+    <div class="row"><span class="k">หัว (glans) · 2 mL</span><span class="v">Ø +0.35 cm</span></div>
+    <div class="nb" style="text-align:right;margin-top:-4px">ไม่เกี่ยวกับไซต์ถุงยาง · คงทนช้ากว่า (85% ที่ 5 ปี)</div>
+    <div class="row"><span class="k">ความยาว (ผลพลอยได้)</span><span class="v">ตอนอ่อน +1.6 cm</span></div>
+    <div class="nb" style="text-align:right;margin-top:-4px">ตอนแข็ง +0.6 cm · เป็น splint กันหด ไม่ใช่ยืดจริง</div>
+    <div class="note">ช่วงผลลัพธ์ ±1 cm (ความต่างรายบุคคล) · ตัวเลขจากงานวิจัย HA filler · เป็นการประมาณ ไม่ใช่คำมั่น</div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="mockup">
+    <div class="mockup-label">Volume warning state (24mL — above conventional)</div>
+    <div class="fcard">
+      <div class="hl">รอบวงหลังฉีด · ช่วงแรก</div>
+      <div class="big">+1.4 cm → 11.8 cm</div>
+      <div class="dur">คงเหลือจริง: +0.95 cm → 11.4 cm</div>
+      <div class="warn">⚠ 24 mL สูงกว่าโดสมาตรฐาน (&gt;20 mL) — เสี่ยง filler เคลื่อน/เป็นก้อน คลินิกมักแบ่งฉีดหลายครั้ง</div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">Beyond-mainstream state (required width &gt; 64mm)</div>
+    <div class="fcard">
+      <div class="hl">รอบวงหลังฉีด · ช่วงแรก</div>
+      <div class="big">+1.3 cm → 13.4 cm</div>
+      <div class="dur">คงเหลือจริง: +0.9 cm → 13.0 cm</div>
+      <div class="row"><span class="k">ถุงยางที่ใช้จริง (ระยะยาว)</span><span class="v" style="color:#ff5a5a">64 mm — Super Wide</span></div>
+      <div class="nb" style="text-align:right;margin-top:-4px">เกินเพดานสินค้าจริง (รอบวง &gt;12.8cm / &gt;64mm) — แทบไม่มีขาย</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Calculation flow — erect-input → geometric girth gain → condom + glans + length, with the time-fade ladder</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>What happens</th><th>Key rule</th></tr>
+    <tr><td>1</td><td>Input</td><td>ERECT mid-shaft girth C0 (default 10.4cm), ERECT length L (default 13.4cm), shaft volume V (default 16mL), glans dose ∈ {0,2,3}mL. (Optional flaccid path: ×1.25 → erect first.)</td><td>SE-Asian defaults; label girth "mid-shaft erect"</td></tr>
+    <tr><td>2</td><td>Geometric ΔC</td><td><code>geo = √(C0² + 4πV/L) − C0</code> — exact uniform-shell volume conservation; falling dC/dV ⇒ saturating dose-response automatically.</td><td>NEVER a constant cm/mL</td></tr>
+    <tr><td>3</td><td>Apply efficiency k</td><td>peak Δgirth = geo × <b>1.90</b> (headline); durable(12mo) Δgirth = geo × <b>1.22</b> (secondary). k-ladder peak1.90→6mo1.45→12mo1.22→18mo1.07.</td><td>On the ERECT base → erect gain (~+0.8–1.3cm), not flaccid (~+2.4cm)</td></tr>
+    <tr><td>4</td><td>New girth</td><td>peak girth = C0 + Δpeak; durable girth = C0 + Δdurable. Show ±1cm individual-variance band.</td><td>L is erect/stretched length — never the flaccid-length gain</td></tr>
+    <tr><td>5</td><td>Condom</td><td>Sized on the <strong>DURABLE</strong> girth (the lasting state you actually buy condoms for; peak may be ~1 rung higher briefly). <code>NW = durableGirth × 5</code>; FLOOR to largest rung ≤ NW on ladder [45,47,49,51,53,55,57,60,64]; show neighbor-up; "beyond mainstream" if NW &gt; 64.</td><td>Round-down = retention (snug) rule</td></tr>
+    <tr><td>6</td><td>Glans (decoupled)</td><td>ΔØ = 0.17 cm/cc up to the 2mL plateau (3mL ≈ 2mL); headline +0.35cm for 2mL; own fade 85%@5yr. Does NOT feed C0 or condom.</td><td>Separate compartment</td></tr>
+    <tr><td>7</td><td>Length (secondary)</td><td>flaccid +1.65cm (durable splint), erect +0.6cm (fades). Display-only line, labeled "splint, not true elongation".</td><td>Never fed back into the geometry L</td></tr>
+    <tr><td>8</td><td>Guards</td><td>volume warn &gt;20mL, hard-cap 30mL; honesty note (peak fades; estimate not promise).</td><td>—</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong><code>src/lib/fillerMath.js</code></strong> (core — pure math, single source of truth): replace the 2 flat k-constants with the k-ladder + peak-fade map; keep the exact geometry engine; correct <code>CONDOM_LADDER</code> to the real 9-rung MyONE; FLOOR snap kept + emit the neighbor-up rung; drop the +2→72 extension (ceiling 64); glans ΔØ/cc → 0.17 with a 2mL saturation cap + glans fade; re-scaled volume constants; SE-Asian default + range constants; new flaccid/erect length-delta constants (display-only). New helpers: <code>girthGainCm(C0,L,V,k)</code>, <code>condomRecommend(erectGirth)</code> (returns {rung, neighborUp, beyond, category}), <code>glansDeltaDiameter(doseMl)</code> (saturating).</li>
+  <li><strong><code>src/components/FillerSimulator.jsx</code></strong> (UI wiring): erect-input labels + SE-Asian defaults/ranges; headline = peak + durable-secondary; condom neighbor display + category; glans dose as a {0,2,3} discrete control (was continuous); volume slider re-ranged 5–30 with the &gt;20 warning band; ±1cm band; length secondary line; honesty notes. <strong>Cosmetic-shell discipline:</strong> all changes consume <code>fillerMath</code> + copy — no new data sources, no behavior beyond surfacing the new constants.</li>
+  <li><strong><code>src/lib/fillerStrings.js</code></strong>: TH/EN copy for peak/durable, condom neighbor, glans, length-splint, volume warning, honesty notes.</li>
+  <li><strong>Obfuscator note:</strong> <code>fillerMath.js</code> is in the build obfuscator scope (formula protection) — keep the new k/condom/glans constants as integer fractions (value-identical) so <code>numbersToExpressions</code> hides the literals, exactly as the current code does.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A + research)</h2>
+<ul>
+  <li><strong>Framing Q1 = peak headline + durable shown alongside</strong> — user chose "show peak"; research + adversarial flag (peak fades ~29%@12mo) → keep peak as headline but display durable co-equally (not hidden).</li>
+  <li><strong>Framing Q2 = ERECT input</strong> — user enters erect girth+length; the geometric ΔC is computed on the erect base → the (smaller) erect gain. Optional flaccid path converts ×1.25 first.</li>
+  <li><strong>Framing Q3 = FLOOR snap + neighbors</strong> — research confirmed round-down is the correct retention rule (MyONE/ISO); keep FLOOR, show the next-up rung.</li>
+  <li><strong>Condom sized on the DURABLE girth</strong> — the lasting, honest, practical size (the research synthesis itself sized the condom on the durable girth). The peak is shown as a brief upper bound, not the recommended buy size.</li>
+  <li><strong>Girth k:</strong> peak 1.90, durable(12mo) 1.22, full ladder (Yang2020 RCT / Ahn RCT / Wang2022 cohort).</li>
+  <li><strong>Condom ladder corrected</strong> to the real MyONE 9-rung [45,47,49,51,53,55,57,60,64]; ceiling 64 (drop fictional 72).</li>
+  <li><strong>Glans</strong> ΔØ/cc 0.17 (band 0.13–0.24); discrete 2–3mL saturating; own 85%@5yr fade; decoupled.</li>
+  <li><strong>Volume</strong> default 16, range 5–30 (hard-cap 30, warn &gt;20); dose-response saturating via geometry (n=103 regression: more mL ≠ more cm).</li>
+  <li><strong>Defaults</strong> re-seeded SE-Asian (erect girth ~10.4cm, length ~13.4cm) — Western seeding overstated girth by ~2 condom sizes.</li>
+  <li><strong>Length</strong>: filler increases FLACCID length (+1.65cm durable splint) but not erect/true (+0.6cm fading) — display-only secondary; L in the geometry stays the erect/stretched length.</li>
+</ul>
+
+<h3>finalConstants (implementation reference)</h3>
+<pre>// GIRTH efficiency k (real ÷ geometric ΔC). Headline = PEAK.
+K_PEAK = 1.90;  K_DURABLE_12MO = 1.22;
+K_LADDER = { '1mo':1.90, '6mo':1.45, '12mo':1.22, '18mo':1.07 };   // interpolate exponentially
+PEAK_FADE = { '1mo':1.00, '6mo':0.76, '12mo':0.71, '18mo':0.56 };  // retained fraction of peak
+// geometry (only girth model): geo = sqrt(C0**2 + 4*PI*V/L) - C0;  gain = geo * k;  (C0,L = ERECT)
+ERECT_FROM_FLACCID_GIRTH = c => c * 1.25;   // band 1.21-1.27 (5 cohorts); reject +50%. only if flaccid entered
+// CONDOM
+condomNW_mm = g => g * 5;                    // ISO 4074 half-circumference (exact)
+MYONE_LADDER = [45,47,49,51,53,55,57,60,64]; // real 9-rung
+CONDOM_CEILING_NW = 64;                       // >64 = beyond mainstream (girth > 12.8cm)
+// snap = FLOOR (largest rung <= NW) + neighborUp; each rung serves [2*NW, 2*NW + ~13mm latex stretch]
+// GLANS (decoupled; saturating)
+GLANS_DELTA_DIAMETER_PER_CC = 0.17;          // band 0.13-0.24 (706-pt pool)
+GLANS_DOSES_ML = [0,2,3];  GLANS_DELTA_2ML = 0.35;  // 3mL ~= 2mL -> cap at 2mL plateau
+GLANS_FADE = { peak:1.00, '1yr':0.92, '5yr':0.85 }; // ~3%/yr (do NOT reuse shaft fade)
+// VOLUME
+VOLUME_DEFAULT = 16; VOLUME_PRACTICAL = [10,22]; VOLUME_FULL = [5,30]; VOLUME_HARD_CAP = 30; VOLUME_WARN_ABOVE = 20;
+// DEFAULTS (SE-Asian, erect mid-shaft)
+ERECT_GIRTH_DEFAULT = 10.4; ERECT_GIRTH_RANGE = [8.5,13.0];
+ERECT_LENGTH_DEFAULT = 13.4; ERECT_LENGTH_RANGE = [10,17];
+// LENGTH effect (display-only; never fed into geometry L)
+FLACCID_LENGTH_DELTA_DURABLE = 1.65; // peak 2.55 (anti-retraction splint)
+ERECT_LENGTH_DELTA_DURABLE   = 0.64; // peak 1.34 (fades)</pre>
+
+<h2>Key evidence (anchors)</h2>
+<table>
+<tr><th>Constant</th><th>Primary source(s)</th></tr>
+<tr><td>Girth k-ladder / fade</td><td>Yang 2020 RCT (PMC7230452) +2.50/1.91/1.41cm @1/6/18mo, 16.4mL · Ahn RCT (PMC8987147) +2.27cm@24wk · Wang 2022 cohort (PMC9809476) flaccid+erect serial, 12mo anchor +2.43cm</td></tr>
+<tr><td>Erect-state gain ≪ flaccid</td><td>Wang 2022 (PMC9809476): 21.5mL → +3.41cm flaccid-peak vs +1.32cm erect-peak</td></tr>
+<tr><td>Dose-response saturating</td><td>JSM 2024 n=103 regression (qdae161.226) vol-vs-gain R²≈0.01 · n=324 audit (qdaf077.122) 10–30mL</td></tr>
+<tr><td>Flaccid→erect ×1.25</td><td>Veale 2015 (PMID25487360) +25% · n=201 (PMC8519169) +21.4% · Korean n=156 +27% · Chinese Rigiscan (PMID39491802) +25.3% · Vietnamese (qdae002.230) +26.3%</td></tr>
+<tr><td>SE-Asian defaults</td><td>Vietnamese n=14,597 (PMID33484108) flaccid mid-shaft 8.39cm, erect 10.42cm · Chinese/Korean cohorts</td></tr>
+<tr><td>Condom: width=girth×5, ladder, ceiling 64</td><td>ISO 4074:2014 · MyONE Custom Fit 9-rung (onecondoms.com) · 64mm Super Wide ceiling</td></tr>
+<tr><td>Glans ΔØ/cc 0.17, fade 85%@5yr, decoupled</td><td>2024 JSM meta 706pt (PMID39121933) +10.96mm · Kwak 2008 (PMID18548080) 5yr −15% · Kim 2015 (PMC4550597) · narrative review (PMC7807328) "no dose-response"</td></tr>
+<tr><td>Length splint (flaccid +1.65 / erect +0.6)</td><td>Wang 2022 (PMC9809476) flaccid 5.39→7.04@12mo, erect 10.09→10.73@12mo; Dartos anti-retraction splint</td></tr>
+<tr><td>Volume cap / complications</td><td>n=324 audit 20.1% complications (migration 7.7%) · WJMH 2026 (10.5534/wjmh.250332) &lt;20mL target · n=230 (PMID33533738) 4.3% at conservative dosing</td></tr>
+</table>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><code>fillerMath.estimate</code> with the SE-Asian erect defaults (C0=10.4, L=13.4, V=16, glans=2) returns peak girth gain ≈ +1.3cm and durable ≈ +0.85cm (matches Wang erect anchor), condom FLOOR rung (sized on the durable girth) with a neighbor-up, glans ΔØ ≈ +0.35cm.</li>
+  <li>Doubling volume does NOT double the girth gain (saturation): gain(32mL) − gain(16mL) &lt; gain(16mL) − gain(0).</li>
+  <li>Condom recommendation uses the real ladder [45,47,49,51,53,55,57,60,64]; a required NW &gt; 64 returns <code>beyondMainstream:true</code>; the old 72 ceiling is gone.</li>
+  <li>Glans dose saturates: ΔØ(3mL) ≈ ΔØ(2mL); glans never changes the shaft girth or condom result.</li>
+  <li>Volume &gt; 20mL surfaces a warning; the input is hard-capped at 30mL; the old 50cc ceiling is gone.</li>
+  <li>The geometry L is the erect/stretched length; the flaccid-length splint gain is display-only and never enters the girth calc.</li>
+  <li>Headline shows the peak value with the durable value displayed alongside (not hidden) + a fade note.</li>
+  <li>Full filler test suite green (old-value locks updated to the researched values, V21-style); new tests for the k-ladder, fade, erect-state, corrected condom ladder, glans saturation, volume cap, SE-Asian defaults, length-secondary; <code>npm run build</code> clean; obfuscated build still computes identically; Rule Q-vis L1 on the real rendered card.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Erect-efficiency is a model extrapolation</strong> — the k-ladder was fitted on flaccid-shaft geometry; Wang's erect serial data (n=38) is the main erect anchor. Documented as a caveat, not hidden.</li>
+  <li><strong>Thai girth data gap</strong> — defaults use the Vietnamese n=14,597 regional proxy; no rigorous Thai girth cohort exists. Acceptable for a toy; disclosed.</li>
+  <li><strong>Individual variance dwarfs the point estimate</strong> (SD ±0.95–2.2cm) — mitigated by the ±1cm band + "estimate not promise" copy.</li>
+  <li><strong>HA-specific</strong> — calibration is for hyaluronic acid; PLA/PMA differ. The sim assumes HA (the clinic's product).</li>
+  <li><strong>Honesty vs marketing</strong> — peak is the headline (user choice) but durable is shown co-equally; this is the agreed compromise between an impressive number and not over-promising.</li>
+  <li>Test churn: ~98–102 existing filler tests lock the old constants → expect a batch of V21-style updates alongside the new tests.</li>
+</ul>
+
+</body>
+</html>
