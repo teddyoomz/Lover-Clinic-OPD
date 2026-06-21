@@ -71,7 +71,7 @@ export default function FillerGraphic2D({ est, lengthCm = 12.7, theme = 'dark', 
   const beforeStroke = theme === 'light' ? 'rgba(15,23,42,0.75)' : 'rgba(255,255,255,0.75)';
   // dashed-line thickness — theme-tuned (user 2026-06-21): dark baseline −10%, light "หลังฉีด" +15%
   const baselineStrokeW = 1.2375;                             // both themes −10% (light reduced to match dark)
-  const afterStrokeW = theme === 'light' ? 1.07525 : 0.85;    // light +15% then +10% (0.85 × 1.265) · dark 0.85
+  const afterStrokeW = theme === 'light' ? 1.2903 : 1.02;     // +20% both themes (mobile visibility): light 1.07525×1.2 · dark 0.85×1.2
   // centered-faint clinic watermark (theme-aware logo) — travels with any screenshot / SVG copy
   const wmLogo = theme === 'light' ? '/lover-clinic-logo-light.png' : '/lover-clinic-logo-dark.png';
 

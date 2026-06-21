@@ -346,7 +346,7 @@ describe('filler-simulator v5.2 — default 10cc + fainter baseline + 2D auto-st
     expect(g2d).not.toMatch(/rgba\(255,255,255,0\.35\)/); // 0.35 superseded
     // baseline width: light 1.375, dark −10% = 1.2375 ; red width: light +15% = 0.9775, dark 0.85
     expect(g2d).toMatch(/const baselineStrokeW = 1\.2375;/);                       // both themes (light reduced to match dark)
-    expect(g2d).toMatch(/const afterStrokeW = theme === 'light' \? 1\.07525 : 0\.85;/); // light +15% then +10%
+    expect(g2d).toMatch(/const afterStrokeW = theme === 'light' \? 1\.2903 : 1\.02;/); // +20% both (mobile visibility)
     expect((g2d.match(/stroke=\{beforeStroke\} strokeWidth=\{baselineStrokeW\}/g) || []).length).toBe(2); // baseline path + circle
     expect((g2d.match(/stroke="#ef4444" strokeWidth=\{afterStrokeW\}/g) || []).length).toBe(2);          // red path + circle
   });
