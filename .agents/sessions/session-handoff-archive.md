@@ -5,6 +5,31 @@
 
 ---
 
+## Archived 2026-06-29 — SESSION_HANDOFF overflow: sessions `2026-06-18` → `2026-06-18` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-18 — ED box (round-select + detail modal + viewing-state) + follow-up push name+HN — SHIPPED local, NOT deployed
+
+master `92c5ab0b` (=origin); prod UNCHANGED (`00da035d`) — user ended session, no deploy. 3 features, each /brainstorming or /systematic-debugging → spec → plan → inline impl → test → adversarial Workflow.
+- **ED chip round-select**: click a history row → chips show that round's snapshot + header "กำลังดู: ครั้งที่ N" + "← ไปที่ครั้งล่าสุด"; default (no selection) = merged latestPerType UNCHANGED (Q2=A, additive).
+- **ED chip → per-question detail modal** (EDDetailModal): click ADAM/IIEF/MRS/PE → full question text + customer's answer (option label) for that round; score banner; AV78 explicit-close (X/ESC, backdrop no-close). NEW canonical `src/lib/edQuestions.js` (questions + per-q options + `buildEdAnswerRows`).
+- **viewing-state for PAST rounds only** (/systematic-debugging, ultrathink): selecting the latest (hero) = default home view (no redundant back button, no stuck-state); derived `viewingPast = selectedRound && selectedRound.id !== hero.id` gates header/chips/highlight/button; robust to delete-renumber. Rewrote R6/C1-C5 to the corrected model + new C6.
+- **Follow-up push name+HN** (Cloud Function): pure CJS `notificationContent.js` + `customerDisplay.js` (CJS mirror of ESM canonical); `functions/index.js` reads `be_customers/{linkedCustomerId}` live (canonical BASE_PATH, non-fatal) → "🔔 {name} · HN {hn}"; intake+edit unchanged. HN = resolveCustomerHN(hn_no) || linkedCustomerId.
+- **Verified**: ed-score-round-select 15/0 · ed-detail-modal 10/0 · ed-questions 9/0 · notification-content 15/0 (ESM parity) · **Rule R real-prod 2/2** (real follow-ups → correct name+HN) · full vitest **16722/0** · build clean.
+- **Adversarial**: notification WF (5 lenses; cf-wiring/parity/regression CLEAN) → 5 defensive findings fixed (trim whitespace name/title + compose-either intake) + locked N11-13. ED-detail WF stalled (no result — RTL 10/0 + chip-click cover it). 2 stray agent-probe files (test-*.mjs) removed pre-commit (not committed).
+- **Deploy when authorized (V18): frontend → `vercel --prod`; notification → `firebase deploy --only functions`** (no rules change → no Probe-Deploy-Probe). Honest gap (Rule Q): ED L1 pixel + notification L1 real-push = USER hands-on after deploy. Checkpoint `.agents/sessions/2026-06-18-ed-box-detail-and-push.md`.
+
+---
+
+📂 **Older sessions (`2026-06-16 EOD+2` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-18) — ED Score box: round-select + per-question detail modal + viewing-state-for-past-only (/brainstorming ×2 + /systematic-debugging) + follow-up push name+HN (Cloud Function) — ✅ COMMITTED + PUSHED, NOT deployed** (user: session-end, ยังไม่ deploy): master `92c5ab0b` (=origin); prod UNCHANGED (`00da035d`). **3 ED frontend features**: (a) click a history row → chips show that round's snapshot + "← ไปที่ครั้งล่าสุด" (default/no-selection = merged latestPerType UNCHANGED); (b) click ADAM/IIEF/MRS/PE chip → **EDDetailModal** (full question text + customer's answer w/ option label, that round; AV78 explicit-close); (c) **/systematic-debugging** — selecting the LATEST (hero) = default home view (no redundant back button, no stuck state) via derived `viewingPast = selectedRound && selectedRound.id !== hero.id` (robust to delete-renumber). NEW canonical `src/lib/edQuestions.js` (ADAM/IIEF/MRS/PE questions + per-q options + `buildEdAnswerRows`) + `EDDetailModal.jsx`. **Follow-up push** (Cloud Function): pure CJS `functions/notificationContent.js` + `customerDisplay.js` (CJS mirror of the ESM canonical resolver); `functions/index.js` reads `be_customers/{linkedCustomerId}` live (canonical BASE_PATH, non-fatal) → body **"🔔 {name} · HN {hn}"** (HN = resolveCustomerHN(hn_no) || linkedCustomerId); intake+edit UNCHANGED. **Verified**: ed-score-round-select 15/0 · ed-detail-modal 10/0 · ed-questions 9/0 · notification-content 15/0 (incl ESM parity) · **Rule R real-prod diag 2/2** (real FW-ED follow-ups → correct name+HN, e.g. "นาย จักรวาล งิ้วลาย · HN LC-26000014") · full vitest **16722/0** · build clean. **Adversarial Workflows**: notification (5 lenses; cf-wiring/parity/regression CLEAN) → 5 defensive findings adjudicated+fixed (trim whitespace name/title ×2 + compose-either intake name = parity w/ canonical) + locked N11-13; ED-detail WF stalled (never returned — feature covered by RTL 10/0 + chip-click verified). **Deploy when authorized (V18): frontend 3 ED features → `vercel --prod`; notification → `firebase deploy --only functions`** (no firestore.rules change → no Probe-Deploy-Probe). **Honest gap (Rule Q)**: ED L1 pixel render + notification L1 real-push = USER hands-on after deploy. Checkpoint `.agents/sessions/2026-06-18-ed-box-detail-and-push.md`.
+
+---
+
 ## Archived 2026-06-21 — SESSION_HANDOFF overflow: sessions `2026-06-16 EOD+2` → `2026-06-16 EOD+2` + Current-State index
 
 ### Session blocks (1)
