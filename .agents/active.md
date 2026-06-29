@@ -1,31 +1,31 @@
 ---
-updated_at: "2026-06-29 — V164: doctor-only นัดหมาย header + Recall-วันนี้ pill blink-while-pending. Committed + pushed, NOT deployed."
-status: "V164 shipped local (master 76c1722b). Frontend-only (no firestore.rules / no data) → vercel-only when user says deploy; no Probe-Deploy-Probe. Idle / await deploy."
+updated_at: "2026-06-29 — V164 (doctor-only header + recall blink) + V164-fix (per-date 'work' shift dropped → 'ไม่มีแพทย์เข้า' bug). Committed + pushed, NOT deployed."
+status: "V164 + V164-fix shipped local (master ef40ff12). Frontend-only (no firestore.rules / no data) → vercel-only when user says deploy; no Probe-Deploy-Probe. Idle / await deploy."
 branch: "master"
-last_commit: "76c1722b — feat(appt): V164 doctor-only header + Recall blink while pending"
+last_commit: "ef40ff12 — fix(appt): V164-fix header showed ไม่มีแพทย์เข้า while a doctor WAS in"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "423159cc (filler EOD) — V164 NOT yet deployed; awaiting explicit 'deploy'."
-firestore_rules_version: "UNCHANGED (V164 frontend-only)"
-tests: "V164 targeted 12/0 + v64 V21-fixups (68/0 across 3 files); full vitest 16979/16983 — the 4 reds are PRE-EXISTING parallel flakes (phase-17-1-cross-branch-import-rtl · phase11-master-data-scaffold routing R1/R2 · staff-chat-lightbox stress) all GREEN in isolation (38/0); build clean; Rule Q L1 real-browser CSS verified."
+production_commit: "423159cc (filler EOD) — V164 + V164-fix NOT yet deployed; awaiting explicit 'deploy'."
+firestore_rules_version: "UNCHANGED (V164 + V164-fix frontend-only)"
+tests: "V164+fix targeted (v164 + v64-fix + v64-rtl) green; full vitest 16991 pass / 4 reds = PRE-EXISTING parallel flakes (phase11-routing R1/R2 · phase15.5b PF.4 global.fetch-leak · staff-chat-lightbox stress) all GREEN isolated (phase15.5b 51/0); build clean; Rule Q L2 real helper vs real prod data verified."
 ---
 
-# Active — 2026-06-29 — V164 doctor-only header + Recall blink
+# Active — 2026-06-29 — V164 doctor-only header + recall blink + V164-fix
 
 ## State
-- AdminDashboard นัดหมาย page, 2 UI changes shipped (master 76c1722b, pushed). NOT deployed.
+- AdminDashboard นัดหมาย page. V164 (display) + V164-fix (data-match bug). master ef40ff12, pushed. NOT deployed.
 - firestore.rules untouched → frontend-only; deploy = vercel-only on explicit "deploy" (V18).
 
-## What V164 shipped (spec/plan: docs/superpowers/{specs,plans}/2026-06-29-doctor-header-and-recall-blink.*)
-- **Change 1 — doctor-only header** (`AppointmentHubDoctorCards.jsx` + `AppointmentHubView.jsx`): shows 🩺 doctor chips (name + hours); no doctor → "ไม่มีแพทย์เข้า". Dropped assistant (purple) chips + the old generic no-staff empty text; memo returns `{ doctorShifts }` only; removed dead `assistants` prop + `dateLabel` var. (Q1=A)
-- **Change 2 — Recall-วันนี้ pill blink** (`RecallTogglePill.jsx` + `index.css`): `recall-pill-blink` (gray↔red full swap 1s ∞) when the existing badge `count > 0` (pending/overdue, not done/closed); `-active` variant for the red state; stops at count 0; `prefers-reduced-motion` → static red border. Reuses the existing count hook — no new state/query. (Q2=A, Q3=A)
+## V164 (spec/plan: docs/superpowers/{specs,plans}/2026-06-29-doctor-header-and-recall-blink.*)
+- doctor-only header (🩺 chips; none → "ไม่มีแพทย์เข้า"; assistant chips dropped) + Recall-วันนี้ pill blinks while badge count>0 (reduced-motion → static red). Q1/Q2/Q3=A.
 
-## Verification
-- 12/0 V164 (RTL real component + recall blink-class + source-grep) + V21-fixups; full vitest 16979 pass, 4 pre-existing parallel flakes (green isolated); build clean.
-- Rule Q L1 real browser (Claude Preview): computed `animationName=recall-pill-blink @1s`, `@keyframes` + `prefers-reduced-motion` override present in the bundled CSS, count-0 = `none`. (screenshot tool timed out on the heavy prod-connected app — CSS evidence + live mockup stand in.)
+## V164-fix (root-cause via /systematic-debugging + Rule R real-prod diag)
+- BUG (latent since V64): header showed "ไม่มีแพทย์เข้า" while a doctor WAS in. The inline filter matched per-date entries by literal `type==='override'`, but real be_staff_schedules per-date shifts have type 'work'/'halfday' (no 'override' type) → หมอมุก (work 17:00-20:00, นครราชสีมา) dropped.
+- FIX: NEW canonical `deriveWorkingDoctorShiftsForDate` (staffScheduleValidation.js — mergeSchedulesForDate override-wins + exported WORKING_TIME_TYPES). AppointmentHubView routes through it; TodaysDoctorsPanel shares WORKING_TIME_TYPES (Rule of 3). Class-of-bug grep: 1 instance, no siblings. AV199 + tests SS1-9/SG2/SC2 + diag-v164-verify-fix.mjs (Rule Q L2).
+- ⚠ self-introduced+fixed this session: a cp accidentally overwrote the canonical `.claude/skills/audit-anti-vibe-code/SKILL.md` (602-line, has AV85-197) with the divergent `.agents` copy (3788-line, lacks AV85) → 20 AV-content tests red. Reverted both; AV199 re-added to .claude only. (.agents + .claude SKILL.md are DIVERGENT files — different AV sets; rtk `diff` falsely reported identical.)
 
 ## Next action
 - Await "deploy" (vercel-only, frontend) — or next task.
 
 ## Outstanding user-triggered actions
-- Deploy V164 (when user says "deploy").
-- Optional: 2 untracked filler docs (`docs/filler-math-explainer.{html,pdf}`) still uncommitted from prior session.
+- Deploy V164 + V164-fix (when user says "deploy"). Rule Q L1: on a real authed session, นครราชสีมา → นัดหมาย/วันนี้ should now show หมอมุก 17:00-20:00 (was "ไม่มีแพทย์เข้า").
+- Optional: 2 untracked filler docs still uncommitted.
