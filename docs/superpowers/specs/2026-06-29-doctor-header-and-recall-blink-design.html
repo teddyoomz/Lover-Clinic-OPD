@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Doctor-only header + Recall-blink Design Spec</title>
+<style>
+  :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+  h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+  h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+  pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+  code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+  .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+  .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+  th { background: var(--bg-meta); }
+  /* faithful dark-app screen for the mockup */
+  .appscreen { background:#0e0e10; border:1px solid #232326; border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; }
+  .appscreen::before { content:""; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,#dc2626,#f59e0b); }
+  .docchip { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:5px 11px; border-radius:8px; background:rgba(8,47,73,.55); border:1px solid #0369a1; color:#e0f2fe; }
+  .hrs { font-family:monospace; font-weight:900; color:#7dd3fc; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:6px 11px; border-radius:8px; border:1px solid #2a2a2a; background:#1c1c1e; color:#9ca3af; }
+  .pbadge { font-size:10px; font-weight:700; padding:0 6px; border-radius:999px; background:rgba(239,68,68,.2); color:#fca5a5; }
+  @keyframes specblink { 0%,100%{background:#1c1c1e;color:#9ca3af;box-shadow:none;border-color:#2a2a2a} 50%{background:#dc2626;color:#fff;box-shadow:0 0 14px rgba(239,68,68,.65);border-color:#dc2626} }
+  .blinkA { animation: specblink 1s ease-in-out infinite; }
+  .cnt { color:#e5e5e5; } .cnt b { color:#f59e0b; }
+</style>
+</head>
+<body>
+
+<h1>Doctor-only header + Recall-วันนี้ blink — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-06-29 · <strong>Status:</strong> Approved by user ("ok") · <strong>Scope:</strong> 2 UI-only changes on the AdminDashboard นัดหมาย page · <strong>Deploy class:</strong> frontend-only (no firestore.rules, no data ops → NO Probe-Deploy-Probe).
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>หน้า <code>นัดหมาย</code> (AdminDashboard) มี 2 จุดที่ user ขอแก้:</p>
+<ol>
+  <li><strong>Header "หมอเข้าวันนี้"</strong> — ปัจจุบัน badge-row แสดง chip ทั้งหมอ (sky) + ผู้ช่วย (purple) และถ้าว่างทั้งคู่จะขึ้นข้อความ <code>ไม่มีพนักงานเข้างาน วันนี้</code> ซึ่ง user ไม่ต้องการ. ต้องการให้ส่วนนี้ <strong>โฟกัสที่หมอ</strong>: แสดงว่าวันนี้หมอใครเข้า, ถ้าไม่มีหมอเข้าให้ขึ้น <code>ไม่มีแพทย์เข้า</code>.</li>
+  <li><strong>ปุ่ม "Recall วันนี้"</strong> — ต้อง <strong>กระพริบไม่หยุด</strong> ถ้ายังมี recall ค้างสถานะ "รอโทร" แม้แต่อันเดียว. พนักงานต้องโทรครบทุกรายการ (→ done/closed) ปุ่มถึงจะหยุดกระพริบ. = signal ที่ดึงให้พนักงานโทรจนหมด list.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Before — ตอนนี้ (dark theme, ตรงตามสกรีนช็อต user)</div>
+  <div class="appscreen">
+    <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+      <span class="pill">🔔 Recall วันนี้ <span class="pbadge">1</span></span>
+      <span style="font-size:11px;color:#6b7280">← นิ่ง ไม่กระพริบ</span>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <span style="font-size:14px;font-weight:700" class="cnt">รายการนัดหมาย <b>6 คน</b></span>
+      <span style="font-size:12px;color:#71717a;font-style:italic">ไม่มีพนักงานเข้างาน วันนี้</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">After — ส่วนหมอเข้าวันนี้ (doctor-only · Q1=A) · 2 กรณี</div>
+  <div class="appscreen" style="display:flex;flex-direction:column;gap:11px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:14px;font-weight:700" class="cnt">รายการนัดหมาย <b>6 คน</b></span>
+      <span style="font-size:11px;color:#52525b">มีหมอ →</span>
+      <span class="docchip">🩺 นพ.สมชาย <span class="hrs">09:00-17:00</span></span>
+      <span class="docchip">🩺 พญ.มายด์ <span class="hrs">12:00-20:00</span></span>
+    </div>
+    <div style="border-top:1px solid #1f1f22;padding-top:11px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:14px;font-weight:700" class="cnt">รายการนัดหมาย <b>6 คน</b></span>
+      <span style="font-size:11px;color:#52525b">ไม่มีหมอ (แม้มีผู้ช่วย) →</span>
+      <span style="font-size:13px;color:#9ca3af;font-style:italic">ไม่มีแพทย์เข้า</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">After — ปุ่ม Recall กระพริบ (count &gt; 0 · Q2=A สลับสีเต็มใบ) — เปิดไฟล์นี้ใน browser เพื่อดูกระพริบจริง</div>
+  <div class="appscreen" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+    <span class="pill blinkA">🔔 Recall วันนี้ <span class="pbadge" style="background:rgba(255,255,255,.25);color:#fff">1</span></span>
+    <span style="font-size:11px;color:#9ca3af">inactive + มี pending → สลับ เทา↔แดง 1s ∞</span>
+  </div>
+</div>
+
+<p><em>หมายเหตุ mockup:</em> ใช้ hex จริงของ Tailwind classes ปัจจุบัน — doctor chip = <code>bg-sky-100 dark:bg-sky-950/50 border-sky-300 dark:border-sky-700/60 text-sky-900 dark:text-sky-100</code> + เวลา <code>font-mono font-black</code>; recall pill inactive = <code>bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)]</code>, active = <code>bg-red-600 text-white</code>. ทั้ง dark/light ใช้ class คู่เดิม (mockup โชว์ dark ตามสกรีนช็อต).</p>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 — render ส่วน "หมอเข้าวันนี้" (AppointmentHubDoctorCards)</div>
+  <table>
+    <tr><th>เงื่อนไข (tab = today/tomorrow)</th><th>render</th></tr>
+    <tr><td><code>doctorShifts.length &gt; 0</code></td><td>chip หมอแต่ละคน (🩺 ชื่อ + เวลา) — เดิม ไม่แตะ</td></tr>
+    <tr><td><code>doctorShifts.length === 0</code> (ไม่ว่าจะมีผู้ช่วยหรือไม่)</td><td><code>ไม่มีแพทย์เข้า</code> (italic, <code>--tx-muted</code>)</td></tr>
+    <tr><td>tab อื่น (ล่วงหน้า/ย้อนหลัง/รอ OPD)</td><td><code>return null</code> — เดิม ไม่แตะ</td></tr>
+  </table>
+  <p style="font-size:0.9em;color:#555;margin:0.4em 0 0">ตัด branch ผู้ช่วย (purple chip) + ข้อความ <code>ไม่มีพนักงานเข้างาน</code> ออกทั้งหมด. <code>doctorShifts</code> ยัง derive จาก <code>be_staff_schedules</code> ตาม dayOfWeek/date ใน <code>AppointmentHubView</code> เหมือนเดิม — <strong>ไม่แตะ logic การกรอง</strong>.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 — ปุ่ม Recall blink (RecallTogglePill)</div>
+  <table>
+    <tr><th>state</th><th>class ที่ใส่</th><th>ผล</th></tr>
+    <tr><td><code>count &gt; 0</code> &amp; inactive</td><td><code>recall-pill-blink</code></td><td>สลับ เทา↔แดงเต็มใบ + เรืองแดง (1s ∞)</td></tr>
+    <tr><td><code>count &gt; 0</code> &amp; active (แดงอยู่แล้ว)</td><td><code>recall-pill-blink-active</code></td><td>เด้งเรืองแดงต่อ (กระพริบจน count=0)</td></tr>
+    <tr><td><code>count === 0</code></td><td>— (ไม่มี)</td><td>นิ่ง</td></tr>
+    <tr><td>prefers-reduced-motion</td><td>(override ใน CSS)</td><td><code>animation:none</code> + ขอบแดง+ring นิ่ง (ยังเห็น signal)</td></tr>
+  </table>
+  <p style="font-size:0.9em;color:#555;margin:0.4em 0 0"><code>count</code> = ค่าเดิมจาก <code>useRecallFrontendBadgeCountInternal()</code> = recall ที่ <code>status ∉ {done, closed-no-answer}</code> และ <code>(snoozedUntil ‖ recallDate) ≤ วันนี้</code> (= Q3: วันนี้ + เกินกำหนด). <strong>ไม่เพิ่ม query/state/hook ใหม่</strong> — blink ผูกกับ count ที่ badge ใช้อยู่แล้ว. เมื่อพนักงานโทร → outcome will-come/not-interested → <code>status='done'</code> → count ลด → ถึง 0 → หยุดกระพริบ. no-answer auto-snooze +3 วัน → หลุดจากนับวันนี้ → ถือว่า "โทรแล้ว".</p>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Change 1 — doctor-only header</h3>
+<table>
+  <tr><th>ไฟล์</th><th>แก้</th></tr>
+  <tr><td><code>src/components/admin/AppointmentHubDoctorCards.jsx</code></td><td>ลบ signature <code>assistantShifts</code> + <code>dateLabel</code> (ไม่ใช้แล้ว) · ลบ block assistant chip (purple, บรรทัด 37-52) · เปลี่ยน empty condition เป็น <code>doctorShifts.length === 0</code> → ข้อความ <code>ไม่มีแพทย์เข้า</code> (testid <code>appt-hub-doctor-cards-empty</code> คงไว้) · อัปเดต header comment เป็น V-entry ใหม่</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>memo (≈473-505): return เฉพาะ <code>{ doctorShifts }</code> · ลบ <code>assistantIdSet</code> + บรรทัด <code>assistantShifts: enrich(...)</code> · ลบ prop <code>assistantShifts={assistantShifts}</code> (≈บรรทัด 688) · prop <code>dateLabel</code> ที่ส่งเข้า component ลบถ้ามี · <strong>ยืนยันใน plan ว่า prop <code>assistants</code> ไม่มี consumer อื่น</strong> ก่อนตัด (grep แล้ว: assistantShifts มี consumer เดียว = component นี้)</td></tr>
+</table>
+
+<h3>Change 2 — Recall pill blink</h3>
+<table>
+  <tr><th>ไฟล์</th><th>แก้</th></tr>
+  <tr><td><code>src/components/backend/recall/RecallTogglePill.jsx</code></td><td><code>const blink = count &gt; 0;</code> · append class <code>${blink ? (active ? 'recall-pill-blink-active' : 'recall-pill-blink') : ''}</code> เข้า button className · ไม่แตะ <code>useRecallFrontendBadgeCountInternal</code></td></tr>
+  <tr><td><code>src/index.css</code></td><td>เพิ่ม <code>@keyframes recall-pill-blink</code> (เทา↔แดงเต็มใบ + glow) + <code>@keyframes recall-pill-blink-active</code> (glow pulse) + 2 class + <code>@media (prefers-reduced-motion: reduce)</code> override (animation:none + ขอบแดง+ring นิ่ง). ใช้ <code>--bg-hover</code>/<code>--bd</code>/<code>--tx-muted</code> ที่ pill ใช้อยู่แล้ว</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A)</h2>
+<ul>
+  <li><strong>Q1 = A (เฉพาะหมอ):</strong> header แสดงเฉพาะ chip หมอ; ตัด chip ผู้ช่วยออก; ไม่มีหมอ → <code>ไม่มีแพทย์เข้า</code> (แม้มีผู้ช่วยเข้า).</li>
+  <li><strong>Q2 = A (สลับสีเต็มใบ):</strong> blink แบบ chat-tab — สลับ เทา↔แดงเต็มใบ + glow, 1s ∞.</li>
+  <li><strong>Q3 = A (วันนี้ + เกินกำหนด):</strong> ใช้ badge count เดิม (eff ≤ วันนี้, ไม่ done/closed) เป็นตัวสั่ง blink — single source of truth กับ badge.</li>
+  <li><strong>Default-1 (no-answer):</strong> recall no-answer auto-snooze +3 วัน → หลุดจากนับวันนี้ → ปุ่มหยุดกระพริบ (ถือว่าโทรแล้ว แม้ไม่รับ).</li>
+  <li><strong>Default-2 (a11y):</strong> <code>prefers-reduced-motion</code> → ไม่กระพริบ, ขอบแดงเด่นนิ่งแทน (signal ยังอยู่).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>tab today/tomorrow มีหมอเข้า → เห็น chip หมอ (🩺 ชื่อ + เวลา) เหมือนเดิม; ไม่เห็น chip ผู้ช่วย.</li>
+  <li>tab today/tomorrow ไม่มีหมอเข้า → เห็น <code>ไม่มีแพทย์เข้า</code> (ไม่เห็น <code>ไม่มีพนักงานเข้างาน</code> อีกเลยทั้ง codebase); แม้มีผู้ช่วยเข้าก็ยังขึ้น <code>ไม่มีแพทย์เข้า</code>.</li>
+  <li>มี recall ค้าง (count &gt; 0) → ปุ่ม Recall วันนี้ กระพริบสลับสีเต็มใบไม่หยุด (ทั้งตอน inactive และ active).</li>
+  <li>โทรครบทุกรายการ (count → 0) → ปุ่มหยุดกระพริบทันที (real-time, count มาจาก listener เดิม).</li>
+  <li><code>prefers-reduced-motion: reduce</code> → ปุ่มไม่กระพริบ แต่ยังมีขอบแดงเด่นเป็น signal.</li>
+  <li>ไม่แตะ recall/count logic, firestore.rules, data; <code>npm run build</code> clean; full vitest เขียว.</li>
+</ol>
+
+<h2>Testing (Rule Q / I / N)</h2>
+<ul>
+  <li><strong>source-grep regression:</strong> ไม่เหลือ literal <code>ไม่มีพนักงานเข้างาน</code> ใน <code>AppointmentHubDoctorCards.jsx</code> · มี <code>ไม่มีแพทย์เข้า</code> · ไม่มี <code>appt-hub-assistant-card</code> · <code>RecallTogglePill</code> มี blink-class toggle ตาม count · <code>index.css</code> มี 2 keyframe + reduced-motion.</li>
+  <li><strong>RTL (AppointmentHubDoctorCards):</strong> doctorShifts present → chip หมอ; doctorShifts ว่าง → <code>ไม่มีแพทย์เข้า</code>; <strong>assistantShifts present + doctorShifts ว่าง → ยัง <code>ไม่มีแพทย์เข้า</code> และไม่มี assistant chip</strong> (Rule I flow-simulate ของ Q1=A).</li>
+  <li><strong>RTL (RecallTogglePill):</strong> mock count&gt;0 → button มี class <code>recall-pill-blink</code> (inactive) / <code>recall-pill-blink-active</code> (active); count=0 → ไม่มี.</li>
+  <li><strong>Rule Q L1 (real browser, Claude Preview per Rule S):</strong> รัน dev (ชี้ prod Firebase), เลือกสาขา นครราชสีมา (badge "1" = มี pending จริง) → <strong>ดูด้วยตา (Rule Q-vis)</strong>: (a) header หมอถูกต้องตามจริง, (b) ปุ่ม Recall กระพริบจริง — screenshot, (c) toggle <code>prefers-reduced-motion</code> → หยุดกระพริบ มีขอบแดงแทน. ถ้าไม่มี pending วันนี้บนสาขาที่ทดสอบ → seed TEST- recall (Rule M/Rule R) แล้วลบหลังเทส.</li>
+  <li><strong>Rule N:</strong> small UI change → targeted (touched-area + flow-simulate) ระหว่างทำ, full vitest ก่อน commit/end-of-batch.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>ตัด assistant ทิ้งข้อมูล:</strong> ข้อมูลผู้ช่วยเข้างานหายจาก header นี้ (user เลือก Q1=A เอง). ตารางผู้ช่วยเต็มยังดูได้ที่หน้า ตั้งค่าตารางคลินิก / schedule view (TodaysDoctorsPanel เป็น doctor-only sidebar คนละจุด).</li>
+  <li><strong>blink ตอน active:</strong> เลือก glow-pulse (active variant) แทน full-swap เพราะ pill แดงอยู่แล้ว + พนักงานกำลังอ่าน list — ยัง "กระพริบจน count=0" ตามสั่ง แต่ไม่จัดจ้านเกินจนรบกวนการอ่าน. ถ้า user อยากให้ active สลับสีจัดเต็มด้วยก็ปรับ keyframe ได้.</li>
+  <li><strong>edge no-answer:</strong> ถ้า admin re-snooze no-answer มาเป็น ≤ วันนี้เอง → จะนับ+กระพริบ (ถือว่า "ยังต้องโทร") — สอดคล้องเจตนา.</li>
+  <li><strong>L1 ต้องมี pending recall จริง</strong> บนสาขาที่ทดสอบเพื่อเห็น blink; ถ้าไม่มีต้อง seed TEST- fixture (ลบหลังเทส).</li>
+</ul>
+
+</body>
+</html>
