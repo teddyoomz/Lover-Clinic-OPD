@@ -35,8 +35,8 @@ describe('V64.R AppointmentHubTabBar', () => {
   });
 });
 
-describe('V64.R AppointmentHubDoctorCards (Q2=D)', () => {
-  it('R2.1 renders cards on today tab', () => {
+describe('V64.R AppointmentHubDoctorCards (V164 doctor-only)', () => {
+  it('R2.1 renders doctor cards on today tab; assistant chips dropped (V164)', () => {
     render(<AppointmentHubDoctorCards
       tab="today"
       doctorShifts={[{ name: 'หมอ น้ำตาล', startTime: '10:30', endTime: '17:00' }]}
@@ -44,7 +44,8 @@ describe('V64.R AppointmentHubDoctorCards (Q2=D)', () => {
     />);
     expect(screen.getByTestId('appt-hub-doctor-cards')).toBeInTheDocument();
     expect(screen.getAllByTestId('appt-hub-doctor-card')).toHaveLength(1);
-    expect(screen.getAllByTestId('appt-hub-assistant-card')).toHaveLength(1);
+    // V164 — assistant chips removed (doctor-only); the legacy assistantShifts prop is ignored.
+    expect(screen.queryByTestId('appt-hub-assistant-card')).toBeNull();
   });
 
   it('R2.2 hides on future tab', () => {

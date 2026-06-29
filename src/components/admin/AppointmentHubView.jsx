@@ -83,7 +83,6 @@ export default function AppointmentHubView({
   onUnmarkServiceComplete,                   // V71.A NEW — symmetric un-mark
   branchName = '',
   doctors = [],
-  assistants = [],
   // V118 (2026-05-23) — Card-level OPD lifecycle handlers, plumbed from
   // AdminDashboard. Each card derives its state via resolveLinkedSession +
   // resolveCardOpdState; handlers dispatch the relevant side-effect.
@@ -463,16 +462,16 @@ export default function AppointmentHubView({
   // V71 (2026-05-15) — sub-pill counts derived from same appts array.
   const todaySubCounts = useMemo(() => subPillCountsForToday(appts, new Date()), [appts]);
 
-  // V64-fix (2026-05-09 root-cause): Doctor + assistant shifts for today/tomorrow header (Q2=B+D)
+  // V164 (2026-06-29) — doctor-only shifts for the today/tomorrow header.
   // Real be_staff_schedules schema (verified via preview_eval against prod):
   //   - field `type` (NOT `kind`): 'recurring' | 'override' | 'leave' | 'sick' | 'holiday'
   //   - field `date` (NOT `dateISO`) for non-recurring entries (YYYY-MM-DD)
   //   - field `dayOfWeek` (0=Sun..6=Sat) for recurring entries
-  //   - NO `role` field — role is inferred from staffId (membership in doctors/assistants prop list)
+  //   - NO `role` field — doctor role is inferred from staffId (membership in the doctors prop list)
   // Bangkok TZ stable: midday-UTC parse so day-of-week stays correct across the dateline.
-  const { doctorShifts, assistantShifts } = useMemo(() => {
+  const { doctorShifts } = useMemo(() => {
     if (activeTab !== 'today' && activeTab !== 'tomorrow') {
-      return { doctorShifts: [], assistantShifts: [] };
+      return { doctorShifts: [] };
     }
     const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
     const nowMs = Date.now() + (activeTab === 'tomorrow' ? 24 * 3600 * 1000 : 0);
@@ -483,7 +482,6 @@ export default function AppointmentHubView({
     const dow = new Date(Date.UTC(yy, mm - 1, dd, 12, 0, 0)).getUTCDay();
 
     const doctorIdSet = new Set((doctors || []).map(p => String(p.id)));
-    const assistantIdSet = new Set((assistants || []).map(p => String(p.id)));
 
     const filterShifts = (entries, idSet) => entries
       .filter(e => {
@@ -501,9 +499,8 @@ export default function AppointmentHubView({
     }));
     return {
       doctorShifts: enrich(filterShifts(scheduleEntries, doctorIdSet), doctors),
-      assistantShifts: enrich(filterShifts(scheduleEntries, assistantIdSet), assistants),
     };
-  }, [scheduleEntries, doctors, assistants, activeTab]);
+  }, [scheduleEntries, doctors, activeTab]);
 
   // V64 — print PDF (Q5=C). Direct html2canvas + jsPDF (V32 lock — never html2pdf).
   const handlePrint = useCallback(async () => {
@@ -541,7 +538,6 @@ export default function AppointmentHubView({
     }
   }, [filteredAppts, summaryMap, activeTab, branchName, range.from, range.to, selectedBranchId]);
 
-  const dateLabel = activeTab === 'today' ? 'นี้' : (activeTab === 'tomorrow' ? 'พรุ่งนี้' : '');
   const typeOptions = APPOINTMENT_TYPES.map(t => ({ value: t.value, label: t.label }));
 
   // V64-fix3 (Issue 2, 2026-05-09): pure optimistic update — NO reload
@@ -685,8 +681,6 @@ export default function AppointmentHubView({
           <AppointmentHubDoctorCards
             tab={activeTab}
             doctorShifts={doctorShifts}
-            assistantShifts={assistantShifts}
-            dateLabel={dateLabel}
           />
         }
       />

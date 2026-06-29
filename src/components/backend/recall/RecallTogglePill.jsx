@@ -37,6 +37,9 @@ function useRecallFrontendBadgeCountInternal() {
  */
 export function RecallTogglePill({ active, onClick }) {
   const count = useRecallFrontendBadgeCountInternal();
+  // V164 — blink non-stop while pending recalls remain today (count > 0);
+  // stops when all called (count → 0). reduced-motion handled in index.css.
+  const blink = count > 0;
   return (
     <button
       type="button"
@@ -46,7 +49,7 @@ export function RecallTogglePill({ active, onClick }) {
         active
           ? 'bg-red-600 border-red-600 text-white'
           : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400'
-      }`}
+      } ${blink ? (active ? 'recall-pill-blink-active' : 'recall-pill-blink') : ''}`}
     >
       🔔 Recall วันนี้
       {count > 0 && (

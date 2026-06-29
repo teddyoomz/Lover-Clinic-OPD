@@ -2250,6 +2250,28 @@ select.pf-input {
   border-color: transparent !important;
 }
 
+/* V164 (2026-06-29) — "Recall วันนี้" pill blinks non-stop while pending
+   recalls remain today (count > 0); stops when all called (count → 0).
+   Inactive (gray) pill: full gray↔red swap (chat-blink idiom). Active (red)
+   pill: red glow pulse so it still reads as blinking while staff work the list. */
+@keyframes recall-pill-blink {
+  0%, 100% { background-color: var(--bg-hover); border-color: var(--bd); color: var(--tx-muted); box-shadow: none; }
+  50%      { background-color: #dc2626; border-color: #dc2626; color: #fff; box-shadow: 0 0 14px rgba(239, 68, 68, 0.6); }
+}
+.recall-pill-blink { animation: recall-pill-blink 1s ease-in-out infinite; }
+@keyframes recall-pill-blink-active {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  50%      { box-shadow: 0 0 16px 2px rgba(239, 68, 68, 0.7); }
+}
+.recall-pill-blink-active { animation: recall-pill-blink-active 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .recall-pill-blink, .recall-pill-blink-active {
+    animation: none;
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.55);
+  }
+}
+
 /* Shimmer for loading states */
 @keyframes shimmer {
   0%   { background-position: -400px 0; }

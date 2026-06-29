@@ -62,8 +62,9 @@ describe('V64-fix.SC1 — getAppointmentsByDateRange query-shape regression', ()
 });
 
 describe('V64-fix.SC2 — AppointmentHubView staff-schedule schema regression', () => {
-  // Slice the doctorShifts/assistantShifts useMemo block
-  const start = viewSrc.indexOf('// V64-fix (2026-05-09 root-cause): Doctor + assistant shifts');
+  // Slice the doctorShifts useMemo block (V164 doctor-only — anchor updated 2026-06-29;
+  // the schema field-name invariants still apply to the doctor-only memo).
+  const start = viewSrc.indexOf('// V164 (2026-06-29) — doctor-only shifts');
   const slice = viewSrc.slice(start, start + 2500);
 
   it('SC2.1 marker comment present', () => {

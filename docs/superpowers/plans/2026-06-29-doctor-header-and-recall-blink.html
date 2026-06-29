@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Doctor-only header + Recall-วันนี้ blink — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 0.6em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    .appscreen { background:#0e0e10; border:1px solid #232326; border-radius:12px; padding:14px 16px; }
+    .docchip { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:5px 11px; border-radius:8px; background:rgba(8,47,73,.55); border:1px solid #0369a1; color:#e0f2fe; }
+    .hrs { font-family:monospace; font-weight:900; color:#7dd3fc; }
+    .pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:6px 11px; border-radius:8px; border:1px solid #2a2a2a; background:#1c1c1e; color:#9ca3af; }
+    @keyframes specblink { 0%,100%{background:#1c1c1e;color:#9ca3af;box-shadow:none;border-color:#2a2a2a} 50%{background:#dc2626;color:#fff;box-shadow:0 0 14px rgba(239,68,68,.65);border-color:#dc2626} }
+    .blinkA { animation: specblink 1s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+
+<h1>Doctor-only header + Recall-วันนี้ blink — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> execute task-by-task. Inline execution (executing-plans) — user authorized full implement + test in one go. Spec: <code>docs/superpowers/specs/2026-06-29-doctor-header-and-recall-blink-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (1) ส่วน "หมอเข้าวันนี้" ในหน้า นัดหมาย แสดงเฉพาะหมอ; ไม่มีหมอ → "ไม่มีแพทย์เข้า". (2) ปุ่ม Recall วันนี้ กระพริบไม่หยุดจนกว่า recall ค้างวันนี้ = 0.</p>
+  <p><strong>Architecture:</strong> Cosmetic shell — ไม่แตะ recall/count/schedule logic. Change 1 = ตัด assistant branch + เปลี่ยน empty text ใน presentational component. Change 2 = blink class ผูกกับ count เดิม + CSS keyframes. Frontend-only → no Probe-Deploy-Probe.</p>
+  <p><strong>Tech Stack:</strong> React 19, Tailwind, vitest + RTL, index.css keyframes. V-marker: <strong>V164</strong>.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">After — หมอเข้าวันนี้ (doctor-only) · 2 กรณี (dark)</div>
+  <div class="appscreen" style="display:flex;flex-direction:column;gap:11px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:14px;font-weight:700;color:#e5e5e5">รายการนัดหมาย <span style="color:#f59e0b">6 คน</span></span>
+      <span class="docchip">🩺 นพ.สมชาย <span class="hrs">09:00-17:00</span></span>
+      <span class="docchip">🩺 พญ.มายด์ <span class="hrs">12:00-20:00</span></span>
+    </div>
+    <div style="border-top:1px solid #1f1f22;padding-top:11px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:14px;font-weight:700;color:#e5e5e5">รายการนัดหมาย <span style="color:#f59e0b">6 คน</span></span>
+      <span style="font-size:11px;color:#52525b">ไม่มีหมอ →</span>
+      <span style="font-size:13px;color:#9ca3af;font-style:italic">ไม่มีแพทย์เข้า</span>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">After — ปุ่ม Recall กระพริบ (count &gt; 0) — เปิด html นี้ใน browser เพื่อดูจริง</div>
+  <div class="appscreen"><span class="pill blinkA">🔔 Recall วันนี้ <span style="font-size:10px;font-weight:700;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.25);color:#fff">1</span></span></div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Flow 1 — AppointmentHubDoctorCards render (tab today/tomorrow)</div>
+  <table>
+    <tr><th>เงื่อนไข</th><th>render</th></tr>
+    <tr><td><code>doctorShifts.length &gt; 0</code></td><td>🩺 chip หมอ + เวลา (เดิม)</td></tr>
+    <tr><td><code>doctorShifts.length === 0</code> (มี/ไม่มีผู้ช่วยก็ตาม)</td><td><code>ไม่มีแพทย์เข้า</code></td></tr>
+    <tr><td>tab อื่น</td><td><code>null</code></td></tr>
+  </table>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Flow 2 — RecallTogglePill blink</div>
+  <table>
+    <tr><th>state</th><th>class</th></tr>
+    <tr><td><code>count&gt;0</code> &amp; inactive</td><td><code>recall-pill-blink</code> (เทา↔แดง + glow)</td></tr>
+    <tr><td><code>count&gt;0</code> &amp; active</td><td><code>recall-pill-blink-active</code> (glow pulse)</td></tr>
+    <tr><td><code>count===0</code></td><td>—</td></tr>
+    <tr><td>reduced-motion</td><td>animation:none + ขอบแดงนิ่ง</td></tr>
+  </table>
+  <p style="font-size:0.9em;color:#555;margin:0.3em 0 0"><code>count</code> = <code>useRecallFrontendBadgeCountInternal()</code> เดิม (eff ≤ วันนี้, status ∉ done/closed) — ไม่แตะ. ลูกค้าโทร → done → count↓ → 0 → หยุดกระพริบ (listener เดิม real-time).</p>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>หน้าที่ / การแก้</th></tr>
+  <tr><td><code>src/components/admin/AppointmentHubDoctorCards.jsx</code></td><td>doctor-only: ตัด signature <code>assistantShifts</code>+<code>dateLabel</code>, ตัด assistant chip block, empty → <code>ไม่มีแพทย์เข้า</code></td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>memo คืน <code>{ doctorShifts }</code> อย่างเดียว; ตัด <code>assistantShifts</code> prop ที่ call site; <code>assistants</code> prop → grep-verify ก่อนตัด deps</td></tr>
+  <tr><td><code>src/components/backend/recall/RecallTogglePill.jsx</code></td><td><code>blink=count&gt;0</code> → append blink class ใน button</td></tr>
+  <tr><td><code>src/index.css</code></td><td>+ 2 keyframes + 2 class + reduced-motion override</td></tr>
+  <tr><td><code>tests/v164-doctor-header-and-recall-blink.test.jsx</code></td><td>NEW — RTL (doctor card + recall pill) + source-grep + Rule I flow-simulate</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Doctor-only header</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/admin/AppointmentHubDoctorCards.jsx</code> (full rewrite of body) + <code>src/components/admin/AppointmentHubView.jsx</code> (memo ~473-506 + call site ~688).</p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Rewrite AppointmentHubDoctorCards.jsx (doctor-only)</strong></label></div>
+<pre><code class="language-jsx">// V164 — doctor-only header (2026-06-29). Show today's DOCTORS; none → "ไม่มีแพทย์เข้า".
+// Drops the V64 assistant (purple) chips + the generic "ไม่มีพนักงานเข้างาน" empty text.
+// Assistant info still lives in the schedule view / TodaysDoctorsPanel.
+import React from 'react';
+
+export default function AppointmentHubDoctorCards({ tab, doctorShifts = [] }) {
+  if (tab !== 'today' &amp;&amp; tab !== 'tomorrow') return null;
+  return (
+    &lt;div className="flex flex-wrap items-center gap-2" data-testid="appt-hub-doctor-cards"&gt;
+      {doctorShifts.length &gt; 0 ? (
+        doctorShifts.map((s, i) =&gt; (
+          &lt;span
+            key={`d-${i}`}
+            data-testid="appt-hub-doctor-card"
+            className="inline-flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg bg-sky-100 dark:bg-sky-950/50 border border-sky-300 dark:border-sky-700/60 text-sky-900 dark:text-sky-100 shadow-sm shadow-sky-950/20"
+            title={`แพทย์ ${s.name} ${s.startTime}-${s.endTime}`}
+          &gt;
+            &lt;span aria-hidden="true" className="text-base"&gt;🩺&lt;/span&gt;
+            &lt;span className="truncate max-w-[160px]"&gt;{s.name}&lt;/span&gt;
+            &lt;span className="text-sky-700 dark:text-sky-200 font-mono font-black"&gt;{s.startTime}-{s.endTime}&lt;/span&gt;
+          &lt;/span&gt;
+        ))
+      ) : (
+        &lt;span className="text-xs text-[var(--tx-muted)] italic" data-testid="appt-hub-doctor-cards-empty"&gt;
+          ไม่มีแพทย์เข้า
+        &lt;/span&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: AppointmentHubView memo → return { doctorShifts } only</strong></label></div>
+  <p>แก้ memo (~473-506): early-return <code>{ doctorShifts: [] }</code>; ลบ <code>assistantIdSet</code> + บรรทัด <code>assistantShifts: enrich(...)</code>; return <code>{ doctorShifts: enrich(filterShifts(scheduleEntries, doctorIdSet), doctors) }</code>; อัปเดต comment 466-472 เป็น doctor-only (V164). Grep <code>assistants</code> ในไฟล์: ถ้าเหลือใช้แค่ใน memo → ลบออกจาก deps array + จาก destructure props; ถ้าใช้ที่อื่น → คงไว้.</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: call site (~688) → drop assistantShifts + dateLabel props</strong></label></div>
+  <p>เหลือ <code>&lt;AppointmentHubDoctorCards tab={activeTab} doctorShifts={doctorShifts} /&gt;</code> (อ่าน 680-695 ก่อนแก้ให้ตรง prop จริง).</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: RTL + flow-simulate tests (doctor card)</strong></label></div>
+<pre><code class="language-jsx">import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import AppointmentHubDoctorCards from '../src/components/admin/AppointmentHubDoctorCards.jsx';
+
+describe('V164 D — doctor-only header', () =&gt; {
+  it('D1 shows doctor chips with name + hours', () =&gt; {
+    render(&lt;AppointmentHubDoctorCards tab="today" doctorShifts={[{ name: 'นพ.สมชาย', startTime: '09:00', endTime: '17:00' }]} /&gt;);
+    expect(screen.getByTestId('appt-hub-doctor-card')).toHaveTextContent('นพ.สมชาย');
+    expect(screen.getByTestId('appt-hub-doctor-card')).toHaveTextContent('09:00-17:00');
+    expect(screen.queryByTestId('appt-hub-doctor-cards-empty')).toBeNull();
+  });
+  it('D2 no doctor → "ไม่มีแพทย์เข้า", never "ไม่มีพนักงานเข้างาน"', () =&gt; {
+    render(&lt;AppointmentHubDoctorCards tab="today" doctorShifts={[]} /&gt;);
+    expect(screen.getByTestId('appt-hub-doctor-cards-empty')).toHaveTextContent('ไม่มีแพทย์เข้า');
+    expect(screen.queryByText(/ไม่มีพนักงานเข้างาน/)).toBeNull();
+  });
+  it('D3 (Rule I / Q1=A) assistant present but no doctor → still "ไม่มีแพทย์เข้า", no assistant chip', () =&gt; {
+    render(&lt;AppointmentHubDoctorCards tab="today" doctorShifts={[]} assistantShifts={[{ name: 'ผู้ช่วยA', startTime: '09:00', endTime: '17:00' }]} /&gt;);
+    expect(screen.getByTestId('appt-hub-doctor-cards-empty')).toHaveTextContent('ไม่มีแพทย์เข้า');
+    expect(screen.queryByTestId('appt-hub-assistant-card')).toBeNull();
+    expect(screen.queryByText(/ผู้ช่วยA/)).toBeNull();
+  });
+  it('D4 non today/tomorrow tab → renders nothing', () =&gt; {
+    const { container } = render(&lt;AppointmentHubDoctorCards tab="upcoming" doctorShifts={[{ name: 'x', startTime: '09:00', endTime: '10:00' }]} /&gt;);
+    expect(container.firstChild).toBeNull();
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: run targeted</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v164-doctor-header-and-recall-blink.test.jsx</code> → D1-D4 PASS.</p>
+</div>
+
+<div class="task">
+  <h3>Task 2: Recall pill blink</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/recall/RecallTogglePill.jsx</code> + <code>src/index.css</code> + extend test file.</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: RecallTogglePill — append blink class</strong></label></div>
+<pre><code class="language-jsx">export function RecallTogglePill({ active, onClick }) {
+  const count = useRecallFrontendBadgeCountInternal();
+  const blink = count &gt; 0; // V164 — pending recalls today → pill blinks until all called
+  return (
+    &lt;button
+      type="button"
+      data-testid="appt-view-toggle-recall"
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 ${
+        active
+          ? 'bg-red-600 border-red-600 text-white'
+          : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400'
+      } ${blink ? (active ? 'recall-pill-blink-active' : 'recall-pill-blink') : ''}`}
+    &gt;
+      🔔 Recall วันนี้
+      {/* ...badge unchanged... */}
+    &lt;/button&gt;
+  );
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: index.css — keyframes (insert near chat-blink ~2243)</strong></label></div>
+<pre><code class="language-css">/* V164 (2026-06-29) — Recall วันนี้ pill blinks non-stop while pending recalls
+   remain today (count &gt; 0); stops when all called (count → 0). */
+@keyframes recall-pill-blink {
+  0%, 100% { background-color: var(--bg-hover); border-color: var(--bd); color: var(--tx-muted); box-shadow: none; }
+  50%      { background-color: #dc2626; border-color: #dc2626; color: #fff; box-shadow: 0 0 14px rgba(239,68,68,0.6); }
+}
+.recall-pill-blink { animation: recall-pill-blink 1s ease-in-out infinite; }
+@keyframes recall-pill-blink-active {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  50%      { box-shadow: 0 0 16px 2px rgba(239,68,68,0.7); }
+}
+.recall-pill-blink-active { animation: recall-pill-blink-active 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .recall-pill-blink, .recall-pill-blink-active {
+    animation: none;
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.55);
+  }
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: RTL tests (recall pill — mock listener)</strong></label></div>
+<pre><code class="language-jsx">import { vi } from 'vitest';
+let mockRecalls = [];
+vi.mock('../src/hooks/useRecallListener.js', () =&gt; ({
+  useRecallListener: () =&gt; ({ recalls: mockRecalls }),
+}));
+import { RecallTogglePill } from '../src/components/backend/recall/RecallTogglePill.jsx';
+
+const cls = (el) =&gt; el.className.split(/\s+/);
+describe('V164 R — recall pill blink', () =&gt; {
+  it('R1 count&gt;0 + inactive → recall-pill-blink (not -active)', () =&gt; {
+    mockRecalls = [{ status: 'pending', recallDate: '2020-01-01' }];
+    render(&lt;RecallTogglePill active={false} onClick={() =&gt; {}} /&gt;);
+    const b = screen.getByTestId('appt-view-toggle-recall');
+    expect(cls(b)).toContain('recall-pill-blink');
+    expect(cls(b)).not.toContain('recall-pill-blink-active');
+  });
+  it('R2 count&gt;0 + active → recall-pill-blink-active', () =&gt; {
+    mockRecalls = [{ status: 'pending', recallDate: '2020-01-01' }];
+    render(&lt;RecallTogglePill active={true} onClick={() =&gt; {}} /&gt;);
+    const b = screen.getByTestId('appt-view-toggle-recall');
+    expect(cls(b)).toContain('recall-pill-blink-active');
+    expect(cls(b)).not.toContain('recall-pill-blink');
+  });
+  it('R3 count===0 (all done) → no blink class', () =&gt; {
+    mockRecalls = [{ status: 'done', recallDate: '2020-01-01' }];
+    render(&lt;RecallTogglePill active={false} onClick={() =&gt; {}} /&gt;);
+    const b = screen.getByTestId('appt-view-toggle-recall');
+    expect(cls(b)).not.toContain('recall-pill-blink');
+    expect(cls(b)).not.toContain('recall-pill-blink-active');
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: run targeted</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v164-doctor-header-and-recall-blink.test.jsx</code> → R1-R3 PASS.</p>
+</div>
+
+<div class="task">
+  <h3>Task 3: source-grep regression + verify + commit</h3>
+  <p><strong>Files:</strong> extend test file (SG block).</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: source-grep tests</strong></label></div>
+<pre><code class="language-jsx">import fs from 'fs';
+import path from 'path';
+const read = (p) =&gt; fs.readFileSync(path.join(process.cwd(), p), 'utf8');
+describe('V164 SG — source-grep regression', () =&gt; {
+  it('SG1 doctor card: no "ไม่มีพนักงานเข้างาน", has "ไม่มีแพทย์เข้า", no assistant chip', () =&gt; {
+    const s = read('src/components/admin/AppointmentHubDoctorCards.jsx');
+    expect(s).not.toMatch(/ไม่มีพนักงานเข้างาน/);
+    expect(s).toMatch(/ไม่มีแพทย์เข้า/);
+    expect(s).not.toMatch(/appt-hub-assistant-card/);
+  });
+  it('SG2 RecallTogglePill: blink derived from count', () =&gt; {
+    const s = read('src/components/backend/recall/RecallTogglePill.jsx');
+    expect(s).toMatch(/recall-pill-blink-active/);
+    expect(s).toMatch(/count\s*&gt;\s*0/);
+  });
+  it('SG3 index.css: keyframes + reduced-motion', () =&gt; {
+    const s = read('src/index.css');
+    expect(s).toMatch(/@keyframes recall-pill-blink\b/);
+    expect(s).toMatch(/@keyframes recall-pill-blink-active/);
+    expect(s).toMatch(/prefers-reduced-motion[\s\S]{0,400}recall-pill-blink/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: full vitest + build</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → ALL PASS (16971 + ~10 ใหม่). <code>npm run build</code> → clean. (เป็น structural-ish change ข้ามไฟล์ → full suite ตาม Rule N.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Rule Q L1 — real browser (Claude Preview, Rule S)</strong></label></div>
+  <p>preview_start (dev ชี้ prod Firebase) → login → สาขา นครราชสีมา → tab นัดหมาย/วันนี้: <strong>ดูด้วยตา (Rule Q-vis)</strong> + screenshot: (a) header หมอถูก/"ไม่มีแพทย์เข้า"; (b) ปุ่ม Recall กระพริบจริงถ้ามี pending (badge&gt;0); (c) DevTools emulate <code>prefers-reduced-motion</code> → หยุดกระพริบ ขอบแดงนิ่ง. ถ้าไม่มี pending วันนี้ → seed TEST- recall (Rule M) แล้วลบ.</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: commit + push (NO deploy)</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubDoctorCards.jsx \
+        src/components/admin/AppointmentHubView.jsx \
+        src/components/backend/recall/RecallTogglePill.jsx \
+        src/index.css tests/v164-doctor-header-and-recall-blink.test.jsx
+git commit -m "feat(appt): V164 doctor-only header + Recall blink while pending"
+git push origin master</code></pre>
+  <p>NO <code>vercel --prod</code> จนกว่า user สั่ง "deploy" (V18).</p>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> Q1 → Task 1 ✔ · Q2/Q3 → Task 2 ✔ · reduced-motion default → Task 2 CSS ✔ · L1 → Task 3 ✔.</li>
+  <li><strong>No placeholders:</strong> ทุก step มี code/command จริง.</li>
+  <li><strong>Consistency:</strong> class names <code>recall-pill-blink</code>/<code>-active</code> + testids ตรงกันทุก task; <code>recall-pill-blink</code> เป็น substring ของ <code>-active</code> → test ใช้ class-list membership (<code>toContain</code> บน array) ไม่ใช่ substring.</li>
+</ul>
+
+</body>
+</html>
