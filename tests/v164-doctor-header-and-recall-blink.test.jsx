@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import AppointmentHubDoctorCards from '../src/components/admin/AppointmentHubDoctorCards.jsx';
 import { RecallTogglePill } from '../src/components/backend/recall/RecallTogglePill.jsx';
+import { deriveWorkingDoctorShiftsForDate, dayOfWeekFromDate } from '../src/lib/staffScheduleValidation.js';
 
 const recallHolder = vi.hoisted(() => ({ recalls: [] }));
 vi.mock('../src/hooks/useRecallListener.js', () => ({
@@ -123,5 +124,85 @@ describe('V164 SG — source-grep regression', () => {
   it('SG4 AppointmentHubView: no assistantShifts remaining', () => {
     const s = read('src/components/admin/AppointmentHubView.jsx');
     expect(s).not.toMatch(/assistantShifts/);
+  });
+});
+
+// V164-fix (2026-06-29) — root-cause: the นัดหมาย header showed "ไม่มีแพทย์เข้า"
+// while a doctor WAS working (real prod: หมอมุก, per-date type='work' 17:00-20:00).
+// The inline filter matched per-date entries by literal `type==='override'` but real
+// per-date shifts are type 'work'/'halfday' (no 'override' type exists). Fixed by
+// routing through the canonical deriveWorkingDoctorShiftsForDate (mergeSchedulesForDate
+// override-wins + WORKING_TIME_TYPES) — the same reader TodaysDoctorsPanel uses.
+describe('V164-fix SS — deriveWorkingDoctorShiftsForDate (canonical who-is-working)', () => {
+  const D = 'DOC-1';
+  const ids = [D];
+  const today = '2026-06-29';
+  const todayDow = dayOfWeekFromDate(today);          // matches the real calendar
+  const otherDow = (todayDow + 3) % 7;
+
+  it('SS1 per-date type="work" today → returned (THE BUG: was dropped by inline type==="override")', () => {
+    const entries = [{ staffId: D, type: 'work', date: today, dayOfWeek: null, startTime: '17:00', endTime: '20:00' }];
+    const out = deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today });
+    expect(out).toEqual([{ staffId: D, startTime: '17:00', endTime: '20:00' }]);
+  });
+
+  it('SS2 per-date type="halfday" today → returned', () => {
+    const entries = [{ staffId: D, type: 'halfday', date: today, startTime: '09:00', endTime: '12:00' }];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today })).toHaveLength(1);
+  });
+
+  it('SS3 recurring with dayOfWeek as STRING on matching day → returned (Number coerce)', () => {
+    const entries = [{ staffId: D, type: 'recurring', dayOfWeek: String(todayDow), startTime: '09:00', endTime: '17:00' }];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today })).toHaveLength(1);
+  });
+
+  it('SS4 recurring on a different day → not returned', () => {
+    const entries = [{ staffId: D, type: 'recurring', dayOfWeek: otherDow, startTime: '09:00', endTime: '17:00' }];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today })).toHaveLength(0);
+  });
+
+  it('SS5 per-date type="leave" today → excluded (not a working type)', () => {
+    const entries = [{ staffId: D, type: 'leave', date: today }];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today })).toHaveLength(0);
+  });
+
+  it('SS6 per-date leave OVERRIDES a recurring shift same day → doctor NOT shown (override-wins)', () => {
+    const entries = [
+      { staffId: D, type: 'recurring', dayOfWeek: todayDow, startTime: '09:00', endTime: '17:00' },
+      { staffId: D, type: 'leave', date: today },
+    ];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today })).toHaveLength(0);
+  });
+
+  it('SS7 entry for a non-doctor staffId → excluded (membership = role)', () => {
+    const entries = [{ staffId: 'STAFF-X', type: 'work', date: today, startTime: '09:00', endTime: '17:00' }];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: ids, targetISO: today })).toHaveLength(0);
+  });
+
+  it('SS8 empty doctorIds → [] (never returns all-staff)', () => {
+    const entries = [{ staffId: D, type: 'work', date: today, startTime: '09:00', endTime: '17:00' }];
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: entries, doctorIds: [], targetISO: today })).toEqual([]);
+  });
+
+  it('SS9 invalid targetISO → []', () => {
+    expect(deriveWorkingDoctorShiftsForDate({ scheduleEntries: [], doctorIds: ids, targetISO: 'nope' })).toEqual([]);
+  });
+});
+
+describe('V164-fix SG2 — header reads the canonical schedule helper (no drift)', () => {
+  it('SG2.1 AppointmentHubView uses deriveWorkingDoctorShiftsForDate + drops the buggy inline match', () => {
+    const s = read('src/components/admin/AppointmentHubView.jsx');
+    expect(s).toMatch(/deriveWorkingDoctorShiftsForDate/);
+    expect(s).not.toMatch(/e\.type\s*===\s*['"]override['"]/);   // the bug pattern
+    expect(s).not.toMatch(/e\.dayOfWeek\s*===\s*dow/);            // strict (un-coerced) match
+  });
+  it('SG2.2 staffScheduleValidation exports the canonical helper + WORKING_TIME_TYPES', () => {
+    const s = read('src/lib/staffScheduleValidation.js');
+    expect(s).toMatch(/export function deriveWorkingDoctorShiftsForDate/);
+    expect(s).toMatch(/export const WORKING_TIME_TYPES/);
+  });
+  it('SG2.3 TodaysDoctorsPanel uses the shared WORKING_TIME_TYPES set', () => {
+    const s = read('src/components/backend/scheduling/TodaysDoctorsPanel.jsx');
+    expect(s).toMatch(/WORKING_TIME_TYPES\.has/);
   });
 });

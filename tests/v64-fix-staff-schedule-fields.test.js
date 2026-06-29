@@ -61,38 +61,37 @@ describe('V64-fix.SC1 — getAppointmentsByDateRange query-shape regression', ()
   });
 });
 
-describe('V64-fix.SC2 — AppointmentHubView staff-schedule schema regression', () => {
-  // Slice the doctorShifts useMemo block (V164 doctor-only — anchor updated 2026-06-29;
-  // the schema field-name invariants still apply to the doctor-only memo).
-  const start = viewSrc.indexOf('// V164 (2026-06-29) — doctor-only shifts');
-  const slice = viewSrc.slice(start, start + 2500);
+describe('V64-fix.SC2 — schedule-effective-on-date uses the canonical reader (V164-fix 2026-06-29)', () => {
+  // V164-fix: the header no longer reimplements the recurring/per-date match
+  // inline (which keyed per-date on a literal `type === 'override'` that real
+  // be_staff_schedules NEVER produces → working doctors dropped). It now routes
+  // through deriveWorkingDoctorShiftsForDate (mergeSchedulesForDate + WORKING_TIME_TYPES).
+  const validationSrc = readFileSync(resolve(__dirname, '../src/lib/staffScheduleValidation.js'), 'utf-8');
 
-  it('SC2.1 marker comment present', () => {
-    expect(start).toBeGreaterThan(0);
+  it('SC2.1 AppointmentHubView delegates to deriveWorkingDoctorShiftsForDate (no inline reimplementation)', () => {
+    expect(viewSrc).toMatch(/deriveWorkingDoctorShiftsForDate/);
   });
 
-  it('SC2.2 uses `type` (NOT `kind`) for entry shape — recurring branch', () => {
-    expect(slice).toMatch(/e\.type\s*===\s*['"]recurring['"]/);
-    expect(slice).not.toMatch(/e\.kind\s*===\s*['"]recurring['"]/);
+  it('SC2.2 header DROPS the buggy literal `type === "override"` per-date match', () => {
+    expect(viewSrc).not.toMatch(/e\.type\s*===\s*['"]override['"]/);
   });
 
-  it('SC2.3 uses `type` (NOT `kind`) — override branch', () => {
-    expect(slice).toMatch(/e\.type\s*===\s*['"]override['"]/);
-    expect(slice).not.toMatch(/e\.kind\s*===\s*['"]override['"]/);
+  it('SC2.3 canonical mergeSchedulesForDate keys per-date on `type !== "recurring"` + `date === targetDate`', () => {
+    expect(validationSrc).toMatch(/e\.date\s*===\s*targetDate\s*&&\s*e\.type\s*!==\s*['"]recurring['"]/);
+    expect(validationSrc).not.toMatch(/e\.type\s*===\s*['"]override['"]/);
   });
 
-  it('SC2.4 uses `date` (NOT `dateISO`) for date match', () => {
-    expect(slice).toMatch(/e\.date\s*===\s*targetISO/);
-    expect(slice).not.toMatch(/e\.dateISO/);
+  it('SC2.4 canonical recurring match coerces dayOfWeek via Number() (string-safe)', () => {
+    expect(validationSrc).toMatch(/Number\(\s*e\.dayOfWeek\s*\)\s*===\s*dow/);
   });
 
-  it('SC2.5 role inferred via Set membership (not e.role field)', () => {
-    expect(slice).toMatch(/idSet\.has/);
-    expect(slice).not.toMatch(/e\.role\s*!==/);
+  it('SC2.5 deriveWorkingDoctorShiftsForDate filters to WORKING_TIME_TYPES (excludes leave/holiday/sick)', () => {
+    expect(validationSrc).toMatch(/export function deriveWorkingDoctorShiftsForDate/);
+    expect(validationSrc).toMatch(/WORKING_TIME_TYPES\.has\(/);
   });
 
-  it('SC2.6 Bangkok TZ midday-UTC parse for dayOfWeek', () => {
-    expect(slice).toMatch(/Date\.UTC\([^)]*12\s*,\s*0\s*,\s*0\)/);
+  it('SC2.6 dayOfWeekFromDate is UTC-anchored (Date.UTC — no local-TZ drift)', () => {
+    expect(validationSrc).toMatch(/Date\.UTC\(/);
   });
 });
 

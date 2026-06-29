@@ -38,6 +38,7 @@ import {
   buildPrintHTMLTemplate,
 } from '../../lib/appointmentHubPrintTemplate.js';
 import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
+import { deriveWorkingDoctorShiftsForDate } from '../../lib/staffScheduleValidation.js';
 import { loadTreatmentsByDateRange } from '../../lib/reportsLoaders.js';
 // V118 (2026-05-23) — Card-level OPD lifecycle state derivation + synth-session
 // fallback for "ดูข้อมูล" on existing-customer cards with no linkedOpdSessionId.
@@ -462,13 +463,16 @@ export default function AppointmentHubView({
   // V71 (2026-05-15) — sub-pill counts derived from same appts array.
   const todaySubCounts = useMemo(() => subPillCountsForToday(appts, new Date()), [appts]);
 
-  // V164 (2026-06-29) — doctor-only shifts for the today/tomorrow header.
-  // Real be_staff_schedules schema (verified via preview_eval against prod):
-  //   - field `type` (NOT `kind`): 'recurring' | 'override' | 'leave' | 'sick' | 'holiday'
-  //   - field `date` (NOT `dateISO`) for non-recurring entries (YYYY-MM-DD)
-  //   - field `dayOfWeek` (0=Sun..6=Sat) for recurring entries
-  //   - NO `role` field — doctor role is inferred from staffId (membership in the doctors prop list)
-  // Bangkok TZ stable: midday-UTC parse so day-of-week stays correct across the dateline.
+  // V164-fix (2026-06-29) — doctor-only shifts for the today/tomorrow header.
+  // Uses the SINGLE canonical reader deriveWorkingDoctorShiftsForDate
+  // (mergeSchedulesForDate override-wins + WORKING_TIME_TYPES) — the SAME source
+  // TodaysDoctorsPanel uses — so this header can't drift again.
+  //   Was: an inline filter matching per-date entries by literal `type==='override'`.
+  //   Real be_staff_schedules per-date shifts have type 'work'/'halfday' (there is NO
+  //   'override' type) → doctors on a per-date shift today were silently DROPPED
+  //   (showed "ไม่มีแพทย์เข้า" while a doctor WAS in). Class-of-bug: a reader that
+  //   reimplemented schedule-effective-on-date and drifted from the canonical helper.
+  // Bangkok TZ stable: midday-UTC date string so the day stays correct across the dateline.
   const { doctorShifts } = useMemo(() => {
     if (activeTab !== 'today' && activeTab !== 'tomorrow') {
       return { doctorShifts: [] };
@@ -477,29 +481,13 @@ export default function AppointmentHubView({
     const nowMs = Date.now() + (activeTab === 'tomorrow' ? 24 * 3600 * 1000 : 0);
     const bd = new Date(nowMs + BANGKOK_OFFSET_MS);
     const targetISO = `${bd.getUTCFullYear()}-${String(bd.getUTCMonth() + 1).padStart(2, '0')}-${String(bd.getUTCDate()).padStart(2, '0')}`;
-    // dayOfWeek for the target Bangkok day (0=Sun..6=Sat)
-    const [yy, mm, dd] = targetISO.split('-').map(Number);
-    const dow = new Date(Date.UTC(yy, mm - 1, dd, 12, 0, 0)).getUTCDay();
-
-    const doctorIdSet = new Set((doctors || []).map(p => String(p.id)));
-
-    const filterShifts = (entries, idSet) => entries
-      .filter(e => {
-        if (!idSet.has(String(e.staffId))) return false;
-        // Working entries only (skip leave/sick/holiday)
-        if (e.type === 'recurring' && e.dayOfWeek === dow) return true;
-        if (e.type === 'override' && e.date === targetISO) return true;
-        return false;
-      })
-      .map(e => ({ staffId: e.staffId, startTime: e.startTime, endTime: e.endTime }));
-
-    const enrich = (shifts, peopleList) => shifts.map(s => ({
+    const doctorIds = (doctors || []).map(p => String(p.id));
+    const shifts = deriveWorkingDoctorShiftsForDate({ scheduleEntries, doctorIds, targetISO });
+    const enrich = (list) => list.map(s => ({
       ...s,
-      name: peopleList.find(p => String(p.id) === String(s.staffId))?.name || s.staffId,
+      name: (doctors || []).find(p => String(p.id) === String(s.staffId))?.name || s.staffId,
     }));
-    return {
-      doctorShifts: enrich(filterShifts(scheduleEntries, doctorIdSet), doctors),
-    };
+    return { doctorShifts: enrich(shifts) };
   }, [scheduleEntries, doctors, activeTab]);
 
   // V64 — print PDF (Q5=C). Direct html2canvas + jsPDF (V32 lock — never html2pdf).

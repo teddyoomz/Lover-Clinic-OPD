@@ -46,7 +46,9 @@ export const DAY_OF_WEEK_LABEL = Object.freeze({
 });
 
 // Types that imply "working" hours (require start+end).
-const WORKING_TIME_TYPES = new Set(['recurring', 'work', 'halfday']);
+// V164 (2026-06-29) — exported so the appointment-hub header + TodaysDoctorsPanel
+// share ONE "is this a working shift" set (was duplicated inline → drift risk).
+export const WORKING_TIME_TYPES = new Set(['recurring', 'work', 'halfday']);
 // Types that need start/end times when used per-date (excludes recurring which uses dayOfWeek).
 const PER_DATE_WORK_TYPES = new Set(['work', 'halfday']);
 
@@ -285,6 +287,34 @@ export function mergeSchedulesForDate(targetDate, entries, staffIdsFilter) {
     }
   }
   return result;
+}
+
+/**
+ * V164 (2026-06-29) — THE single canonical reader for "which of these staff are
+ * working a real shift on date X". Wraps mergeSchedulesForDate (per-date override
+ * wins over recurring) + keeps only WORKING_TIME_TYPES (recurring / work / halfday),
+ * dropping holiday / leave / sick. Returns `{ staffId, startTime, endTime }[]`.
+ *
+ * Use this anywhere a "doctors/staff working today" header/list is needed —
+ * NEVER reimplement the recurring/per-date matching inline. The old AppointmentHub
+ * header did, and matched per-date entries by a literal `type === 'override'`,
+ * but real be_staff_schedules per-date shifts have type 'work'/'halfday' (there is
+ * NO 'override' type — see TYPE_OPTIONS) → working doctors were silently dropped
+ * ("ไม่มีแพทย์เข้า" while a doctor WAS in). This helper closes that drift permanently.
+ *
+ * @param {object} opts
+ * @param {Array} opts.scheduleEntries — be_staff_schedules entries (recurring + per-date mixed)
+ * @param {Array<string>} opts.doctorIds — staffIds to include (membership = role)
+ * @param {string} opts.targetISO — YYYY-MM-DD (Bangkok day)
+ * @returns {Array<{staffId: string, startTime: string, endTime: string}>}
+ */
+export function deriveWorkingDoctorShiftsForDate({ scheduleEntries, doctorIds, targetISO }) {
+  if (!targetISO || !DATE_ISO_RE.test(targetISO)) return [];
+  if (!Array.isArray(doctorIds) || doctorIds.length === 0) return [];
+  const effective = mergeSchedulesForDate(targetISO, scheduleEntries || [], doctorIds.map(String));
+  return effective
+    .filter((e) => WORKING_TIME_TYPES.has(e.type))
+    .map((e) => ({ staffId: String(e.staffId), startTime: e.startTime, endTime: e.endTime }));
 }
 
 /**

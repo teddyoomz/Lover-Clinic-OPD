@@ -578,6 +578,11 @@ Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky
 **Grep** (any = AV197 violation): a recall LIST surface that renders `recall.customerName` without routing its recalls through `useEnrichedRecalls`; an admin-SDK script that backfills `be_recalls.customerName` to "fix display" (forbidden — `feedback_no_admin_sdk_backfill_to_fix_display.md`).
 **Verification**: `tests/recall-customer-name.test.js` + `tests/recall-fixes-flow-simulate.test.js` (enrich→render→chip) + e2e Phase 5 (real kiosk customer → resolved).
 
+### AV199 — "Who is working on date X" must use the canonical schedule reader (V164-fix, 2026-06-29)
+**Why**: V164 surfaced a latent V64 bug — the นัดหมาย header reimplemented the recurring/per-date schedule match INLINE and keyed per-date entries on a literal `type === 'override'`, but real `be_staff_schedules` per-date shifts have `type` ∈ {'work','halfday'} (NO 'override' type exists — see `TYPE_OPTIONS`). A doctor on a per-date shift today (real prod: หมอมุก, `type='work'` 17:00-20:00) was silently DROPPED → "ไม่มีแพทย์เข้า" while a doctor WAS in. Class: a reader that reimplements schedule-effective-on-date drifts from the canonical `mergeSchedulesForDate` (V12 multi-reader-sweep). Fix: route through `deriveWorkingDoctorShiftsForDate` (mergeSchedulesForDate override-wins + `WORKING_TIME_TYPES`) — the same reader TodaysDoctorsPanel uses.
+**Grep** (any = AV199 violation): `e\.type\s*===\s*['"]override['"]` in `src/components/**` (the bug pattern — `'override'` is only a `mergeSchedulesForDate` output `source` tag + the schedule-editor UI `kind`, never a stored type to match); a component matching `(e.type==='recurring' && e.dayOfWeek===…) || (e.date===…)` inline to a date instead of calling `mergeSchedulesForDate`/`deriveWorkingDoctorShiftsForDate`. Sanctioned: consumers filtering the ALREADY-MERGED output by `WORKING_TIME_TYPES.has(s.type)`.
+**Verification**: `tests/v164-doctor-header-and-recall-blink.test.jsx` (SS1-SS9 behavior + SG2.1-2.3) + `tests/v64-fix-staff-schedule-fields.test.js` SC2. L2 real-prod: `scripts/diag-v164-verify-fix.mjs`.
+
 ## How to run
 
 1. Run each grep pattern; classify hits.

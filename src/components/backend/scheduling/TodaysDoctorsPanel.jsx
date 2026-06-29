@@ -16,7 +16,7 @@ import { User } from 'lucide-react';
 // V56 / BS-15 (2026-05-08) — chip rendering uses expandRoomIdsForDisplay
 // to silent-skip stale ids and fall back to all branch doctor-rooms for
 // legacy (pre-V56) entries.
-import { expandRoomIdsForDisplay } from '../../../lib/staffScheduleValidation.js';
+import { expandRoomIdsForDisplay, WORKING_TIME_TYPES } from '../../../lib/staffScheduleValidation.js';
 
 function fmtThaiDate(dateISO) {
   if (!dateISO) return '';
@@ -51,7 +51,8 @@ export default function TodaysDoctorsPanel({
     (branchExamRooms || []).filter((r) => r && (r.kind ?? 'doctor') === 'doctor').map((r) => [String(r.id), r.name]),
   );
   const todaysDoctors = (todaysSchedules || [])
-    .filter((s) => s.type === 'recurring' || s.type === 'work' || s.type === 'halfday')
+    // V164 — shared WORKING_TIME_TYPES (recurring/work/halfday); excludes leave/holiday/sick.
+    .filter((s) => WORKING_TIME_TYPES.has(s.type))
     .map((s) => {
       const doc = doctors.find((d) => String(d.doctorId || d.id) === String(s.staffId));
       if (!doc) return null;
