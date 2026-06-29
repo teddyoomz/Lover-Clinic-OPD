@@ -1,10 +1,10 @@
 ---
-updated_at: "2026-06-29 — V164 (doctor-only header + recall blink) + V164-fix (per-date 'work' shift dropped → 'ไม่มีแพทย์เข้า' bug). Committed + pushed, NOT deployed."
-status: "V164 + V164-fix shipped local (master ef40ff12). Frontend-only (no firestore.rules / no data) → vercel-only when user says deploy; no Probe-Deploy-Probe. Idle / await deploy."
+updated_at: "2026-06-29 — V164 (doctor-only header + recall blink) + V164-fix (per-date 'work' shift dropped → 'ไม่มีแพทย์เข้า' bug). DEPLOYED to prod."
+status: "V164 + V164-fix DEPLOYED (vercel --prod, frontend-only; firestore.rules unchanged → no Probe-Deploy-Probe). prod == HEAD. Idle."
 branch: "master"
 last_commit: "ef40ff12 — fix(appt): V164-fix header showed ไม่มีแพทย์เข้า while a doctor WAS in"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "423159cc (filler EOD) — V164 + V164-fix NOT yet deployed; awaiting explicit 'deploy'."
+production_commit: "ef46aa8b — V164 + V164-fix DEPLOYED 2026-06-29 (vercel lover-clinic-g1ighqj0e → aliased lover-clinic-app.vercel.app). prod == HEAD."
 firestore_rules_version: "UNCHANGED (V164 + V164-fix frontend-only)"
 tests: "V164+fix targeted (v164 + v64-fix + v64-rtl) green; full vitest 16991 pass / 4 reds = PRE-EXISTING parallel flakes (phase11-routing R1/R2 · phase15.5b PF.4 global.fetch-leak · staff-chat-lightbox stress) all GREEN isolated (phase15.5b 51/0); build clean; Rule Q L2 real helper vs real prod data verified."
 ---
