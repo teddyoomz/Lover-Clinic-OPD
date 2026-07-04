@@ -5,6 +5,7 @@ import {
   getRecallStatusColor,
   getRecallOutcomeMeta,
   isOverdue,
+  formatThaiFullDate,
 } from '../../../lib/recallResolvers.js';
 import { useTheme } from '../../../hooks/useTheme.js';
 import { RecallPairBadge } from './RecallPairBadge.jsx';
@@ -63,13 +64,13 @@ export function RecallRow({
   // 2026-06-16 Part B (items 6/7) — surface the snooze/reschedule target date in
   // the row. no-answer (auto-snoozed +3d) → "📞 โทรอีกครั้ง"; reschedule (admin
   // picked a new date) → "📅 เลื่อนนัด"; other pending+snoozed → "📅 เลื่อนถึง".
-  // Date = dd/mm/yyyy พ.ศ. (Bangkok-local from the stored YYYY-MM-DD).
+  // 2026-07-05 Q1=B — date via formatThaiFullDate ("9 ก.ค. 2569"): month NAMED
+  // + year ALWAYS, uniform with every other recall date (user: "กันพลาด").
   const recallDateChip = (() => {
     const until = recall.snoozedUntil;
     if (!until) return null;
-    const m = String(until).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    const text = `${m[3]}/${m[2]}/${Number(m[1]) + 543}`;
+    const text = formatThaiFullDate(until);
+    if (!text) return null;
     if (recall.status === 'no-answer') return { icon: '📞', label: 'โทรอีกครั้ง', text, tone: 'sky' };
     if (recall.outcome === 'reschedule') return { icon: '📅', label: 'เลื่อนนัด', text, tone: 'violet' };
     if (recall.status === 'pending') return { icon: '📅', label: 'เลื่อนถึง', text, tone: 'sky' };
@@ -79,13 +80,9 @@ export function RecallRow({
     ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-500/30'
     : 'bg-sky-500/10 text-sky-600 dark:text-sky-300 border-sky-500/30';
 
-  // Format dd/mm from recallDate 'YYYY-MM-DD'
-  const dateDisplay = recall.recallDate
-    ? (() => {
-        const m = String(recall.recallDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
-        return m ? `${m[3]}/${m[2]}` : '--';
-      })()
-    : '--';
+  // 2026-07-05 Q1=B — the row date chip shows the FULL Thai date ("6 ก.ค. 2569";
+  // was bare dd/mm "06/07" with no year → ambiguous, user report IMG_8920).
+  const dateDisplay = formatThaiFullDate(recall.recallDate) || '--';
 
   // V72 (2026-05-16) — Mobile-first Editorial card redesign.
   // User report: "โครตน่าเกลียด Recall ใน Version mobile ช่วยทำให้สวยระดับโปร".
@@ -105,7 +102,8 @@ export function RecallRow({
   // against page bg. Coupled with --bd-strong border + shadow-md for clear
   // elevation.
   const rowClass = [
-    'group flex flex-col md:grid md:grid-cols-[56px_1fr_auto] md:gap-3 transition-all cursor-pointer',
+    // 2026-07-05 Q1=B — date column 56px → 92px to fit the full "16 พ.ย. 2569".
+    'group flex flex-col md:grid md:grid-cols-[92px_1fr_auto] md:gap-3 transition-all cursor-pointer',
     'rounded-xl border bg-[var(--bg-input)] shadow-md',
     'hover:shadow-lg hover:border-rose-500/50 hover:-translate-y-[1px]',
     snoozed ? 'opacity-65 border-dashed border-[var(--bd-strong)]' : 'border-[var(--bd-strong)]',

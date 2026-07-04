@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatThaiFullDate } from '../../../lib/recallResolvers.js';
 
 /**
  * Phase 29 (2026-05-14) — bucket section header.
@@ -63,9 +64,17 @@ const BUCKET_THEMES = Object.freeze({
   },
 });
 
-export function RecallSectionHeader({ bucketKey, count, doneCount, prominent = false }) {
+/**
+ * 2026-07-05 additions (user report IMG_8920):
+ *   - `dateISO` (Q1=B) — today/tomorrow headers show the REAL full date
+ *     (" · 5 ก.ค. 2569") so the group can never be misread.
+ *   - `alwaysRender` (Q2=A) — compact mode renders the header even at count 0
+ *     (the section carries a "✓ ไม่มี" box below instead of vanishing).
+ */
+export function RecallSectionHeader({ bucketKey, count, doneCount, prominent = false, dateISO = '', alwaysRender = false }) {
   const theme = BUCKET_THEMES[bucketKey];
-  if (!theme || !count) return null;
+  if (!theme || (!count && !alwaysRender)) return null;
+  const dateSuffix = dateISO ? formatThaiFullDate(dateISO) : '';
 
   return (
     <div
@@ -75,7 +84,10 @@ export function RecallSectionHeader({ bucketKey, count, doneCount, prominent = f
       className={`flex items-center gap-2 border-l-2 ${theme.borderLeft} ${theme.bg} border-b border-[var(--bd)] ${prominent ? 'px-3 py-3 rounded-t-lg' : 'px-3 py-2'}`}
     >
       <span className={prominent ? 'text-lg' : 'text-sm'} aria-hidden="true">{theme.icon}</span>
-      <span className={`font-bold text-[var(--tx-primary)] ${prominent ? 'text-base' : 'text-[12px]'}`}>{theme.label}</span>
+      <span className={`font-bold text-[var(--tx-primary)] ${prominent ? 'text-base' : 'text-[12px]'}`}>
+        {theme.label}
+        {dateSuffix && <span className="font-semibold text-[var(--tx-muted)]" data-testid={`recall-section-date-${bucketKey}`}> · {dateSuffix}</span>}
+      </span>
       <span
         className="text-[9px] px-1.5 py-0.5 rounded font-bold"
         style={{ background: theme.pillColor, color: theme.pillText }}
