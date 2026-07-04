@@ -123,10 +123,14 @@ export function RecallRow({
   const phoneRaw = recall.customerPhone ? String(recall.customerPhone).trim() : '';
   const phoneDigits = phoneRaw.replace(/[^0-9+]/g, '');
 
-  // 2026-05-20 (Q1=A) — prominent note: outcomeNote when present, else the recall reason.
+  // 2026-07-04 Timeline (spec Q=C) — the ORIGINAL reason must stay visible even
+  // after an outcome is recorded (supersedes 2026-05-20 Q1=A single-box which
+  // REPLACED the reason with the outcomeNote). Reason node ALWAYS + outcome node
+  // when recorded. User: "หากใส่เหตุผลแล้ว ให้ยังแสดงว่า Recall นั้นสร้างมาเพราะอะไรด้วย".
+  const reasonText = (recall.reason || '').trim();
   const hasOutcomeNote = !!(recall.outcomeNote && String(recall.outcomeNote).trim());
-  const noteText = hasOutcomeNote ? recall.outcomeNote : (recall.reason || '');
-  const noteLabel = hasOutcomeNote ? '📝 ผลการติดต่อ' : '📝 เหตุผลนัด recall';
+  const hasOutcomeRecorded = !!recall.outcome || hasOutcomeNote;
+  const timelineOutcomeMeta = recall.outcome ? getRecallOutcomeMeta(recall.outcome) : null;
   const loggedByName = (recall.status === 'done' || recall.status === 'no-answer' || recall.status === 'closed-no-answer')
     ? (recall.outcomeBy?.name || '')
     : '';
@@ -334,17 +338,48 @@ export function RecallRow({
           </div>
         )}
 
-        {/* PROMINENT NOTE (2026-05-20, Q1=A) — outcomeNote when present, else the recall reason.
-            Larger + boxed so it's the visual anchor. User: "User จะใส่เหตุผลเสมอ". */}
-        {noteText && (
+        {/* TIMELINE (2026-07-04, spec Q=C) — gold reason node ALWAYS + sky outcome
+            node when recorded. Replaces the 2026-05-20 Q1=A single box that hid
+            the reason once an outcome existed. */}
+        {(reasonText || hasOutcomeRecorded) && (
           <div
             className="mt-1 md:mt-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] px-2.5 py-2"
-            data-testid={`recall-note-${recall.id}`}
-            data-note-source={hasOutcomeNote ? 'outcome' : 'reason'}
+            data-testid={`recall-timeline-${recall.id}`}
           >
-            <div className="text-[9px] uppercase tracking-wide text-[var(--tx-muted)] mb-0.5">{noteLabel}</div>
-            <div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3">
-              {noteText}
+            <div className="flex gap-2.5">
+              <div className="flex flex-col items-center pt-1 flex-none" aria-hidden="true">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,.5)] flex-none" />
+                {hasOutcomeRecorded && (
+                  <>
+                    <span className="w-0.5 flex-1 min-h-[10px] my-0.5 bg-gradient-to-b from-amber-500/30 to-sky-400/50" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,.5)] flex-none" />
+                  </>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div
+                  data-testid={`recall-note-${recall.id}`}
+                  data-note-source="reason"
+                  className={hasOutcomeRecorded ? 'mb-1.5' : ''}
+                >
+                  <div className="text-[9px] uppercase tracking-wide text-[var(--tx-muted)] mb-0.5">เหตุผลนัด RECALL</div>
+                  <div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3">
+                    {reasonText || '—'}
+                  </div>
+                </div>
+                {hasOutcomeRecorded && (
+                  <div data-testid={`recall-outcome-note-${recall.id}`}>
+                    <div className="text-[9px] uppercase tracking-wide text-sky-700 dark:text-sky-300 mb-0.5">
+                      ผลการติดต่อ{timelineOutcomeMeta ? ` · ${timelineOutcomeMeta.emoji} ${timelineOutcomeMeta.label}` : ''}
+                    </div>
+                    {hasOutcomeNote && (
+                      <div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3">
+                        {recall.outcomeNote}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
