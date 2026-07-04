@@ -1,28 +1,31 @@
 ---
-updated_at: "2026-06-29 EOD — V164 (doctor-only header + recall blink) + V164-fix (per-date 'work' shift bug) DEPLOYED; audit-anti-vibe-code SKILL.md reconciled."
-status: "V164 + V164-fix LIVE on prod (lover-clinic-app.vercel.app). SKILL.md two copies unified (AV1-199) + sync guard. master 1582675f. Idle."
+updated_at: "2026-07-04 EOD — DF course-rate 0-baht fix (AV200) + product/procedure rate section (Q1=A) SHIPPED + DEPLOYED; Rule M junk cleanup applied."
+status: "DF fix + product rates LIVE on prod (lover-clinic-app.vercel.app). master 49032ef0 deployed. Idle."
 branch: "master"
-last_commit: "1582675f — chore(skills): reconcile divergent audit-anti-vibe-code SKILL.md copies → one union"
-tests: "full vitest 16995/16995 · 0 fail · success=true (last run = SKILL reconcile). Not re-run at session-end."
+last_commit: "49032ef0 — chore(df): Rule M cleanup — delete 2 legacy all-zero be_df_staff_rates docs"
+tests: "full vitest 17021/17021 · 0 fail (this session, post-Task-6). Build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef46aa8b code (V164 + V164-fix) DEPLOYED 2026-06-29 (vercel-only, frontend). Post-deploy commits 8e5a0e9c/1582675f = docs+skill only (not bundled)."
+production_commit: "49032ef0 DEPLOYED 2026-07-04 (vercel lover-clinic-8mg3xw451, frontend-only; HTTP 200)"
 firestore_rules_version: "UNCHANGED all session (frontend-only → no Probe-Deploy-Probe)"
 ---
 
-# Active — 2026-06-29 EOD — V164 + V164-fix + SKILL reconcile
+# Active — 2026-07-04 EOD — DF rates fix + product rates (AV200)
 
 ## State
-- 3 things shipped this session: V164 (UI), V164-fix (data-match bug — DEPLOYED), SKILL.md reconcile (housekeeping). prod LIVE.
-- firestore.rules untouched all session → every deploy frontend-only (no Probe-Deploy-Probe).
-- master 1582675f; prod bundle = ef46aa8b (V164+fix); idle.
+- DF ค่ามือ 0-บาท bug FIXED + ค่ามือสินค้า/หัตถการ section NEW — both DEPLOYED LIVE.
+- Rule M cleanup applied on prod: 2 legacy all-zero be_df_staff_rates docs deleted (audit doc emitted).
+- master 49032ef0 = prod bundle; firestore.rules untouched; idle.
 
-## What this session shipped (detail → checkpoint 2026-06-29-v164-doctor-header-recall-blink.md)
-- **V164** (`/brainstorming`→spec→plan→inline): นัดหมาย header = doctor-only (🩺 chips; none→"ไม่มีแพทย์เข้า"; dropped assistant chips) + Recall-วันนี้ pill blinks while badge count>0 (reduced-motion→static red). Q1/Q2/Q3=A. Rule Q L1 real-browser CSS verified.
-- **V164-fix** (`/systematic-debugging`+Rule R): header showed "ไม่มีแพทย์เข้า" while a doctor WAS in — latent V64 bug: inline filter matched per-date by literal `type==='override'` but real shifts are `type='work'` (no 'override' type) → หมอมุก (work 17:00-20:00) dropped. Fix: NEW canonical `deriveWorkingDoctorShiftsForDate` (mergeSchedulesForDate + exported WORKING_TIME_TYPES); AppointmentHubView + TodaysDoctorsPanel share it (Rule of 3). AV199. Rule Q L2: real helper vs real prod → หมอมุก returned. DEPLOYED.
-- **SKILL.md reconcile**: the two audit-anti-vibe-code copies (.agents/.claude) had silently diverged into complementary AV sets → unified into one AV1-199 union, byte-identical both paths + NEW `tests/skill-av-sync.test.js` (SY1) guard.
+## What this session shipped (detail → checkpoint 2026-07-04-df-product-rates-and-rate-fix.md)
+- **AV200 bugfix**: TFP masterCourseIdByName read `mc.name` but all 405 be_courses are canonical (`courseName`) → empty map → every DfEntryModal row 0 บาท while 188 entered rates existed. NEW shared `buildMasterIdByName` (canonical-first) in dfEntryValidation.js. V49-class missed site.
+- **Product rates (Q1=A)**: DfGroupFormModal section 2 "อัตราค่ามือต่อสินค้า/หัตถการ" (listProductsForPicker, rows `kind:'product'` in same rates[]); TFP resolves treatmentItems name → courseMap → productMap → pseudo-name; resolver getRateForStaffCourse UNTOUCHED.
+- normalizeDfGroup preserves `kind:'product'` (undefined-free per V14); AV200 appended byte-identical to both SKILL.md copies (SY1 green).
+- **Rule Q L2 ALL PASS ×2 on real prod** (`scripts/diag-df-rate-verify-fix.mjs`): pre-fix repro (map empty → 0) + post-fix returns the REAL entered 10 บาท source=group + product chain resolves; re-run post-cleanup still green.
+- **Rule M cleanup**: `scripts/cleanup-junk-df-staff-rates.mjs` two-phase + signature guard → deleted docs 3841/3842 (174 all-zero ProClinic-era rates, no branchId); audit `cleanup-junk-df-staff-rates-1783151535457-7b1d6704`; idempotent 0.
+- Spec + plan HTML committed; 26 new tests (A helper / B Rule I flow-simulate incl. user-screenshot repro / C kind / D source-grep); full vitest 17021/0; also committed 2 stray filler-math-explainer docs from prior session.
 
 ## Next action
-- Idle / await. V164 + V164-fix live; user to confirm หมอมุก shows on their authed session.
+- Idle / await. **User L1 (auth-gated)**: open TFP → เพิ่มค่ามือ → course rows show entered rates (not 0); enter a "Shock wave" product rate in กลุ่ม DF → row auto-fills.
 
 ## Outstanding user-triggered actions
-- None blocking. Optional: 2 untracked `docs/filler-math-explainer.{html,pdf}` still uncommitted (prior session).
+- None blocking.
