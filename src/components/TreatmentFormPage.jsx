@@ -2793,6 +2793,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           ? await updateBackendTreatment(treatmentId, finalBackendDetail)
           : await createBackendTreatment(customerId, finalBackendDetail);
         await rebuildTreatmentSummary(customerId);
+        // (2026-07-04 spec ③④) staff-chat "ระบบ" card on vitals/doctor save —
+        // fire-and-forget + NON-FATAL (writeTfpChatCard never throws). Uses the
+        // resolved id (result.treatmentId on create OR treatmentId prop on edit —
+        // V36-quater newTid pattern; do NOT read shadowed state, V104).
+        // branchId '' (all-branches view) → builder returns null → no card.
+        if (saveMode === 'vitals' || saveMode === 'doctor') {
+          const cardTid = result?.treatmentId || treatmentId;
+          if (cardTid) {
+            import('../lib/tfpStaffChatNotify.js').then(({ writeTfpChatCard }) => writeTfpChatCard({
+              kind: saveMode === 'doctor' ? 'tfp-doctor' : 'tfp-vitals',
+              treatmentId: cardTid,
+              customerId,
+              customerName: patientName || '',
+              customerHN: customerHNProp || '',
+              doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
+              branchId: selectedBranchId || '',
+            })).catch(() => {});
+          }
+        }
         // V157 — collect non-fatal side-effect failures (deposit/wallet/points/
         // course) so the admin SEES them at save. The treatment+sale are saved
         // regardless (deliberate non-blocking design), but pre-V157 a failed
