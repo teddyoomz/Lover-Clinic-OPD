@@ -324,6 +324,14 @@ service cloud.firestore {
       match /be_holidays/{holidayId} {
         allow read, write: if isClinicStaff();
       }
+      // OPD note templates (2026-07-05) — per-branch CC templates for the TFP
+      // "template จดประวัติ" dropdown. Staff-only: internal medical templates
+      // MUST NOT be world-readable. Branch isolation at the app layer
+      // (_resolveBranchIdForWrite + listOpdNoteTemplates auto-inject).
+      // Rule B probe #19: anon write → 403.
+      match /be_opd_note_templates/{templateId} {
+        allow read, write: if isClinicStaff();
+      }
       match /be_branches/{branchId} {
         allow read, write: if isClinicStaff();
       }

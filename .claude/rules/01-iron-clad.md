@@ -241,8 +241,12 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
    # anon create intake-kind system card → 403 (still unforgeable)
    curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_staff_chat_messages?documentId=test-probe-sysforge-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"ระบบ"},"deviceId":{"stringValue":"d"},"text":{"stringValue":"p"},"system":{"mapValue":{"fields":{"kind":{"stringValue":"intake"}}}}}}'   # → 403
    ```
+19. **OPD Note Templates (2026-07-05)** — anon CREATE `be_opd_note_templates` → expect 403 (staff-only collection; per-branch CC templates for the TFP dropdown). Primary verification = Rule Q L2 `scripts/diag-opd-note-templates-l2.mjs` (post-deploy mode: staff CRUD SUCCESS + cross-branch isolation + anon DENIED). Curl regression:
+   ```
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_opd_note_templates?documentId=test-probe-opdt-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'   # → 403 (anon; staff-only)
+   ```
 13. `firebase deploy --only firestore:rules,storage` (⚠ firebase CLI 15.x: `storage`, NOT `storage:rules`)
-14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15, 18) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy) — probe 18 เต็มรูปแบบ (staff-allow + forge-deny) ใช้ `scripts/diag-tfp-chat-card-l2.mjs`
+14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15, 18, 19) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy) — probe 18 เต็มรูปแบบ (staff-allow + forge-deny) ใช้ `scripts/diag-tfp-chat-card-l2.mjs`; probe 19 เต็มรูปแบบ (staff CRUD + isolation) ใช้ `scripts/diag-opd-note-templates-l2.mjs`
 13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
