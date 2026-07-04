@@ -529,6 +529,8 @@ export const deleteHoliday = (...args) => raw.deleteHoliday(...args);
 // OPD note templates (2026-07-05) — writers stamp branchId via _resolveBranchIdForWrite in Layer 1
 export const saveOpdNoteTemplate = (...args) => raw.saveOpdNoteTemplate(...args);
 export const deleteOpdNoteTemplate = (...args) => raw.deleteOpdNoteTemplate(...args);
+// realtime listener — branch injection + re-subscribe handled by useBranchAwareListener (BS-4)
+export const listenToOpdNoteTemplatesByBranch = (...args) => raw.listenToOpdNoteTemplatesByBranch(...args);
 export const saveBranch = (...args) => raw.saveBranch(...args);
 export const deleteBranch = (...args) => raw.deleteBranch(...args);
 export const savePermissionGroup = (...args) => raw.savePermissionGroup(...args);

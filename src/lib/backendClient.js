@@ -10847,6 +10847,31 @@ export async function deleteOpdNoteTemplate(templateId) {
   await deleteDoc(opdNoteTemplateDoc(id));
 }
 
+/**
+ * 2026-07-05 (user directive: "แสดงผลการเปลี่ยนแปลงทันที") — real-time variant.
+ * Same branch semantics as listOpdNoteTemplates (V54 safe-by-default); returns
+ * unsubscribe. create/edit/delete from ANY device appears instantly (Firestore
+ * latency compensation makes the local writer see it before the server acks).
+ * Also kills the slow menu-open getDocs round-trip (snapshot serves from cache).
+ */
+export function listenToOpdNoteTemplatesByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) {
+    onChange?.([]);
+    return () => {};
+  }
+  const q = !allBranches
+    ? query(opdNoteTemplatesCol(), where('branchId', '==', String(effectiveBranchId)))
+    : opdNoteTemplatesCol();
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id })); // V38 spread order — docId WINS
+    items.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));
+    onChange(items);
+  }, onError);
+}
+
 // ─── Exam Room CRUD (Phase 18.0 Master Data Suite) ─────────────────────────
 // Branch-scoped exam-room master. Each branch maintains its OWN list of
 // rooms (independent — different counts + names per branch). User directive

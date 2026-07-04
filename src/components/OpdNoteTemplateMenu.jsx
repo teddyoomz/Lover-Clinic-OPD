@@ -2,17 +2,28 @@
 // OPD Card SectionHeader of TFP. Clean boundary: knows nothing about TFP state —
 // communicates only via onInsert(content).
 // Spec: docs/superpowers/specs/2026-07-05-opd-note-templates-design.html
+//       + docs/superpowers/specs/2026-07-05-recall-dates-templates-thumbs-design.html (④③)
 // - Built-in mandatory templates come from MANDATORY_OPD_NOTE_TEMPLATES (never
-//   editable/deletable); branch templates load lazily from be_opd_note_templates.
-// - Pre-rules-deploy the branch list read is permission-denied → loadErr row +
+//   editable/deletable); branch templates arrive via a REAL-TIME listener
+//   (user directive 2026-07-05: create/edit/delete must appear instantly — no
+//   refresh, no re-open; latency compensation shows local writes immediately).
+// - The listener also kills the old menu-open getDocs round-trip ("กำลังโหลด"
+//   นานผิดปกติ on mobile/long-polling).
+// - The editor modal renders via createPortal(document.body): a transform/filter
+//   ancestor inside TFP turned position:fixed into in-slot positioning → the
+//   modal appeared "in the box" and flickered (user bug report). Portal = the
+//   modal exists OUTSIDE the TFP tree, once, always viewport-centered.
+// - Pre-rules-deploy the listener errors permission-denied → error row +
 //   built-ins stay fully usable (feature degrades, never blocks).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FileText, Pencil, Trash2, Plus, X } from 'lucide-react';
-import { listOpdNoteTemplates, saveOpdNoteTemplate, deleteOpdNoteTemplate } from '../lib/scopedDataLayer.js';
+import { listenToOpdNoteTemplatesByBranch, saveOpdNoteTemplate, deleteOpdNoteTemplate } from '../lib/scopedDataLayer.js';
 import {
   MANDATORY_OPD_NOTE_TEMPLATES, validateOpdNoteTemplate, mintOpdNoteTemplateId,
 } from '../lib/opdNoteTemplateValidation.js';
 import { useEscToClose } from '../lib/useEscToClose.js';
+import { useBranchAwareListener } from '../hooks/useBranchAwareListener.js';
 
 // AV78 modal — backdrop click does NOT close; explicit close only (X / ยกเลิก / ESC via LIFO stack)
 function TemplateEditorModal({ isDark, template, onSaved, onClose }) {
@@ -51,7 +62,9 @@ function TemplateEditorModal({ isDark, template, onSaved, onClose }) {
     }
   };
 
-  return (
+  // 2026-07-05 (user bug: modal ซ้อน/แว๊ปสลับ) — portal to document.body so the
+  // fixed overlay can never be captured by a transformed TFP ancestor.
+  return createPortal(
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" data-testid="opd-template-editor">
       {/* AV78 (2026-07-05): backdrop has NO onClick — explicit close only (X / ยกเลิก / ESC) */}
       <div className="absolute inset-0 bg-black/60" data-testid="opd-template-editor-backdrop" />
@@ -84,40 +97,34 @@ function TemplateEditorModal({ isDark, template, onSaved, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);   // จน snapshot แรกเท่านั้น
   const [loadErr, setLoadErr] = useState(false);
   const [editor, setEditor] = useState(null); // null | {mode:'create'} | {mode:'edit', template}
   const rootRef = useRef(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true); setLoadErr(false);
-    try {
-      setItems(await listOpdNoteTemplates());
-    } catch {
-      // pre-rules-deploy → permission-denied → built-ins stay usable
-      setLoadErr(true);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
+  // 2026-07-05 realtime — subscribe from TFP mount; every create/edit/delete
+  // (this device OR another staff's) lands in the menu instantly. BS-4: branch
+  // injection + re-subscribe on branch switch via useBranchAwareListener.
+  const handleItems = useCallback((next) => {
+    setItems(Array.isArray(next) ? next : []);
+    setLoading(false);
+    setLoadErr(false);
   }, []);
-
-  const toggleOpen = () => {
-    const next = !open;
-    setOpen(next);
-    // Hunt R1-B1 (2026-07-05): refresh EVERY open (not lazy-once) — a lazy-once
-    // cache went stale on branch switch mid-page AND on another staff's
-    // create/edit/delete. Built-ins render instantly; the branch rows show the
-    // loading line for the round-trip. Templates are a small collection.
-    if (next) refresh();
-  };
+  const handleErr = useCallback(() => {
+    // pre-rules-deploy → permission-denied → built-ins stay usable
+    setItems([]);
+    setLoading(false);
+    setLoadErr(true);
+  }, []);
+  useBranchAwareListener(listenToOpdNoteTemplatesByBranch, {}, handleItems, handleErr);
 
   // Dropdown menu (NOT a modal) — closes on outside click, standard dropdown UX.
   // AV78 governs modals only; the editor modal above follows AV78.
@@ -139,7 +146,7 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
     if (!window.confirm(`ลบ template "${t.name}" ?`)) return;
     try {
       await deleteOpdNoteTemplate(t.id);
-      await refresh();
+      // no refresh needed — the snapshot removes the row instantly
     } catch (e) {
       const denied = e?.code === 'permission-denied' || /permission/i.test(e?.message || '');
       window.alert(denied ? 'ไม่มีสิทธิ์ลบ template' : (e?.message || 'ลบไม่สำเร็จ'));
@@ -150,7 +157,7 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
 
   return (
     <div ref={rootRef} className="relative ml-auto" data-testid="opd-template-menu">
-      <button type="button" onClick={toggleOpen} data-testid="opd-template-trigger"
+      <button type="button" onClick={() => setOpen(o => !o)} data-testid="opd-template-trigger"
         className="text-[11px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1"
         style={{
           color: isDark ? '#a78bfa' : '#7c3aed',
@@ -213,7 +220,7 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
 
       {editor && (
         <TemplateEditorModal isDark={isDark} template={editor.template || null}
-          onSaved={async () => { setEditor(null); await refresh(); }}
+          onSaved={() => setEditor(null)}
           onClose={() => setEditor(null)} />
       )}
     </div>

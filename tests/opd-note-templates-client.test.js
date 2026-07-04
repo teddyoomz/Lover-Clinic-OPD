@@ -10,6 +10,7 @@ let capturedConds = [];
 let docsToReturn = []; // [{ __docId, data: {...} }]
 let setDocCalls = [];  // [{ ref, payload, opts }]
 let deleteDocCalls = [];
+let onSnapshotCapture = null;
 
 vi.mock('firebase/firestore', () => ({
   collection: (_db, ...segs) => ({ __sentinel: 'col', path: segs.join('/') }),
@@ -31,7 +32,13 @@ vi.mock('firebase/firestore', () => ({
   writeBatch: () => ({ set: () => {}, update: () => {}, delete: () => {}, commit: async () => {} }),
   runTransaction: async (_db, fn) => fn({ get: async () => ({ exists: () => false }), set: () => {}, update: () => {}, delete: () => {} }),
   serverTimestamp: () => ({ __sentinel: 'serverTimestamp' }),
-  onSnapshot: () => () => {},
+  onSnapshot: (q, next, err) => {
+    onSnapshotCapture = { q, next, err };
+    Promise.resolve().then(() => {
+      next({ docs: docsToReturn.map((d) => ({ id: d.__docId, data: () => ({ ...d.data }) })) });
+    });
+    return () => { onSnapshotCapture = null; };
+  },
 }));
 
 vi.mock('../src/firebase.js', () => ({
@@ -56,6 +63,7 @@ beforeEach(() => {
   docsToReturn = [];
   setDocCalls = [];
   deleteDocCalls = [];
+  onSnapshotCapture = null;
   mockResolvedBranchId = null;
 });
 
@@ -163,8 +171,51 @@ describe('B9 — scopedDataLayer Layer 2 (source-grep)', () => {
     expect(sdl).toMatch(/export const listOpdNoteTemplates = _autoInject\(\(\) => raw\.listOpdNoteTemplates\);/);
   });
 
-  it('B9.2 writers passthrough ครบ', () => {
+  it('B9.2 writers passthrough ครบ + listener passthrough (BS-4 wiring ที่ hook)', () => {
     expect(sdl).toMatch(/export const saveOpdNoteTemplate = \(\.\.\.args\) => raw\.saveOpdNoteTemplate\(\.\.\.args\);/);
     expect(sdl).toMatch(/export const deleteOpdNoteTemplate = \(\.\.\.args\) => raw\.deleteOpdNoteTemplate\(\.\.\.args\);/);
+    expect(sdl).toMatch(/export const listenToOpdNoteTemplatesByBranch = \(\.\.\.args\) => raw\.listenToOpdNoteTemplatesByBranch\(\.\.\.args\);/);
+  });
+});
+
+describe('B10 — listenToOpdNoteTemplatesByBranch (realtime Layer 1)', () => {
+  it('B10.1 explicit branchId → where(branchId==) + snapshot delivers sorted items (V38 docId wins)', async () => {
+    docsToReturn = [
+      { __docId: 'OPDT-B', data: { id: 'stray', name: 'หลัง' } },
+      { __docId: 'OPDT-A', data: { name: 'ก่อน' } },
+    ];
+    const got = await new Promise((resolve) => {
+      bc.listenToOpdNoteTemplatesByBranch({ branchId: 'BR-A' }, resolve);
+    });
+    expect(capturedConds[0]).toMatchObject({ field: 'branchId', op: '==', val: 'BR-A' });
+    expect(got.map(t => t.name)).toEqual(['ก่อน', 'หลัง']);
+    expect(got.find(t => t.name === 'หลัง').id).toBe('OPDT-B'); // V38
+  });
+
+  it('B10.2 safe-by-default: {} + resolve fail → onChange([]) + noop unsub (ห้าม whole-collection)', () => {
+    mockResolvedBranchId = null;
+    const onChange = vi.fn();
+    const unsub = bc.listenToOpdNoteTemplatesByBranch({}, onChange);
+    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onSnapshotCapture).toBeNull(); // ไม่ subscribe จริง
+    expect(typeof unsub).toBe('function');
+    unsub();
+  });
+
+  it('B10.3 {} + resolve ได้ → ใช้ branch ที่ resolve + คืน unsubscribe จริง', async () => {
+    mockResolvedBranchId = 'BR-RESOLVED';
+    docsToReturn = [];
+    await new Promise((resolve) => bc.listenToOpdNoteTemplatesByBranch({}, resolve));
+    expect(capturedConds[0]).toMatchObject({ field: 'branchId', op: '==', val: 'BR-RESOLVED' });
+    expect(onSnapshotCapture).not.toBeNull();
+  });
+
+  it('B10.4 onError forwarded (permission-denied pre-deploy path)', () => {
+    docsToReturn = [];
+    const onErr = vi.fn();
+    bc.listenToOpdNoteTemplatesByBranch({ branchId: 'BR-A' }, () => {}, onErr);
+    const boom = Object.assign(new Error('denied'), { code: 'permission-denied' });
+    onSnapshotCapture.err(boom);
+    expect(onErr).toHaveBeenCalledWith(boom);
   });
 });
