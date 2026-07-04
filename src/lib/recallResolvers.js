@@ -12,13 +12,28 @@ function _parseISOMiddayUTC(iso) {
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
 }
 
-function _formatThaiShortDate(iso) {
+/**
+ * 2026-07-05 (Q1=B, user: "แสดงวันที่แบบเต็มเสมอกันพลาด") — full Thai date
+ * with พ.ศ. year: '2026-07-06' → "6 ก.ค. 2569". THE canonical date display
+ * for every recall surface (row chip, section headers, snooze/reschedule
+ * chips, pair badges, status labels). Month is NAMED so day/month can never
+ * be misread; year is always present.
+ * @param {string} iso 'YYYY-MM-DD'
+ * @returns {string} "d เดือนย่อ ปีพ.ศ." or '' on invalid input
+ */
+export function formatThaiFullDate(iso) {
   if (!iso) return '';
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return '';
-  const day = Number(m[3]);
-  const monthIdx = Number(m[2]) - 1;
-  return `${day} ${THAI_MONTHS_SHORT[monthIdx] || ''}`;
+  const month = THAI_MONTHS_SHORT[Number(m[2]) - 1];
+  if (!month) return '';
+  return `${Number(m[3])} ${month} ${Number(m[1]) + 543}`;
+}
+
+// 2026-07-05 — delegates to the full form (Q1=B: no year-less dates anywhere).
+// Kept as an internal alias so the status-chip + pair-badge callsites stay put.
+function _formatThaiShortDate(iso) {
+  return formatThaiFullDate(iso);
 }
 
 /**

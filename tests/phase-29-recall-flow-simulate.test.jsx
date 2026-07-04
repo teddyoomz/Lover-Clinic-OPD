@@ -276,7 +276,7 @@ describe('Phase 29 · F11 pair-badge helper sanity', () => {
 
   it('F11.2 formatPairBadge for snoozed returns "เลื่อนไป <date>"', () => {
     const out = formatPairBadge({ id: 'R8', slotType: 'revisit', reason: 'x', recallDate: '2026-05-08', status: 'pending', snoozedUntil: '2026-05-22' }, TODAY);
-    expect(out.statusSuffix).toBe('เลื่อนไป 22 พ.ค.');
+    expect(out.statusSuffix).toBe('เลื่อนไป 22 พ.ค. 2569'); // Q1=B 2026-07-05: full date with พ.ศ. year everywhere
   });
 });
 

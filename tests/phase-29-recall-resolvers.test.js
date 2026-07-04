@@ -94,7 +94,7 @@ describe('Phase 29 · R2 getRecallStatusLabel', () => {
     expect(getRecallStatusLabel({ status: 'closed-no-answer' })).toBe('ปิด (ติดต่อไม่ได้)');
   });
   it('R2.5 pending + snoozedUntil → เลื่อนไป <date>', () => {
-    expect(getRecallStatusLabel({ status: 'pending', snoozedUntil: '2026-05-20' })).toBe('เลื่อนไป 20 พ.ค.');
+    expect(getRecallStatusLabel({ status: 'pending', snoozedUntil: '2026-05-20' })).toBe('เลื่อนไป 20 พ.ค. 2569'); // Q1=B 2026-07-05
   });
   it('R2.6 pending + past recallDate → เกินกำหนด N วัน', () => {
     expect(getRecallStatusLabel({ status: 'pending', recallDate: '2026-05-12' }, TODAY)).toBe('เกินกำหนด 2 วัน');
@@ -192,7 +192,7 @@ describe('Phase 29 · R6 formatPairBadge', () => {
     const out = formatPairBadge(paired, TODAY);
     expect(out.icon).toBe('📅');
     expect(out.reason).toBe('ฟิลเลอร์ครบ 6 เดือน');
-    expect(out.date).toBe('14 พ.ย.');
+    expect(out.date).toBe('14 พ.ย. 2569'); // Q1=B 2026-07-05
     expect(out.statusSuffix).toBe('รอ Recall');
   });
   it('R6.2 done paired recall', () => {
@@ -209,7 +209,7 @@ describe('Phase 29 · R6 formatPairBadge', () => {
   it('R6.4 snoozed suffix', () => {
     const paired = { id: 'R3', slotType: 'aftercare', reason: 'ติดตาม', recallDate: '2026-05-15', status: 'pending', snoozedUntil: '2026-05-20' };
     const out = formatPairBadge(paired, TODAY);
-    expect(out.statusSuffix).toBe('เลื่อนไป 20 พ.ค.');
+    expect(out.statusSuffix).toBe('เลื่อนไป 20 พ.ค. 2569'); // Q1=B 2026-07-05
   });
   it('R6.5 overdue suffix', () => {
     const paired = { id: 'R4', slotType: 'revisit', reason: 'ฟิลเลอร์ครบรอบ', recallDate: '2026-05-12', status: 'pending' };
