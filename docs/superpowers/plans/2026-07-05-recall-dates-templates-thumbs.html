@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall dates + Template realtime/portal + TFP thumbs — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .flow-box { display:inline-block; background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:6px 12px; font-size:0.85em; margin:2px; }
+    .flow-arrow { color:#888; padding:0 4px; }
+  </style>
+</head>
+<body>
+
+<h1>Recall full dates + empty state · Template realtime/portal · TFP thumbs — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execution = INLINE (superpowers:executing-plans). Subagents เฉพาะ Task 9 hunt loop, ≤2/รอบ. <strong>จบงาน = หยุด รอ user สั่ง "deploy" เท่านั้น (V18)</strong>. Spec: <code>docs/superpowers/specs/2026-07-05-recall-dates-templates-thumbs-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ① วันที่เต็ม "6 ก.ค. 2569" ทุกจุด recall ② compact 3-sections เสมอ + ✓ ไม่มี ③ template editor modal → portal ④ template dropdown realtime (onSnapshot) ⑤ TFP image thumbnails + backfill</p>
+  <p><strong>Architecture:</strong> pure helper ใน recallResolvers → shared RecallRow/SectionHeader/List · listener BSA L1/L2/L3 (mirror listenToHolidays + useBranchAwareListener) · thumb ที่ upload chokepoint (treatmentImageUpload.js) + reader sweep 5 surfaces + Rule M backfill (sharp)</p>
+  <p><strong>Facts verified:</strong> upload path = <code>treatmentImageUpload.js → uploadTreatmentBlob</code> (uploads/be_treatments/{docId}/...) · image readers = TFP + TreatmentTimelineModal + TreatmentReadOnlyPanel + TreatmentReadOnlyMirror + TreatmentDetailComponents + backendClient (delete cascade) · <code>useBranchAwareListener(fn, args, onChange, onError)</code> รองรับ listener ใหม่ตรงๆ · storage.rules uploads/* image/* ครอบ thumb แล้ว (ไม่ต้อง deploy rules)</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">เป้าหมายหลัก (ตัวเต็มอยู่ใน spec) — การ์ด recall + section</div>
+  <div style="max-width:400px">
+    <div style="border-left:3px solid #ef4444;background:#fef2f2;padding:6px 10px;font-size:12px;font-weight:800">📅 วันนี้ · 5 ก.ค. 2569 <span style="float:right;color:#9ca3af;font-weight:400;font-size:10px">0 รายการ</span></div>
+    <div style="margin:6px 0;background:#f0fdf4;border:1px dashed #86efac;border-radius:10px;padding:8px;text-align:center;font-size:12px;font-weight:800;color:#15803d">✓ ไม่มี Recall วันนี้</div>
+    <div style="border-left:3px solid #f59e0b;background:#fffbeb;padding:6px 10px;font-size:12px;font-weight:800">📅 พรุ่งนี้ · 6 ก.ค. 2569 <span style="float:right;color:#9ca3af;font-weight:400;font-size:10px">4 รายการ</span></div>
+    <div style="margin-top:6px;border:1px solid #fecaca;border-radius:10px;padding:8px;font-size:11px"><b style="font-family:monospace;background:#f1f2f4;border-radius:6px;padding:2px 6px">6 ก.ค. 2569</b> นาย บัญญัติ ประจง · <span style="color:#0369a1">เลื่อนถึง 9 ก.ค. 2569</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Template realtime + thumb upload (ตัวเต็มใน spec)</div>
+  <div><span class="flow-box">TFP mount</span><span class="flow-arrow">→</span><span class="flow-box">useBranchAwareListener(listenToOpdNoteTemplatesByBranch, {}, setItems, onErr)</span><span class="flow-arrow">→</span><span class="flow-box">create/edit/delete จากที่ไหนก็ตาม → snapshot → เมนูเปลี่ยนทันที</span></div>
+  <div style="margin-top:6px"><span class="flow-box">เลือกรูป</span><span class="flow-arrow">→</span><span class="flow-box">resize เดิม + NEW thumb ~320px</span><span class="flow-arrow">→</span><span class="flow-box">upload คู่ → {dataUrl, storagePath, thumbUrl, thumbStoragePath}</span><span class="flow-arrow">→</span><span class="flow-box">grid ใช้ thumbUrl||dataUrl + lazy · zoom = full</span></div>
+</div>
+
+<h2>File Structure</h2>
+<pre>
+Modify: src/lib/recallResolvers.js                       — NEW formatThaiFullDate + repoint short-date callsites
+Modify: src/components/backend/recall/RecallRow.jsx      — dateDisplay + recallDateChip → full date
+Modify: src/components/backend/recall/RecallSectionHeader.jsx — date suffix (today/tomorrow) + render-at-0 (compact)
+Modify: src/components/backend/recall/RecallList.jsx     — compact: 3 sections เสมอ + empty boxes
+Modify: src/lib/backendClient.js                         — NEW listenToOpdNoteTemplatesByBranch
+Modify: src/lib/scopedDataLayer.js                       — passthrough listener
+Modify: src/components/OpdNoteTemplateMenu.jsx           — listener + createPortal
+Modify: src/lib/treatmentImageUpload.js                  — thumb generation + upload คู่
+Modify: src/components/TreatmentFormPage.jsx             — entries thread thumb fields + grid thumb-first + lazy
+Modify: TreatmentTimelineModal / TreatmentReadOnlyPanel / TreatmentReadOnlyMirror / treatment-history/TreatmentDetailComponents — thumb-first + lazy (V12 sweep)
+Modify: src/lib/backendClient.js (delete cascade)        — ลบ thumbStoragePath ควบคู่ (grep จุดลบ storagePath)
+Create: scripts/backfill-treatment-image-thumbs.mjs      — Rule M two-phase + sharp
+Create: scripts/diag-opd-templates-realtime-l2.mjs       — Rule Q L2 listener realtime บน prod
+Create: tests/recall-full-date-and-empty-state.test.jsx  — bank ①②
+Modify: tests/opd-note-template-menu-rtl.test.jsx        — rewrite C-series เป็น listener contract + portal
+Create: tests/tfp-image-thumbs.test.jsx                  — bank ⑤ (upload helper + readers source-grep + flow-simulate)
+devDependency: sharp (script เท่านั้น — ไม่เข้า bundle)
+</pre>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: recallResolvers — formatThaiFullDate + repoint</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> เพิ่ม export + repoint (ปี พ.ศ. = +543)</div>
+<pre><code>export function formatThaiFullDate(iso) {
+  if (!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return `${Number(m[3])} ${THAI_MONTHS_SHORT[Number(m[2]) - 1] || ''} ${Number(m[1]) + 543}`;
+}
+// _formatThaiShortDate → delegate ไป formatThaiFullDate (คง signature เดิม
+// เพื่อไม่แตะ callsites ภายใน: status-chip "เลื่อนไป ..." + formatPairBadge)
+function _formatThaiShortDate(iso) { return formatThaiFullDate(iso); }
+</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> รัน targeted tests ของ recallResolvers → คาด V21 fixups (asserts "6 ก.ค." ไม่มีปี) → repoint เป็น "6 ก.ค. 2569" + commit</div>
+</div>
+
+<div class="task">
+<h3>Task 2: Recall UI — Row chip เต็ม + SectionHeader date + List 3-sections เสมอ</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1: RecallRow</strong> — <code>dateDisplay</code> → <code>formatThaiFullDate(recall.recallDate)</code> (fallback '--'); <code>recallDateChip</code> text → <code>formatThaiFullDate(until)</code>; ชิป desktop/mobile ทั้งคู่ (import จาก recallResolvers)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2: RecallSectionHeader</strong> — รับ <code>dateISO</code> + <code>alwaysRender</code> props: label suffix <code>{dateISO ? ` · ${formatThaiFullDate(dateISO)}` : ''}</code>; เดิม <code>if (!theme || !count) return null</code> → <code>if (!theme || (!count && !alwaysRender)) return null</code>; count=0 → "0 รายการ"</div>
+<div class="step"><input type="checkbox"> <strong>Step 3: RecallList</strong> — compact: loop 3 buckets เสมอ; per-bucket <code>dateISO</code> = today→todayISO, tomorrow→todayISO+1 (Date.UTC midday +86400000 → ISO), overdue→null; items ว่าง → กล่องเขียวประ:</div>
+<pre><code>const EMPTY_BUCKET_LABEL = Object.freeze({
+  today: '✓ ไม่มี Recall วันนี้', overdue: '✓ ไม่มีรายการค้าง', tomorrow: '✓ ไม่มี Recall พรุ่งนี้',
+});
+// ใน compact: items.length === 0 → render header (alwaysRender) +
+// &lt;div data-testid={`recall-bucket-empty-${bucketKey}`}
+//   className="mx-0 mt-2 rounded-lg border border-dashed border-green-500/40 bg-green-500/[0.06] py-3 text-center text-[12px] font-extrabold text-green-600 dark:text-green-400"&gt;
+//   {EMPTY_BUCKET_LABEL[bucketKey]}&lt;/div&gt;
+// full mode: พฤติกรรมเดิม (skip ว่าง) — totalShown===0 → RecallEmptyState เดิม (compact ไม่ใช้แล้ว)
+</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> กวาด modal ที่โชว์วันที่ recall (Outcome/Snooze/LineTemplate — grep render ของ recallDate/snoozedUntil) → formatThaiFullDate · commit</div>
+</div>
+
+<div class="task">
+<h3>Task 3: Recall test bank + V21 fixups</h3>
+<div class="step"><input type="checkbox"> NEW <code>tests/recall-full-date-and-empty-state.test.jsx</code>: D1 formatThaiFullDate unit (ปกติ/ขอบเดือน/invalid/'' ) · D2 RecallRow RTL — ชิป "6 ก.ค. 2569" + เลื่อนถึงเต็ม · D3 SectionHeader RTL — วันนี้/พรุ่งนี้ มี date suffix + count 0 render เมื่อ alwaysRender · D4 RecallList compact RTL — 3 sections เสมอ + empty boxes ครบ 3 แบบ + มี items แล้วกล่องหาย · D5 full mode ไม่เปลี่ยน (skip ว่าง) · D6 source-grep: ไม่มี <code>`${m[3]}/${m[2]}`</code> เปล่าเหลือใน recall/ · commit</div>
+<div class="step"><input type="checkbox"> รัน targeted recall tests ทั้งโฟลเดอร์ → V21 fixups (dd/mm asserts เดิม + skip-empty asserts เดิม) → repoint + commit</div>
+</div>
+
+<div class="task">
+<h3>Task 4: Template dropdown — listener + portal</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1: backendClient</strong> (ใต้ deleteOpdNoteTemplate):</div>
+<pre><code>export function listenToOpdNoteTemplatesByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) { onChange?.([]); return () => {}; } // V54 safe-by-default
+  const q = !allBranches
+    ? query(opdNoteTemplatesCol(), where('branchId', '==', String(effectiveBranchId)))
+    : opdNoteTemplatesCol();
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id })); // V38
+    items.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));
+    onChange(items);
+  }, onError);
+}
+// scopedDataLayer: export const listenToOpdNoteTemplatesByBranch = (...args) => raw.listenToOpdNoteTemplatesByBranch(...args);
+</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 2: OpdNoteTemplateMenu</strong> — ลบ refresh/getDocs ทั้งหมด → <code>useBranchAwareListener(listenToOpdNoteTemplatesByBranch, {}, handleItems, handleErr)</code> (subscribe ตั้งแต่ mount; loading=true จน snapshot แรก; onErr → loadErr + built-ins ใช้ได้); ลบ <code>await refresh()</code> หลัง save/delete (snapshot จัดการ — latency compensation = ทันที); <code>TemplateEditorModal</code> return ห่อ <code>createPortal(&lt;div className="fixed ..."&gt;, document.body)</code> (import { createPortal } from 'react-dom')</div>
+<div class="step"><input type="checkbox"> <strong>Step 3: tests</strong> — rewrite <code>opd-note-template-menu-rtl.test.jsx</code>: mock scopedDataLayer listener (capture onChange → push arrays) — C2 realtime: push ใหม่ → เมนูเปลี่ยนโดยไม่ปิด/เปิด (create โผล่/delete หาย/edit เปลี่ยน — REQUIREMENT หลักของ user) · C6-bis portal: modal element เป็น child ของ document.body ไม่ใช่ menu root · เดิมที่เป็น refresh-contract ลบ/repoint · flow-simulate F-locks (listener wired + portal + no-refresh-calls source-grep) · commit</div>
+</div>
+
+<div class="task">
+<h3>Task 5: Thumbs — upload chokepoint + threading + delete cascade</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> อ่าน <code>src/lib/treatmentImageUpload.js</code> เต็ม → เพิ่ม <code>makeThumbDataUrl(dataUrl, max=320, q=0.7)</code> (Image+canvas — รับ dataUrl ตรงๆ) + ใน upload fn ของรูป (ไม่ใช่ PDF): upload thumb ควบคู่ <code>kind=`${kind}thumb`</code> → return เพิ่ม <code>{thumbUrl, thumbStoragePath}</code> (thumb ล้มเหลว → non-fatal, field = '' — V14 no-undefined)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> TFP callers — entries เก็บ thumb fields + persist ใน handleSubmit images mapping (<code>thumbUrl: i.thumbUrl || ''</code>, <code>thumbStoragePath: i.thumbStoragePath || ''</code>) ทั้ง before/after/other + lab images + edit-load restore fields</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> grep จุดลบ blob (<code>deleteTreatmentBlob|deleteChartImage</code> callsites ใน TFP + backendClient cascade) → ลบ <code>thumbStoragePath</code> ควบคู่ทุกจุด · commit</div>
+</div>
+
+<div class="task">
+<h3>Task 6: Thumbs — readers sweep (V12)</h3>
+<div class="step"><input type="checkbox"> ทุก <code>&lt;img src={img.dataUrl}&gt;</code> ที่เป็นรูปย่อ ใน TFP grids/lab + TreatmentTimelineModal + TreatmentReadOnlyPanel + TreatmentReadOnlyMirror + TreatmentDetailComponents → <code>src={img.thumbUrl || img.dataUrl} loading="lazy"</code>; ทุกจุด zoom/Lightbox ยังส่ง <code>img.dataUrl</code> (รูปเต็ม); chart thumbnails ไม่แตะ (charts มี flow ตัวเอง) · commit</div>
+</div>
+
+<div class="task">
+<h3>Task 7: Backfill script + รันจริง (Rule M — user อนุมัติ Q3=B)</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>npm i -D sharp</code> + NEW <code>scripts/backfill-treatment-image-thumbs.mjs</code>: env-load แบบ diag scripts + admin SDK + canonical path; scan be_treatments → detail.{beforeImages,afterImages,otherImages,labItems[].images} ทุก entry ที่มี storagePath + ไม่มี thumbUrl → download bytes จาก Storage → sharp resize 320 JPEG q70 → upload <code>{storagePath}__thumb.jpg</code> → stamp entry {thumbUrl, thumbStoragePath} + doc-level <code>_thumbBackfilledAt</code>; dry-run default (นับ docs/entries/ขนาดรวม) → <code>--apply</code>; idempotent (re-run 0); audit doc be_admin_audit; inline data: → skip; invocation guard</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> dry-run บน prod → review ตัวเลข → <code>--apply</code> → re-run dry = 0 → verify sample doc + storage object มีจริง (admin read-back) · commit</div>
+</div>
+
+<div class="task">
+<h3>Task 8: Test bank ⑤ + full suite + build</h3>
+<div class="step"><input type="checkbox"> NEW <code>tests/tfp-image-thumbs.test.jsx</code>: U1 makeThumbDataUrl unit (jsdom canvas mock หรือ source-grep contract ถ้า canvas ไม่มีใน jsdom — ใช้ source-grep + upload-fn contract via mocked uploadTreatmentBlob) · U2 upload คู่ + non-fatal thumb fail · SG readers ทุก surface ใช้ thumbUrl||dataUrl + loading="lazy" + Lightbox ใช้ dataUrl เต็ม · SG delete cascade ลบ thumb · F flow-simulate: upload→entry→persist→re-load→render chain · commit</div>
+<div class="step"><input type="checkbox"> <code>npm test -- --run</code> full + <code>npm run build</code> → V21 fixups → commit</div>
+</div>
+
+<div class="task">
+<h3>Task 9: Rule Q L2 + hunt loop → STOP (ห้าม deploy)</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> NEW <code>scripts/diag-opd-templates-realtime-l2.mjs</code> — real client SDK: subscribe listener จริง (EXACT query) → admin-SDK สร้าง TEST-OPDT → assert snapshot fire ภายใน ~5s มีรายการใหม่ → admin แก้ name → snapshot เปลี่ยน → admin ลบ → snapshot หาย → cleanup · รันบน prod จริง (rules deploy แล้วรอบก่อน → post-deploy mode ใช้ได้เลย)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> hunt loop — รอบละ ≤2 agents (lens: recall-regression+date-sweep / listener-lifecycle+portal / thumbs-dataflow+delete-cascade / fresh) → adjudicate (V162) → fix confirmed + locks → รอบใหม่จน 0 confirmed → full suite + build เขียว</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> อัพเดท active.md + SESSION_HANDOFF + checkpoint · **หยุด — รายงานผล + รอ user สั่ง "deploy"** (batch นี้ไม่มี rules change → deploy ในอนาคต = vercel-only ตาม V15)</div>
+</div>
+
+</body>
+</html>
