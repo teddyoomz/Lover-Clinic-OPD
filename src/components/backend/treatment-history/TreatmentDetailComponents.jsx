@@ -190,10 +190,12 @@ function ImageRow({ label, images }) {
         {images.map((img, i) => {
           const src = typeof img === 'string' ? img : img?.dataUrl || '';
           if (!src) return null;
+          // 2026-07-05 thumbs — mini-row renders the thumb; href opens the FULL image
+          const thumb = (typeof img === 'object' && img?.thumbUrl) ? img.thumbUrl : src;
           return (
             <a key={i} href={src} target="_blank" rel="noopener noreferrer"
               className="w-14 h-14 rounded border border-[var(--bd)] overflow-hidden flex-shrink-0 hover:ring-1 hover:ring-orange-500 transition-all">
-              <img src={src} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+              <img src={thumb} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
             </a>
           );
         })}

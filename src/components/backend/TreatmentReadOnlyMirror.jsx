@@ -88,8 +88,20 @@ function hexToRgb(hex) {
     : '231, 76, 60';
 }
 
-function imageUrl(dataUrl) {
-  return dataUrl || null;
+// 2026-07-05 — object-aware: post Storage-ref migration the image entries are
+// {dataUrl, storagePath, thumbUrl?} objects (a bare passthrough coerced them to
+// "[object Object]" in <img src>). Strings (chart dataUrl maps) pass through.
+function imageUrl(img) {
+  if (!img) return null;
+  if (typeof img === 'string') return img;
+  return img.dataUrl || img.url || null;
+}
+
+// 2026-07-05 thumbs — grid renders the ~320px thumb when present; zoom always
+// receives the FULL image via imageUrl().
+function imageThumbUrl(img) {
+  if (img && typeof img === 'object' && img.thumbUrl) return img.thumbUrl;
+  return imageUrl(img);
 }
 
 // ─── Lightbox ──────────────────────────────────────────────────────────────
@@ -164,12 +176,13 @@ function ImageGridColumn({ images, label, onZoom, testidPrefix }) {
             data-testid={resolveTestid(idx)}
             className="aspect-square overflow-hidden rounded border cursor-zoom-in hover:opacity-80 transition"
             style={{ borderColor: 'var(--bd)' }}
-            onClick={() => onZoom?.(src, `${label} ${idx + 1}`)}
+            onClick={() => onZoom?.(imageUrl(src), `${label} ${idx + 1}`)}
             aria-label={`ขยายรูป ${label} ${idx + 1}`}
           >
             <img
-              src={imageUrl(src)}
+              src={imageThumbUrl(src)}
               alt={`${label} ${idx + 1}`}
+              loading="lazy"
               className="w-full h-full object-cover"
             />
           </button>

@@ -4055,9 +4055,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   </div>
                 ) : (
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {/* 2026-07-05 thumbs — grid renders the ~320px thumb (falls back
+                        to full URL for legacy entries); zoom loads the full image. */}
                     {images.map((img, idx) => (
                       <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-[#333] group">
-                        <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                        <img src={img.thumbUrl || img.dataUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
                         {/* 2026-05-27 (V123) — view-large button (mirror Chart's Maximize2).
                             bg-white/90 + dark icon: theme-stable. `text-white` is remapped
                             dark by index.css:404 in light theme UNLESS on a colored bg
@@ -4171,7 +4173,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <div className="grid grid-cols-6 gap-1">
                         {lab.images.map((img, ii) => (
                           <div key={ii} className="relative aspect-square rounded overflow-hidden border border-[#333] group">
-                            <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                            <img src={img.thumbUrl || img.dataUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
                             {/* 2026-05-27 (V123) — view-large button (mirror Chart's Maximize2);
                                 white bg + dark icon = theme-stable (see treatment-image note). */}
                             <button type="button" onClick={() => setImageLightboxSrc(img.dataUrl)}

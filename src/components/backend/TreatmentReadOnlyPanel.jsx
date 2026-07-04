@@ -55,6 +55,14 @@ function imageUrl(img) {
   return img.dataUrl || img.url || '';
 }
 
+// 2026-07-05 thumbs — grid/carousel/strip render the ~320px thumbnail when the
+// entry carries one (legacy entries fall back to the full URL). Zoom always
+// receives the FULL image via imageUrl().
+function imageThumbUrl(img) {
+  if (img && typeof img === 'object' && img.thumbUrl) return img.thumbUrl;
+  return imageUrl(img);
+}
+
 // ─── Image grid column (carousel) ───────────────────────────────────────────
 // Full copy from TreatmentTimelineModal.jsx (V21 lightbox-button pattern).
 function ImageGridColumn({ label, images, isDark, onZoom }) {
@@ -84,7 +92,7 @@ function ImageGridColumn({ label, images, isDark, onZoom }) {
           data-testid="timeline-img-zoom"
           aria-label={`ขยาย ${label}`}
           className="block w-full aspect-[4/3] rounded-lg overflow-hidden border border-[var(--bd)] hover:ring-2 hover:ring-orange-500 transition-all p-0 cursor-zoom-in bg-transparent">
-          <img src={src} alt={label} className="w-full h-full object-cover" loading="lazy" />
+          <img src={imageThumbUrl(valid[0])} alt={label} className="w-full h-full object-cover" loading="lazy" />
         </button>
       </div>
     );
@@ -99,7 +107,7 @@ function ImageGridColumn({ label, images, isDark, onZoom }) {
         data-testid="timeline-img-zoom"
         aria-label={`ขยาย ${label} ${activeIdx + 1}`}
         className="block w-full aspect-[4/3] rounded-lg overflow-hidden border border-[var(--bd)] hover:ring-2 hover:ring-orange-500 transition-all mb-2 p-0 cursor-zoom-in bg-transparent">
-        <img src={activeSrc} alt={`${label} ${activeIdx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+        <img src={imageThumbUrl(valid[activeIdx]) || imageThumbUrl(valid[0])} alt={`${label} ${activeIdx + 1}`} className="w-full h-full object-cover" loading="lazy" />
       </button>
       <div className="flex flex-wrap gap-1">
         {valid.map((img, i) => {
@@ -112,7 +120,7 @@ function ImageGridColumn({ label, images, isDark, onZoom }) {
               aria-label={`รูปที่ ${i + 1}`}
               aria-current={isActive ? 'true' : undefined}
               className={`w-12 h-12 rounded border overflow-hidden flex-shrink-0 transition-all ${isActive ? 'border-orange-500 ring-1 ring-orange-500' : 'border-[var(--bd)] opacity-60 hover:opacity-100'}`}>
-              <img src={src} alt={`thumb ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+              <img src={imageThumbUrl(img)} alt={`thumb ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
             </button>
           );
         })}
