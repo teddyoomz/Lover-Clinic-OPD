@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall Reason + VIP + Staff-Chat Cards Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Recall Reason ทุกจุด + VIP + Staff-Chat Cards — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline — โปรเจ็คนี้ subagent thrash บน baseline ใหญ่ per V81/V86) หรือ subagent-driven-development. Steps ใช้ HTML checkboxes.<br>
+  <strong>Spec:</strong> <code>docs/superpowers/specs/2026-07-04-recall-reason-vip-staffchat-cards-design.html</code> (approved 2026-07-04)<br>
+  <strong>⚠ Rule K (iron-clad):</strong> งานนี้เป็น multi-stream — ทำ STRUCTURE ทุก feature ให้เสร็จก่อน (Tasks 1-11) → review โครง → test bank รวบยอด (Task 12) → AV/L2/docs (Task 13). <strong>ไม่ interleave test กลางทาง</strong> ยกเว้น sanity run ของไฟล์ที่แตะ.<br>
+  <strong>⚠ NO DEPLOY:</strong> commit+push ทุก task; <code>vercel --prod</code> + <code>firebase deploy --only firestore:rules</code> เฉพาะเมื่อ user พิมพ์ "deploy" (V18) — rules ใหม่ทำให้ TFP cards live-gated จนกว่าจะ deploy rules.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (①) เหตุผลนัด recall แสดงทุกจุด (Timeline + modal strips) · (②) VIP ทอง real-time ทุกจอ staff ยกเว้น customer-facing · (③④) การ์ด staff chat ตอนบันทึกซักประวัติ/แพทย์บันทึกเสร็จ + ปุ่มเปิดบันทึกการรักษา · (⑤⑥) ปุ่มดูข้อมูลรับเข้า + ดูแบบประเมิน (EDDetailModal) บนการ์ดเดิม</p>
+  <p><strong>Architecture:</strong> Recall = UI-only ใน RecallRow (shared 3 surfaces) + 3 modal strips, zero data change · VIP = field <code>vip</code> บน be_customers + VipProvider (listener เดียว where vip==true) + useIsVip/VipName/VipBadge กลาง, mount เฉพาะ dashboard staff · TFP cards = client เขียน system card kind <code>tfp-*</code> (deterministic id, non-fatal) + rules แคบ + deep link <code>?treatment=</code> · ⑤ = สกัด OpdIntakeDetailBody จาก AdminDashboard modal (shared, synthetic fallback) · ⑥ = reuse EDDetailModal ตรงๆ</p>
+  <p><strong>Tech Stack:</strong> React 19 · Firebase client SDK (Firestore) · Tailwind + CSS vars theme · vitest/RTL · firestore.rules</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Mockup เต็ม (dark+light ทุก state) อยู่ในไฟล์ spec — สรุป target ที่ต้อง match:</p>
+<div class="mockup">
+  <div class="mockup-label">เป้าหมายรวม (ย่อ) — Recall Timeline · VIP gold · การ์ด 4 ชนิด + ปุ่ม violet</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:250px;background:#0f0f0f;padding:10px;border-radius:8px;">
+      <div style="font-size:9px;color:#777;">RECALL TIMELINE (RecallRow)</div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <div style="display:flex;flex-direction:column;align-items:center;padding-top:3px;">
+          <span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,.5);"></span>
+          <span style="flex:1;width:2px;background:linear-gradient(#f59e0b33,#38bdf866);margin:2px 0;min-height:10px;"></span>
+          <span style="width:9px;height:9px;border-radius:50%;background:#38bdf8;"></span>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:8px;text-transform:uppercase;color:#8a8a8a;">เหตุผลนัด RECALL</div>
+          <div style="color:#ececec;font-size:12px;font-weight:600;">ติดตามอาการหลังฉีดฟิลเลอร์</div>
+          <div style="font-size:8px;text-transform:uppercase;color:#7dd3fc;margin-top:5px;">ผลการติดต่อ · ✅ จะมาตามนัด</div>
+          <div style="color:#ececec;font-size:12px;font-weight:600;">โทรแล้ว ลูกค้าสะดวกมาวันเสาร์บ่าย</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:4px 8px;background:rgba(245,158,11,.08);border-left:3px solid #f59e0b;font-size:10px;color:#e5cf9b;">MODAL STRIP: 🏷 นัดเพราะ: ติดตามอาการ…</div>
+    </div>
+    <div style="flex:1;min-width:250px;background:#0f0f0f;padding:10px;border-radius:8px;">
+      <div style="font-size:9px;color:#777;">VIP GOLD (dark #fbbf24 / light #b45309)</div>
+      <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-top:6px;">คุณสมหญิง ใจดี
+        <span style="margin-left:5px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45);color:#fcd34d;font-size:9px;font-weight:800;padding:1px 7px;border-radius:999px;">👑 VIP</span>
+      </div>
+      <div style="font-size:9px;color:#777;margin-top:10px;">การ์ด TFP + ปุ่ม (btn-A violet glow)</div>
+      <div style="margin-top:4px;font-size:11px;color:#ececec;">🩺 แพทย์ลงบันทึกเสร็จแล้ว · <span style="color:#7dd3fc;text-decoration:underline;">คุณสมหญิง ↗</span><br><span style="color:#bbb;font-size:10px;">โดยแพทย์: นพ.สมชาย รักษาดี</span></div>
+      <span style="display:inline-flex;gap:5px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:10.5px;font-weight:800;padding:5px 12px;border-radius:8px;box-shadow:0 3px 12px rgba(139,92,246,.45);margin-top:5px;">🩺 เปิดบันทึกการรักษา ›</span>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<table>
+  <tr><th>Flow</th><th>ลำดับ</th></tr>
+  <tr><td>① Recall render</td><td>recall doc → RecallRow: reason → โหนดทองเสมอ; outcome บันทึกแล้ว → เส้น+โหนดฟ้า (chip label + outcomeNote) | Modal บันทึกผล/เลื่อน/LINE → strip "นัดเพราะ" ใต้ header — <b>data ไม่แก้</b></td></tr>
+  <tr><td>② VIP toggle</td><td>CDV ปุ่ม 👑 → updateCustomer({vip,vipAt,vipBy}) → VipProvider onSnapshot(where vip==true) → Set&lt;id&gt; → useIsVip ทุก surface re-render ทันที | mount เฉพาะ BackendDashboard+AdminDashboard | print/LINE/patient pages = ไม่มี import vip (guard test)</td></tr>
+  <tr><td>③④ TFP card</td><td>handleSubmit('vitals'|'doctor') save สำเร็จ → writeTfpChatCard (id ตายตัว CHAT-SYS-TFP-{tid}-{kind}, non-fatal) → rules อนุญาตเฉพาะ kind tfp-* → การ์ดเด้ง + เสียง/unread เดิม → ปุ่ม → /?backend=1&amp;customer=X&amp;treatment=BT-… → BackendDashboard deep-link → setTreatmentFormMode(edit)</td></tr>
+  <tr><td>⑤ ดูข้อมูลรับเข้า</td><td>กดปุ่มการ์ด intake → getDoc(opd_session) | หายแล้ว → getCustomer + synthesizeSessionFromCustomer → portal modal → OpdIntakeDetailBody (shared กับ modal คิว)</td></tr>
+  <tr><td>⑥ ดูแบบประเมิน</td><td>กดปุ่มการ์ด followup → getCustomer + listenToAssessments → deriveRounds → EDDetailModal (hero, type แรกที่มี) — listener ทำให้รอบที่เพิ่ง materialize เด้งเอง</td></tr>
+</table>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>Action</th><th>หน้าที่</th></tr>
+  <tr><td><code>src/components/backend/recall/RecallRow.jsx</code></td><td>Modify (~:115-132, ~:337-350)</td><td>Timeline block แทน prominent-note box</td></tr>
+  <tr><td><code>src/components/backend/recall/{RecallOutcomeModal,RecallSnoozeMenu,RecallLineTemplateModal}.jsx</code></td><td>Modify</td><td>เพิ่ม reason strip ใต้ header</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>Modify</td><td>+<code>listenToVipCustomers</code> (Layer 1, __universal__)</td></tr>
+  <tr><td><code>src/lib/scopedDataLayer.js</code></td><td>Modify</td><td>re-export listenToVipCustomers (universal passthrough)</td></tr>
+  <tr><td><code>src/lib/VipContext.jsx</code></td><td>Create</td><td>VipProvider + useIsVip (provider-less → false เงียบ)</td></tr>
+  <tr><td><code>src/components/VipBadge.jsx</code></td><td>Create</td><td>VipBadge + VipName (gold dark/light + 👑 chip)</td></tr>
+  <tr><td><code>src/components/CustomerOption.jsx</code></td><td>Modify</td><td>VipName ครอบชื่อ (8 consumers ได้ฟรี)</td></tr>
+  <tr><td><code>src/components/backend/CustomerDetailView.jsx</code></td><td>Modify</td><td>ปุ่ม toggle 👑 + header ชื่อทอง</td></tr>
+  <tr><td><code>src/pages/BackendDashboard.jsx</code></td><td>Modify</td><td>mount VipProvider + deep-link ?treatment=</td></tr>
+  <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>Modify</td><td>mount VipProvider + queue VIP + modal ใช้ OpdIntakeDetailBody</td></tr>
+  <tr><td>VIP sweep (~15 ไฟล์ internal)</td><td>Modify</td><td>VipName/VipBadge รายจุด (Task 5 ตาราง)</td></tr>
+  <tr><td><code>src/lib/tfpStaffChatNotify.js</code></td><td>Create</td><td>buildTfpChatCard (pure) + writeTfpChatCard (non-fatal)</td></tr>
+  <tr><td><code>src/components/TreatmentFormPage.jsx</code></td><td>Modify</td><td>เรียก writeTfpChatCard หลัง save vitals/doctor</td></tr>
+  <tr><td><code>firestore.rules</code></td><td>Modify (~:178-207)</td><td>system clause อนุญาต kind tfp-* จาก staff client</td></tr>
+  <tr><td><code>src/lib/customerNavigation.js</code></td><td>Modify</td><td>+buildTreatmentEditUrl</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatSystemCard.jsx</code></td><td>Modify</td><td>kind ใหม่ 2 + ปุ่ม violet + โดยแพทย์ + ปุ่ม ⑤⑥</td></tr>
+  <tr><td><code>src/components/OpdIntakeDetailBody.jsx</code></td><td>Create</td><td>สกัดจาก AdminDashboard renderViewingSessionModal (:5040-5230)</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatIntakeModal.jsx</code></td><td>Create</td><td>portal modal + session→synthetic fallback</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatEdModalLauncher.jsx</code></td><td>Create</td><td>fetch+deriveRounds → EDDetailModal</td></tr>
+  <tr><td><code>.claude/rules/04-thai-ui.md</code> + <code>01-iron-clad.md</code></td><td>Modify</td><td>สีทอง OK + probe #18</td></tr>
+  <tr><td>tests (Task 12) + AV201-203 + L2 scripts (Task 13)</td><td>Create</td><td>test bank รวบยอด + invariants + Rule Q</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: Recall Timeline ใน RecallRow</h3>
+<p><strong>Files:</strong> Modify <code>src/components/backend/recall/RecallRow.jsx</code></p>
+<div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1:</strong> Read RecallRow.jsx เต็มไฟล์ — ยืนยัน conditional :~126-129 + note box :~339-350 + สังเกต <code>isLight</code>/theme source + <code>outcomeMeta</code> gate เดิม (คง chip header ไว้ตามเดิม)</label></div>
+<div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2:</strong> แทน derivation เดิมด้วย:</label></div>
+<pre><code>// 2026-07-04 Timeline (spec Q=C): reason ALWAYS + outcome node when recorded.
+// (แทน hasOutcomeNote/noteText/noteLabel เดิม — reason ไม่ถูกซ่อนอีก)
+const reasonText = (recall.reason || '').trim();
+const hasOutcomeNote = !!(recall.outcomeNote &amp;&amp; String(recall.outcomeNote).trim());
+const hasOutcomeRecorded = !!recall.outcome || hasOutcomeNote;
+const timelineOutcomeMeta = recall.outcome ? getRecallOutcomeMeta(recall.outcome) : null;</code></pre>
+<div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3:</strong> แทน note box JSX (:339-350) ด้วย Timeline block (คง testid contract เดิมไว้บนโหนดเหตุผล):</label></div>
+<pre><code>{(reasonText || hasOutcomeRecorded) &amp;&amp; (
+  &lt;div className="mt-1 md:mt-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] px-2.5 py-2"
+       data-testid={`recall-timeline-${recall.id}`}&gt;
+    &lt;div className="flex gap-2.5"&gt;
+      &lt;div className="flex flex-col items-center pt-1 flex-none" aria-hidden="true"&gt;
+        &lt;span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,.5)] flex-none" /&gt;
+        {hasOutcomeRecorded &amp;&amp; (&lt;&gt;
+          &lt;span className="w-0.5 flex-1 min-h-[10px] my-0.5 bg-gradient-to-b from-amber-500/30 to-sky-400/50" /&gt;
+          &lt;span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,.5)] flex-none" /&gt;
+        &lt;/&gt;)}
+      &lt;/div&gt;
+      &lt;div className="flex-1 min-w-0"&gt;
+        &lt;div data-testid={`recall-note-${recall.id}`} data-note-source="reason"
+             className={hasOutcomeRecorded ? 'mb-1.5' : ''}&gt;
+          &lt;div className="text-[9px] uppercase tracking-wide text-[var(--tx-muted)] mb-0.5"&gt;เหตุผลนัด RECALL&lt;/div&gt;
+          &lt;div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3"&gt;{reasonText || '—'}&lt;/div&gt;
+        &lt;/div&gt;
+        {hasOutcomeRecorded &amp;&amp; (
+          &lt;div data-testid={`recall-outcome-note-${recall.id}`}&gt;
+            &lt;div className={`text-[9px] uppercase tracking-wide mb-0.5 ${isLight ? 'text-sky-700' : 'text-sky-300'}`}&gt;
+              ผลการติดต่อ{timelineOutcomeMeta ? ` · ${timelineOutcomeMeta.emoji} ${timelineOutcomeMeta.label}` : ''}
+            &lt;/div&gt;
+            {hasOutcomeNote &amp;&amp; (
+              &lt;div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3"&gt;{recall.outcomeNote}&lt;/div&gt;
+            )}
+          &lt;/div&gt;
+        )}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+)}</code></pre>
+<p>หมายเหตุ: ถ้า RecallRow ไม่มี <code>isLight</code> ใน scope ตรงนั้น ใช้ pattern เดียวกับ outcome chip เดิม (:292-306) ที่อ้าง isLight ได้อยู่แล้ว. loggedByName + sourceProductName + LINE chip ใต้กล่อง — คงเดิมทุกบรรทัด.</p>
+<div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4:</strong> Sanity: <code>npx vitest run tests/ --silent -t recall 2>&amp;1 | tail -5</code> — คาดว่ามี fail ของเทสเก่าที่ล็อกกล่องเดิม (V21-class) → <b>จดรายชื่อไว้ แก้ใน Task 12</b> (Rule K — ไม่แก้ตอนนี้ถ้าไม่ใช่ syntax error)</label></div>
+<div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5:</strong> Commit: <code>git add src/components/backend/recall/RecallRow.jsx &amp;&amp; git commit -m "feat(recall): timeline shows original reason alongside contact outcome" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 2: Reason strip ใน 3 recall modals</h3>
+<p><strong>Files:</strong> Modify <code>RecallOutcomeModal.jsx</code>, <code>RecallSnoozeMenu.jsx</code>, <code>RecallLineTemplateModal.jsx</code> (ทั้งหมดใน <code>src/components/backend/recall/</code>)</p>
+<div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1:</strong> Read ทั้ง 3 ไฟล์ หา header region (OutcomeModal: หัว modal ก่อน outcome cards :~30; Snooze: "เลื่อน Recall · name" :~88; LineTemplate: "ส่งข้อความ LINE · name" :~125)</label></div>
+<div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2:</strong> เพิ่ม strip เดียวกันใต้ header ของทั้ง 3 (ปรับ theme class ตามไฟล์นั้นๆ ใช้):</label></div>
+<pre><code>{(recall?.reason || '').trim() &amp;&amp; (
+  &lt;div className="mt-2 px-2.5 py-1.5 rounded-r-md border-l-[3px] border-amber-500 bg-amber-500/10"
+       data-testid="recall-reason-strip"&gt;
+    &lt;span className={`text-[11px] ${isLight ? 'text-amber-800' : 'text-amber-300'}`}&gt;🏷 นัดเพราะ: &lt;/span&gt;
+    &lt;span className="text-[12px] font-semibold text-[var(--tx-primary)]"&gt;{recall.reason}&lt;/span&gt;
+  &lt;/div&gt;
+)}</code></pre>
+<p>ห้ามแตะ: ตัวเลือก outcome / การเขียน recordRecallOutcome / เนื้อความ LINE ที่ส่งจริง (lineTemplateRenderer) — strip เป็น display ฝั่ง staff เท่านั้น. ถ้า modal ไหนไม่มี isLight → ใช้ <code>text-amber-700 dark:text-amber-300</code> ตาม convention ไฟล์นั้น.</p>
+<div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3:</strong> Commit: <code>git commit -m "feat(recall): show recall reason in outcome/snooze/line modals" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 3: VIP foundation — listener + context + badge components + mounts</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code>, <code>src/lib/scopedDataLayer.js</code> · Create <code>src/lib/VipContext.jsx</code>, <code>src/components/VipBadge.jsx</code> · Modify <code>src/pages/BackendDashboard.jsx</code>, <code>src/pages/AdminDashboard.jsx</code> (mount)</p>
+<div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1:</strong> backendClient.js — เพิ่มข้าง listenToCustomer (:~1194):</label></div>
+<pre><code>// VIP (2026-07-04): single collection-wide listener for the VipProvider.
+// be_customers is UNIVERSAL (no branchId). Single-field where → no composite index.
+export function listenToVipCustomers(onChange, onError) {
+  const q = query(customersCol(), where('vip', '==', true));
+  return onSnapshot(q, (snap) =&gt; onChange(snap.docs.map(d =&gt; d.id)),
+    (err) =&gt; { console.warn('[vip] listener error', err?.code || err); onError?.(err); });
+}
+listenToVipCustomers.__universal__ = true;   // BSA marker (ข้าง listenToCustomer เดิม)</code></pre>
+<p>scopedDataLayer.js: re-export passthrough ใน universal section (ข้าง listenToCustomer :~298): <code>export const listenToVipCustomers = (...a) =&gt; raw.listenToVipCustomers(...a);</code> (ตาม lazy pattern ของไฟล์)</p>
+<div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2:</strong> Create <code>src/lib/VipContext.jsx</code>:</label></div>
+<pre><code>// VIP context (2026-07-04) — ONE listener powers real-time VIP across every staff surface.
+// Provider mounts ONLY in staff dashboards (BackendDashboard + AdminDashboard) —
+// NEVER App root: anon users on public links would hit permission-denied.
+// No provider =&gt; useIsVip returns false =&gt; VIP rendering silently off (structural
+// guarantee for customer-facing pages).
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+const VipCtx = createContext(null);
+
+export function VipProvider({ children }) {
+  const [vipIds, setVipIds] = useState(() =&gt; new Set());
+  useEffect(() =&gt; {
+    let unsub = null; let cancelled = false;
+    import('./scopedDataLayer.js').then(({ listenToVipCustomers }) =&gt; {
+      if (cancelled) return;
+      unsub = listenToVipCustomers(
+        (ids) =&gt; setVipIds(new Set((ids || []).map(String))),
+        () =&gt; setVipIds(new Set()),
+      );
+    });
+    return () =&gt; { cancelled = true; unsub?.(); };
+  }, []);
+  return &lt;VipCtx.Provider value={vipIds}&gt;{children}&lt;/VipCtx.Provider&gt;;
+}
+
+export function useIsVip(customerId) {
+  const vipIds = useContext(VipCtx);
+  if (!vipIds || !customerId) return false;
+  return vipIds.has(String(customerId));
+}</code></pre>
+<div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3:</strong> Create <code>src/components/VipBadge.jsx</code> (เช็ค useTheme API จริงจาก <code>src/hooks/useTheme.js</code> ก่อน — CDV/RecallRow มี isLight pattern อยู่แล้ว ใช้ source เดียวกัน):</label></div>
+<pre><code>// VIP display primitives (2026-07-04). Gold allowed on names per user 2026-07-04
+// ("ชื่อสีทองได้นะห้ามแดงเฉยๆ") — see .claude/rules/04-thai-ui.md update.
+// AA: dark #fbbf24 (~11:1 on dark) / light #b45309 (4.7:1 on white) — aaAccent V125 pattern.
+import React from 'react';
+import { useIsVip } from '../lib/VipContext.jsx';
+
+export const VIP_GOLD = { dark: '#fbbf24', light: '#b45309' };
+export const VIP_CHIP = {
+  dark:  { bg: 'rgba(245,158,11,.14)', bd: 'rgba(245,158,11,.45)', tx: '#fcd34d' },
+  light: { bg: 'rgba(245,158,11,.12)', bd: 'rgba(180,83,9,.4)',  tx: '#92400e' },
+};
+
+export function VipBadge({ customerId, isLight = false, className = '' }) {
+  const isVip = useIsVip(customerId);
+  if (!isVip) return null;
+  const c = isLight ? VIP_CHIP.light : VIP_CHIP.dark;
+  return (
+    &lt;span data-testid="vip-badge"
+      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold align-middle ${className}`}
+      style={{ background: c.bg, border: `1px solid ${c.bd}`, color: c.tx }}&gt;
+      👑 VIP
+    &lt;/span&gt;
+  );
+}
+
+// ครอบชื่อ: ชื่อทอง + badge ต่อท้าย (badge ปิดได้ด้วย showBadge={false} สำหรับที่แคบมาก)
+export function VipName({ customerId, isLight = false, showBadge = true, className = '', children }) {
+  const isVip = useIsVip(customerId);
+  return (
+    &lt;span className={className}
+      style={isVip ? { color: isLight ? VIP_GOLD.light : VIP_GOLD.dark } : undefined}
+      data-vip={isVip ? 'true' : undefined}&gt;
+      {children}
+      {isVip &amp;&amp; showBadge &amp;&amp; &lt;VipBadge customerId={customerId} isLight={isLight} className="ml-1.5" /&gt;}
+    &lt;/span&gt;
+  );
+}</code></pre>
+<div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4:</strong> Mount provider: BackendDashboard root (ที่เดียวกับ BranchProvider ครอบ content) + AdminDashboard root — <code>&lt;VipProvider&gt;…&lt;/VipProvider&gt;</code>. <b>ห้าม</b> mount ใน App.jsx / PatientForm / PatientDashboard / ClinicSchedule.</label></div>
+<div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(vip): VipProvider single-listener + VipName/VipBadge primitives" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 4: VIP toggle ใน CDV + CustomerOption integration</h3>
+<p><strong>Files:</strong> Modify <code>src/components/backend/CustomerDetailView.jsx</code>, <code>src/components/CustomerOption.jsx</code></p>
+<div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1:</strong> CDV — เพิ่มปุ่ม toggle ใต้ HN badge / ข้างชื่อ (mirror <code>onToggleCustomerOptOut</code> :509-514 เป๊ะ — transition stamp เฉพาะตอนเปลี่ยน):</label></div>
+<pre><code>const handleToggleVip = async () =&gt; {
+  try {
+    const next = !customer?.vip;
+    const { updateCustomer } = await import('../../lib/scopedDataLayer.js');
+    await updateCustomer(customerId, {
+      vip: next,
+      vipAt: serverTimestamp(),                       // stamp on transition (V41 pattern)
+      vipBy: auth.currentUser?.uid || null,
+    });
+  } catch (e) { alert('สลับสถานะ VIP ไม่สำเร็จ: ' + (e?.message || e)); }
+};</code></pre>
+<p>ปุ่ม (gold-tinted, ทั้ง 2 ธีม AA — ตาม mockup): label <code>👑 VIP: เปิด (กดเพื่อปิด)</code> / <code>👑 ตั้งเป็น VIP</code>, <code>data-testid="vip-toggle-btn"</code>. ชื่อใน header ผ่าน CustomerOption จะทองเองจาก Step 2 (CDV มี liveCustomer แล้ว → real-time ฟรี). เช็ค import serverTimestamp/auth ที่มีอยู่ในไฟล์.</p>
+<div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2:</strong> CustomerOption.jsx (:44-55) — ครอบชื่อด้วย VipName:</label></div>
+<pre><code>import { VipName } from './VipBadge.jsx';
+// ...
+export function CustomerOption({ customer, contextBranchId, showLineBadge = true, nameClassName = '', isLight = false }) {
+  if (!customer) return null;
+  const displayName = customer.fullName || customer.name || '';
+  const cid = customer.id || customer.customerId || customer.proClinicId || '';
+  return (
+    &lt;div className="flex items-center gap-2 min-w-0"&gt;
+      &lt;VipName customerId={cid} isLight={isLight} className={nameClassName || undefined}&gt;{displayName}&lt;/VipName&gt;
+      {showLineBadge &amp;&amp; &lt;CustomerLineBadge customer={customer} contextBranchId={contextBranchId} /&gt;}
+    &lt;/div&gt;
+  );
+}</code></pre>
+<p>isLight: caller ส่งได้; ไม่ส่ง → default false (dark). callers ที่รู้ theme (CDV/TFP) ส่งค่าจริง — เช็คตอน sweep (Task 5).</p>
+<div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3:</strong> Commit: <code>git commit -m "feat(vip): CDV toggle + CustomerOption gold name integration" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 5: VIP surface sweep — ทุกจุด internal (เน้นย้ำ "ทุกที่")</h3>
+<p><strong>Files:</strong> Modify ตามตาราง — ทุกจุดใช้ <code>&lt;VipName customerId=…&gt;</code> ครอบชื่อ หรือ <code>&lt;VipBadge customerId=…/&gt;</code> ต่อท้าย (ที่แสดงชื่อจาก denorm ก็ใช้ได้ — key ด้วย customerId)</p>
+<table>
+  <tr><th>ไฟล์</th><th>จุด</th><th>customerId key</th></tr>
+  <tr><td><code>backend/CustomerCard.jsx</code></td><td>ชื่อบนการ์ด grid (:118-122)</td><td>customer.id</td></tr>
+  <tr><td><code>backend/SaleTab.jsx</code></td><td>แถวรายการขาย (:1246-1262 _v105DisplayName)</td><td>sale.customerId</td></tr>
+  <tr><td><code>TreatmentFormPage.jsx</code></td><td>header (CustomerOption :3555-3564 — ได้ฟรี; เช็ค cid ใน synthetic object → ส่ง customerId prop เพิ่มถ้าจำเป็น)</td><td>customerId prop</td></tr>
+  <tr><td><code>admin/AppointmentHubRowCard.jsx</code></td><td>ชื่อ :253/:257</td><td>appt.customerId</td></tr>
+  <tr><td><code>backend/AppointmentCalendarView.jsx</code></td><td>การ์ด grid :1097-1173</td><td>appt.customerId</td></tr>
+  <tr><td><code>backend/AppointmentDetailBody.jsx</code></td><td>ชื่อใน peek+modal :61/:68</td><td>appt.customerId</td></tr>
+  <tr><td><code>pages/AdminDashboard.jsx</code></td><td>คิวผู้ป่วย (ชื่อจาก session) :2528/:4668/:5242/:8451</td><td>session.brokerProClinicId (ไม่มี = ไม่แสดง — ถูกต้อง)</td></tr>
+  <tr><td><code>recall/RecallRow.jsx</code></td><td>ชื่อบนหัวการ์ด recall</td><td>recall.customerId</td></tr>
+  <tr><td><code>staffchat/StaffChatSystemCard.jsx</code></td><td>ชื่อบนการ์ดระบบ</td><td>customerId (resolve แล้ว)</td></tr>
+  <tr><td><code>backend/DepositPanel.jsx</code></td><td>แถวมัดจำ</td><td>deposit.customerId</td></tr>
+  <tr><td><code>backend/QuotationTab.jsx / OnlineSalesTab / SaleInsuranceClaimsTab</code></td><td>แถวรายการ</td><td>doc.customerId</td></tr>
+  <tr><td><code>backend/reports/*</code> (Sale/Customer/Appointment/RemainingCourseRow/CRMInsight/SaleDetailModal/DepositReceiptRow)</td><td>แถวรายงานที่มีชื่อ+customerId</td><td>row.customerId</td></tr>
+  <tr><td><code>backend/MovementLogPanel.jsx</code></td><td>ชื่อจาก useCustomerMap</td><td>movement.customerId</td></tr>
+  <tr><td><code>TreatmentTimelineModal.jsx</code> · <code>backend/LinkRequestsTab.jsx</code> · Membership/WalletPanel</td><td>ชื่อลูกค้า</td><td>customerId ในข้อมูลนั้น</td></tr>
+</table>
+<div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1:</strong> Completeness grep ก่อนเริ่ม: <code>rg -l "resolveCustomerDisplayName|customerName" src/components src/pages</code> → คัดทุกไฟล์เป็น INTERNAL (ใส่ VIP) / CUSTOMER-FACING (ห้าม) / ไม่แสดงชื่อ — บันทึกลง classification list สำหรับ classifier test (Task 12). ChatPanel (ชื่อจาก LINE/FB profile ไม่มี customerId) = out of scope, จดไว้.</label></div>
+<div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2:</strong> ไล่ใส่ตามตาราง — pattern ต่อจุด: <code>&lt;VipName customerId={X} isLight={isLight}&gt;{ชื่อเดิม}&lt;/VipName&gt;</code> (แถวลิสต์แคบ → <code>&lt;VipBadge/&gt;</code> ต่อท้ายอย่างเดียวก็ได้ แต่ชื่อควรทองทุกจุดที่ทำได้). <b>ห้ามแตะ logic/handler ใดๆ</b> — cosmetic wrap เท่านั้น (V-cosmetic-shell discipline).</label></div>
+<div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3:</strong> <code>npm run build</code> clean → Commit เป็น 2-3 ก้อนตามโซน (backend tabs / appointments+admin / reports): <code>git commit -m "feat(vip): gold name + badge across internal surfaces (zone X)"</code> + push</label></div>
+</div>
+
+<div class="task">
+<h3>Task 6: VIP hygiene — form-save survival + rule files</h3>
+<p><strong>Files:</strong> Read/Modify <code>src/lib/backendClient.js:606</code> (updateCustomerFromForm) · Modify <code>.claude/rules/04-thai-ui.md</code></p>
+<div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1:</strong> Read updateCustomerFromForm (:606+) — ตรวจว่าเขียนแบบ <code>updateDoc</code> รายฟิลด์ (top-level vip ไม่ถูกแตะ = รอด) หรือ rebuild ทั้ง doc (<code>setDoc merge:false</code> = vip โดน strip). ถ้าเป็นอย่างหลัง → เพิ่ม carry: อ่าน vip/vipAt/vipBy เดิมมา spread ก่อนเขียน (V145 whitelist lesson). บันทึกผลตรวจใน commit message.</label></div>
+<div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2:</strong> <code>.claude/rules/04-thai-ui.md</code> — แก้ข้อ 2 "สีทองห้ามใช้" เป็น: <code>2. **สีทอง: อนุญาต (user 2026-07-04 "ชื่อสีทองได้นะห้ามแดงเฉยๆ")** — ใช้กับ VIP name/badge; ต้องผ่าน AA ทั้งสองธีม (dark #fbbf24 / light #b45309). ห้ามเฉพาะสีแดงบนชื่อ/HN (ข้อ 1) เช่นเดิม</code></label></div>
+<div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3:</strong> Commit: <code>git commit -m "feat(vip): form-save vip survival + gold-allowed rule update" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 7: TFP chat-card lib + TFP wire</h3>
+<p><strong>Files:</strong> Create <code>src/lib/tfpStaffChatNotify.js</code> · Modify <code>src/components/TreatmentFormPage.jsx</code> (~:2793-2860 หลัง create/update สำเร็จ)</p>
+<div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1:</strong> Read <code>src/lib/staffChatClient.js</code> — หา message doc ref helper (canonical path <code>artifacts/{APP_ID}/public/data/be_staff_chat_messages</code>) เพื่อ reuse; ถ้าไม่ export → import doc/setDoc + path ตรง (mirror ของ functions/staffChatNotify.js writer)</label></div>
+<div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2:</strong> Create <code>src/lib/tfpStaffChatNotify.js</code>:</label></div>
+<pre><code>// TFP → staff-chat system cards (2026-07-04, spec ③④).
+// CLIENT-side writer (Q2=A): fire-and-forget after a successful vitals/doctor save.
+// Deterministic id = one card per treatment per kind (re-save hits update:false rule
+// → error → swallowed → idempotent). NON-FATAL: a card failure must never break the save.
+// LIVE-GATED on the firestore.rules deploy (until then create is denied → swallowed).
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+const COL = `artifacts/${APP_ID}/public/data/be_staff_chat_messages`;
+
+export function buildTfpChatCard({ kind, treatmentId, customerId, customerName, customerHN, doctorName, branchId }) {
+  const isDoctor = kind === 'tfp-doctor';
+  return {
+    id: `CHAT-SYS-TFP-${String(treatmentId)}-${isDoctor ? 'doctor' : 'vitals'}`,
+    branchId: String(branchId || ''),
+    deviceId: 'system',
+    displayName: 'ระบบ',
+    text: isDoctor ? '🔔 แพทย์ลงบันทึกเสร็จแล้ว' : '🔔 บันทึกซักประวัติเสร็จแล้ว',
+    system: {
+      kind: isDoctor ? 'tfp-doctor' : 'tfp-vitals',
+      treatmentId: String(treatmentId || ''),
+      customerId: String(customerId || ''),
+      nameSnapshot: customerName || '',
+      hnSnapshot: customerHN || null,
+      ...(isDoctor ? { doctorName: doctorName || '' } : {}),
+    },
+  };
+}
+
+export async function writeTfpChatCard(payload) {
+  try {
+    const card = buildTfpChatCard(payload);
+    if (!card.branchId || !card.system.treatmentId) return false;
+    await setDoc(doc(db, `${COL}/${card.id}`), { ...card, createdAt: serverTimestamp() });
+    return true;
+  } catch (e) {
+    console.warn('[tfp-chat-card] skipped:', e?.code || e?.message);  // rules-denied / duplicate / offline
+    return false;
+  }
+}</code></pre>
+<div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3:</strong> TFP wire — ใน handleSubmit หลัง save สำเร็จ (มี <code>result.treatmentId</code> :~2858; ตัวแปร newTid pattern V36-quater <code>result.treatmentId || treatmentId</code>):</label></div>
+<pre><code>// (2026-07-04 ③④) staff-chat card on vitals/doctor save — fire-and-forget, non-fatal
+if (saveMode === 'vitals' || saveMode === 'doctor') {
+  const cardTid = result?.treatmentId || treatmentId;
+  if (cardTid) {
+    import('../lib/tfpStaffChatNotify.js').then(({ writeTfpChatCard }) =&gt; writeTfpChatCard({
+      kind: saveMode === 'doctor' ? 'tfp-doctor' : 'tfp-vitals',
+      treatmentId: cardTid,
+      customerId,
+      customerName: patientName || '',
+      customerHN: customerHN || '',
+      doctorName: (options?.doctors || []).find(d =&gt; String(d.id) === String(doctorId))?.name || '',
+      branchId: selectedBranchId,
+    })).catch(() =&gt; {});
+  }
+}</code></pre>
+<p>⚠ ตำแหน่ง: หลัง create/update สำเร็จ ก่อน success-navigation; ระวัง V104 — อย่าอ้าง state ที่ถูก shadow; ตัวแปรจริง (patientName/customerHN/selectedBranchId/options/doctorId) ให้ยืนยันชื่อจาก scope จริงตอน implement. saveMode 'staff'/'course' → ไม่ยิงการ์ด (YAGNI ตาม spec).</p>
+<div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(staffchat): TFP vitals/doctor save writes system card (client, non-fatal)" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 8: firestore.rules แคบ + probe #18</h3>
+<p><strong>Files:</strong> Modify <code>firestore.rules</code> (:178-207 be_staff_chat_messages) · Modify <code>.claude/rules/01-iron-clad.md</code> (Rule B probe list)</p>
+<div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1:</strong> แทน clause <code>&amp;&amp; !('system' in request.resource.data);</code> ใน create rule ด้วย:</label></div>
+<pre><code>// (AV198) server-only "ระบบ" cards must stay unforgeable — EXCEPT the two
+// TFP kinds (2026-07-04 spec ③④): staff clients write those after a TFP save.
+&amp;&amp; (
+  !('system' in request.resource.data)
+  || (
+    request.resource.data.system is map
+    &amp;&amp; request.resource.data.system.get('kind', '') in ['tfp-vitals', 'tfp-doctor']
+    &amp;&amp; request.resource.data.system.get('treatmentId', '') is string
+    &amp;&amp; request.resource.data.system.get('treatmentId', '').size() &gt; 0
+    &amp;&amp; request.resource.data.system.get('customerId', '') is string
+  )
+);</code></pre>
+<div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2:</strong> เพิ่ม probe <b>#18</b> ใน 01-iron-clad.md Rule B (ต่อจาก #17): anon POST การ์ด kind tfp-vitals → 403; anon/ไม่มี auth POST การ์ด kind intake → 403 (ยัง unforgeable); หมายเหตุ canonical L2 = <code>scripts/diag-tfp-chat-card-l2.mjs</code> (Task 13). อัปเดตบรรทัด "รัน probe ... ซ้ำ" ให้รวม 18.</label></div>
+<div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3:</strong> Commit: <code>git commit -m "feat(rules): allow staff-client tfp-* system cards (narrow) + probe #18" &amp;&amp; git push</code> — <b>ไม่ deploy rules ตอนนี้</b> (V18; การ์ดจะเริ่มเด้งจริงหลัง user สั่ง deploy)</label></div>
+</div>
+
+<div class="task">
+<h3>Task 9: การ์ด UI kinds ใหม่ + deep link ?treatment=</h3>
+<p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatSystemCard.jsx</code>, <code>src/lib/customerNavigation.js</code>, <code>src/pages/BackendDashboard.jsx</code> (:232-282 deep-link + :482-502 opener reference)</p>
+<div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1:</strong> customerNavigation.js — เพิ่มข้าง buildCustomerUrl:</label></div>
+<pre><code>// (2026-07-04 ③④) open a SPECIFIC treatment in TFP edit mode from anywhere.
+export function buildTreatmentEditUrl(customerId, treatmentId) {
+  return `/?backend=1&amp;customer=${encodeURIComponent(String(customerId || ''))}&amp;treatment=${encodeURIComponent(String(treatmentId || ''))}`;
+}</code></pre>
+<div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2:</strong> BackendDashboard deep-link useEffect (:232-282) — อ่าน <code>params.get('treatment')</code>; ถ้ามีพร้อม customer: หลัง getCustomer สำเร็จ → แทน setViewingCustomer ด้วย setTreatmentFormMode โหมด edit — <b>mirror opener เดิม :482-502 ฟิลด์ต่อฟิลด์</b> (mode:'edit', customerId, treatmentId, customerHN: resolveCustomerHN(c), patientName: resolveCustomerDisplayName(c), patientData: c.patientData || {}). treatment ไม่มี/ผิด → TFP โหมด edit จะ handle not-found ตามเดิม (โหลดไม่เจอ → พฤติกรรม TFP เดิม)</label></div>
+<div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3:</strong> StaffChatSystemCard.jsx — (a) HEADLINE map + icon/border: <code>'tfp-vitals': '📋 บันทึกซักประวัติเสร็จแล้ว'</code>, <code>'tfp-doctor': '🩺 แพทย์ลงบันทึกเสร็จแล้ว'</code>; borderLeft + avatar bg = <code>#7c3aed</code> เมื่อ tfp-doctor (การ์ดอื่น #ef4444 เดิม); (b) tfp kinds มี customerId เสมอ → ข้าม pending state; (c) ปุ่ม + บรรทัดแพทย์:</label></div>
+<pre><code>{(kind === 'tfp-vitals' || kind === 'tfp-doctor') &amp;&amp; sys?.treatmentId &amp;&amp; customerId &amp;&amp; (
+  &lt;a href={buildTreatmentEditUrl(customerId, sys.treatmentId)} target="_blank" rel="noopener noreferrer"
+     data-testid="system-card-open-treatment"
+     className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-[12.5px] font-extrabold text-white"
+     style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)', border: '1px solid rgba(255,255,255,.18)',
+              boxShadow: '0 4px 18px rgba(139,92,246,.45), inset 0 1px 0 rgba(255,255,255,.25)' }}&gt;
+    🩺 เปิดบันทึกการรักษา &lt;span style={{ opacity: .85 }}&gt;›&lt;/span&gt;
+  &lt;/a&gt;
+)}
+{kind === 'tfp-doctor' &amp;&amp; sys?.doctorName &amp;&amp; (
+  &lt;div className="mt-1.5 text-[12px]" style={{ color: 'var(--tx-muted)' }} data-testid="system-card-doctor-name"&gt;
+    โดยแพทย์: &lt;span className="font-bold" style={{ color: 'var(--tx-primary)' }}&gt;{sys.doctorName}&lt;/span&gt;
+  &lt;/div&gt;
+)}</code></pre>
+<p>เช็ค <code>useSystemCardCustomer</code> priority (:35-42) รองรับ system.customerId แล้ว → tfp kinds resolve ชื่อ/HN จาก snapshot ทันที (ไม่มี live-resolve เพิ่ม)</p>
+<div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><strong>Step 4:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(staffchat): tfp card kinds + open-treatment deep link" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 10: ⑤ สกัด OpdIntakeDetailBody + ปุ่มดูข้อมูลรับเข้า</h3>
+<p><strong>Files:</strong> Create <code>src/components/OpdIntakeDetailBody.jsx</code>, <code>src/components/staffchat/StaffChatIntakeModal.jsx</code> · Modify <code>src/pages/AdminDashboard.jsx</code> (:5040-5230 ภายใน renderViewingSessionModal), <code>StaffChatSystemCard.jsx</code></p>
+<div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1:</strong> Read AdminDashboard :4845-5240 เต็มๆ — ระบุขอบเขต JSX ส่วน "แสดง patientData" (ข้อมูลส่วนตัว/ฉุกเฉิน/สุขภาพ + clinical summary readonly) ที่ไม่มี handler ภายใน (ปุ่ม print/ปุ่ม action/ปุ่มลบ อยู่นอกขอบเขต — คงใน AdminDashboard)</label></div>
+<div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2:</strong> Create <code>OpdIntakeDetailBody.jsx</code> — ย้าย JSX ก้อนนั้นมาแบบ <b>byte-behavior-identical</b>: <code>export function OpdIntakeDetailBody({ session })</code>; ภายในอ่าน <code>const d = session?.patientData || {}</code> + <code>generateClinicalSummary</code> (import จาก utils.js) ตามโค้ดเดิมเป๊ะ. AdminDashboard แทนก้อนเดิมด้วย <code>&lt;OpdIntakeDetailBody session={viewingSession} /&gt;</code>. <code>npm run build</code> ต้อง clean.</label></div>
+<div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3:</strong> Create <code>StaffChatIntakeModal.jsx</code> — portal modal (mirror StaffChatImageLightbox :275 createPortal(document.body); AV78: backdrop ไม่ปิด, ปิดด้วย ✕/ESC เท่านั้น; z สูงกว่า chat panel):</label></div>
+<pre><code>// โหลด: getDoc(opd_sessions/{sessionId}) → มี = ใช้ตรง
+//        ไม่มี (booking flow hard-deleted, AV131) → getCustomer(customerId)
+//          → synthesizeSessionFromCustomer(customer)   // opdSessionState.js:85 (__synthetic)
+//        ทั้งคู่ไม่ได้ → "ไม่พบข้อมูลรับเข้า"
+// imports ผ่าน scopedDataLayer (BS-1); header: 📄 ประวัติผู้ป่วย OPD — {ชื่อ}
+// body: &lt;OpdIntakeDetailBody session={resolved} /&gt; (อ่านอย่างเดียว — ไม่มีปุ่ม action)</code></pre>
+<div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4:</strong> StaffChatSystemCard — kind==='intake' เพิ่มปุ่ม (สไตล์ violet เดียวกับ Task 9, testid <code>system-card-view-intake</code>): <code>📄 ดูข้อมูลรับเข้า ›</code> → setState เปิด StaffChatIntakeModal({sessionId: sys.sessionId, customerId, name})</label></div>
+<div class="step"><input type="checkbox" id="t10s5"> <label for="t10s5"><strong>Step 5:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(staffchat): intake card view button + shared OpdIntakeDetailBody" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 11: ⑥ ปุ่มดูแบบประเมิน → EDDetailModal</h3>
+<p><strong>Files:</strong> Create <code>src/components/staffchat/StaffChatEdModalLauncher.jsx</code> · Modify <code>StaffChatSystemCard.jsx</code></p>
+<div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1:</strong> Read <code>EDScoreBox.jsx</code> (:39 deriveRounds + :223-226 modal render) + <code>assessmentRoundsCore.js</code> + CDV :259-286 (intakePerf build) — ยืนยัน signatures จริง</label></div>
+<div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2:</strong> Create <code>StaffChatEdModalLauncher.jsx</code> — mirror data-chain ของ CDV เป๊ะ (ไม่ fork modal):</label></div>
+<pre><code>// เปิดจากการ์ด followup: props { customerId, onClose, isLight }
+// 1) getCustomer(customerId) → pd = customer.patientData || {}
+//    intakePerf = { ...pickKioskAssessmentFields(pd), assessmentDate: pd.assessmentDate || createdISO }  // CDV:283-286
+// 2) listenToAssessments(customerId, setAssessments)  // universal — live: รอบที่ CF เพิ่ง materialize เด้งเอง
+// 3) rounds = deriveRounds(intakePerf, assessments); hero = rounds[rounds.length-1]
+//    type = ชนิดแรกที่ hero มีข้อมูล (ADAM→IIEF→MRS→PE ตามลำดับ EDScoreBox)
+// 4) rounds ว่าง → กล่องเล็ก "ยังไม่มีแบบประเมิน"; มี → render:
+//    &lt;EDDetailModal type={type} round={hero} rounds={rounds} hero={hero} isDark={!isLight} onClose={onClose} /&gt;
+// 5) unmount → unsubscribe listener</code></pre>
+<div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3:</strong> StaffChatSystemCard — kind==='followup' && customerId เพิ่มปุ่ม <code>📊 ดูแบบประเมิน ›</code> (violet เดียวกัน, testid <code>system-card-view-assessment</code>) → เปิด launcher</label></div>
+<div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(staffchat): followup card opens EDDetailModal (reuse, no fork)" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 12: Test bank รวบยอด (Rule K) + V21 fixups + full suite</h3>
+<p><strong>Files:</strong> Create 7 test files + fixup เทสเก่า</p>
+<div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Step 1:</strong> Review โครงทั้งหมดก่อนเขียนเทส (Rule K step 2): อ่าน exports/props ของทุกไฟล์ใหม่ + grep cross-file invariants</label></div>
+<div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Step 2:</strong> เขียน test bank (อิงของจริง ไม่ mock Firestore เกินจำเป็น — mock เฉพาะ boundary):</label></div>
+<table>
+  <tr><th>ไฟล์</th><th>ครอบ</th></tr>
+  <tr><td><code>tests/recall-reason-timeline.test.jsx</code></td><td>RTL RecallRow: (R1) reason+outcome → เห็นทั้งคู่ + chip label ในโหนดฟ้า (R2) reason-only → โหนดเดียว (R3) outcome ไม่มี note → label อย่างเดียว (R4) compact mode (R5) source-grep: ไม่มี <code>noteText = hasOutcomeNote ?</code> เหลือ (anti-regression) (R6) 3 modals มี recall-reason-strip + ไม่แตะ lineTemplateRenderer</td></tr>
+  <tr><td><code>tests/vip-context-badge.test.jsx</code></td><td>unit+RTL: (V1) useIsVip นอก provider → false ไม่ throw (V2) provider + set → VipName ทอง + badge (V3) isLight → #b45309 (V4) listener fires → re-render (mock listenToVipCustomers) (V5) VipBadge ไม่ render เมื่อไม่ vip</td></tr>
+  <tr><td><code>tests/vip-surface-classifier.test.js</code></td><td>source-grep classifier (V49 CAT8 pattern): INTERNAL list จาก Task 5 Step 1 → ทุกไฟล์มี VipName/VipBadge import; CUSTOMER-FACING closed list (PatientForm, PatientDashboard, ClinicSchedule, SalePrintView, QuotationPrintView, documentPrintEngine, documentTemplateValidation, appointmentHubPrintTemplate, lineBotResponder, lineReminderTemplate, api/webhook/**, api/cron/**) → <b>ต้องไม่มี</b> import VipBadge/VipContext/useIsVip; App.jsx ไม่ mount VipProvider; ไฟล์ใหม่แสดงชื่อลูกค้า → ต้อง classify (fail = ตกหล่น)</td></tr>
+  <tr><td><code>tests/vip-write-shape.test.js</code></td><td>(W1) toggle เขียน {vip, vipAt, vipBy} (source-grep CDV) (W2) updateCustomerFromForm ไม่ strip vip (ผลตรวจ Task 6 + ล็อก) (W3) listenToVipCustomers where('vip','==',true) + __universal__ (W4) scopedDataLayer re-export</td></tr>
+  <tr><td><code>tests/tfp-staffchat-cards.test.js</code></td><td>(C1) buildTfpChatCard shape ครบ + id ตายตัว + doctorName เฉพาะ doctor kind + undefined-free (V14 walk) (C2) TFP source-grep: เรียกเฉพาะ vitals|doctor + non-fatal + newTid pattern (V104 กัน shadow) (C3) firestore.rules source-grep: tfp-* allowlist + intake/followup ยัง forge ไม่ได้ (C4) buildTreatmentEditUrl encode (C5) BackendDashboard ?treatment= → setTreatmentFormMode edit (source-grep)</td></tr>
+  <tr><td><code>tests/staffchat-card-buttons-rtl.test.jsx</code></td><td>RTL StaffChatSystemCard: (B1) tfp-vitals → headline+ปุ่ม href ถูก (B2) tfp-doctor → โดยแพทย์ + border ม่วง (B3) intake → ปุ่มดูข้อมูลรับเข้า เปิด modal (mock getDoc/getCustomer; case session-deleted → synthetic path) (B4) followup → ปุ่มดูแบบประเมิน เปิด launcher (mock EDDetailModal — assert props type/round/rounds/hero) (B5) การ์ดเดิม intake/followup ไม่มีปุ่ม TFP</td></tr>
+  <tr><td><code>tests/2026-07-04-recall-vip-cards-flow-simulate.test.js</code></td><td>Rule I chains: (F1) recall create→outcome→render ทั้งคู่ (pure mirrors + จำลอง doc จริง) (F2) toggle vip→Set→ทุก consumer เห็น (จำลอง provider) (F3) TFP vitals save→card doc→(rules shape validate)→deep link parse→treatmentFormMode (F4) intake card→session deleted→synthetic→body fields (F5) followup→deriveRounds จริงจาก assessmentRoundsCore + fixture รอบจริง→props modal (F6) adversarial: reason ว่าง/ยาว 10K/Thai+emoji, treatmentId แปลก, customerId null</td></tr>
+</table>
+<div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Step 3:</strong> V21 fixups: <code>rg -l "recall-note-|data-note-source|noteLabel" tests/</code> + <code>rg -l "StaffChatSystemCard|system-card" tests/</code> + เทส AdminDashboard modal — เทสที่ล็อกโครงเก่า → repoint เป็น contract ใหม่ (คง intent, ใส่ marker "2026-07-04 timeline/extraction")</label></div>
+<div class="step"><input type="checkbox" id="t12s4"> <label for="t12s4"><strong>Step 4:</strong> รัน targeted ทั้งชุดใหม่ → เขียว → <b>full</b> <code>npm test -- --run</code> (Rule P batch-end override ของ Rule N) + <code>npm run build</code> — 0 fail ทั้งคู่</label></div>
+<div class="step"><input type="checkbox" id="t12s5"> <label for="t12s5"><strong>Step 5:</strong> Commit: <code>git commit -m "test: bank for recall-timeline + vip + staffchat cards (+V21 fixups)" &amp;&amp; git push</code></label></div>
+</div>
+
+<div class="task">
+<h3>Task 13: AV invariants + Rule Q L2 scripts + docs</h3>
+<p><strong>Files:</strong> Modify AV SKILL.md ทั้ง 2 copies (byte-identical — SY1 guard) · Create <code>scripts/diag-tfp-chat-card-l2.mjs</code>, <code>scripts/diag-vip-l2.mjs</code></p>
+<div class="step"><input type="checkbox" id="t13s1"> <label for="t13s1"><strong>Step 1:</strong> AV เพิ่ม 3 ตัว (เลขต่อจาก AV200; เขียนทั้ง .agents + .claude copies แล้วรัน <code>npx vitest run tests/skill-av-sync.test.js</code>):
+<br>• <b>AV201</b> recall UI ใดๆ ที่แสดง outcomeNote ต้องแสดง reason ควบคู่ (grep: ห้าม <code>hasOutcomeNote ? recall.outcomeNote : recall.reason</code> pattern)
+<br>• <b>AV202</b> VIP render อยู่ได้เฉพาะผ่าน VipBadge/VipName + ห้าม import ในไฟล์ customer-facing closed list + VipProvider ห้าม mount ใน App root
+<br>• <b>AV203</b> system-card kind ใหม่ทุกตัวต้อง: deterministic id + non-fatal writer + rules validator + probe entry</label></div>
+<div class="step"><input type="checkbox" id="t13s2"> <label for="t13s2"><strong>Step 2:</strong> Rule Q L2 (Rule R standing auth — read เมื่อไหร่ก็ได้; mutation ใช้ TEST- prefix):
+<br>• <code>diag-vip-l2.mjs</code>: client SDK (staff auth) สร้าง TEST- customer → toggle vip → query where('vip','==',true) เห็น id → listener event ยิง → ปิด vip → หาย → cleanup. รันได้ทันที (rules รองรับแล้ว)
+<br>• <code>diag-tfp-chat-card-l2.mjs</code>: client SDK เขียนการ์ด kind tfp-vitals (TEST- treatmentId) → คาด SUCCESS หลัง rules deploy / PERMISSION_DENIED ก่อน deploy (script รายงานทั้ง 2 mode) + forge kind intake → ต้อง DENIED เสมอ + anon → DENIED + cleanup (การ์ด TEST- ลบผ่าน admin SDK)
+<br>รัน diag-vip-l2 เลย (L2 evidence); diag-tfp รัน pre-deploy mode บันทึกผล DENIED-as-expected</label></div>
+<div class="step"><input type="checkbox" id="t13s3"> <label for="t13s3"><strong>Step 3:</strong> Honest gap report ต่อ user (Rule Q): อะไร L2 แล้ว / อะไร live-gated on rules deploy / user L1 checklist (recall จอจริง 3 จุด + toggle VIP เห็นทองทันทีหลายจอ + save ซักประวัติ→การ์ด→ปุ่มเปิด TFP + ปุ่ม ⑤⑥) — <b>ไม่ claim "verified" เกิน evidence</b></label></div>
+<div class="step"><input type="checkbox" id="t13s4"> <label for="t13s4"><strong>Step 4:</strong> Commit + push → session-end skill (active.md + SESSION_HANDOFF + checkpoint) — สถานะ "SHIPPED local, NOT deployed; TFP cards live-gated on rules deploy"</label></div>
+</div>
+
+<h2>Verification สรุป (Rule Q)</h2>
+<ul>
+  <li><b>ก่อน deploy:</b> full vitest 0 fail + build clean + diag-vip-l2 PASS (real prod, client SDK) + diag-tfp pre-deploy DENIED-as-expected</li>
+  <li><b>ตอน user สั่ง "deploy":</b> V15 combined (vercel + firestore.rules) + Rule B Probe-Deploy-Probe เต็ม (probes 1,5,6,7,8,9,12,15,16,17 + <b>18 ใหม่</b>) → diag-tfp-chat-card-l2 post-deploy mode (การ์ดเขียนสำเร็จจริง + forge ยัง DENIED) → user L1 checklist</li>
+</ul>
+
+</body>
+</html>
