@@ -136,6 +136,17 @@ export function RecallLineTemplateModal({ recall, customer, onClose, onSent }) {
         </div>
 
         <div className="p-4 space-y-3">
+          {/* 2026-07-04 — staff-side context: WHY this recall was created (the LINE
+              message content itself is template-driven — untouched) */}
+          {(recall?.reason || '').trim() && (
+            <div
+              className="px-2.5 py-1.5 rounded-r-md border-l-[3px] border-amber-500 bg-amber-500/10"
+              data-testid="recall-reason-strip"
+            >
+              <span className="text-[11px] text-amber-700 dark:text-amber-300">🏷 นัดเพราะ: </span>
+              <span className="text-[12px] font-semibold text-[var(--tx-primary)]">{recall.reason}</span>
+            </div>
+          )}
           {/* Template picker */}
           <p className="text-[11px] font-bold text-[var(--tx-muted)] uppercase tracking-wider">
             เลือก template <span className="text-red-300">*</span>
