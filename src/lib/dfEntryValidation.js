@@ -172,6 +172,41 @@ export function buildDefaultRows(treatmentCourses, doctorId, dfGroupId, groups, 
 }
 
 /**
+ * Build a name → master-id Map from a canonical be_* list output.
+ * Canonical field FIRST (courseName / productName), legacy `name` fallback.
+ * First-hit wins on duplicate names (mirrors the pre-2026-07-04 inline map).
+ *
+ * Origin (AV200, 2026-07-04): TFP's inline masterCourseIdByName read `mc.name`
+ * but all 405 prod be_courses docs are canonical (`courseName` only) → empty
+ * map → every DfEntryModal row resolved null → "0 บาท / (ไม่มีอัตราในกลุ่มนี้)"
+ * while the entered rates existed. V49-class missed site.
+ *
+ * @param {Array<object>} items    — raw list* output (canonical or legacy)
+ * @param {Array<string>} nameKeys — e.g. ['courseName','name'] — first non-empty wins
+ * @param {Array<string>} idKeys   — e.g. ['id','courseId'] — first non-empty wins
+ * @returns {Map<string,string>}
+ */
+export function buildMasterIdByName(items, nameKeys, idKeys) {
+  const m = new Map();
+  for (const it of (Array.isArray(items) ? items : [])) {
+    if (!it || typeof it !== 'object') continue;
+    let name = '';
+    for (const k of nameKeys) {
+      const v = it[k];
+      if (typeof v === 'string' && v.trim()) { name = v.trim(); break; }
+    }
+    if (!name || m.has(name)) continue;
+    let id = '';
+    for (const k of idKeys) {
+      const v = it[k];
+      if (v != null && String(v).trim()) { id = String(v).trim(); break; }
+    }
+    m.set(name, id);
+  }
+  return m;
+}
+
+/**
  * Dup-guard helper used by DfEntryModal's ADD path. Returns true if the
  * selected doctor already has an entry on this treatment (ProClinic's
  * client-side guard mirrors this — see df-modal-brief-phase14.md §2 of

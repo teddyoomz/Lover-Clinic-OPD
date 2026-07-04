@@ -36,7 +36,7 @@ import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import EditAttributionModal from './backend/EditAttributionModal.jsx';
 import TreatmentReadOnlyMirror from './backend/TreatmentReadOnlyMirror.jsx';
-import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
+import { buildDefaultRows, generateDfEntryId, buildMasterIdByName } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // Phase 14.7.H follow-up A — branch-aware sale + stock writes.
 // Phase 17.2 (2026-05-05): BranchProvider hoisted to App.jsx so every
@@ -1985,15 +1985,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // that's the same hit DfGroupFormModal's picker would show. Missing
   // match → pass the customer name as pseudo-id so the modal still
   // renders the row (user can set the value manually).
-  const masterCourseIdByName = useMemo(() => {
-    const m = new Map();
-    for (const mc of (masterCourses || [])) {
-      const n = String(mc?.name || '').trim();
-      if (!n || m.has(n)) continue;
-      m.set(n, String(mc.id || mc.courseId || ''));
-    }
-    return m;
-  }, [masterCourses]);
+  // AV200 (2026-07-04): canonical be_courses uses `courseName` — the old
+  // inline map read `mc.name` (legacy) → empty map → DF modal showed 0 บาท
+  // on every row while the entered rates existed. Canonical-first via the
+  // shared helper (courseName → name fallback).
+  const masterCourseIdByName = useMemo(
+    () => buildMasterIdByName(masterCourses, ['courseName', 'name'], ['id', 'courseId']),
+    [masterCourses]
+  );
 
   const treatmentCoursesForDf = useMemo(() => {
     const seen = new Set();
