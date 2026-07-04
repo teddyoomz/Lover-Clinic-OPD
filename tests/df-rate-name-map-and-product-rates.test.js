@@ -141,3 +141,32 @@ describe('B. Source 2 chain — course → product → pseudo-name (Rule I mirro
     expect(rows[0]).toMatchObject({ value: 500, source: 'staff' });
   });
 });
+
+describe('C. normalizeDfGroup — kind preservation (V14 undefined-free)', () => {
+  it('C1: kind product รอด normalize (จำเป็นสำหรับ UI แยก section)', () => {
+    const out = normalizeDfGroup({ name: 'g', rates: [{ courseId: 'P1', courseName: 'Shock wave', value: 300, type: 'baht', kind: 'product' }] });
+    expect(out.rates[0].kind).toBe('product');
+  });
+
+  it('C2: แถวคอร์ส (ไม่มี kind) → ไม่มี field kind เลย (ห้าม undefined — V14)', () => {
+    const out = normalizeDfGroup({ name: 'g', rates: [{ courseId: 'C1', courseName: 'คอร์ส', value: 10, type: 'baht' }] });
+    expect('kind' in out.rates[0]).toBe(false);
+    expect(Object.values(out.rates[0]).some((v) => v === undefined)).toBe(false);
+  });
+
+  it('C3: kind แปลกปลอม → drop (treat as course)', () => {
+    const out = normalizeDfGroup({ name: 'g', rates: [{ courseId: 'C1', value: 10, type: 'baht', kind: 'weird' }] });
+    expect('kind' in out.rates[0]).toBe(false);
+  });
+
+  it('C4: validator เดิมผ่านกับแถว product (DFG-3..5 ไม่แตะ kind)', () => {
+    const fail = validateDfGroupStrict(normalizeDfGroup({ name: 'g', rates: [{ courseId: 'P1', courseName: 'Shock wave', value: 300, type: 'baht', kind: 'product' }] }));
+    expect(fail).toBeNull();
+  });
+
+  it('C5: percent product rate เกิน 100 ยังโดน validator บล็อค (DFG-5 คุมทุก kind)', () => {
+    const fail = validateDfGroupStrict(normalizeDfGroup({ name: 'g', rates: [{ courseId: 'P1', value: 150, type: 'percent', kind: 'product' }] }));
+    expect(fail).not.toBeNull();
+    expect(fail[0]).toBe('rates');
+  });
+});

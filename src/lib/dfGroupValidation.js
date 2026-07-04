@@ -119,6 +119,11 @@ export function normalizeDfGroup(form) {
     courseName: trim(r?.courseName ?? r?.course_name),
     value: Math.max(0, Number(r?.value) || 0),
     type: RATE_TYPES.includes(r?.type) ? r.type : 'baht',
+    // AV200 (2026-07-04): kind:'product' marks a be_products rate row — same
+    // rates[] array, resolver matches by id so it needs no change. Only the
+    // literal 'product' survives (undefined-free per V14; anything else =
+    // course row, field omitted entirely).
+    ...(r?.kind === 'product' ? { kind: 'product' } : {}),
   })).filter((r) => r.courseId) : [];
   out.branchId = trim(out.branchId ?? out.branch_id);
   out.createdBy = trim(out.createdBy ?? out.created_by);
