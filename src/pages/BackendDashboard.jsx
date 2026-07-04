@@ -243,13 +243,28 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       setInitialApptDate(dateParam);
     }
     if (customerId) {
+      const treatmentParam = params.get('treatment');
       getCustomer(customerId)
         .then(c => {
           if (c) {
             setActiveTab('customers');
-            // Phase 24.0-duodecies — mode=edit opens the V33.3 full-page Edit
-            // Customer takeover instead of the read-only detail view.
-            if (mode === 'edit') {
+            // (2026-07-04 spec ③④) ?treatment=BT-... — open the SPECIFIC TFP in
+            // edit mode (staff-chat card "เปิดบันทึกการรักษา" button). Payload
+            // mirrors the onEditTreatment opener below field-for-field. Missing/
+            // wrong treatment id → TFP edit-mode handles not-found as usual.
+            if (treatmentParam) {
+              setViewingCustomer(c); // TFP's onClose returns to the customer detail
+              setTreatmentFormMode({
+                mode: 'edit',
+                customerId: c.id || c.proClinicId,
+                customerHN: c.proClinicHN || c.hn || c.hn_no || '',
+                treatmentId: treatmentParam,
+                patientName: `${c.patientData?.prefix || ''} ${c.patientData?.firstName || ''} ${c.patientData?.lastName || ''}`.trim(),
+                patientData: c.patientData,
+              });
+            } else if (mode === 'edit') {
+              // Phase 24.0-duodecies — mode=edit opens the V33.3 full-page Edit
+              // Customer takeover instead of the read-only detail view.
               setEditingCustomer(c);
             } else {
               setViewingCustomer(c);

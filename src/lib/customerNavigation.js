@@ -91,3 +91,29 @@ export function openCustomerEditInNewTab(customerId) {
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
+
+// ─── (2026-07-04 spec ③④) — treatment edit deep-link ────────────────────
+//
+// `?backend=1&customer=ID&treatment=BT-...` — BackendDashboard's deep-link
+// useEffect resolves this to `setTreatmentFormMode({mode:'edit', ...})` so a
+// staff-chat card button ("เปิดบันทึกการรักษา") opens the EXACT TFP the
+// vitals/doctor save came from, in a new tab, ready for the doctor to
+// continue. Shares the same getCustomer(id) resolver as the view/edit links.
+
+/**
+ * Build the deep-link URL that auto-opens a SPECIFIC treatment (TFP edit
+ * mode) on a fresh BackendDashboard mount.
+ *
+ * @param {string} customerId
+ * @param {string} treatmentId  BT-... doc id in be_treatments
+ * @returns {string} '' when either id is missing
+ */
+export function buildTreatmentEditUrl(customerId, treatmentId) {
+  const cid = String(customerId || '').trim();
+  const tid = String(treatmentId || '').trim();
+  if (!cid || !tid) return '';
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : '';
+  return `${origin}/?backend=1&customer=${encodeURIComponent(cid)}&treatment=${encodeURIComponent(tid)}`;
+}

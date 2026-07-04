@@ -1,0 +1,87 @@
+// StaffChatEdModalLauncher (2026-07-04, spec ⑥) — "📊 ดูแบบประเมิน" from the
+// staff-chat follow-up card. Opens THE SAME EDDetailModal the customer-detail
+// page uses (2-panel compare, type tabs, round pickers, swap) — reuse, NO fork.
+//
+// Data chain mirrors CustomerDetailView + EDScoreBox exactly:
+//   getCustomer → intakePerf = pickKioskAssessmentFields(patientData) +
+//   assessmentDate (round-1 virtual) · listenToAssessments(customerId) LIVE —
+//   a round the Cloud Function just materialized pops into the open modal by
+//   itself · deriveRounds → hero (latest) + first ED type with data.
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Loader2 } from 'lucide-react';
+import { deriveRounds } from '../../lib/assessmentRoundsCore.js';
+import { pickKioskAssessmentFields } from '../../lib/kioskAssessmentFields.js';
+import { getCustomer, listenToAssessments } from '../../lib/scopedDataLayer.js';
+import { useTheme } from '../../hooks/useTheme.js';
+import EDDetailModal from '../backend/EDDetailModal.jsx';
+
+const ED_ORDER = ['adam', 'iief', 'mrs', 'pe']; // EDScoreBox display order
+
+export function StaffChatEdModalLauncher({ customerId, onClose }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme !== 'light';
+  const [customer, setCustomer] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const [assessments, setAssessments] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    getCustomer(customerId)
+      .then((c) => { if (alive) { setCustomer(c || null); setLoaded(true); } })
+      .catch(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [customerId]);
+
+  // LIVE — modal updates itself when the CF materializes the just-submitted round
+  useEffect(() => {
+    if (!customerId) return undefined;
+    const unsub = listenToAssessments(customerId, (rows) => setAssessments(Array.isArray(rows) ? rows : []), () => {});
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, [customerId]);
+
+  const intakePerf = useMemo(() => {
+    const pd = customer?.patientData || {};
+    const ca = customer?.createdAt;
+    const ms = ca?.toMillis?.() ?? (typeof ca === 'number' ? ca : (typeof ca === 'string' ? Date.parse(ca) : 0));
+    const createdISO = ms && !Number.isNaN(ms) ? new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) : '';
+    return { ...pickKioskAssessmentFields(pd), assessmentDate: (pd?.assessmentDate || createdISO || '') };
+  }, [customer]);
+
+  const rounds = useMemo(() => deriveRounds(intakePerf, assessments), [intakePerf, assessments]);
+  const hero = rounds.length ? rounds[rounds.length - 1] : null;
+  const type = hero ? (ED_ORDER.find((t) => Array.isArray(hero.types) && hero.types.includes(t)) || (hero.types && hero.types[0]) || 'adam') : 'adam';
+
+  if (!loaded) {
+    return createPortal(
+      <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/50" data-testid="staffchat-ed-loading">
+        <div className="flex items-center gap-2 text-sm text-white/80"><Loader2 size={16} className="animate-spin" /> กำลังโหลดแบบประเมิน…</div>
+      </div>,
+      document.body,
+    );
+  }
+
+  if (!hero) {
+    return createPortal(
+      <div className="fixed inset-0 z-[240] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" data-testid="staffchat-ed-empty">
+        <div className="bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl shadow-2xl p-5 max-w-sm w-full text-center" onClick={(e) => e.stopPropagation()}>
+          <p className="text-sm font-bold text-[var(--tx-primary)] mb-1">ยังไม่มีแบบประเมิน</p>
+          <p className="text-xs text-[var(--tx-muted)] mb-4">{customer ? 'ลูกค้าคนนี้ยังไม่มีผลการประเมินในระบบ' : 'ไม่พบข้อมูลลูกค้า'}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-xs font-bold border border-[var(--bd)] text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)] inline-flex items-center gap-1.5"
+          >
+            <X size={12} /> ปิด
+          </button>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  // The REAL modal — portals to document.body itself (AV98).
+  return <EDDetailModal type={type} round={hero} rounds={rounds} hero={hero} isDark={isDark} onClose={onClose} />;
+}
+
+export default StaffChatEdModalLauncher;
