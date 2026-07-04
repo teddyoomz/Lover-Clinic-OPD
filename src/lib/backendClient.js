@@ -10788,6 +10788,65 @@ export async function deleteHoliday(holidayId) {
   await deleteDoc(holidayDoc(id));
 }
 
+// ─── OPD Note Templates (2026-07-05) ────────────────────────────────────────
+// Per-branch CC templates for the TFP "template จดประวัติ" dropdown.
+// Spec: docs/superpowers/specs/2026-07-05-opd-note-templates-design.html
+// The mandatory built-in template lives in opdNoteTemplateValidation.js as a
+// constant — NOT in this collection.
+
+const opdNoteTemplatesCol = () => collection(db, ...basePath(), 'be_opd_note_templates');
+const opdNoteTemplateDoc = (id) => doc(db, ...basePath(), 'be_opd_note_templates', String(id));
+
+/**
+ * List branch templates. V54/BS-13 safe-by-default: no explicit branchId +
+ * !allBranches → resolve via resolveSelectedBranchId(); still null → return []
+ * (NEVER fall back to a whole-collection read).
+ */
+export async function listOpdNoteTemplates({ branchId, allBranches = false } = {}) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) return [];
+  const ref = !allBranches
+    ? query(opdNoteTemplatesCol(), where('branchId', '==', String(effectiveBranchId)))
+    : opdNoteTemplatesCol();
+  const snap = await getDocs(ref);
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id })); // V38 spread order — docId WINS
+  items.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));
+  return items;
+}
+
+export async function saveOpdNoteTemplate(templateId, data) {
+  const id = String(templateId || '');
+  if (!id) throw new Error('templateId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeOpdNoteTemplate, validateOpdNoteTemplate } = await import('./opdNoteTemplateValidation.js');
+
+  const normalized = normalizeOpdNoteTemplate(data);
+  const fail = validateOpdNoteTemplate(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(opdNoteTemplateDoc(id), {
+    ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
+    templateId: id,
+    createdAt: data.createdAt || now,
+    createdBy: data.createdBy || auth?.currentUser?.uid || '',
+    updatedAt: now,
+    updatedBy: auth?.currentUser?.uid || '',
+  }, { merge: false });
+}
+
+export async function deleteOpdNoteTemplate(templateId) {
+  const id = String(templateId || '');
+  if (!id) throw new Error('templateId required');
+  await deleteDoc(opdNoteTemplateDoc(id));
+}
+
 // ─── Exam Room CRUD (Phase 18.0 Master Data Suite) ─────────────────────────
 // Branch-scoped exam-room master. Each branch maintains its OWN list of
 // rooms (independent — different counts + names per branch). User directive

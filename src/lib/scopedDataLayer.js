@@ -92,6 +92,8 @@ export const listProductGroups = _autoInject(() => raw.listProductGroups);
 export const listProductUnitGroups = _autoInject(() => raw.listProductUnitGroups);
 export const listMedicalInstruments = _autoInject(() => raw.listMedicalInstruments);
 export const listHolidays = _autoInject(() => raw.listHolidays);
+// OPD note templates (2026-07-05) — branch-scoped CC templates for TFP dropdown
+export const listOpdNoteTemplates = _autoInject(() => raw.listOpdNoteTemplates);
 // Phase 18.0 (2026-05-05) — branch-scoped exam-room master + listener +
 // writers. listExamRooms accepts {branchId, allBranches, status} via auto-
 // inject; listenToExamRoomsByBranch is positional so the hook layer
@@ -524,6 +526,9 @@ export const saveMedicalInstrument = (...args) => raw.saveMedicalInstrument(...a
 export const deleteMedicalInstrument = (...args) => raw.deleteMedicalInstrument(...args);
 export const saveHoliday = (...args) => raw.saveHoliday(...args);
 export const deleteHoliday = (...args) => raw.deleteHoliday(...args);
+// OPD note templates (2026-07-05) — writers stamp branchId via _resolveBranchIdForWrite in Layer 1
+export const saveOpdNoteTemplate = (...args) => raw.saveOpdNoteTemplate(...args);
+export const deleteOpdNoteTemplate = (...args) => raw.deleteOpdNoteTemplate(...args);
 export const saveBranch = (...args) => raw.saveBranch(...args);
 export const deleteBranch = (...args) => raw.deleteBranch(...args);
 export const savePermissionGroup = (...args) => raw.savePermissionGroup(...args);

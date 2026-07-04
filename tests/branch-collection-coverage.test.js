@@ -84,6 +84,7 @@ const COLLECTION_MATRIX = {
   'be_branches':           { scope: 'global',  reason: 'Branch directory itself' },
   'be_holidays':           { scope: 'global',  reason: 'Clinic-wide holidays (could be branch-scoped later)' },
   'be_exam_rooms':         { scope: 'branch-spread', source: 'Phase 18.0 — ExamRoomsTab; saveExamRoom spreads branchId via _resolveBranchIdForWrite. Each branch maintains its own exam-room list independently.' },
+  'be_opd_note_templates': { scope: 'branch-spread', source: 'OPD note templates (2026-07-05) — TFP CC template dropdown; saveOpdNoteTemplate stamps branchId via _resolveBranchIdForWrite; listOpdNoteTemplates filters per branch (V54 safe-by-default).' },
   'be_permission_groups':  { scope: 'global',  reason: 'Roles' },
   'be_promotions':         { scope: 'global',  reason: 'Clinic-wide marketing' },
   'be_coupons':            { scope: 'global',  reason: 'Clinic-wide marketing' },
