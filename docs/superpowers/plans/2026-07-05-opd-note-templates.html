@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>OPD Note Templates Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .flow-box { display:inline-block; background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:6px 12px; font-size:0.85em; margin:2px; }
+    .flow-arrow { color:#888; padding:0 4px; }
+  </style>
+</head>
+<body>
+
+<h1>OPD Note Templates — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execution = INLINE (superpowers:executing-plans) — this baseline thrashes subagents (V81/V86 lesson). Subagents allowed ONLY in Task 9 bug-hunt, ≤2 at a time (user directive 2026-07-05). Steps use HTML checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Dropdown "template จดประวัติ" ในแถวหัวข้อ OPD Card ของ TFP — เลือก/สร้าง/แก้/ลบ template ต่อสาขา, เลือกแล้ว append เข้าช่อง CC, มี built-in บังคับ "สมรรถภาพทางเพศ".</p>
+  <p><strong>Architecture:</strong> Pure lib (validation + built-in constant + append helper) → BSA Layer 1/2 (backendClient + scopedDataLayer, collection ใหม่ <code>be_opd_note_templates</code> branch-scoped) → component <code>OpdNoteTemplateMenu</code> (pill + menu + AV78 modal) → TFP แตะจุดเดียว (SectionHeader children slot + functional setOpd). firestore.rules staff-only match เข้า batch ที่ staged อยู่.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Firebase client SDK + Vitest/RTL. Spec: <code>docs/superpowers/specs/2026-07-05-opd-note-templates-design.html</code>.</p>
+  <p><strong>Deploy:</strong> user pre-authorized THIS SESSION after 100% green — V15 combined + Probe-Deploy-Probe (probes 1,5,6,7,8,9,12,15,16,17,18 + NEW #19) — ships the pending 19-commit batch too.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">แถวหัวข้อ OPD Card + เมนูเปิด (จำลองจากดีไซน์จริง — รายละเอียดครบทุก state ใน spec)</div>
+  <div style="background:#050505;border-radius:12px;padding:14px">
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:12px;padding:16px;max-width:520px;position:relative">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <span style="color:#a78bfa;font-size:14px">▣</span>
+        <span style="font-size:12px;font-weight:700;color:#a78bfa">OPD Card</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:#a78bfa;border:1px solid rgba(167,139,250,.4);background:rgba(167,139,250,.1);border-radius:8px;padding:3px 8px">📄 template จดประวัติ ▴</span>
+      </div>
+      <div style="position:relative;height:128px">
+        <div style="position:absolute;right:0;top:-4px;z-index:2;background:#111;border:1px solid #333;border-radius:10px;min-width:250px;box-shadow:0 8px 24px rgba(0,0,0,.8);font-size:11.5px;color:#d4d4d4">
+          <div style="padding:8px 10px;border-bottom:1px solid #222;display:flex;justify-content:space-between"><span>สมรรถภาพทางเพศ</span><span style="font-size:9px;color:#fbbf24;border:1px solid rgba(251,191,36,.25);border-radius:6px;padding:1px 5px">บังคับ</span></div>
+          <div style="padding:8px 10px;border-bottom:1px solid #222;display:flex;justify-content:space-between;color:#9ca3af"><span>ปรึกษาผมร่วง</span><span style="font-size:10px;color:#666">✎ 🗑</span></div>
+          <div style="padding:8px 10px;color:#4ade80">+ สร้าง template ใหม่…</div>
+        </div>
+        <div style="opacity:.4">
+          <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px">CC — อาการ (Chief Complaint)</div>
+          <div style="background:#111;border:1px solid #222;border-radius:8px;height:88px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">เลือก template → append เข้า CC / จัดการ template → Firestore</div>
+  <div>
+    <span class="flow-box">กด pill "📄 ▾"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">lazy <code>listOpdNoteTemplates()</code> (scopedDataLayer auto-inject branchId)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เมนู: built-ins + branch items</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เลือก → <code>onInsert(content)</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">TFP: <code>setOpd(prev ⇒ {...prev, symptoms: appendTemplateToCc(prev.symptoms, content)})</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">OPDFieldWithPrev [value] sync-in → textarea</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flow-box">+ สร้าง / ✎</span><span class="flow-arrow">→</span>
+    <span class="flow-box">modal (AV78, useEscToClose)</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>saveOpdNoteTemplate(id, data)</code> → validate → setDoc + <code>_resolveBranchIdForWrite</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>be_opd_note_templates/{id}</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">refresh list</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flow-box">🗑</span><span class="flow-arrow">→</span>
+    <span class="flow-box">window.confirm</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>deleteOpdNoteTemplate(id)</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">refresh list</span>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<pre>
+Create: src/lib/opdNoteTemplateValidation.js       — pure: built-in constant + validate + normalize + append + mintId
+Create: src/components/OpdNoteTemplateMenu.jsx     — pill + menu + create/edit modal + delete confirm
+Modify: src/lib/backendClient.js                   — Layer 1: list/save/delete + col/doc accessors (วางถัดจาก holidays block ~line 10790)
+Modify: src/lib/scopedDataLayer.js                 — Layer 2: auto-inject lister + passthrough writers
+Modify: src/components/TreatmentFormPage.jsx       — SectionHeader "OPD Card" children + insert handler (จุดแตะเดียว)
+Modify: firestore.rules                            — match /be_opd_note_templates (staff-only)
+Modify: .claude/rules/01-iron-clad.md              — Rule B probe #19
+Modify: tests/branch-collection-coverage.test.js   — BC1.1 matrix: be_opd_note_templates = branch
+Create: tests/opd-note-template-validation.test.js
+Create: tests/opd-note-templates-client.test.js
+Create: tests/opd-note-template-menu-rtl.test.jsx
+Create: tests/opd-note-templates-flow-simulate.test.js
+Create: scripts/diag-opd-note-templates-l2.mjs     — Rule Q L2 dual-mode (pre/post rules deploy)
+</pre>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: Pure lib — opdNoteTemplateValidation.js</h3>
+<p><strong>Files:</strong> Create <code>src/lib/opdNoteTemplateValidation.js</code></p>
+<div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: เขียนไฟล์ (เนื้อหา built-in = verbatim จาก .docx — tab คงไว้)</strong></label></div>
+<pre><code>// OPD Note Templates (2026-07-05) — pure helpers for the CC template dropdown
+// in TFP. Spec: docs/superpowers/specs/2026-07-05-opd-note-templates-design.html
+// Built-in mandatory template is a hardcoded constant (precedent:
+// DEFAULT_RECALL_TEMPLATES) — always present in every branch, never editable,
+// never seeded to Firestore.
+
+export const MANDATORY_OPD_NOTE_TEMPLATES = Object.freeze([
+  Object.freeze({
+    id: 'builtin-sexual-performance',
+    name: 'สมรรถภาพทางเพศ',
+    builtin: true,
+    content: 'สมรรถภาพทางเพศ\n' +
+      '1.ประวัติทางเพศ\n' +
+      '-อาการนำ / ระยะเวลาที่เริ่มมีอาการ\t:\n' +
+      '- ความแข็งตัว\t\t : ____%\n' +
+      '-Morning erection\t : ____วัน/สัปดาห์\n' +
+      '- อารมณ์ทางเพศ\t\t : ปกติ/ลดลง/ไม่มี\n' +
+      '-หลั่งไว \t\t\t:  ไม่มี / มี __ นาที\n' +
+      '2.อาการทางฮอร์โมน\n' +
+      '-นอนหลับ  \t\t: __ ชม.\n' +
+      '-หยุดหายใจขณะนอนหลับ : ไม่มี/มี\n' +
+      '-อารมณ์ ปกติ/สวิง/หงุดหงิดงาย/แปรปรวน : ไม่มี/มี\n' +
+      '- เบื่อหนาย ไม่มีแรง \t:ไม่มี/มี\n' +
+      '-น้ำหนักเพิ่ม \t\t: ไม่มี/มี\n' +
+      '-ออกกำลังกาย \t\t: เท่าเดิม/ลดลง/ไม่เคยออก\n' +
+      '3.ประวัติส่วนตัว\n' +
+      '-ดื่มแอลกอฮอล์\t\t:ไม่ดื่ม/ดื่ม\n' +
+      '-บุหรี่/กัญชา\t\t:ไม่สูบ/สูบ\n' +
+      '-ประวัติผ่าตัด โรคประจำตัว /ยาที่ทานประจำ :',
+  }),
+]);
+
+/** @returns {[field, msg] | null} */
+export function validateOpdNoteTemplate(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return ['data', 'ข้อมูล template ไม่ถูกต้อง'];
+  if (!String(data.name || '').trim()) return ['name', 'กรุณากรอกชื่อ template'];
+  if (!String(data.content || '').trim()) return ['content', 'กรุณากรอกเนื้อหา template'];
+  return null;
+}
+
+/** V14: output has NO undefined leaves. CRLF → LF; ตัด blank หัว-ท้าย, tab ภายในคงไว้ */
+export function normalizeOpdNoteTemplate(data = {}) {
+  return {
+    name: String(data.name || '').trim(),
+    content: String(data.content || '').replace(/\r\n/g, '\n').replace(/^\n+/, '').replace(/\s+$/, ''),
+  };
+}
+
+/** Q2=A — append ต่อท้าย CC เดิม เว้นบรรทัดคั่น; CC ว่าง/whitespace → แทนที่ตรงๆ */
+export function appendTemplateToCc(existing, content) {
+  const cur = String(existing || '');
+  const add = String(content || '');
+  if (!add) return cur;
+  if (!cur.trim()) return add;
+  return cur.replace(/\s+$/, '') + '\n\n' + add;
+}
+
+/** Rule C2 — crypto id, NOT Math.random */
+export function mintOpdNoteTemplateId() {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `OPDT-${Date.now()}-${hex}`;
+}
+</code></pre>
+<div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Commit</strong></label> — <code>git add src/lib/opdNoteTemplateValidation.js && git commit -m "feat(opd-templates): pure lib — built-in + validate/normalize/append/mintId" && git push</code></div>
+</div>
+
+<div class="task">
+<h3>Task 2: BSA Layer 1 + Layer 2 + BC1.1</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> (วางหลัง deleteHoliday ~line 10790), <code>src/lib/scopedDataLayer.js</code> (lister ~line 94 / writers ~line 526), <code>tests/branch-collection-coverage.test.js</code> (COLLECTION_MATRIX)</p>
+<div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: backendClient.js — accessors + list (safe-by-default V54/BS-13) + save + delete</strong></label></div>
+<pre><code>// ─── OPD Note Templates (2026-07-05) ────────────────────────────────────────
+// Per-branch CC templates for the TFP "template จดประวัติ" dropdown.
+// Spec: docs/superpowers/specs/2026-07-05-opd-note-templates-design.html
+const opdNoteTemplatesCol = () => collection(db, ...basePath(), 'be_opd_note_templates');
+const opdNoteTemplateDoc = (id) => doc(db, ...basePath(), 'be_opd_note_templates', String(id));
+
+/** V54/BS-13 safe-by-default: branchId ไม่มา + !allBranches → resolve; ยัง null → [] (ห้าม whole-collection) */
+export async function listOpdNoteTemplates({ branchId, allBranches = false } = {}) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) return [];
+  const ref = !allBranches
+    ? query(opdNoteTemplatesCol(), where('branchId', '==', String(effectiveBranchId)))
+    : opdNoteTemplatesCol();
+  const snap = await getDocs(ref);
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id })); // V38 spread order — docId WINS
+  items.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));
+  return items;
+}
+
+export async function saveOpdNoteTemplate(templateId, data) {
+  const id = String(templateId || '');
+  if (!id) throw new Error('templateId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeOpdNoteTemplate, validateOpdNoteTemplate } = await import('./opdNoteTemplateValidation.js');
+  const normalized = normalizeOpdNoteTemplate(data);
+  const fail = validateOpdNoteTemplate(normalized);
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(opdNoteTemplateDoc(id), {
+    ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
+    templateId: id,
+    createdAt: data.createdAt || now,
+    createdBy: data.createdBy || auth?.currentUser?.uid || '',
+    updatedAt: now,
+    updatedBy: auth?.currentUser?.uid || '',
+  }, { merge: false });
+}
+
+export async function deleteOpdNoteTemplate(templateId) {
+  const id = String(templateId || '');
+  if (!id) throw new Error('templateId required');
+  await deleteDoc(opdNoteTemplateDoc(id));
+}
+</code></pre>
+<div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: scopedDataLayer.js — Layer 2 (lister ใกล้ listHolidays; writers ใกล้ saveHoliday)</strong></label></div>
+<pre><code>export const listOpdNoteTemplates = _autoInject(() => raw.listOpdNoteTemplates);
+// ...
+export const saveOpdNoteTemplate = (...args) => raw.saveOpdNoteTemplate(...args);
+export const deleteOpdNoteTemplate = (...args) => raw.deleteOpdNoteTemplate(...args);
+</code></pre>
+<div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: BC1.1 — เพิ่ม <code>be_opd_note_templates</code> scope <code>branch</code> ใน COLLECTION_MATRIX ของ tests/branch-collection-coverage.test.js (ทำพร้อม Task 3 rules; BC1.1 จะ fail ถ้า rules มี collection ที่ไม่ classify)</strong></label></div>
+<div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 3: firestore.rules + Rule B probe #19</h3>
+<p><strong>Files:</strong> Modify <code>firestore.rules</code> (วางใกล้ be_holidays ~line 324), <code>.claude/rules/01-iron-clad.md</code> (probe list)</p>
+<div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: rules match (LOCAL — deploy พร้อม batch)</strong></label></div>
+<pre><code>      // OPD note templates (2026-07-05) — per-branch CC templates for TFP.
+      // Staff-only: internal medical templates MUST NOT be world-readable.
+      // Rule B probe #19: anon write → 403.
+      match /be_opd_note_templates/{templateId} {
+        allow read, write: if isClinicStaff();
+      }
+</code></pre>
+<div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Probe #19 ใน 01-iron-clad.md</strong></label></div>
+<pre><code>19. **OPD Note Templates (2026-07-05)** — anon CREATE be_opd_note_templates → expect 403:
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_opd_note_templates?documentId=test-probe-opdt-$(date +%s)" \
+     -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'   # → 403 (staff-only)
+</code></pre>
+<p>+ เพิ่ม 19 เข้า probe-rerun list (ข้อ 14 ของ Rule B) แบบ expect 403.</p>
+<div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 4: Component — OpdNoteTemplateMenu.jsx</h3>
+<p><strong>Files:</strong> Create <code>src/components/OpdNoteTemplateMenu.jsx</code></p>
+<div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: เขียน component</strong></label></div>
+<pre><code>// OpdNoteTemplateMenu (2026-07-05) — "template จดประวัติ" pill + dropdown ใน
+// SectionHeader ของ OPD Card (TFP). Boundary สะอาด: ไม่รู้จัก TFP state —
+// สื่อสารผ่าน onInsert(content) เท่านั้น.
+// Spec: docs/superpowers/specs/2026-07-05-opd-note-templates-design.html
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FileText, Pencil, Trash2, Plus, X } from 'lucide-react';
+import { listOpdNoteTemplates, saveOpdNoteTemplate, deleteOpdNoteTemplate } from '../lib/scopedDataLayer.js';
+import {
+  MANDATORY_OPD_NOTE_TEMPLATES, validateOpdNoteTemplate, mintOpdNoteTemplateId,
+} from '../lib/opdNoteTemplateValidation.js';
+import { useEscToClose } from '../lib/useEscToClose.js';
+
+// AV78 modal — backdrop click ไม่ปิด; ปิดด้วย X / ยกเลิก / ESC (LIFO stack)
+function TemplateEditorModal({ isDark, template, onSaved, onClose }) {
+  const [name, setName] = useState(template?.name || '');
+  const [content, setContent] = useState(template?.content || '');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  useEscToClose(onClose);
+  const inputCls = `w-full rounded-lg px-3 py-2 text-sm outline-none border ${isDark ? 'bg-[#111] border-[#222] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
+  const handleSave = async () => {
+    const fail = validateOpdNoteTemplate({ name, content });
+    if (fail) { setErr(fail[1]); return; }
+    setSaving(true); setErr('');
+    try {
+      const id = template?.id || mintOpdNoteTemplateId();
+      await saveOpdNoteTemplate(id, {
+        name, content,
+        createdAt: template?.createdAt, createdBy: template?.createdBy,
+        branchId: template?.branchId, // แก้ไข: คง branch เดิม; สร้างใหม่: undefined → _resolveBranchIdForWrite เติม selected branch
+      });
+      onSaved();
+    } catch (e) {
+      setErr(e?.message || 'บันทึกไม่สำเร็จ');
+    } finally { setSaving(false); }
+  };
+  return (
+    &lt;div className="fixed inset-0 z-[120] flex items-center justify-center p-4"&gt;
+      {/* AV78: backdrop ไม่มี onClick — ปิดด้วย X / ยกเลิก / ESC เท่านั้น */}
+      &lt;div className="absolute inset-0 bg-black/60" /&gt;
+      &lt;div className={`relative w-full max-w-md rounded-2xl border p-5 ${isDark ? 'bg-[#0a0a0a] border-[#2a2a2a]' : 'bg-white border-gray-200'}`}&gt;
+        ... header (ชื่อ modal + ปุ่ม X onClick={onClose}) ...
+        ... label "ชื่อ template *" + input (value={name}, data-field="opdt-name") ...
+        ... label "เนื้อหา (จะถูกเติมเข้าช่อง CC) *" + textarea rows=8 (value={content}, data-field="opdt-content") ...
+        ... {err && &lt;div className="text-xs text-red-400"&gt;{err}&lt;/div&gt;} ...
+        ... ปุ่ม "ยกเลิก" onClick={onClose} + "บันทึก template" onClick={handleSave} disabled={saving} ...
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);
+  const [editor, setEditor] = useState(null); // null | {mode:'create'} | {mode:'edit', template}
+  const rootRef = useRef(null);
+
+  const refresh = useCallback(async () =&gt; {
+    setLoading(true); setLoadErr(false);
+    try { setItems(await listOpdNoteTemplates()); }
+    catch { setLoadErr(true); setItems([]); } // pre-rules-deploy → permission-denied → built-in ยังใช้ได้
+    finally { setLoading(false); setLoaded(true); }
+  }, []);
+
+  const toggleOpen = () =&gt; {
+    const next = !open;
+    setOpen(next);
+    if (next && !loaded) refresh(); // lazy ครั้งแรก
+  };
+
+  // เมนู (ไม่ใช่ modal) — ปิดเมื่อคลิกนอก (มาตรฐาน dropdown; AV78 คุมเฉพาะ modal)
+  useEffect(() =&gt; {
+    if (!open) return undefined;
+    const onDown = (e) =&gt; { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () =&gt; document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const handlePick = (t) =&gt; { onInsert?.(t.content); setOpen(false); };
+  const handleDelete = async (t) =&gt; {
+    if (!window.confirm(`ลบ template "${t.name}" ?`)) return;
+    try { await deleteOpdNoteTemplate(t.id); await refresh(); }
+    catch (e) { window.alert(e?.message || 'ลบไม่สำเร็จ'); }
+  };
+
+  return (
+    &lt;div ref={rootRef} className="relative ml-auto" data-testid="opd-template-menu"&gt;
+      &lt;button type="button" onClick={toggleOpen} data-testid="opd-template-trigger"
+        className="text-[11px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1"
+        style={{ color: isDark ? '#a78bfa' : '#7c3aed', borderColor: isDark ? '#a78bfa40' : '#7c3aed40', background: isDark ? '#a78bfa0a' : '#7c3aed0a' }}&gt;
+        &lt;FileText size={12} /&gt; template จดประวัติ {open ? '▴' : '▾'}
+      &lt;/button&gt;
+      {open && (
+        &lt;div className={`absolute right-0 top-full mt-1 z-30 min-w-[250px] max-w-[320px] rounded-xl border shadow-2xl overflow-hidden ${isDark ? 'bg-[#111] border-[#333]' : 'bg-white border-gray-200'}`} data-testid="opd-template-list"&gt;
+        ... MANDATORY_OPD_NOTE_TEMPLATES.map: แถว builtin — คลิก handlePick + badge "บังคับ" (ไม่มี ✎/🗑) ...
+        ... loading ? "กำลังโหลด…" : items.map: แถว branch template — คลิก handlePick + ปุ่ม ✎ setEditor({mode:'edit',template:t}) + 🗑 handleDelete(t) (stopPropagation ทั้งคู่) ...
+        ... loadErr && แถวเทา "โหลด template สาขาไม่สำเร็จ" ...
+        ... แถวเขียว "+ สร้าง template ใหม่…" onClick={() =&gt; { setEditor({mode:'create'}); setOpen(false); }} ...
+        &lt;/div&gt;
+      )}
+      {editor && (
+        &lt;TemplateEditorModal isDark={isDark} template={editor.template || null}
+          onSaved={async () =&gt; { setEditor(null); await refresh(); }}
+          onClose={() =&gt; setEditor(null)} /&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p><em>หมายเหตุ implement จริง: ส่วน "..." ด้านบนเขียนเต็มตามโครง JSX ปกติของโปรเจ็ค (สี/spacing ตาม mockup ใน spec); ห้ามมี logic เพิ่มจากที่ระบุ. เมนูอยู่ใน relative container → ไม่ต้อง portal (OPD Card ไม่มี overflow-hidden).</em></p>
+<div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 5: TFP wiring (จุดแตะเดียว)</h3>
+<p><strong>Files:</strong> Modify <code>src/components/TreatmentFormPage.jsx</code> (import ~top, handler ใกล้ setOpdField ~line 705, JSX ~line 3903)</p>
+<div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: import + handler (functional update — กัน stale closure)</strong></label></div>
+<pre><code>import OpdNoteTemplateMenu from './OpdNoteTemplateMenu.jsx';
+import { appendTemplateToCc } from '../lib/opdNoteTemplateValidation.js';
+// ...ใกล้ setOpdField:
+// OPD note templates (2026-07-05) — Q2=A append เข้า CC; functional update
+// อ่าน prev.symptoms สดเสมอ (blur ของ textarea commit ก่อน click บนเมนู → ไม่มี race)
+const handleInsertCcTemplate = useCallback((content) => {
+  setOpd(prev => ({ ...prev, symptoms: appendTemplateToCc(prev.symptoms, content) }));
+}, []);
+</code></pre>
+<div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: JSX — children slot ของ SectionHeader "OPD Card" (คงกลไก column-balance เดิม)</strong></label></div>
+<pre><code>&lt;SectionHeader icon={ClipboardList} title="OPD Card" isDark={isDark} accent={accent}&gt;
+  {prevTreatment && (
+    &lt;span className={...}&gt;มีข้อมูลครั้งก่อน ...&lt;/span&gt;
+  )}
+  &lt;OpdNoteTemplateMenu isDark={isDark} onInsert={handleInsertCcTemplate} /&gt;
+&lt;/SectionHeader&gt;
+</code></pre>
+<p>ห้ามแตะ: <code>grow={key === 'symptoms'}</code> / right-column <code>flex flex-col gap-4</code> / <code>FormSection className="flex-1 flex flex-col"</code> — คือกลไกที่ทำให้ปุ่มเขียว/ม่วง bottom-align.</p>
+<div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: <code>npm run build</code> clean (V11 lock) + Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 6: Test bank (Rule K — bank เดียวหลังโครงเสร็จ)</h3>
+<p><strong>Files:</strong> Create 4 test files ตาม File Structure</p>
+<div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: opd-note-template-validation.test.js</strong> — A1 built-in: frozen + id/name/builtin + content มี "สมรรถภาพทางเพศ" + "Morning erection" + "3.ประวัติส่วนตัว" + ลงท้าย "ยาที่ทานประจำ :" · A2 validate: null/array/ชื่อว่าง/เนื้อหาว่าง/ช่องว่างล้วน → [field,msg]; ครบ → null · A3 normalize: CRLF→LF, ตัดหัวท้าย, tab คงไว้, walk ไม่มี undefined leaf (V14) · A4 append: (ว่าง,T)=T / (ws-only,T)=T / (เดิม,T)=เดิม+"\n\n"+T / trailing-\n เดิมถูก collapse / (เดิม,ว่าง)=เดิม / append 2 รอบซ้อน / Thai+emoji+10K chars · A5 mintId: /^OPDT-\d+-[0-9a-f]{16}$/ + 1000 unique + ไม่ใช้ Math.random (source-grep)</div>
+<div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: opd-note-templates-client.test.js</strong> — mock firebase/firestore (pattern เดียวกับ v54-listener-safe-by-default.test.js): B1 list explicit branchId → where('branchId','==',id) · B2 allBranches → no filter · B3 {} + resolve fail → [] (ห้าม whole-collection) · B4 spread order docId wins (V38) · B5 sort th locale · B6 save: invalid → throw ก่อน setDoc / stamps branchId+templateId+createdAt/By+updatedAt/By + merge:false · B7 save แก้ไข: คง createdAt เดิม · B8 delete: id ว่าง throw / เรียก deleteDoc ถูก doc · B9 scopedDataLayer: exports ทั้ง 3 + lister ผ่าน _autoInject (source-grep)</div>
+<div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: opd-note-template-menu-rtl.test.jsx</strong> — mock scopedDataLayer: C1 pill render + ยังไม่ fetch (lazy) · C2 เปิดเมนู → fetch ครั้งเดียว + builtin แถวแรก + badge บังคับ + ไม่มี ✎/🗑 บน builtin · C3 เลือก builtin → onInsert(contentตรง) + เมนูปิด · C4 เลือก branch item → onInsert + ปิด · C5 คลิกนอก → เมนูปิด · C6 "+ สร้าง" → modal เปิด; backdrop click ไม่ปิด (AV78); ESC ปิด; ยกเลิก ปิด · C7 create: กรอก+บันทึก → saveOpdNoteTemplate ถูกเรียกด้วย OPDT- id + refresh → รายการใหม่โผล่ (effect จริง) · C8 edit: ✎ → prefill ชื่อ+เนื้อหา → บันทึก → save ด้วย id เดิม + createdAt เดิม → เมนูแสดงชื่อใหม่ (effect จริง) · C9 delete: 🗑 → confirm → delete + refresh → หายจากเมนู (effect จริง); confirm=false → ไม่เรียก · C10 validate fail → error โชว์ + ไม่เรียก save · C11 load error (reject) → builtin ยังคลิกได้ + แถว error โชว์ · C12 ✎/🗑 stopPropagation — ไม่ trigger insert</div>
+<div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: opd-note-templates-flow-simulate.test.js (Rule I)</strong> — F1 chain: branch list + builtin → เลือก → appendTemplateToCc → opd.symptoms → handleSubmit detail มี CC เต็ม (pure mirrors) · F2 ซ้อน 2 templates → ทั้งคู่อยู่ครบตามลำดับ · F3 adversarial: template ที่มี tab/underscore/Thai ยาว → รอด round-trip · F4 source-grep TFP: OpdNoteTemplateMenu อยู่ใน SectionHeader "OPD Card" children + handler ใช้ appendTemplateToCc + functional setOpd · F5 source-grep alignment lock: <code>grow={key === 'symptoms'}</code> ยังอยู่ + OpdNoteTemplateMenu ไม่ได้ถูก render เป็น block นอก SectionHeader (กันเพิ่มความสูง column) · F6 source-grep rules: match be_opd_note_templates + isClinicStaff · F7 BC1.1 matrix มี entry</div>
+<div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: รัน targeted ทั้ง 4 ไฟล์ → เขียวหมด → Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 7: Full suite + build + V21 fixups</h3>
+<div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1:</strong> <code>npm test -- --run</code> → คาด fixups: BC1.1 (ถ้ายังไม่ classify), source-grep ที่ล็อค SectionHeader/TFP shape เดิม — repoint ตาม V21 discipline (ใส่ marker comment)</label></div>
+<div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2:</strong> <code>npm run build</code> clean · Commit fixups + push</label></div>
+</div>
+
+<div class="task">
+<h3>Task 8: Rule Q L2 script (dual-mode) + run pre-deploy</h3>
+<p><strong>Files:</strong> Create <code>scripts/diag-opd-note-templates-l2.mjs</code> (mirror โครง auth/env ของ diag-tfp-chat-card-l2.mjs: client SDK signin loverclinic@loverclinic.com + admin SDK เฉพาะ setup/cleanup)</p>
+<div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: เขียน script</strong> — PRE-DEPLOY mode (default เมื่อ rules ยังไม่ขึ้น): staff-client create <code>TEST-OPDT-*</code> → expect PERMISSION_DENIED (พิสูจน์ live-gate) + anon read → DENIED. POST-DEPLOY mode: (1) staff create ที่ branch A → SUCCESS (2) list branch A เห็น / list branch B ไม่เห็น (cross-branch isolation — EXACT query ที่ UI ใช้: where branchId==) (3) edit → อ่านกลับได้ content ใหม่ (4) delete → หาย (5) anon write → DENIED. Cleanup TEST- docs ทุก path (V33 prefix discipline) + zero-orphan verify.</label></div>
+<div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: รัน pre-deploy mode บน prod จริง → ALL PASS (DENIED-as-expected) · Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 9: Bug-hunt loop (≤2 agents/รอบ — user directive) จน converge</h3>
+<div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>รอบละ ≤2 subagents lens ต่างกัน → adjudicate เอง (V162: agents ชอบ overstate) → fix confirmed + lock test → รอบใหม่ lens ใหม่ → หยุดเมื่อรอบล่าสุด = 0 confirmed</strong></label></div>
+<p>Lens pool: (R1) correctness/regression — insert path, OPDFieldWithPrev sync, stale closure, memo re-render, z-index/overflow ของเมนู+modal, mobile wrap; (R2) adversarial-UX/data — dual-branch switch กลาง flow, template ยาวมาก, ESC stack ชนกับ modal อื่นใน TFP, permission-denied path, concurrent edit, theme light AA; (R3+) fresh lens จาก findings. ทุก fix = Rule P mini (class grep + lock test).</p>
+<div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>ปิดรอบ: full vitest + build เขียว 100% → Commit + push</strong></label></div>
+</div>
+
+<div class="task">
+<h3>Task 10: Deploy (V15 combined — user pre-authorized this session) + post-deploy verify</h3>
+<div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1:</strong> ยืนยัน full vitest 100% + build clean + push ครบ</label></div>
+<div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2:</strong> Probe-Deploy-Probe: pre-probes → <code>vercel --prod --yes</code> + <code>firebase deploy --only firestore:rules</code> → post-probes 1,5,6,7,8,9,12,15,16,17,18,<strong>19</strong> (expect ตามตาราง Rule B; 19 = 403)</label></div>
+<div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3:</strong> รัน <code>diag-tfp-chat-card-l2.mjs</code> (post-deploy mode: staff SUCCESS + forge DENIED + dup DENIED) + <code>diag-opd-note-templates-l2.mjs</code> (post-deploy mode: CRUD จริง + cross-branch isolation) บน prod จริง → ALL PASS</label></div>
+<div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4:</strong> อัพเดท active.md + SESSION_HANDOFF + checkpoint + รายงาน honest gap (user L1: เปิด TFP จริง กดเลือก template → CC ได้ข้อความ)</label></div>
+</div>
+
+</body>
+</html>
