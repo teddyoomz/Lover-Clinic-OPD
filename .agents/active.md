@@ -15,7 +15,7 @@ firestore_rules_version: "UNCHANGED this batch (be_opd_note_templates + tfp-card
 - **① วันที่เต็ม (Q1=B)** — NEW `formatThaiFullDate` (recallResolvers) "6 ก.ค. 2569" (เดือนไทย+พ.ศ.); `_formatThaiShortDate` delegates → row date chip / snooze chip / section-header suffix / PairBadge / LINE `{วันที่}` var ทั้งหมด.
 - **② empty state (Q2=A)** — RecallList compact renders today/overdue/tomorrow ALWAYS; ว่าง → กล่องเขียวประ "✓ ไม่มี..." (data-testid recall-bucket-empty-*). full mode unchanged.
 - **③ modal portal** — TemplateEditorModal via createPortal(document.body) → ไม่ซ้อน/ไม่แว๊ป (transform-ancestor fix).
-- **④ dropdown realtime (user directive)** — listenToOpdNoteTemplatesByBranch (onSnapshot, BSA L1/L2/L3 via useBranchAwareListener) → create/edit/delete เห็นทันที ไม่ต้อง refresh; ฆ่า slow menu-open getDocs.
+- **④ dropdown realtime (user directive)** — listenToOpdNoteTemplatesByBranch (onSnapshot, V54 safe-by-default + V38 spread, BSA L1/L2/L3 via useBranchAwareListener) → create/edit/delete เห็นทันที ไม่ต้อง refresh; ฆ่า slow menu-open getDocs.
 - **⑤ TFP thumbnails (Q3=B)** — upload คู่ ~320px thumb (non-fatal) + persist/remove/cascade threading + readers 5 surface thumb-first||dataUrl + lazy; zoom=full. Rule M backfill รูปเก่า **543/543 patched** (idempotent re-run 0; HTTP-verify 5/5 = 200 image/jpeg 6.5-9KB).
 - **Hunt loop converged**: R1 (2 agents) 0 confirmed (backfill-URL SUSPECTED→REFUTED by HTTP 200 5/5; 92px cosmetic). R2 (2 agents) 1 latent fixed (lineTemplate {วันที่}→full) + carousel-thumb REFUTED (= user's explicit inline-thumb/click-full directive) + 4 dims CONFIRMED-SAFE. self-grep = 0 remaining raw-date exposure.
 
