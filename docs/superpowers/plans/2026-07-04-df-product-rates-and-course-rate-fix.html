@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>DF Product Rates + Course Rate Fix Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .rate-row { display: flex; align-items: center; gap: 8px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px; padding: 7px 10px; font-size: 13px; margin-bottom: 6px; }
+    .rate-row .val { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 2px 10px; }
+    .flow-box { display: inline-block; background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 13px; margin: 4px 2px; }
+    .flow-arrow { color: #94a3b8; font-weight: bold; padding: 0 4px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>DF Product Rates + Course Rate Fix Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:executing-plans (inline — subagents thrash on this baseline per V81/V83). Steps use HTML checkboxes for tracking.
+  <br><strong>Spec:</strong> <a href="../specs/2026-07-04-df-product-rates-and-course-rate-fix-design.html">2026-07-04-df-product-rates-and-course-rate-fix-design.html</a>
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> แก้บั๊คค่ามือ 0 บาท (map ชื่อ→id อ่าน field เก่า) + เพิ่มอัตราค่ามือ "สินค้า/หัตถการ" ในหน้ากลุ่ม DF (Q1=A)</p>
+  <p><strong>Architecture:</strong> extract pure helper <code>buildMasterIdByName</code> (canonical-field-first) ใช้ทั้ง course-map + product-map ใน TFP; <code>rates[]</code> schema เดิม + field <code>kind:'product'</code>; resolver <code>getRateForStaffCourse</code> ไม่แก้เลย</p>
+  <p><strong>Tech Stack:</strong> React (TFP + DfGroupFormModal) · pure JS lib (dfEntryValidation/dfGroupValidation) · Vitest · Rule Q L2 diag (admin SDK, read-only)</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">หน้ากลุ่ม DF — เพิ่ม section ที่ 2 (เต็มดูใน spec)</div>
+  <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px;">อัตราค่ามือต่อคอร์ส</div>
+  <div class="rate-row"><span style="flex:1;">Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง</span><span class="val">10</span><span style="color:#666;">บาท</span></div>
+  <div style="border-top:1px solid #e5e5e5;margin:10px 0 6px;"></div>
+  <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:6px;">อัตราค่ามือต่อสินค้า/หัตถการ (ใหม่)</div>
+  <div class="rate-row" style="color:#999;">🔍 ค้นหาสินค้า/หัตถการเพื่อเพิ่มอัตรา</div>
+  <div class="rate-row"><span style="flex:1;">Shock wave</span><span class="val">300</span><span style="color:#666;">บาท</span></div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Data shape — be_df_groups.rates[] (schema เดิม + kind)</div>
+<pre><code>rates: [
+  { courseId: "COURSES_1778150447655_AE530C40", courseName: "Shock Wave 6 ครั้ง + ...", value: 10,  type: "baht" },              // course (ไม่มี kind)
+  { courseId: "PRODUCTS_1778150429849_3D0F5DAE", courseName: "Shock wave",             value: 300, type: "baht", kind: "product" } // NEW
+]</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Resolve chain หลังแก้ (TFP → modal)</div>
+  <div>
+    <span class="flow-box">listCourses() / options.products</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#1D9E75;">buildMasterIdByName (courseName/productName first)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">treatmentCoursesForDf: cid = courseMap → productMap → name</span><span class="flow-arrow">→</span>
+    <span class="flow-box">buildDefaultRows + getRateForStaffCourse (ไม่แก้)</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#1D9E75;">แถวขึ้นอัตราจริง (source: group)</span>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>บทบาท</th></tr>
+  <tr><td>Modify <code>src/lib/dfEntryValidation.js</code></td><td>NEW pure <code>buildMasterIdByName(items, nameKeys, idKeys)</code> — single source สำหรับ map ทั้งสอง</td></tr>
+  <tr><td>Modify <code>src/lib/dfGroupValidation.js</code></td><td><code>normalizeDfGroup</code> preserve <code>kind:'product'</code> (undefined-free ตาม V14)</td></tr>
+  <tr><td>Modify <code>src/components/TreatmentFormPage.jsx</code></td><td>ใช้ helper แทน inline map (1988-1996) + NEW <code>masterProductIdByName</code> + Source 2 chain (2049-2055)</td></tr>
+  <tr><td>Modify <code>src/components/backend/DfGroupFormModal.jsx</code></td><td>section ที่ 2 สินค้า/หัตถการ (listProductsForPicker + kind stamp + แสดงแยก kind)</td></tr>
+  <tr><td>Create <code>tests/df-rate-name-map-and-product-rates.test.js</code></td><td>unit + Rule I flow-simulate + source-grep regression (ไฟล์เดียว จบในตัว)</td></tr>
+  <tr><td>Create <code>scripts/diag-df-rate-verify-fix.mjs</code></td><td>Rule Q L2 — REAL helpers vs REAL prod data</td></tr>
+  <tr><td>Modify <code>.claude/skills/audit-anti-vibe-code/SKILL.md</code> + <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>AV200 invariant (byte-identical ทั้งคู่ — SY1 guard บังคับ)</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>buildMasterIdByName</code> pure helper (TDD) + แก้บั๊คใน TFP</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/dfEntryValidation.js</code> · Modify <code>src/components/TreatmentFormPage.jsx:1988-1996</code> · Create <code>tests/df-rate-name-map-and-product-rates.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: เขียน failing tests (กลุ่ม A — unit)</strong></label></div>
+<pre><code>// tests/df-rate-name-map-and-product-rates.test.js
+import { describe, it, expect } from 'vitest';
+import { buildMasterIdByName, buildDefaultRows } from '../src/lib/dfEntryValidation.js';
+import { getRateForStaffCourse, normalizeDfGroup } from '../src/lib/dfGroupValidation.js';
+
+// CANONICAL fixtures — จงใจไม่มี field `name` เพื่อ lock บั๊ค (prod จริง: 405/405 มีแต่ courseName)
+const CANON_COURSES = [
+  { id: 'COURSES_1778150447655_AE530C40', courseId: 'COURSES_1778150447655_AE530C40', courseName: 'Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', salePrice: 8900 },
+  { id: 'COURSE-mq6f4n4q-b68eee4a46055b85', courseId: 'COURSE-mq6f4n4q-b68eee4a46055b85', courseName: 'Shock wave 1 ครั้ง', salePrice: 1890 },
+];
+const CANON_PRODUCTS = [
+  { id: 'PRODUCTS_1778150429849_3D0F5DAE', productId: 'PRODUCTS_1778150429849_3D0F5DAE', productName: 'Shock wave' },
+];
+
+describe('A. buildMasterIdByName — canonical-first (บั๊ค 0 บาท 2026-07-04)', () => {
+  it('A1: canonical courseName-only docs → map resolves (บั๊คเดิม: map ว่าง)', () => {
+    const m = buildMasterIdByName(CANON_COURSES, ['courseName', 'name'], ['id', 'courseId']);
+    expect(m.get('Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง')).toBe('COURSES_1778150447655_AE530C40');
+  });
+  it('A2: legacy name-only docs ยัง resolve ได้ (fallback)', () => {
+    const m = buildMasterIdByName([{ id: '56451', name: 'Shock Wave 6' }], ['courseName', 'name'], ['id', 'courseId']);
+    expect(m.get('Shock Wave 6')).toBe('56451');
+  });
+  it('A3: ชื่อซ้ำ → first-hit wins (พฤติกรรมเดิม)', () => {
+    const m = buildMasterIdByName([
+      { id: 'X1', courseName: 'ซ้ำ' }, { id: 'X2', courseName: 'ซ้ำ' },
+    ], ['courseName', 'name'], ['id', 'courseId']);
+    expect(m.get('ซ้ำ')).toBe('X1');
+  });
+  it('A4: adversarial — null/empty/whitespace/no-id ไม่ crash', () => {
+    const m = buildMasterIdByName([null, {}, { courseName: '   ' }, { courseName: 'มี id ว่าง' }], ['courseName', 'name'], ['id', 'courseId']);
+    expect(m.get('มี id ว่าง')).toBe('');
+    expect(m.size).toBe(1);
+  });
+  it('A5: products — productName-first', () => {
+    const m = buildMasterIdByName(CANON_PRODUCTS, ['productName', 'name'], ['id', 'productId']);
+    expect(m.get('Shock wave')).toBe('PRODUCTS_1778150429849_3D0F5DAE');
+  });
+  it('A6: non-array → empty map', () => {
+    expect(buildMasterIdByName(null, ['courseName'], ['id']).size).toBe(0);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: รันให้ fail</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/df-rate-name-map-and-product-rates.test.js</code> · Expected: FAIL — <code>buildMasterIdByName</code> is not exported</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: implement helper ใน dfEntryValidation.js (ต่อท้ายไฟล์)</strong></label></div>
+<pre><code>/**
+ * Build a name → master-id Map from a canonical be_* list output.
+ * Canonical field FIRST (courseName / productName), legacy `name` fallback.
+ * First-hit wins on duplicate names (mirrors the pre-2026-07-04 inline map).
+ *
+ * Origin (2026-07-04): TFP's inline masterCourseIdByName read `mc.name` but
+ * all 405 prod be_courses docs are canonical (`courseName` only) → empty map
+ * → every DfEntryModal row resolved null → "0 บาท / ไม่มีอัตราในกลุ่มนี้"
+ * while the entered rates existed. V49-class missed site. AV200.
+ *
+ * @param {Array<object>} items    — raw list* output (canonical or legacy)
+ * @param {Array<string>} nameKeys — e.g. ['courseName','name'] — first non-empty wins
+ * @param {Array<string>} idKeys   — e.g. ['id','courseId'] — first non-empty wins
+ * @returns {Map<string,string>}
+ */
+export function buildMasterIdByName(items, nameKeys, idKeys) {
+  const m = new Map();
+  for (const it of (Array.isArray(items) ? items : [])) {
+    if (!it || typeof it !== 'object') continue;
+    let name = '';
+    for (const k of nameKeys) {
+      const v = it[k];
+      if (typeof v === 'string' && v.trim()) { name = v.trim(); break; }
+    }
+    if (!name || m.has(name)) continue;
+    let id = '';
+    for (const k of idKeys) {
+      const v = it[k];
+      if (v != null && String(v).trim()) { id = String(v).trim(); break; }
+    }
+    m.set(name, id);
+  }
+  return m;
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: แก้ TFP ใช้ helper (แก้บั๊คจริง)</strong></label></div>
+<pre><code>// TreatmentFormPage.jsx — import เพิ่มใน dfEntryValidation import ที่มีอยู่ (ถ้า TFP ยังไม่ import ไฟล์นี้ ให้เพิ่ม)
+import { buildMasterIdByName } from '../lib/dfEntryValidation.js';
+
+// แทนที่ตัว inline builder เดิม (1988-1996):
+// AV200 (2026-07-04): canonical be_courses uses `courseName` — the old inline
+// map read `mc.name` (legacy) → empty map → DF modal showed 0 บาท ทุกแถว
+// while entered rates existed. Canonical-first via shared helper.
+const masterCourseIdByName = useMemo(
+  () => buildMasterIdByName(masterCourses, ['courseName', 'name'], ['id', 'courseId']),
+  [masterCourses]
+);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: รัน tests กลุ่ม A ให้ผ่าน + commit</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/df-rate-name-map-and-product-rates.test.js</code> → กลุ่ม A PASS</p>
+<pre><code>git add src/lib/dfEntryValidation.js src/components/TreatmentFormPage.jsx tests/df-rate-name-map-and-product-rates.test.js
+git commit -m "fix(df): course rate 0-baht — name map reads canonical courseName (AV200)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: product map + Source 2 chain ใน TFP (TDD ผ่าน flow-simulate mirror)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/TreatmentFormPage.jsx:2049-2055</code> · Test เพิ่มกลุ่ม B ในไฟล์เดิม</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: เขียน failing tests (กลุ่ม B — Rule I flow-simulate mirror)</strong></label></div>
+<pre><code>// pure mirror ของ treatmentCoursesForDf Source 2 (chain course → product → name)
+// mirror นี้ถูก lock กับ implementation จริงด้วย source-grep กลุ่ม D
+function simulateSource2Cid(name, courseMap, productMap) {
+  return courseMap.get(name) || productMap.get(name) || name;
+}
+
+describe('B. Source 2 chain — course → product → pseudo-name (Rule I mirror)', () => {
+  const courseMap = buildMasterIdByName(CANON_COURSES, ['courseName', 'name'], ['id', 'courseId']);
+  const productMap = buildMasterIdByName(CANON_PRODUCTS, ['productName', 'name'], ['id', 'productId']);
+  const GROUP = normalizeDfGroup({
+    id: 'DFG-0526-b1399741', name: 'ผู้ช่วยแพทย์', status: 'active',
+    rates: [
+      { courseId: 'COURSES_1778150447655_AE530C40', courseName: 'Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', value: 10, type: 'baht' },
+      { courseId: 'PRODUCTS_1778150429849_3D0F5DAE', courseName: 'Shock wave', value: 300, type: 'baht', kind: 'product' },
+    ],
+  });
+
+  it('B1: REPRO บั๊คผู้ใช้ (screenshot 2026-07-04) — คอร์สแถวแรก resolve เป็น 10 บาท จากกลุ่ม', () => {
+    const cid = simulateSource2Cid('Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', courseMap, productMap);
+    const rows = buildDefaultRows(
+      [{ courseId: cid, courseName: 'Shock Wave 6 ครั้ง ...' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse
+    );
+    expect(rows[0]).toMatchObject({ value: 10, type: 'baht', enabled: true, source: 'group' });
+  });
+  it('B2: แถวสินค้า "Shock wave" เฉยๆ resolve เป็น 300 บาท (kind: product)', () => {
+    const cid = simulateSource2Cid('Shock wave', courseMap, productMap);
+    expect(cid).toBe('PRODUCTS_1778150429849_3D0F5DAE');
+    const rows = buildDefaultRows(
+      [{ courseId: cid, courseName: 'Shock wave' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse
+    );
+    expect(rows[0]).toMatchObject({ value: 300, enabled: true, source: 'group' });
+  });
+  it('B3: ชื่อที่เป็นทั้งคอร์สและสินค้า → course-first (คงพฤติกรรม Phase 14.4)', () => {
+    const cm = buildMasterIdByName([{ id: 'C-BOTH', courseName: 'ชนกัน' }], ['courseName', 'name'], ['id', 'courseId']);
+    const pm = buildMasterIdByName([{ id: 'P-BOTH', productName: 'ชนกัน' }], ['productName', 'name'], ['id', 'productId']);
+    expect(simulateSource2Cid('ชนกัน', cm, pm)).toBe('C-BOTH');
+  });
+  it('B4: ไม่ match อะไรเลย → pseudo-name (แถวยังโผล่ กรอกมือได้ + ไม่มีอัตรา)', () => {
+    const cid = simulateSource2Cid('หัตถการลอย', courseMap, productMap);
+    expect(cid).toBe('หัตถการลอย');
+    const rows = buildDefaultRows([{ courseId: cid, courseName: 'หัตถการลอย' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse);
+    expect(rows[0]).toMatchObject({ value: 0, enabled: false, source: null });
+  });
+  it('B5: PRE-FIX repro — map ที่อ่าน name (legacy) กับ docs canonical → 0 บาท (บั๊คเดิม)', () => {
+    const brokenMap = buildMasterIdByName(CANON_COURSES, ['name'], ['id']); // จำลองโค้ดเก่า
+    expect(brokenMap.size).toBe(0);
+    const cid = simulateSource2Cid('Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', brokenMap, new Map());
+    const rows = buildDefaultRows([{ courseId: cid, courseName: 'x' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse);
+    expect(rows[0].value).toBe(0); // นี่คือสิ่งที่ผู้ใช้เห็น
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: รันให้ fail (kind ยังถูก strip โดย normalizeDfGroup → B2 fail)</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/df-rate-name-map-and-product-rates.test.js</code> · Expected: B2 FAIL (rate หาย เพราะ normalize ตัด kind — จะแก้ Task 3) — B1/B3/B4/B5 PASS ถ้า helper ถูก. <em>หมายเหตุ: B2 fail เพราะ normalize ตัด rate ทิ้งหรือไม่ตัด? normalize ไม่ตัดแถว (courseId อยู่) แค่ strip kind — resolver ยัง match id ได้ → B2 อาจ PASS ก่อน Task 3. ถ้า PASS ให้ยืนยันว่า kind หายจริงด้วย assert ใน Task 3 แทน</em></p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: implement ใน TFP</strong></label></div>
+<pre><code>// หลัง masterCourseIdByName (Task 1):
+// AV200 (2026-07-04): product/procedure rows from "+ เพิ่มรายการรักษา" or
+// course-product ticks carry only a NAME — resolve to be_products master id
+// so DF group product rates (kind: 'product') auto-fill. Course-first keeps
+// the Phase 14.4 contract; product map is the NEW fallback.
+const masterProductIdByName = useMemo(
+  () => buildMasterIdByName(options?.products, ['productName', 'name'], ['id', 'productId']),
+  [options?.products]
+);
+
+// Source 2 (เดิม 2049-2055) — เปลี่ยนเฉพาะบรรทัด cid:
+for (const ti of (treatmentItems || [])) {
+  const name = String(ti?.name || '').trim();
+  if (!name) continue;
+  const masterId = masterCourseIdByName.get(name) || masterProductIdByName.get(name) || '';
+  const price = priceByName.get(name) || (Number(ti.price) || 0);
+  push(masterId || name, name, price);
+}
+// + เพิ่ม masterProductIdByName ใน deps array ของ useMemo treatmentCoursesForDf</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: รัน + commit</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/df-rate-name-map-and-product-rates.test.js</code> → กลุ่ม A+B PASS</p>
+<pre><code>git add src/components/TreatmentFormPage.jsx tests/df-rate-name-map-and-product-rates.test.js
+git commit -m "feat(df): TFP resolves product/procedure rows to be_products id (AV200)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: <code>normalizeDfGroup</code> preserve <code>kind:'product'</code> (TDD)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/dfGroupValidation.js:117-122</code> · Test เพิ่มกลุ่ม C</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: เขียน failing tests (กลุ่ม C)</strong></label></div>
+<pre><code>describe('C. normalizeDfGroup — kind preservation (V14 undefined-free)', () => {
+  it('C1: kind product รอด normalize', () => {
+    const out = normalizeDfGroup({ name: 'g', rates: [{ courseId: 'P1', courseName: 'Shock wave', value: 300, type: 'baht', kind: 'product' }] });
+    expect(out.rates[0].kind).toBe('product');
+  });
+  it('C2: แถวคอร์ส (ไม่มี kind) → ไม่มี field kind เลย (ห้าม undefined — V14)', () => {
+    const out = normalizeDfGroup({ name: 'g', rates: [{ courseId: 'C1', courseName: 'คอร์ส', value: 10, type: 'baht' }] });
+    expect('kind' in out.rates[0]).toBe(false);
+  });
+  it('C3: kind แปลกปลอม → drop (treat as course)', () => {
+    const out = normalizeDfGroup({ name: 'g', rates: [{ courseId: 'C1', value: 10, type: 'baht', kind: 'weird' }] });
+    expect('kind' in out.rates[0]).toBe(false);
+  });
+  it('C4: validator เดิมผ่านกับแถว product (DFG-3..5 ไม่แตะ kind)', () => {
+    const fail = validateDfGroupStrict(normalizeDfGroup({ name: 'g', rates: [{ courseId: 'P1', value: 300, type: 'baht', kind: 'product' }] }));
+    expect(fail).toBeNull();
+  });
+});</code></pre>
+  <p>(เพิ่ม <code>validateDfGroupStrict</code> เข้า import จาก dfGroupValidation.js)</p>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: รันให้ fail → implement</strong></label></div>
+<pre><code>// dfGroupValidation.js normalizeDfGroup — แทน rates map เดิม (117-122):
+out.rates = Array.isArray(out.rates) ? out.rates.map((r) => ({
+  courseId: trim(r?.courseId ?? r?.course_id),
+  courseName: trim(r?.courseName ?? r?.course_name),
+  value: Math.max(0, Number(r?.value) || 0),
+  type: RATE_TYPES.includes(r?.type) ? r.type : 'baht',
+  // AV200 (2026-07-04): kind:'product' marks a be_products rate row — same
+  // rates[] array, resolver matches by id so it needs no change. Only the
+  // literal 'product' survives (undefined-free per V14; anything else = course).
+  ...(r?.kind === 'product' ? { kind: 'product' } : {}),
+})).filter((r) => r.courseId) : [];</code></pre>
+  <p>Run: <code>npm test -- --run tests/df-rate-name-map-and-product-rates.test.js</code> → A+B+C PASS</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add src/lib/dfGroupValidation.js tests/df-rate-name-map-and-product-rates.test.js
+git commit -m "feat(df): rates[] kind:'product' survives normalizeDfGroup (AV200)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: DfGroupFormModal — section "อัตราค่ามือต่อสินค้า/หัตถการ"</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/DfGroupFormModal.jsx</code> · Test เพิ่มกลุ่ม D (source-grep)</p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: implement (UI mirror ของ section คอร์ส)</strong></label></div>
+<pre><code>// 1) import: saveDfGroup, listCoursesForPicker, listProductsForPicker
+// 2) state เพิ่ม:
+const [products, setProducts] = useState([]);
+const [productQuery, setProductQuery] = useState('');
+// 3) load effect เดิม → Promise.all ทั้งคู่:
+useEffect(() => {
+  let cancelled = false;
+  Promise.all([
+    listCoursesForPicker().catch(() => []),
+    listProductsForPicker().catch(() => []),
+  ]).then(([c, p]) => {
+    if (cancelled) return;
+    setCourses(c || []); setProducts(p || []);
+  });
+  return () => { cancelled = true; };
+}, []);
+// 4) rehydrate nameById: รวม products ด้วย
+//    const nameById = new Map([...courses, ...products].map((c) => [String(c.id), c.name || '']));
+// 5) แสดงแถวแยก kind — เก็บ index จริงไว้เพื่อ updateRate/removeRate เดิม:
+const indexedRates = (form.rates || []).map((r, idx) => ({ r, idx }));
+const courseRateRows = indexedRates.filter(({ r }) => r.kind !== 'product');
+const productRateRows = indexedRates.filter(({ r }) => r.kind === 'product');
+// 6) pool สินค้า (mirror availablePool; takenCourseIds เดิมกันซ้ำข้าม kind อยู่แล้ว):
+const availableProductPool = useMemo(() => {
+  const q = productQuery.trim().toLowerCase();
+  const pool = products.filter((p) => !takenCourseIds.has(String(p.id)));
+  if (!q) return pool.slice(0, 20);
+  return pool.filter((p) =>
+    (p.name || '').toLowerCase().includes(q) ||
+    (p.category || '').toLowerCase().includes(q)
+  ).slice(0, 20);
+}, [products, takenCourseIds, productQuery]);
+// 7) addProductRate:
+const addProductRate = (product) => {
+  setForm((prev) => ({
+    ...prev,
+    rates: [...(prev.rates || []), {
+      courseId: product.id, courseName: product.name || '',
+      value: 0, type: 'baht', kind: 'product',
+    }],
+  }));
+  setProductQuery('');
+};
+// 8) JSX: section เดิม render courseRateRows (ใช้ ({ r, idx }) แทน (r, idx));
+//    ต่อท้ายใน &lt;section data-field="rates"&gt; เพิ่มหัวข้อที่ 2:
+//    "อัตราค่ามือต่อสินค้า/หัตถการ" + search placeholder
+//    "ค้นหาสินค้า/หัตถการเพื่อเพิ่มอัตรา" + chip pool (availableProductPool →
+//    addProductRate) + productRateRows ด้วย markup แถวเดิมเป๊ะ
+//    (updateRate(idx)/removeRate(idx) ใช้ index จริง — ไม่ต้องแก้)
+//    data-testid ใหม่: "df-product-rate-list" ที่ wrapper ของ productRateRows</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: เขียน tests กลุ่ม D (source-grep regression lock)</strong></label></div>
+<pre><code>import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+describe('D. source-grep regression locks (AV200)', () => {
+  const tfp = readFileSync(resolve(__dirname, '../src/components/TreatmentFormPage.jsx'), 'utf8');
+  const modal = readFileSync(resolve(__dirname, '../src/components/backend/DfGroupFormModal.jsx'), 'utf8');
+
+  it('D1: TFP course map ใช้ buildMasterIdByName + courseName ก่อน name', () => {
+    expect(tfp).toMatch(/buildMasterIdByName\(\s*masterCourses\s*,\s*\['courseName',\s*'name'\]/);
+  });
+  it('D2: ANTI-REGRESSION — inline map เก่าที่อ่าน mc.name ต้องไม่กลับมา', () => {
+    expect(tfp).not.toMatch(/String\(mc\?\.name \|\| ''\)/);
+  });
+  it('D3: TFP มี product map + chain course→product ใน Source 2', () => {
+    expect(tfp).toMatch(/buildMasterIdByName\(\s*options\?\.products\s*,\s*\['productName',\s*'name'\]/);
+    expect(tfp).toMatch(/masterCourseIdByName\.get\(name\)\s*\|\|\s*masterProductIdByName\.get\(name\)/);
+  });
+  it('D4: DfGroupFormModal โหลด listProductsForPicker + stamp kind product', () => {
+    expect(modal).toMatch(/listProductsForPicker/);
+    expect(modal).toMatch(/kind:\s*'product'/);
+    expect(modal).toMatch(/ค้นหาสินค้า\/หัตถการเพื่อเพิ่มอัตรา/);
+  });
+  it('D5: resolver ไม่ถูกแก้ (สัญญา spec: getRateForStaffCourse เทียบ id ตรงๆ)', () => {
+    const dfv = readFileSync(resolve(__dirname, '../src/lib/dfGroupValidation.js'), 'utf8');
+    expect(dfv).toMatch(/String\(r\.courseId\) === String\(courseId\)/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: targeted tests (Rule N) + commit</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/df-rate-name-map-and-product-rates.test.js</code> ทั้งไฟล์ PASS + ไฟล์ DF เดิมที่ import โมดูลที่แตะ: <code>grep -rln "dfGroupValidation\|dfEntryValidation\|DfGroupFormModal" tests/ | xargs npm test -- --run</code></p>
+<pre><code>git add src/components/backend/DfGroupFormModal.jsx tests/df-rate-name-map-and-product-rates.test.js
+git commit -m "feat(df): product/procedure rate section in DF group form (Q1=A, AV200)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: AV200 invariant + Rule Q L2 verify กับ prod จริง</h3>
+  <p><strong>Files:</strong> Modify SKILL.md ทั้ง 2 copies (byte-identical — SY1) · Create <code>scripts/diag-df-rate-verify-fix.mjs</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: AV200 ใน audit-anti-vibe-code SKILL.md (ทั้ง .claude + .agents copies)</strong></label></div>
+<pre><code>### AV200 — Canonical-first name→id maps over be_* list outputs (2026-07-04)
+Any name→master-id map built from raw `list*()` canonical output MUST read the
+canonical field first (`courseName` / `productName`); legacy `.name` only as
+fallback. Use `buildMasterIdByName` (dfEntryValidation.js) — do not hand-roll.
+Origin: DF modal showed 0 บาท on every row while 188 entered rates existed —
+TFP's inline map read `mc.name` but all 405 be_courses docs are canonical.
+Grep: `\.name \|\| ''\)` near `new Map()` over list* outputs in src/components.
+Sanctioned: none. Tests: tests/df-rate-name-map-and-product-rates.test.js (D1-D3).</code></pre>
+  <p>Run: <code>npm test -- --run tests/skill-av-sync.test.js</code> → SY1 PASS (byte-identical)</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Rule Q L2 diag — REAL helpers vs REAL prod</strong></label></div>
+<pre><code>// scripts/diag-df-rate-verify-fix.mjs (READ-ONLY, mirror diag-v164-verify-fix.mjs)
+// 1. โหลด be_df_groups + be_df_staff_rates + be_courses (นครราชสีมา) จาก prod
+// 2. เรียก REAL buildMasterIdByName + buildDefaultRows + getRateForStaffCourse
+//    (import จาก ../src/lib/*.js) กับชื่อคอร์สจริงจาก customer จริง (LC-26000009:
+//    "Shock Wave 12 ครั้ง + ติดตามอาการกับแพทย์ 2 ครั้ง")
+// 3. ASSERT: กลุ่ม "ผู้ช่วยแพทย์" (DFG-0526-b1399741) คืน value 10 type baht
+//    source 'group' — exit 1 ถ้าไม่ใช่
+// 4. ASSERT: pre-fix simulation (map จาก ['name']) คืน 0 — พิสูจน์ว่าบั๊คเดิมมีจริง
+// Run: node --env-file=.env.local.prod scripts/diag-df-rate-verify-fix.mjs</code></pre>
+  <p>Expected: ทุก assert ผ่าน — resolver คืน 10 บาท จากข้อมูลจริงที่ผู้ใช้กรอกไว้</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add .claude/skills/audit-anti-vibe-code/SKILL.md .agents/skills/audit-anti-vibe-code/SKILL.md scripts/diag-df-rate-verify-fix.mjs
+git commit -m "docs(audit): AV200 canonical-first name maps + Rule Q L2 DF verify"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Full suite + build (Rule N batch-end) + wrap</h3>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: full vitest</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> · Expected: 0 fail (แตะ shared helper + feature ≥3 ไฟล์ → full suite ตาม Rule N) — V21 lock-in ที่โผล่ให้แก้ทันทีพร้อม marker comment</p>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: build</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean</p>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: push + รายงาน</strong></label></div>
+  <p><code>git push origin master</code> · รายงาน: L2 evidence + honest gap (L1 บนหน้า authed = ผู้ใช้) · ถาม user เรื่อง optional Rule M ลบ 2 junk be_df_staff_rates docs · <strong>NO deploy โดยไม่มีคำสั่ง "deploy" (V18)</strong></p>
+</div>
+
+<h2>Verification Summary</h2>
+<table>
+  <tr><th>Layer</th><th>อะไร</th></tr>
+  <tr><td>Unit (A, C)</td><td>helper canonical-first + normalize kind — fixtures canonical จริง (ไม่มี field name)</td></tr>
+  <tr><td>Rule I flow-simulate (B)</td><td>chain map → cid → buildDefaultRows → resolver ด้วย REAL fixture ids จาก prod + PRE-FIX repro (B5)</td></tr>
+  <tr><td>Source-grep (D)</td><td>lock canonical-first + anti-regression + resolver untouched</td></tr>
+  <tr><td>Rule Q L2</td><td>diag script: REAL helpers vs REAL prod data → 10 บาท กลับมา</td></tr>
+  <tr><td>Rule Q L1</td><td>ผู้ใช้เปิด TFP จริง (auth-gated) — modal ขึ้นอัตราอัตโนมัติ</td></tr>
+</table>
+
+</body>
+</html>
