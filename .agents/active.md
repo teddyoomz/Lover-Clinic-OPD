@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-07-05 LATE+1 — recall full-dates + empty-state + template realtime/portal + TFP image thumbnails SHIPPED local (NOT deployed); hunt loop converged R1(0)→R2(1 lineTemplate fixed)→self-grep(0)."
-status: "Feature batch complete on master, ahead of prod 18904ac8-vs-a5b45c6f... wait prod=a5b45c6f already deployed OPD-templates; this NEW batch NOT deployed. Awaiting explicit 'deploy'."
+updated_at: "2026-07-05 LATE+1 — recall full-dates + empty-state + template realtime/portal + TFP image thumbnails SHIPPED + DEPLOYED LIVE; hunt loop converged R1(0)→R2(1 fixed)→self-grep(0)."
+status: "DEPLOYED. master = prod. Definitive green full vitest 17245/17245 · 0 fail. Awaiting user L1 hands-on."
 branch: "master"
-last_commit: "18904ac8 fix(recall): hunt R2 — {วันที่} LINE var → formatThaiFullDate"
-tests: "full vitest 17244/17245 (1 known parallel flake subtab-filters-stress, green isolated 43/0; definitive re-run pending). Build clean. Touched-area targeted all green."
+last_commit: "52938478 fix(state): active.md V54/V38 lineage marker (v50 F1.12)"
+tests: "full vitest 17245/17245 · 0 fail · 0 suites-fail (definitive clean run, --outputFile json). Build clean. All touched files green isolated."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "a5b45c6f (2026-07-05) — OPD note templates + earlier batch DEPLOYED. THIS recall/thumbs batch NOT yet deployed."
-firestore_rules_version: "UNCHANGED this batch (be_opd_note_templates + tfp-card rules already deployed a5b45c6f). No new rule → future deploy = vercel-only, no Probe-Deploy-Probe."
+production_commit: "52938478 (2026-07-05) — DEPLOYED vercel lover-clinic-j5brcikn6 aliased lover-clinic-app.vercel.app HTTP 200."
+firestore_rules_version: "UNCHANGED this batch → frontend-only deploy, NO Probe-Deploy-Probe. (be_opd_note_templates + tfp-card rules already live from prior a5b45c6f deploy.)"
 ---
 
 # Active — 2026-07-05 LATE+1 — recall dates + empty-state + template realtime/portal + TFP thumbs
@@ -24,8 +24,8 @@ firestore_rules_version: "UNCHANGED this batch (be_opd_note_templates + tfp-card
 - Thumb URL-shape verified live (`diag-thumb-sample.mjs` 5/5 HTTP 200).
 
 ## Next action
-- Await explicit "deploy" → vercel --prod only (frontend-only, no rules change → no Probe-Deploy-Probe). Backfill already applied.
+- idle — DEPLOYED + LIVE. Await user L1 hands-on.
 - Post-deploy user L1: (1) หน้า Recall วันนี้ → ทุกวันที่เต็ม "6 ก.ค. 2569" + วันว่างขึ้น ✓ ไม่มี ชัด (2) dropdown template → สร้าง/แก้/ลบ เห็นทันที + modal เปิดกลางจอไม่ซ้อน (3) TFP รูปเยอะ → grid โหลดเร็ว (thumb) + กดซูมได้รูปเต็ม.
 
 ## Outstanding user-triggered actions
-- "deploy" for this batch (vercel-only).
+- (none — deployed; awaiting L1 feedback only)
