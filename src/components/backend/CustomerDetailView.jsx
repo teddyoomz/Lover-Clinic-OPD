@@ -530,6 +530,33 @@ export default function CustomerDetailView({
       alert('บันทึกการตั้งค่าแจ้งเตือนไม่สำเร็จ');
     }
   };
+
+  // VIP (2026-07-04) — toggle ลูกค้า VIP. Any staff may toggle (Q3=A; rules
+  // already allow staff writes on be_customers). Stamps vipAt/vipBy on every
+  // transition (V41 audit pattern, ISO string per the opt-out precedent above).
+  // Real-time fan-out: the VipProvider's where('vip','==',true) listener fires
+  // → every <VipName>/<VipBadge> on every open screen updates instantly.
+  const onToggleVip = async () => {
+    if (!customerId) return;
+    try {
+      const { updateCustomer } = await import('../../lib/scopedDataLayer.js');
+      const { auth } = await import('../../firebase.js');
+      const uid = auth?.currentUser?.uid || 'unknown';
+      const next = !customer?.vip;
+      await updateCustomer(customerId, {
+        vip: next,
+        vipAt: new Date().toISOString(),
+        vipBy: `admin-uid-${uid}`,
+      });
+      if (onCustomerUpdated) {
+        const refreshed = await getCustomer(customerId);
+        if (refreshed) onCustomerUpdated(refreshed);
+      }
+    } catch (err) {
+      console.warn('[CustomerDetailView] vip toggle failed:', err);
+      alert('สลับสถานะ VIP ไม่สำเร็จ');
+    }
+  };
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
   // 2026-06-09 — carry the TRUE customer.courses index (rawIndex) so
@@ -885,6 +912,23 @@ export default function CustomerDetailView({
                   contextBranchId={selectedBranchId}
                 />
               </h2>
+
+              {/* VIP toggle (2026-07-04) — gold when on; ทุก staff กดได้ (Q3=A).
+                  Name above goes gold + 👑 badge live via VipProvider. */}
+              <button
+                type="button"
+                onClick={onToggleVip}
+                data-testid="vip-toggle-btn"
+                data-vip-on={customer?.vip ? 'true' : 'false'}
+                className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                  customer?.vip
+                    ? 'bg-amber-500/15 border-amber-500/45 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25'
+                    : 'bg-[var(--bg-elevated)] border-[var(--bd)] text-[var(--tx-muted)] hover:border-amber-500/40 hover:text-amber-600 dark:hover:text-amber-300'
+                }`}
+                title={customer?.vip ? 'กดเพื่อปิดสถานะ VIP' : 'กดเพื่อตั้งเป็นลูกค้า VIP'}
+              >
+                👑 {customer?.vip ? 'VIP: เปิดอยู่' : 'ตั้งเป็น VIP'}
+              </button>
 
               {/* 2026-06-16 Part A — flagged-duplicate badge (created via the
                   "บันทึกเป็นลูกค้าใหม่อยู่ดี" override; links to the canonical). */}

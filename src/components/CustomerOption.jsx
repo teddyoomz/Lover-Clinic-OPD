@@ -41,14 +41,20 @@
 //   • Badge <span>s use `flex-shrink-0` so they don't get squished
 //     when the name span starts truncating.
 
+import { VipName } from './VipBadge.jsx';
+
 export function CustomerOption({ customer, contextBranchId, showLineBadge = true, nameClassName = '' }) {
   if (!customer) return null;
 
   const displayName = customer.fullName || customer.name || '';
+  // VIP (2026-07-04) — key into the VipProvider set. Callers passing synthetic
+  // objects must include one of these ids for VIP to render (see VipName —
+  // no id / no provider ⇒ plain name, structurally safe).
+  const vipCustomerId = customer.id || customer.customerId || customer.proClinicId || '';
 
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className={nameClassName || undefined}>{displayName}</span>
+      <VipName customerId={vipCustomerId} className={nameClassName || undefined}>{displayName}</VipName>
       {showLineBadge && <CustomerLineBadge customer={customer} contextBranchId={contextBranchId} />}
     </div>
   );
