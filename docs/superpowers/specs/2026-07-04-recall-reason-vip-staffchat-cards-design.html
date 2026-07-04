@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall Reason + VIP + Staff-Chat TFP Cards — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flowbox { display:inline-block; background:#fff; border:1.5px solid #94a3b8; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; margin:3px 0; }
+    .flowarrow { color:#64748b; font-weight:700; padding:0 6px; }
+    .flowrow { margin: 6px 0; }
+  </style>
+</head>
+<body>
+
+<h1>Recall Reason ทุกจุด + VIP ลูกค้า + Staff-Chat TFP Cards — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-04 · <strong>Status:</strong> Approved by user ("อนุมัติ") · <strong>Implementation plan:</strong> 2026-07-04-recall-reason-vip-staffchat-cards.html (จะสร้างโดย writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<div class="section">
+<p><strong>4 feature requests (2026-07-04):</strong></p>
+<ol>
+  <li><strong>Recall:</strong> พอบันทึกผลการติดต่อแล้ว เหตุผลแรกที่สร้าง recall หายไปจากจอ (ข้อมูล <code>reason</code> ยังอยู่ใน Firestore — <code>recordRecallOutcome</code> ไม่เคยทับ — เป็น UI conditional ใน <code>RecallRow.jsx:126-129</code> ที่เลือกโชว์ <code>outcomeNote</code> แทน) → ต้องแสดงเหตุผล <strong>ทุกจุดที่แสดง recall</strong></li>
+  <li><strong>VIP:</strong> toggle ลูกค้าเป็น VIP ในหน้าข้อมูลลูกค้า → ชื่อสีทอง + badge 👑 VIP <strong>ทุกที่ใน OPD system แบบ real-time ทันทีทุกจอ</strong> — ยกเว้นทุกช่องทางที่ลูกค้าเห็น (ลิ้ง/print/LINE) ห้ามแสดงเด็ดขาด</li>
+  <li><strong>Staff chat — ซักประวัติ:</strong> เมื่อกดปุ่ม teal "บันทึกข้อมูลซักประวัติ" ใน TFP → การ์ด "ระบบ" ใน staff chat: ชื่อลูกค้ากดได้ + ปุ่ม "เปิดบันทึกการรักษา" เปิด TFP ใบนั้นตรงๆ ให้แพทย์ลงบันทึกต่อ</li>
+  <li><strong>Staff chat — แพทย์บันทึกเสร็จ:</strong> เมื่อกดปุ่มม่วง "บันทึกสำหรับแพทย์" → การ์ดแบบเดียวกัน + แสดง "โดยแพทย์: {ชื่อแพทย์จากหัว TFP}" (<code>detail.doctorName</code>)</li>
+</ol>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">① Recall Timeline (แบบ C — user เลือก) · Dark / Light · RecallRow ใช้ร่วม 3 surfaces</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:280px;background:#0f0f0f;padding:12px;border-radius:8px;">
+      <div style="background:#161616;border:1px solid #2e2e2e;border-radius:10px;padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          <span style="color:#ececec;font-weight:700;font-size:13px;">คุณสมหญิง ใจดี</span>
+          <span style="background:#222;border:1px solid #333;color:#aaa;font-family:monospace;font-size:11px;padding:1px 8px;border-radius:6px;">HN 000123</span>
+          <span style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">เสร็จแล้ว</span>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div style="display:flex;flex-direction:column;align-items:center;padding-top:3px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,.5);"></span>
+            <span style="flex:1;width:2px;background:linear-gradient(#f59e0b33,#38bdf866);margin:2px 0;min-height:14px;"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#38bdf8;box-shadow:0 0 6px rgba(56,189,248,.5);"></span>
+          </div>
+          <div style="flex:1;">
+            <div style="margin-bottom:8px;">
+              <div style="font-size:9px;text-transform:uppercase;color:#8a8a8a;">เหตุผลนัด RECALL</div>
+              <div style="color:#ececec;font-size:13px;font-weight:600;">ติดตามอาการหลังฉีดฟิลเลอร์</div>
+            </div>
+            <div>
+              <div style="font-size:9px;text-transform:uppercase;color:#7dd3fc;">ผลการติดต่อ · ✅ จะมาตามนัด</div>
+              <div style="color:#ececec;font-size:13px;font-weight:600;">โทรแล้ว ลูกค้าสะดวกมาวันเสาร์บ่าย</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:6px;font-size:10px;color:#8a8a8a;">บันทึกโดย: <span style="color:#ddd;font-weight:600;">พลอย</span></div>
+      </div>
+      <div style="margin-top:8px;background:#161616;border:1px solid #2e2e2e;border-radius:10px;padding:10px 12px;">
+        <div style="font-size:9px;color:#777;margin-bottom:4px;">สถานะยังไม่ติดต่อ → โหนดเดียว (หน้าตาใกล้เดิม)</div>
+        <div style="display:flex;gap:10px;">
+          <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,.5);margin-top:3px;"></span>
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;color:#8a8a8a;">เหตุผลนัด RECALL</div>
+            <div style="color:#ececec;font-size:13px;font-weight:600;">ครบรอบ Botox 6 เดือน</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;">
+        <div style="display:flex;gap:10px;">
+          <div style="display:flex;flex-direction:column;align-items:center;padding-top:3px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#d97706;"></span>
+            <span style="flex:1;width:2px;background:linear-gradient(#d9770633,#0284c766);margin:2px 0;min-height:14px;"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#0284c7;"></span>
+          </div>
+          <div style="flex:1;">
+            <div style="margin-bottom:8px;">
+              <div style="font-size:9px;text-transform:uppercase;color:#64748b;">เหตุผลนัด RECALL</div>
+              <div style="color:#1e293b;font-size:13px;font-weight:600;">ติดตามอาการหลังฉีดฟิลเลอร์</div>
+            </div>
+            <div>
+              <div style="font-size:9px;text-transform:uppercase;color:#0369a1;">ผลการติดต่อ · ✅ จะมาตามนัด</div>
+              <div style="color:#1e293b;font-size:13px;font-weight:600;">โทรแล้ว ลูกค้าสะดวกมาวันเสาร์บ่าย</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;">
+        <div style="font-size:9px;color:#94a3b8;margin-bottom:2px;">MODAL บันทึกผล/เลื่อน/ส่ง LINE — เพิ่มแถบเหตุผล</div>
+        <div style="padding:5px 10px;background:rgba(245,158,11,.08);border-left:3px solid #d97706;border-radius:0 6px 6px 0;">
+          <span style="font-size:11px;color:#92400e;">🏷 นัดเพราะ:</span>
+          <span style="font-size:12px;color:#78350f;font-weight:600;"> ติดตามอาการหลังฉีดฟิลเลอร์</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">② VIP — ชื่อสีทอง + badge 👑 (user เลือก A Gold) · toggle ในหัวการ์ดหน้าข้อมูลลูกค้า</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:280px;background:#0f0f0f;padding:14px;border-radius:8px;text-align:center;">
+      <div style="font-size:9px;color:#777;text-transform:uppercase;margin-bottom:6px;">Dark — CDV header + toggle</div>
+      <div style="width:56px;height:56px;border-radius:50%;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;border:2px solid rgba(220,38,38,.4);background:rgba(220,38,38,.08);color:#eee;font-weight:700;font-size:20px;">ส</div>
+      <div style="display:inline-block;background:#1c1c1c;border:1px solid #333;color:#bbb;font-family:monospace;font-size:11px;padding:2px 10px;border-radius:6px;margin-bottom:6px;">HN 000123</div>
+      <div style="font-size:16px;font-weight:700;color:#fbbf24;">คุณสมหญิง ใจดี
+        <span style="margin-left:6px;display:inline-flex;align-items:center;gap:3px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45);color:#fcd34d;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;vertical-align:middle;">👑 VIP</span>
+      </div>
+      <div style="margin-top:8px;">
+        <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);color:#fcd34d;font-size:11px;font-weight:700;padding:5px 12px;border-radius:8px;">👑 VIP: เปิด (กดเพื่อปิด)</span>
+      </div>
+      <div style="font-size:10px;color:#8a8a8a;margin-top:6px;">#fbbf24 บนพื้นเข้ม ≈ 11:1 ✓</div>
+    </div>
+    <div style="flex:1;min-width:280px;background:#f8fafc;padding:14px;border-radius:8px;text-align:center;border:1px solid #e2e8f0;">
+      <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">Light — เฉดทองเข้ม (aaAccent V125 pattern)</div>
+      <div style="display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;color:#64748b;font-family:monospace;font-size:11px;padding:2px 10px;border-radius:6px;margin-bottom:6px;">HN 000123</div>
+      <div style="font-size:16px;font-weight:700;color:#b45309;">คุณสมหญิง ใจดี
+        <span style="margin-left:6px;display:inline-flex;align-items:center;gap:3px;background:rgba(245,158,11,.12);border:1px solid rgba(180,83,9,.4);color:#92400e;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;vertical-align:middle;">👑 VIP</span>
+      </div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:4px;">#b45309 บนพื้นขาว ≈ 4.7:1 AA ✓</div>
+      <div style="margin-top:10px;text-align:left;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+        <div style="font-size:10px;color:#64748b;margin-bottom:4px;">ตัวอย่างในลิสต์ (ทุก surface ภายใน):</div>
+        <div style="font-size:12px;color:#334155;">INV-2026... · <span style="color:#b45309;font-weight:700;">คุณสมหญิง ใจดี</span> <span style="background:rgba(245,158,11,.12);border:1px solid rgba(180,83,9,.4);color:#92400e;font-size:9px;font-weight:800;padding:1px 6px;border-radius:999px;">👑 VIP</span> · ฿13,900</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">③④ Staff-chat cards — ปุ่ม Violet gradient เรืองแสง "เปิดบันทึกการรักษา ›" (user เลือก A)</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:280px;background:#0f0f0f;padding:12px;border-radius:8px;">
+      <div style="background:#161616;border:1px solid #2e2e2e;border-left:4px solid #ef4444;border-radius:0 12px 12px 0;padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="display:inline-flex;width:26px;height:26px;border-radius:50%;background:#ef4444;align-items:center;justify-content:center;color:#fff;font-size:13px;">✦</span>
+          <div style="line-height:1.2;">
+            <div style="font-size:10px;font-weight:700;color:#fda4af;">ระบบ · LoverClinic</div>
+            <div style="font-size:13px;font-weight:700;color:#ececec;">📋 บันทึกซักประวัติเสร็จแล้ว</div>
+          </div>
+          <div style="margin-left:auto;font-size:9px;color:#8a8a8a;">14:32</div>
+        </div>
+        <a style="font-size:13px;font-weight:700;color:#7dd3fc;text-decoration:underline;">คุณสมหญิง ใจดี ↗</a>
+        <span style="font-size:11px;background:#222;color:#999;padding:2px 8px;border-radius:6px;margin-left:6px;">HN 000123</span>
+        <div style="margin-top:9px;">
+          <span style="display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:12.5px;font-weight:800;letter-spacing:.02em;padding:8px 18px;border-radius:10px;box-shadow:0 4px 18px rgba(139,92,246,.45), inset 0 1px 0 rgba(255,255,255,.25);">🩺 เปิดบันทึกการรักษา <span style="font-size:14px;opacity:.85;">›</span></span>
+        </div>
+      </div>
+      <div style="margin-top:10px;background:#161616;border:1px solid #2e2e2e;border-left:4px solid #7c3aed;border-radius:0 12px 12px 0;padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="display:inline-flex;width:26px;height:26px;border-radius:50%;background:#7c3aed;align-items:center;justify-content:center;color:#fff;font-size:13px;">✦</span>
+          <div style="line-height:1.2;">
+            <div style="font-size:10px;font-weight:700;color:#c4b5fd;">ระบบ · LoverClinic</div>
+            <div style="font-size:13px;font-weight:700;color:#ececec;">🩺 แพทย์ลงบันทึกเสร็จแล้ว</div>
+          </div>
+        </div>
+        <a style="font-size:13px;font-weight:700;color:#7dd3fc;text-decoration:underline;">คุณสมหญิง ใจดี ↗</a>
+        <span style="font-size:11px;background:#222;color:#999;padding:2px 8px;border-radius:6px;margin-left:6px;">HN 000123</span>
+        <div style="margin-top:6px;font-size:12px;color:#bbb;">โดยแพทย์: <span style="color:#ececec;font-weight:700;">นพ.สมชาย รักษาดี</span></div>
+        <div style="margin-top:8px;"><span style="display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:12.5px;font-weight:800;padding:8px 18px;border-radius:10px;box-shadow:0 4px 18px rgba(139,92,246,.45), inset 0 1px 0 rgba(255,255,255,.25);">🩺 เปิดบันทึกการรักษา <span style="font-size:14px;opacity:.85;">›</span></span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;background:#f1f5f9;padding:12px;border-radius:8px;">
+      <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">Light</div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #ef4444;border-radius:0 12px 12px 0;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:#be123c;">ระบบ · LoverClinic</div>
+        <div style="font-size:13px;font-weight:700;color:#1e293b;">📋 บันทึกซักประวัติเสร็จแล้ว</div>
+        <a style="font-size:13px;font-weight:700;color:#0369a1;text-decoration:underline;">คุณสมหญิง ใจดี ↗</a>
+        <span style="font-size:11px;background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:6px;margin-left:6px;">HN 000123</span>
+        <div style="margin-top:9px;"><span style="display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:12.5px;font-weight:800;padding:8px 18px;border-radius:10px;box-shadow:0 4px 14px rgba(139,92,246,.35);">🩺 เปิดบันทึกการรักษา <span style="font-size:14px;opacity:.85;">›</span></span></div>
+      </div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:6px;">ขาวบนม่วง 5.2:1 AA ✓ ทั้งสองธีม · ชื่อลิงก์ sky-700 (light) / sky-300 (dark) ตามการ์ดเดิม AV198</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow ① — Recall render decision (RecallRow ใช้ร่วม 3 surfaces + 3 modals)</div>
+  <div class="flowrow"><span class="flowbox">recall doc {reason, outcome, outcomeNote}</span><span class="flowarrow">→</span><span class="flowbox">RecallRow Timeline</span><span class="flowarrow">→</span><span class="flowbox">reason มี? → โหนดทอง "เหตุผลนัด" เสมอ</span></div>
+  <div class="flowrow" style="padding-left:40px;"><span class="flowarrow">↓ outcome/outcomeNote มี?</span></div>
+  <div class="flowrow" style="padding-left:40px;"><span class="flowbox">มี → เส้นเชื่อม + โหนดฟ้า "ผลการติดต่อ" + chip ผลลัพธ์</span> <span class="flowbox">ไม่มี → จบที่โหนดเดียว</span></div>
+  <div class="flowrow"><span class="flowbox">RecallOutcomeModal / RecallSnoozeMenu / RecallLineTemplateModal</span><span class="flowarrow">→</span><span class="flowbox">แถบ "🏷 นัดเพราะ: {reason}" ใต้หัว modal</span></div>
+  <div class="flowrow"><span class="flowbox" style="border-color:#16a34a;color:#166534;">ข้อมูลไม่แก้เลย — recordRecallOutcome ไม่เคยทับ reason (ยืนยันแล้ว backendClient.js:12991)</span></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow ② — VIP toggle → real-time ทุกจอ (listener เดียว)</div>
+  <div class="flowrow"><span class="flowbox">CDV: กดปุ่ม 👑 VIP</span><span class="flowarrow">→</span><span class="flowbox">updateCustomer(id, {vip, vipAt, vipBy})</span><span class="flowarrow">→</span><span class="flowbox">be_customers doc</span></div>
+  <div class="flowrow"><span class="flowbox">VipProvider (mount ใน BackendDashboard + AdminDashboard เท่านั้น)</span><span class="flowarrow">→</span><span class="flowbox">onSnapshot where('vip','==',true)</span><span class="flowarrow">→</span><span class="flowbox">Set&lt;customerId&gt; ใน context</span></div>
+  <div class="flowrow"><span class="flowbox">ทุก surface: useIsVip(customerId) / &lt;VipName&gt; / &lt;VipBadge&gt;</span><span class="flowarrow">→</span><span class="flowbox" style="border-color:#d97706;color:#92400e;">snapshot ยิง → ทุกจอเปลี่ยนทันที (denormalized name ไม่เกี่ยว — key ด้วย customerId)</span></div>
+  <div class="flowrow"><span class="flowbox" style="border-color:#dc2626;color:#991b1b;">EXCLUDE: PatientForm / PatientDashboard / ClinicSchedule / Sale+Quotation print / documentPrintEngine / LINE ทั้งหมด — VipProvider ไม่ mount + source-grep guard</span></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow ③④ — TFP save → การ์ด staff chat → แพทย์เปิดกลับ</div>
+  <div class="flowrow"><span class="flowbox">TFP handleSubmit('vitals' | 'doctor')</span><span class="flowarrow">→</span><span class="flowbox">save สำเร็จ (ได้ treatmentId)</span><span class="flowarrow">→</span><span class="flowbox">เขียนการ์ด client-side (try/catch ไม่กระทบ save)</span></div>
+  <div class="flowrow" style="padding-left:20px;"><span class="flowbox">id = CHAT-SYS-TFP-{treatmentId}-{vitals|doctor} (ตายตัว → save ซ้ำ = create ชน → เงียบ = ไม่มีการ์ดซ้ำ)</span></div>
+  <div class="flowrow" style="padding-left:20px;"><span class="flowbox">system: {kind, treatmentId, customerId, nameSnapshot, hnSnapshot, doctorName?}</span> <span class="flowbox">branchId = สาขาของการรักษา</span></div>
+  <div class="flowrow"><span class="flowbox">firestore.rules</span><span class="flowarrow">→</span><span class="flowbox">client เขียน system ได้เฉพาะ kind ∈ {tfp-vitals, tfp-doctor} + validators · intake/followup ยังปลอมไม่ได้</span></div>
+  <div class="flowrow"><span class="flowbox">StaffChatSystemCard (kind ใหม่)</span><span class="flowarrow">→</span><span class="flowbox">ชื่อกดได้ → /?backend=1&customer={id}</span> <span class="flowbox">ปุ่ม → /?backend=1&customer={id}&treatment={BT-id}</span></div>
+  <div class="flowrow"><span class="flowbox">BackendDashboard deep-link useEffect (ขยาย)</span><span class="flowarrow">→</span><span class="flowbox">?treatment= → getCustomer → setTreatmentFormMode({mode:'edit', treatmentId, ...})</span><span class="flowarrow">→</span><span class="flowbox" style="border-color:#7c3aed;color:#5b21b6;">TFP ใบนั้นเปิดทันที</span></div>
+  <div class="flowrow"><span class="flowbox">เสียง + unread</span><span class="flowarrow">→</span><span class="flowbox">อัตโนมัติตาม pipeline เดิม (V82 cursor)</span></div>
+</div>
+
+<h2>Architecture</h2>
+
+<div class="section">
+<h3>Feature ① — Recall reason ทุกจุด</h3>
+<ul>
+  <li><strong>ไม่มี data change.</strong> <code>reason</code> preserved อยู่แล้ว</li>
+  <li><code>RecallRow.jsx</code>: แทนที่ prominent-note box (บรรทัด ~126-129 + ~339-350) ด้วย Timeline block — โหนดเหตุผล (ทอง) เสมอเมื่อ reason ไม่ว่าง; โหนดผลติดต่อ (ฟ้า) เมื่อ outcome ถูกบันทึก (แสดง outcome chip inline; outcomeNote เป็นเนื้อความ ถ้าไม่มี note แสดง label ผลลัพธ์อย่างเดียว); ยังไม่ติดต่อ → โหนดเดียว; compact mode ใช้โครงเดียวกันแบบแน่นขึ้น (ครอบ RecallTab / RecallFrontendView / CDV RecallCard อัตโนมัติ)</li>
+  <li><code>RecallOutcomeModal.jsx</code> + <code>RecallSnoozeMenu.jsx</code> + <code>RecallLineTemplateModal.jsx</code>: เพิ่มแถบ "🏷 นัดเพราะ: {reason}" ใต้ header (LINE message ที่ส่งจริงไม่แตะ)</li>
+  <li><code>RecallEditModal</code> มีช่อง reason อยู่แล้ว — ไม่แก้; pill นับจำนวน — ไม่เกี่ยว</li>
+</ul>
+
+<h3>Feature ② — VIP</h3>
+<ul>
+  <li><strong>Schema</strong>: <code>be_customers.vip: boolean</code> + <code>vipAt</code> (serverTimestamp เมื่อ transition) + <code>vipBy</code> (uid) — mirror V41 isHidden + toggle notifyOptOut precedent (CDV:509-514) — <strong>ไม่ต้องแก้ firestore.rules</strong> (staff เขียน be_customers ได้อยู่แล้ว :139-141)</li>
+  <li><strong>Toggle</strong>: ปุ่มในหัวการ์ด CDV ใกล้ชื่อ — staff ทุกคนเห็น/กดได้ (Q3=A); optimistic + live ผ่าน <code>listenToCustomer</code> ที่ CDV มีอยู่แล้ว</li>
+  <li><strong>VipProvider</strong> (ไฟล์ใหม่ เช่น <code>src/lib/VipContext.jsx</code>): listener เดียว <code>onSnapshot(query(be_customers, where('vip','==',true)))</code> ผ่าน scopedDataLayer (universal collection; single-field where → ไม่ต้องมี composite index) → <code>Set&lt;customerId&gt;</code>; mount เฉพาะ BackendDashboard + AdminDashboard root (ห้าม App root — anon บนลิ้ง public จะโดน permission-denied)</li>
+  <li><strong>ตัวแสดงผลกลาง</strong> (ไฟล์ใหม่ <code>src/components/VipBadge.jsx</code>): <code>useIsVip(customerId)</code> + <code>&lt;VipName&gt;</code> (ชื่อทอง dark <code>#fbbf24</code> / light <code>#b45309</code> ตาม theme) + <code>&lt;VipBadge&gt;</code> (👑 VIP chip ทอง) — นอก provider → คืน false เงียบๆ (ปลอดภัยโดยโครงสร้าง)</li>
+  <li><strong>จุดเสียบ</strong>: <code>CustomerOption.jsx</code> (คุม 8 ไฟล์: CDV header, TFP header, AdminDashboard, DepositPanel, AppointmentCalendarView, AppointmentFormModal, CustomerCard, AppointmentLineBadge) + รายจุด inline: CustomerCard grid, SaleTab rows, AppointmentHubRowCard, AppointmentDetailBody (peek+modal), AdminDashboard queue (key ด้วย session.brokerProClinicId), recall rows, StaffChatSystemCard, Quotation/OnlineSales/InsuranceClaims tabs, reports rows (ทุก tab ที่มี customerId), MovementLogPanel, TreatmentTimelineModal, LinkRequestsTab, Membership/WalletPanel — <em>ไล่ให้ครบใน plan (สแกน + enumerate เป็น task)</em></li>
+  <li><strong>Exclusions (ห้ามมี vip render)</strong>: PatientForm / PatientDashboard / ClinicSchedule / SalePrintView / QuotationPrintView / documentPrintEngine + templates / appointmentHubPrintTemplate / lineBotResponder / lineReminderTemplate / api/webhook / api/cron / ED-scoring ลิ้งลูกค้า — ล็อกด้วย source-grep guard test (ไฟล์เหล่านี้ต้องไม่ import VipBadge/VipContext/useIsVip)</li>
+  <li><strong>Rule file update</strong>: <code>.claude/rules/04-thai-ui.md</code> — สีทองใช้ได้แล้ว (user 2026-07-04) ห้ามเฉพาะแดงบนชื่อ/HN</li>
+</ul>
+
+<h3>Feature ③④ — Staff-chat TFP cards</h3>
+<ul>
+  <li><strong>Kind ใหม่ 2 ตัว</strong> ใน <code>system.kind</code>: <code>tfp-vitals</code> ("📋 บันทึกซักประวัติเสร็จแล้ว") + <code>tfp-doctor</code> ("🩺 แพทย์ลงบันทึกเสร็จแล้ว" + "โดยแพทย์: {detail.doctorName}")</li>
+  <li><strong>Writer</strong>: helper ใหม่ฝั่ง client (คู่กับ <code>staffChatClient.js</code>) เรียกจาก TFP handleSubmit หลัง save สำเร็จเมื่อ saveMode==='vitals'|'doctor' — try/catch non-fatal; doc id ตายตัว <code>CHAT-SYS-TFP-{treatmentId}-{kind}</code> + rules update:false → save ซ้ำไม่สร้างการ์ดซ้ำ (already-exists → swallow); snapshot ชื่อ/HN/customerId/doctorName มีครบใน TFP ตอน save</li>
+  <li><strong>firestore.rules</strong>: แก้ clause <code>!('system' in ...)</code> ของ be_staff_chat_messages → อนุญาต system map เมื่อ <code>system.kind ∈ {'tfp-vitals','tfp-doctor'}</code> + validators (treatmentId/customerId string ไม่ว่าง) — kind อื่น (intake/followup) ยัง client-forge ไม่ได้; <strong>ต้อง deploy rules + Probe-Deploy-Probe + เพิ่ม probe ใหม่</strong> (anon เขียน tfp card → 403; staff เขียน kind intake → denied)</li>
+  <li><strong>Deep link ใหม่</strong>: <code>buildTreatmentEditUrl(customerId, treatmentId)</code> ใน <code>customerNavigation.js</code> → <code>/?backend=1&customer={id}&treatment={BT-id}</code>; ขยาย deep-link useEffect ใน <code>BackendDashboard.jsx:232-282</code> ให้ ?treatment= → getCustomer → <code>setTreatmentFormMode({mode:'edit', treatmentId, customerId, customerHN, patientName, patientData})</code> (mirror opener เดิม :482-502)</li>
+  <li><strong>Card UI</strong>: ขยาย <code>StaffChatSystemCard.jsx</code> — kind ใหม่ 2 ตัว + ปุ่ม violet gradient (target _blank) + บรรทัดแพทย์; ชื่อลูกค้าลิงก์แบบเดิม; ไม่ต้อง live-resolve (ลูกค้าลงทะเบียนแล้ว ณ จุด TFP)</li>
+  <li><strong>ไม่ทำ (YAGNI)</strong>: การ์ดตอน full staff-save (finalize) — user ขอเฉพาะซักประวัติ + แพทย์; Cloud Function trigger — Q2=A client-write</li>
+</ul>
+</div>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>ซักประวัติ = A:</strong> ปุ่ม teal "บันทึกข้อมูลซักประวัติ" ใน TFP (ไม่ใช่ฟอร์มรับเข้าที่มีการ์ดอยู่แล้ว)</li>
+  <li><strong>กลไกการ์ด = A:</strong> client เขียนตรง + แก้ rules แบบแคบ (deploy rules + Probe-Deploy-Probe)</li>
+  <li><strong>สิทธิ์ VIP = A:</strong> staff ทุกคน toggle ได้</li>
+  <li><strong>สีชื่อ VIP = Gold:</strong> dark <code>#fbbf24</code> / light <code>#b45309</code> + badge 👑 VIP — <em>user ยืนยัน "ชื่อสีทองได้นะห้ามแดงเฉยๆ" (supersede กฎห้ามทองเดิม → อัปเดต 04-thai-ui.md)</em></li>
+  <li><strong>Recall layout = C:</strong> Timeline เล่าเรื่อง (เลือกจาก 5 แบบ A-E)</li>
+  <li><strong>Recall scope:</strong> เหตุผลแสดงทุกจุดที่แสดง recall (ลิสต์ ×3 ผ่าน RecallRow + modal ×3)</li>
+  <li><strong>ปุ่มการ์ด = A:</strong> Violet gradient เรืองแสง + chevron, label "เปิดบันทึกการรักษา"</li>
+  <li><strong>Theme:</strong> ทุกอย่างต้องเข้ากับ light theme ด้วย (AA ทั้งสองธีม — aaAccent V125 pattern)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Recall ที่มีผลการติดต่อแล้ว → เห็นทั้งเหตุผลนัดและผลการติดต่อ (Timeline) ในลิสต์ backend / Recall วันนี้ / หน้าลูกค้า; recall ที่ยังไม่ติดต่อ → เห็นเหตุผลเหมือนเดิม</li>
+  <li>Modal บันทึกผล / เลื่อน / ส่ง LINE แสดง "นัดเพราะ: {reason}"; ข้อความ LINE ที่ส่งจริงไม่เปลี่ยน</li>
+  <li>กด toggle 👑 ใน CDV → ชื่อลูกค้าเป็นสีทอง + badge 👑 VIP ปรากฏ<strong>ทันที (ไม่ต้อง refresh)</strong> ในทุก surface ภายในที่เปิดอยู่ (ลิสต์ลูกค้า, ขาย, นัดหมาย, คิว, recall, staff chat, รายงาน, ฯลฯ); กดปิด → หายทันทีทุกจอ</li>
+  <li>หน้า/เอกสาร/ข้อความที่ลูกค้าเห็น (patient links, schedule link, ใบเสร็จ/ใบเสนอราคา/เอกสาร print, LINE) <strong>ไม่มีร่องรอย VIP ใดๆ</strong> — มี test ล็อก</li>
+  <li>field vip รอดหลังบันทึกฟอร์มแก้ไขลูกค้า (updateCustomerFromForm) — มี test ล็อก</li>
+  <li>กด "บันทึกข้อมูลซักประวัติ" ใน TFP → การ์ด 📋 โผล่ใน staff chat สาขานั้น (ชื่อกดได้ + HN + ปุ่มเปิดบันทึกการรักษา); กด "บันทึกสำหรับแพทย์" → การ์ด 🩺 + "โดยแพทย์: {ชื่อ}"</li>
+  <li>ปุ่ม "เปิดบันทึกการรักษา" เปิดแท็บใหม่เข้า TFP ใบนั้นในโหมดแก้ไขโดยตรง</li>
+  <li>กด save ซ้ำใบเดิมโหมดเดิม → ไม่มีการ์ดซ้ำ; การ์ดเขียนไม่สำเร็จ → การ save ไม่พัง</li>
+  <li>Client ปลอมการ์ด kind intake/followup ไม่ได้ (rules ยังบล็อก); anon เขียนการ์ดใดๆ ไม่ได้ (403)</li>
+  <li>ทุก UI ใหม่ผ่าน AA ทั้ง dark + light theme</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>updateCustomerFromForm rebuild (V145-class):</strong> ฟอร์มแก้ไขลูกค้า rebuild doc — ต้อง verify ตอน implement ว่า top-level <code>vip</code> ไม่ถูก strip (ถ้า strip → แก้ให้ carry + test ล็อก)</li>
+  <li><strong>VIP sweep completeness (V12-class):</strong> ชื่อลูกค้าโผล่ ~74 ไฟล์ — plan ต้องมี task สแกน enumerate + classifier test (internal = มี VipBadge / customer-facing = ห้ามมี) กันตกหล่น</li>
+  <li><strong>Rules narrowing:</strong> การเปิดให้ staff เขียน system card kind tfp-* = staff ปลอมการ์ด tfp ได้ในทางทฤษฎี — ยอมรับ (staff auth แล้ว + พิมพ์ข้อความหลอกได้อยู่แล้ว); intake/followup ยัง server-only</li>
+  <li><strong>AdminDashboard queue:</strong> คิวใช้ opd_sessions (denorm) — VIP ต้อง key ด้วย <code>session.brokerProClinicId</code>; ลูกค้า walk-in ที่ยังไม่ลงทะเบียน (ไม่มี customerId) จะยังไม่โชว์ VIP จนกว่าจะ link — ถูกต้องตาม semantic</li>
+  <li><strong>Deploy:</strong> feature นี้ต้อง deploy ทั้ง vercel + firestore.rules (V15 combined + Rule B Probe-Deploy-Probe + probe ใหม่) — รอคำสั่ง "deploy" explicit (V18)</li>
+</ul>
+
+</body>
+</html>
