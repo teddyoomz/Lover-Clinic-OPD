@@ -8,6 +8,8 @@
 // Spec: docs/superpowers/specs/2026-07-04-df-product-rates-and-course-rate-fix-design.html
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { buildMasterIdByName, buildDefaultRows } from '../src/lib/dfEntryValidation.js';
 import { getRateForStaffCourse, normalizeDfGroup, validateDfGroupStrict } from '../src/lib/dfGroupValidation.js';
 
@@ -168,5 +170,44 @@ describe('C. normalizeDfGroup — kind preservation (V14 undefined-free)', () =>
     const fail = validateDfGroupStrict(normalizeDfGroup({ name: 'g', rates: [{ courseId: 'P1', value: 150, type: 'percent', kind: 'product' }] }));
     expect(fail).not.toBeNull();
     expect(fail[0]).toBe('rates');
+  });
+});
+
+describe('D. source-grep regression locks (AV200)', () => {
+  const tfp = readFileSync(resolve(__dirname, '../src/components/TreatmentFormPage.jsx'), 'utf8');
+  const modal = readFileSync(resolve(__dirname, '../src/components/backend/DfGroupFormModal.jsx'), 'utf8');
+
+  it('D1: TFP course map ใช้ buildMasterIdByName + courseName ก่อน name', () => {
+    expect(tfp).toMatch(/buildMasterIdByName\(masterCourses,\s*\['courseName',\s*'name'\],\s*\['id',\s*'courseId'\]\)/);
+  });
+
+  it('D2: ANTI-REGRESSION — inline map เก่าที่อ่าน mc.name ต้องไม่กลับมา', () => {
+    expect(tfp).not.toMatch(/String\(mc\?\.name \|\| ''\)/);
+  });
+
+  it('D3: TFP มี product map + chain course→product ใน Source 2', () => {
+    expect(tfp).toMatch(/buildMasterIdByName\(options\?\.products,\s*\['productName',\s*'name'\],\s*\['id',\s*'productId'\]\)/);
+    expect(tfp).toMatch(/masterCourseIdByName\.get\(name\)\s*\|\|\s*masterProductIdByName\.get\(name\)/);
+    // deps ของ treatmentCoursesForDf ต้องมี product map (stale-closure guard)
+    expect(tfp).toMatch(/masterCourseIdByName,\s*masterProductIdByName,\s*treatmentItems/);
+  });
+
+  it('D4: DfGroupFormModal โหลด listProductsForPicker + stamp kind product + section ใหม่', () => {
+    expect(modal).toMatch(/listProductsForPicker/);
+    expect(modal).toMatch(/kind:\s*'product'/);
+    expect(modal).toMatch(/ค้นหาสินค้า\/หัตถการเพื่อเพิ่มอัตรา/);
+    expect(modal).toMatch(/อัตราค่ามือต่อสินค้า\/หัตถการ/);
+    expect(modal).toMatch(/data-testid="df-product-rate-list"/);
+  });
+
+  it('D5: resolver ไม่ถูกแก้ (สัญญา spec: getRateForStaffCourse เทียบ id ตรงๆ)', () => {
+    const dfv = readFileSync(resolve(__dirname, '../src/lib/dfGroupValidation.js'), 'utf8');
+    expect(dfv).toMatch(/String\(r\.courseId\) === String\(courseId\)/);
+  });
+
+  it('D6: updateRate/removeRate ยังใช้ index จริงของ rates[] (split ด้วย indexedRates)', () => {
+    expect(modal).toMatch(/const indexedRates = \(form\.rates \|\| \[\]\)\.map\(\(r, idx\) => \(\{ r, idx \}\)\)/);
+    expect(modal).toMatch(/courseRateRows\.map\(renderRateRow\)/);
+    expect(modal).toMatch(/productRateRows\.map\(renderRateRow\)/);
   });
 });

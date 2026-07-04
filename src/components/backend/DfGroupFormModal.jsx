@@ -9,7 +9,9 @@ import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 // V49 (2026-05-08) — switched listCourses → listCoursesForPicker because
 // canonical be_courses uses `courseName`+`courseCategory` not `name`+`category`.
 // Course chip search + datalist + addRate were silently empty.
-import { saveDfGroup, listCoursesForPicker } from '../../lib/scopedDataLayer.js';
+// AV200 (2026-07-04) — + listProductsForPicker for the NEW product/procedure
+// rate section (kind: 'product'); same rates[] array, resolver unchanged.
+import { saveDfGroup, listCoursesForPicker, listProductsForPicker } from '../../lib/scopedDataLayer.js';
 import {
   emptyDfGroupForm, generateDfGroupId, validateDfGroupStrict, normalizeDfGroup,
   STATUS_OPTIONS, RATE_TYPES, RATE_TYPE_LABEL,
@@ -23,11 +25,19 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
   const [error, setError] = useState('');
   const [courses, setCourses] = useState([]);
   const [courseQuery, setCourseQuery] = useState('');
+  const [products, setProducts] = useState([]);
+  const [productQuery, setProductQuery] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    listCoursesForPicker().catch(() => [])
-      .then((c) => { if (!cancelled) setCourses(c || []); });
+    Promise.all([
+      listCoursesForPicker().catch(() => []),
+      listProductsForPicker().catch(() => []),
+    ]).then(([c, p]) => {
+      if (cancelled) return;
+      setCourses(c || []);
+      setProducts(p || []);
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -37,8 +47,9 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
   // this, the row label shows the courseId until the user touches it.
   useEffect(() => {
     if (!Array.isArray(form.rates) || form.rates.length === 0) return;
-    if (!Array.isArray(courses) || courses.length === 0) return;
-    const nameById = new Map(courses.map((c) => [String(c.id), c.name || '']));
+    const pool = [...(courses || []), ...(products || [])]; // AV200: products join the rehydrate pool
+    if (pool.length === 0) return;
+    const nameById = new Map(pool.map((c) => [String(c.id), c.name || '']));
     let changed = false;
     const patched = form.rates.map((r) => {
       if (r && r.courseName && String(r.courseName).trim()) return r;
@@ -48,7 +59,7 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
     });
     if (changed) setForm((prev) => ({ ...prev, rates: patched }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courses]);
+  }, [courses, products]);
 
   const takenCourseIds = useMemo(() => new Set((form.rates || []).map((r) => String(r.courseId))), [form.rates]);
   const availablePool = useMemo(() => {
@@ -61,6 +72,19 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
     ).slice(0, 20);
   }, [courses, takenCourseIds, courseQuery]);
 
+  // AV200 (2026-07-04): product/procedure pool — mirror of availablePool.
+  // takenCourseIds is shared across both kinds (also blocks a cross-namespace
+  // numeric-id collision from ever entering the same rates[] array).
+  const availableProductPool = useMemo(() => {
+    const q = productQuery.trim().toLowerCase();
+    const pool = products.filter((p) => !takenCourseIds.has(String(p.id)));
+    if (!q) return pool.slice(0, 20);
+    return pool.filter((p) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [products, takenCourseIds, productQuery]);
+
   const addRate = (course) => {
     setForm((prev) => ({
       ...prev,
@@ -70,6 +94,17 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
       }],
     }));
     setCourseQuery('');
+  };
+
+  const addProductRate = (product) => {
+    setForm((prev) => ({
+      ...prev,
+      rates: [...(prev.rates || []), {
+        courseId: product.id, courseName: product.name || '',
+        value: 0, type: 'baht', kind: 'product',
+      }],
+    }));
+    setProductQuery('');
   };
 
   const updateRate = (idx, patch) => {
@@ -82,6 +117,37 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
   const removeRate = (idx) => {
     setForm((prev) => ({ ...prev, rates: prev.rates.filter((_, i) => i !== idx) }));
   };
+
+  // AV200 (2026-07-04): display rows split by kind but keep the ORIGINAL
+  // rates[] index so updateRate/removeRate target the real array slot.
+  const indexedRates = (form.rates || []).map((r, idx) => ({ r, idx }));
+  const courseRateRows = indexedRates.filter(({ r }) => r.kind !== 'product');
+  const productRateRows = indexedRates.filter(({ r }) => r.kind === 'product');
+
+  // Shared row renderer for both sections (identical markup; idx = real index).
+  const renderRateRow = ({ r, idx }) => (
+    <div key={`${r.courseId}-${idx}`}
+      className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]">
+      <span className="col-span-6 text-sm truncate" title={r.courseName || r.courseId}>
+        {r.courseName || r.courseId}
+      </span>
+      <input type="number" min="0" step="0.01" value={r.value}
+        onChange={(e) => updateRate(idx, { value: Math.max(0, Number(e.target.value) || 0) })}
+        className="col-span-3 px-2 py-1 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)]"
+        data-testid={`df-rate-value-${idx}`} />
+      <select value={r.type}
+        onChange={(e) => updateRate(idx, { type: e.target.value })}
+        className="col-span-2 px-2 py-1 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)]"
+        data-testid={`df-rate-type-${idx}`}>
+        {RATE_TYPES.map((t) => <option key={t} value={t}>{RATE_TYPE_LABEL[t]}</option>)}
+      </select>
+      <button type="button" onClick={() => removeRate(idx)}
+        aria-label={`ลบอัตรา ${r.courseName || r.courseId}`}
+        className="col-span-1 justify-self-center p-1 text-red-400 hover:bg-red-900/20 rounded">
+        <Trash2 size={12} />
+      </button>
+    </div>
+  );
 
   const handleSave = async () => {
     setError('');
@@ -151,13 +217,13 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
         </div>
       </section>
 
-      {/* Rate matrix */}
+      {/* Rate matrix — courses */}
       <section className="space-y-3" data-field="rates">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">
             อัตราค่ามือต่อคอร์ส
           </h3>
-          <span className="text-[10px] text-[var(--tx-muted)]">{(form.rates || []).length} รายการ</span>
+          <span className="text-[10px] text-[var(--tx-muted)]">{courseRateRows.length} รายการ</span>
         </div>
 
         {/* Course picker */}
@@ -179,32 +245,47 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
           </div>
         )}
 
-        {/* Rate rows */}
-        {(form.rates || []).length > 0 && (
+        {/* Course rate rows */}
+        {courseRateRows.length > 0 && (
           <div className="space-y-1.5" data-testid="df-rate-list">
-            {form.rates.map((r, idx) => (
-              <div key={`${r.courseId}-${idx}`}
-                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]">
-                <span className="col-span-6 text-sm truncate" title={r.courseName || r.courseId}>
-                  {r.courseName || r.courseId}
-                </span>
-                <input type="number" min="0" step="0.01" value={r.value}
-                  onChange={(e) => updateRate(idx, { value: Math.max(0, Number(e.target.value) || 0) })}
-                  className="col-span-3 px-2 py-1 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)]"
-                  data-testid={`df-rate-value-${idx}`} />
-                <select value={r.type}
-                  onChange={(e) => updateRate(idx, { type: e.target.value })}
-                  className="col-span-2 px-2 py-1 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)]"
-                  data-testid={`df-rate-type-${idx}`}>
-                  {RATE_TYPES.map((t) => <option key={t} value={t}>{RATE_TYPE_LABEL[t]}</option>)}
-                </select>
-                <button type="button" onClick={() => removeRate(idx)}
-                  aria-label={`ลบอัตรา ${r.courseName || r.courseId}`}
-                  className="col-span-1 justify-self-center p-1 text-red-400 hover:bg-red-900/20 rounded">
-                  <Trash2 size={12} />
-                </button>
-              </div>
+            {courseRateRows.map(renderRateRow)}
+          </div>
+        )}
+
+        {/* AV200 (2026-07-04) — product/procedure rates (kind: 'product').
+            Same rates[] array + row markup; resolver matches by id. Lets
+            standalone procedures (e.g. "Shock wave") auto-fill in the DF
+            modal instead of manual per-treatment keying. */}
+        <div className="flex items-center justify-between pt-2 border-t border-[var(--bd)]">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">
+            อัตราค่ามือต่อสินค้า/หัตถการ
+          </h3>
+          <span className="text-[10px] text-[var(--tx-muted)]">{productRateRows.length} รายการ</span>
+        </div>
+
+        {/* Product picker */}
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] pointer-events-none" />
+          <input type="text" value={productQuery}
+            onChange={(e) => setProductQuery(e.target.value)}
+            placeholder="ค้นหาสินค้า/หัตถการเพื่อเพิ่มอัตรา"
+            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
+        </div>
+        {availableProductPool.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
+            {availableProductPool.map((p) => (
+              <button key={p.id} type="button" onClick={() => addProductRate(p)}
+                className="px-2 py-1 rounded-full text-[11px] bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-[var(--accent)] flex items-center gap-1">
+                <Plus size={10} /> {p.name || p.id}
+              </button>
             ))}
+          </div>
+        )}
+
+        {/* Product rate rows */}
+        {productRateRows.length > 0 && (
+          <div className="space-y-1.5" data-testid="df-product-rate-list">
+            {productRateRows.map(renderRateRow)}
           </div>
         )}
       </section>
