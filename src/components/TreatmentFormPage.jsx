@@ -31,6 +31,8 @@ import { deleteTreatmentBlob } from '../lib/chartImageStorage.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
+import OpdNoteTemplateMenu from './OpdNoteTemplateMenu.jsx';
+import { appendTemplateToCc } from '../lib/opdNoteTemplateValidation.js';
 import ImageLightbox from './ImageLightbox.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
@@ -704,6 +706,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // re-rendering all 7 siblings on every keystroke in one of them.
   const setOpdField = useCallback((field, value) => {
     setOpd(prev => ({ ...prev, [field]: value }));
+  }, []);
+  // OPD note templates (2026-07-05, Q2=A) — append template content into CC.
+  // Functional update reads prev.symptoms fresh (textarea blur commits via
+  // flushSync BEFORE the menu click lands → no race with in-flight typing).
+  const handleInsertCcTemplate = useCallback((content) => {
+    setOpd(prev => ({ ...prev, symptoms: appendTemplateToCc(prev.symptoms, content) }));
   }, []);
   // Stable per-field updater for vitals (8 fields under one object).
   const setVitalField = useCallback((field, value) => {
@@ -3906,6 +3914,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     มีข้อมูลครั้งก่อน {prevTreatment.treatmentDate ? `(${prevTreatment.treatmentDate})` : ''}
                   </span>
                 )}
+                {/* OPD note templates (2026-07-05, Q1=A) — pill in the header row
+                    (ml-auto inside the component) so the right column gains NO
+                    height → เขียว/ม่วง save buttons stay bottom-aligned. */}
+                <OpdNoteTemplateMenu isDark={isDark} onInsert={handleInsertCcTemplate} />
               </SectionHeader>
               <div className="flex flex-col gap-3 flex-1 min-h-0">
                 {[
