@@ -7,6 +7,9 @@ import { reconnectFirestore } from './lib/firestoreReconnect.js';
 import LoadErrorRetry from './components/LoadErrorRetry.jsx';
 import { UserPermissionProvider } from './contexts/UserPermissionContext.jsx';
 import { BranchProvider } from './lib/BranchContext.jsx';
+// VIP (2026-07-04) — staff-dashboard-only provider (AV202: NEVER wrap public
+// routes — anon users would hit permission-denied on the be_customers query).
+import { VipProvider } from './lib/VipContext.jsx';
 // DEBUG: expose auth for console API calls (DEV ONLY — Vite tree-shakes
 // the entire `if` block in prod builds; closes Rule C2 security exposure
 // surfaced by pre-Phase-15 survey scout 2026-04-26).
@@ -270,13 +273,15 @@ export default function App() {
     return (
       <UserPermissionProvider user={user}>
         <BranchProvider>
-          <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>
-          {/* V73 (2026-05-16) — staff chat widget mounted inside BranchProvider
-              so useSelectedBranch resolves. Widget self-gates on user +
-              selectedBranchId + !needsPublicAuth. */}
-          <Suspense fallback={null}>
-            <StaffChatWidget user={user} needsPublicAuth={needsPublicAuth} />
-          </Suspense>
+          <VipProvider>
+            <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>
+            {/* V73 (2026-05-16) — staff chat widget mounted inside BranchProvider
+                so useSelectedBranch resolves. Widget self-gates on user +
+                selectedBranchId + !needsPublicAuth. */}
+            <Suspense fallback={null}>
+              <StaffChatWidget user={user} needsPublicAuth={needsPublicAuth} />
+            </Suspense>
+          </VipProvider>
         </BranchProvider>
       </UserPermissionProvider>
     );
@@ -294,6 +299,7 @@ export default function App() {
         <Suspense fallback={<LazyFallback />}>
         <UserPermissionProvider user={user}>
           <BranchProvider>
+          <VipProvider>
             <div className={adminView === 'simulation' ? 'hidden' : ''}>
               <AdminDashboard
                 db={db} appId={appId} user={user} auth={auth}
@@ -318,6 +324,7 @@ export default function App() {
             <Suspense fallback={null}>
               <StaffChatWidget user={user} needsPublicAuth={needsPublicAuth} />
             </Suspense>
+          </VipProvider>
           </BranchProvider>
         </UserPermissionProvider>
         </Suspense>

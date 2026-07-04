@@ -296,6 +296,7 @@ function _makeUniversalListener(name) {
 }
 
 export const listenToCustomer = _makeUniversalListener('listenToCustomer');
+export const listenToVipCustomers = _makeUniversalListener('listenToVipCustomers'); // VIP 2026-07-04 — VipProvider single listener
 export const listenToCustomerTreatments = _makeUniversalListener('listenToCustomerTreatments');
 export const listenToCustomerAppointments = _makeUniversalListener('listenToCustomerAppointments');
 export const listenToCustomerSales = _makeUniversalListener('listenToCustomerSales');

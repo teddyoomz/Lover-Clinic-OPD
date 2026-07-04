@@ -1206,6 +1206,27 @@ export function listenToCustomer(customerId, onChange, onError) {
 }
 
 /**
+ * VIP (2026-07-04) — single collection-wide listener that powers the
+ * VipProvider: every staff surface renders gold-name + 👑 badge in real time
+ * from ONE Set<customerId>. be_customers is UNIVERSAL (no branchId) and VIP
+ * customers are few → the where('vip','==',true) result set stays tiny.
+ * Single-field where → no composite index needed.
+ *
+ * @param {(vipCustomerIds: string[]) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToVipCustomers(onChange, onError) {
+  const q = query(customersCol(), where('vip', '==', true));
+  return onSnapshot(q, (snap) => {
+    onChange(snap.docs.map(d => d.id));
+  }, (err) => {
+    console.warn('[vip] listener error', err?.code || err?.message || err);
+    onError?.(err);
+  });
+}
+
+/**
  * V36-quinquies (2026-04-29) — real-time listener for be_course_changes
  * filtered to one customer. Powers `CourseHistoryTab` ("ประวัติการใช้คอร์ส")
  * so newly-emitted course audit entries (kind='use' from treatment-deduct,
@@ -12758,6 +12779,7 @@ export async function convertQuotationToSale(quotationId) {
 // listenToScheduleByDay) remain unmarked — the hook injects current branchId
 // for them and re-subscribes on branch switch.
 listenToCustomer.__universal__ = true;
+listenToVipCustomers.__universal__ = true;
 listenToCustomerTreatments.__universal__ = true;
 listenToCustomerAppointments.__universal__ = true;
 listenToCustomerSales.__universal__ = true;
