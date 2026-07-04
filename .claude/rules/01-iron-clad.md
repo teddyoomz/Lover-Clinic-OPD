@@ -234,8 +234,15 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
    curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_customer_identity?documentId=CITIZEN:0000000000000" -H "Content-Type: application/json" -d '{"fields":{"customerId":{"stringValue":"PROBE"}}}'   # → 403 (anon; no list, no write)
    curl -s -o /dev/null -w "%{http_code}\n" -X DELETE "$BASE/$PREFIX/be_recall_cases/anything"   # → 403 (anon)
    ```
+18. **TFP staff-chat system cards (2026-07-04, spec ③④)** — `be_staff_chat_messages` create rule gains a NARROW `system.kind ∈ ['tfp-vitals','tfp-doctor']` allowance for staff clients (TreatmentFormPage writes the card after a vitals/doctor save). intake/followup kinds MUST stay unforgeable. Primary verification = Rule Q L2 `scripts/diag-tfp-chat-card-l2.mjs` (staff client-SDK: tfp card → SUCCESS post-deploy; forge kind intake → DENIED; anon → DENIED). Curl regression:
+   ```
+   # anon create tfp card → 403 (no auth)
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_staff_chat_messages?documentId=test-probe-tfp-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"ระบบ"},"deviceId":{"stringValue":"system"},"text":{"stringValue":"p"},"system":{"mapValue":{"fields":{"kind":{"stringValue":"tfp-vitals"},"treatmentId":{"stringValue":"BT-0"},"customerId":{"stringValue":"x"}}}}}}'   # → 403
+   # anon create intake-kind system card → 403 (still unforgeable)
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_staff_chat_messages?documentId=test-probe-sysforge-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"ระบบ"},"deviceId":{"stringValue":"d"},"text":{"stringValue":"p"},"system":{"mapValue":{"fields":{"kind":{"stringValue":"intake"}}}}}}'   # → 403
+   ```
 13. `firebase deploy --only firestore:rules,storage` (⚠ firebase CLI 15.x: `storage`, NOT `storage:rules`)
-14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
+14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15, 18) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy) — probe 18 เต็มรูปแบบ (staff-allow + forge-deny) ใช้ `scripts/diag-tfp-chat-card-l2.mjs`
 13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)

@@ -204,7 +204,20 @@ service cloud.firestore {
                       // SERVER-ONLY (written by the sendPushOnSubmit Cloud Function via
                       // admin SDK, which bypasses rules). A client must not be able to
                       // FORGE one. Human messages carry no `system` field → unaffected.
-                      && !('system' in request.resource.data);
+                      // (2026-07-04 spec ③④ — NARROW exception) staff clients MAY create
+                      // the two TFP kinds (tfp-vitals / tfp-doctor) written by
+                      // TreatmentFormPage after a vitals/doctor save. intake/followup
+                      // kinds stay server-only / unforgeable.
+                      && (
+                        !('system' in request.resource.data)
+                        || (
+                          request.resource.data.system is map
+                          && request.resource.data.system.get('kind', '') in ['tfp-vitals', 'tfp-doctor']
+                          && request.resource.data.system.get('treatmentId', '') is string
+                          && request.resource.data.system.get('treatmentId', '').size() > 0
+                          && request.resource.data.system.get('customerId', '') is string
+                        )
+                      );
         allow update: if false;             // still immutable-once-sent
         // (2026-05-26) Feature 3 Unsend — clinic-staff may delete (own-only
         // enforced UI-side via deviceId; the retention cron still uses admin SDK).
