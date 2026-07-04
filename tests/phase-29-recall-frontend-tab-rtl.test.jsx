@@ -149,10 +149,16 @@ describe('Phase 29 · F3 RecallFrontendView empty + loading + error states', () 
     expect(screen.getByTestId('recall-frontend-error')).toHaveTextContent('failed');
   });
 
-  it('F3.3 empty list renders empty state', () => {
+  it('F3.3 empty list renders 3 always-on sections + ✓ boxes (Q2=A 2026-07-05 — supersedes the aggregate empty state)', () => {
     mockUseRecallListener.mockReturnValueOnce({ recalls: [], loading: false, error: '' });
     render(<RecallFrontendView />);
-    expect(screen.getByTestId('recall-empty-state')).toBeInTheDocument();
+    // User report IMG_8920: the vanished "วันนี้" section made tomorrow's list
+    // read as today's — compact now ALWAYS shows all 3 sections with explicit
+    // green "✓ ไม่มี" boxes instead of one aggregate empty card.
+    expect(screen.getByTestId('recall-bucket-empty-today')).toHaveTextContent('ไม่มี Recall วันนี้');
+    expect(screen.getByTestId('recall-bucket-empty-overdue')).toBeInTheDocument();
+    expect(screen.getByTestId('recall-bucket-empty-tomorrow')).toBeInTheDocument();
+    expect(screen.queryByTestId('recall-empty-state')).not.toBeInTheDocument();
   });
 });
 

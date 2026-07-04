@@ -48,10 +48,10 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
     expect(screen.getByTestId('recall-status-chip-R1')).toHaveTextContent('รอโทร');
   });
 
-  it('R-Row.3 renders dd/mm date in time column', () => {
+  it('R-Row.3 renders FULL Thai date in time column (Q1=B 2026-07-05 — was bare dd/mm "15/05")', () => {
     // V72: date appears in mobile chip + desktop column → getAllByText.
     render(<RecallRow recall={baseRecall} todayISO={TODAY} />);
-    expect(screen.getAllByText('15/05').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('15 พ.ค. 2569').length).toBeGreaterThanOrEqual(1);
   });
 
   it('R-Row.4 LINE button visible when customerLineUserId present', () => {

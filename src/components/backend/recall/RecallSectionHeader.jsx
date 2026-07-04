@@ -86,7 +86,7 @@ export function RecallSectionHeader({ bucketKey, count, doneCount, prominent = f
       <span className={prominent ? 'text-lg' : 'text-sm'} aria-hidden="true">{theme.icon}</span>
       <span className={`font-bold text-[var(--tx-primary)] ${prominent ? 'text-base' : 'text-[12px]'}`}>
         {theme.label}
-        {dateSuffix && <span className="font-semibold text-[var(--tx-muted)]" data-testid={`recall-section-date-${bucketKey}`}> · {dateSuffix}</span>}
+        {dateSuffix && <span className="font-semibold text-[var(--tx-muted)]" data-testid={`recall-bucket-date-${bucketKey}`}> · {dateSuffix}</span>}
       </span>
       <span
         className="text-[9px] px-1.5 py-0.5 rounded font-bold"

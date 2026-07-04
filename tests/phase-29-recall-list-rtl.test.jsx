@@ -134,10 +134,14 @@ describe('Phase 29 · L2 RecallList empty state', () => {
     expect(screen.queryByTestId('recall-empty-state')).not.toBeInTheDocument();
   });
 
-  it('L2.4 compact mode with no overdue+today shows empty state (even if later has data)', () => {
+  it('L2.4 compact mode with no overdue+today renders 3 always-on sections + ✓ boxes (Q2=A 2026-07-05 — later data stays invisible in compact)', () => {
     const later = [mkRecall({ id: 'L1', recallDate: '2026-06-14', status: 'pending' })];
     render(<RecallList recalls={later} todayISO={TODAY} mode="compact" />);
-    expect(screen.getByTestId('recall-empty-state')).toBeInTheDocument();
+    expect(screen.getByTestId('recall-bucket-empty-today')).toBeInTheDocument();
+    expect(screen.getByTestId('recall-bucket-empty-overdue')).toBeInTheDocument();
+    expect(screen.getByTestId('recall-bucket-empty-tomorrow')).toBeInTheDocument();
+    expect(screen.queryByTestId('recall-empty-state')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recall-row-L1')).not.toBeInTheDocument(); // later ยังไม่โชว์ใน compact
   });
 });
 
