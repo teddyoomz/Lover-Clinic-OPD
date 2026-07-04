@@ -75,9 +75,20 @@ describe('A2 — validateOpdNoteTemplate', () => {
     expect(validateOpdNoteTemplate({ name: 'x', content: ' \n\t ' })?.[0]).toBe('content');
   });
 
-  it('A2.4 ครบ → null (รวม Thai + emoji + ยาว)', () => {
+  it('A2.4 ครบ → null (รวม Thai + emoji + ยาวถึงเพดานพอดี)', () => {
     expect(validateOpdNoteTemplate({ name: 'ปรึกษาผมร่วง', content: 'หัวข้อ\n-รายการ : ____' })).toBeNull();
-    expect(validateOpdNoteTemplate({ name: '😀', content: 'x'.repeat(10000) })).toBeNull();
+    expect(validateOpdNoteTemplate({ name: '😀', content: 'x'.repeat(10000) })).toBeNull(); // = cap พอดี ผ่าน
+  });
+
+  it('A2.5 (Hunt R2-B hardening) เกินเพดาน → [field, Thai msg] — กัน treatment doc ชน 1MB ทีหลัง', () => {
+    const nameFail = validateOpdNoteTemplate({ name: 'ก'.repeat(101), content: 'x' });
+    expect(nameFail?.[0]).toBe('name');
+    expect(nameFail?.[1]).toContain('ยาวเกินไป');
+    const contentFail = validateOpdNoteTemplate({ name: 'ก', content: 'x'.repeat(10001) });
+    expect(contentFail?.[0]).toBe('content');
+    expect(contentFail?.[1]).toContain('ยาวเกินไป');
+    // ขอบพอดีผ่านทั้งคู่
+    expect(validateOpdNoteTemplate({ name: 'ก'.repeat(100), content: 'x'.repeat(10000) })).toBeNull();
   });
 });
 

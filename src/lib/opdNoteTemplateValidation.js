@@ -32,14 +32,23 @@ export const MANDATORY_OPD_NOTE_TEMPLATES = Object.freeze([
   }),
 ]);
 
+// Hunt R2-B hardening (2026-07-05): length caps. An uncapped template content
+// would later inflate the be_treatments doc on insert (the doc already carries
+// inline charts near the 1MB Firestore cap) → the TREATMENT save would fail
+// far from the cause. 10,000 chars ≈ 5+ pages — generous for a history form.
+export const OPD_NOTE_TEMPLATE_NAME_MAX = 100;
+export const OPD_NOTE_TEMPLATE_CONTENT_MAX = 10000;
+
 /**
- * Validate a template (name + content both required, non-whitespace).
+ * Validate a template (name + content required, non-whitespace, capped).
  * @returns {[field: string, msg: string] | null} null = valid
  */
 export function validateOpdNoteTemplate(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ['data', 'ข้อมูล template ไม่ถูกต้อง'];
   if (!String(data.name || '').trim()) return ['name', 'กรุณากรอกชื่อ template'];
+  if (String(data.name || '').trim().length > OPD_NOTE_TEMPLATE_NAME_MAX) return ['name', `ชื่อ template ยาวเกินไป (สูงสุด ${OPD_NOTE_TEMPLATE_NAME_MAX} ตัวอักษร)`];
   if (!String(data.content || '').trim()) return ['content', 'กรุณากรอกเนื้อหา template'];
+  if (String(data.content || '').length > OPD_NOTE_TEMPLATE_CONTENT_MAX) return ['content', `เนื้อหา template ยาวเกินไป (สูงสุด ${OPD_NOTE_TEMPLATE_CONTENT_MAX.toLocaleString()} ตัวอักษร)`];
   return null;
 }
 
