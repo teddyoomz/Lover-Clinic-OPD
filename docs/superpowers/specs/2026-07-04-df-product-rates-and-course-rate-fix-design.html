@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>DF Product Rates + Course Rate Fix — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .rate-row { display: flex; align-items: center; gap: 8px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px; padding: 7px 10px; font-size: 13px; margin-bottom: 6px; }
+    .rate-row .val { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 2px 10px; }
+    .pill { border-radius: 6px; padding: 1px 8px; font-size: 11px; }
+    .flow-box { display: inline-block; background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 13px; margin: 4px 2px; }
+    .flow-arrow { color: #94a3b8; font-weight: bold; padding: 0 4px; }
+    .bug { color: #A32D2D; background: #FCEBEB; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+    .good { color: #085041; background: #E1F5EE; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<h1>DF Product Rates + Course Rate Fix — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-04 · <strong>Status:</strong> Approved direction (Q1=A) — spec under user review ·
+  <strong>Implementation plan:</strong> <a href="../plans/2026-07-04-df-product-rates-and-course-rate-fix.html">2026-07-04-df-product-rates-and-course-rate-fix.html</a> (next step)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>User report (2026-07-04, with screenshot of DfEntryModal on mobile):</p>
+<ol>
+  <li><strong>บั๊ค:</strong> ค่ามือที่กรอกในหน้า "กลุ่ม DF (ค่ามือ)" ไม่ขึ้นใน modal "เพิ่มค่ามือแพทย์ &amp; ผู้ช่วยแพทย์" ของ TFP — ทุกแถวขึ้น 0 บาท + "(ไม่มีอัตราในกลุ่มนี้)" ทั้งที่กรอกอัตราไว้แล้ว</li>
+  <li><strong>Gap:</strong> แถว "Shock wave" เฉยๆ (สินค้า/หัตถการ ที่เข้ามาทาง "+ เพิ่มรายการรักษา" หรือจากการติ๊กใช้สินค้าในคอร์ส) <strong>ไม่มีที่ให้ตั้ง master rate</strong> — หน้ากลุ่ม DF มี picker เฉพาะคอร์ส</li>
+</ol>
+
+<div class="section">
+<p><strong>Root cause ข้อ 1 — ยืนยันจากข้อมูล prod จริง</strong> (Rule R diag <code>scripts/diag-df-rate-mismatch.mjs</code>, 2026-07-04):</p>
+<ul>
+  <li><code>be_courses</code> ทั้ง <strong>405/405 docs ใช้ field <code>courseName</code> — 0 docs มี <code>.name</code></strong></li>
+  <li>TFP <code>masterCourseIdByName</code> (TreatmentFormPage.jsx:1991) อ่าน <code>mc?.name</code> → <strong>map ว่างเปล่า</strong></li>
+  <li>→ <code>treatmentCoursesForDf</code> fallback ใช้ "ชื่อคอร์ส" เป็น pseudo-id (customer.courses ไม่มี courseId)</li>
+  <li>→ resolver <code>getRateForStaffCourse</code> เทียบ pseudo-name กับ <code>rates[].courseId</code> ที่เป็น id จริง (<code>COURSES_1778150447655_AE530C40</code> ฯลฯ) → ไม่ match ทุกแถว → 0 บาท</li>
+  <li><strong>อัตราที่กรอกไว้อยู่ครบ:</strong> กลุ่ม "แพทย์" (DFG-0626-ab5928b6) 120 อัตรา / กลุ่ม "ผู้ช่วยแพทย์" (DFG-0526-b1399741) 68 อัตรา รวม Shock Wave = 10 บาท ✓</li>
+</ul>
+<p><strong>Class-of-bug:</strong> V49-family (canonical-shape multi-reader-sweep) — จุดที่ V49 ตกสำรวจเพราะไม่ใช่ picker แต่เป็น name-map. เกิดตอน BSA/H-quater สลับแหล่งข้อมูล <code>getAllMasterDataItems('courses')</code> (legacy shape มี <code>name</code>) → <code>listCourses()</code> (canonical มี <code>courseName</code>) โดยไม่ได้กวาด reader ตัวนี้</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · หน้ากลุ่ม DF (DfGroupFormModal) — ก่อน (ของจริงตอนนี้)</div>
+  <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#888;margin-bottom:8px;">อัตราค่ามือต่อคอร์ส <span style="float:right;font-weight:400;">120 รายการ</span></div>
+  <div class="rate-row" style="color:#999;">🔍 ค้นหาคอร์สเพื่อเพิ่มอัตรา</div>
+  <div class="rate-row"><span style="flex:1;">Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง</span><span class="val">10</span><span style="color:#666;">บาท</span><span style="color:#e24b4a;">🗑</span></div>
+  <div class="rate-row"><span style="flex:1;">ขลิบไร้เลือด (เบอร์22) 1 ครั้ง</span><span class="val">2000</span><span style="color:#666;">บาท</span><span style="color:#e24b4a;">🗑</span></div>
+  <p class="bug">สินค้า/หัตถการ เช่น "Shock wave" เฉยๆ — ไม่มีที่ให้กรอก (picker มีแต่คอร์ส)</p>
+</div>
+
+<div class="mockup" style="border: 2px solid #185FA5;">
+  <div class="mockup-label">Desktop · หน้ากลุ่ม DF — หลัง (เพิ่ม section ที่ 2)</div>
+  <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#888;margin-bottom:8px;">อัตราค่ามือต่อคอร์ส <span style="float:right;font-weight:400;">120 รายการ</span></div>
+  <div class="rate-row"><span style="flex:1;">Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง</span><span class="val">10</span><span style="color:#666;">บาท</span></div>
+  <div style="border-top:1px solid #e5e5e5;margin:12px 0 8px;"></div>
+  <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#085041;margin-bottom:8px;">อัตราค่ามือต่อสินค้า/หัตถการ <span class="pill" style="background:#E1F5EE;color:#085041;">ใหม่</span> <span style="float:right;font-weight:400;color:#888;">1 รายการ</span></div>
+  <div class="rate-row" style="color:#999;">🔍 ค้นหาสินค้า/หัตถการเพื่อเพิ่มอัตรา</div>
+  <div class="rate-row"><span style="flex:1;">Shock wave</span><span class="val">300</span><span style="color:#666;">บาท</span><span style="color:#e24b4a;">🗑</span></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile · ผลใน TFP modal "เพิ่มค่ามือแพทย์ &amp; ผู้ช่วยแพทย์" (จาก screenshot ผู้ใช้) — หลังแก้ทั้งสองส่วน</div>
+  <div style="max-width:420px;">
+    <div style="font-size:15px;font-weight:600;color:#dc2626;margin-bottom:10px;">เพิ่มค่ามือแพทย์ &amp; ผู้ช่วยแพทย์</div>
+    <div style="font-size:12px;color:#888;">แพทย์ / ผู้ช่วยแพทย์: <strong>ยาหยี · ผู้ช่วยแพทย์</strong> · กลุ่มค่ามือ: <strong>ผู้ช่วยแพทย์</strong></div>
+    <div style="background:#fdf6f6;border:1px solid #f0e0e0;border-radius:10px;padding:10px;margin-top:8px;">
+      <div style="font-size:11px;color:#888;margin-bottom:8px;">ค่ามือต่อคอร์ส (2/2 เลือก)</div>
+      <div class="rate-row" style="background:#fff;"><span style="color:#10b981;">☑</span><span style="flex:1;">Shock Wave 6 ครั้ง ... <em style="font-size:10px;color:#666;">(จากกลุ่ม)</em></span><span class="val" style="color:#085041;font-weight:600;">10</span><span style="color:#666;">บาท</span></div>
+      <div class="rate-row" style="background:#fff;"><span style="color:#10b981;">☑</span><span style="flex:1;">Shock wave <em style="font-size:10px;color:#666;">(จากกลุ่ม)</em></span><span class="val" style="color:#085041;font-weight:600;">300</span><span style="color:#666;">บาท</span></div>
+      <p class="good" style="margin:8px 0 0;">อัตราขึ้นอัตโนมัติทั้งสองแถว — ไม่ขึ้น 0 บาท / "(ไม่มีอัตราในกลุ่มนี้)" อีก · แถวยังติ๊กออก/แก้มือได้เหมือนเดิม</p>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State · empty / error</div>
+  <ul style="font-size:13px; margin:0;">
+    <li><strong>ยังไม่มีอัตราสินค้า:</strong> section ที่ 2 แสดง search + chip pool ตามปกติ (mirror section คอร์ส — ไม่มี empty banner พิเศษ)</li>
+    <li><strong>แถวที่ resolve ไม่ได้ใน TFP modal:</strong> พฤติกรรมเดิมคงไว้ — value 0 + "(ไม่มีอัตราในกลุ่มนี้)" + กรอกมือได้</li>
+    <li><strong>สินค้าถูกลบทีหลัง:</strong> แถวอัตราแสดง courseName ที่ freeze ไว้ (พฤติกรรมเดิมของ rehydrate) — ลบแถวได้ปกติ</li>
+  </ul>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 · Bugfix — ทำไม 0 บาท และหลังแก้วิ่งยังไง</div>
+  <p style="font-size:13px;margin:0 0 4px;"><strong>ก่อน (พัง):</strong></p>
+  <div>
+    <span class="flow-box">listCourses() → docs มีแต่ courseName</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#e24b4a;">masterCourseIdByName อ่าน mc.name → map ว่าง</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#e24b4a;">cid = ชื่อคอร์ส (pseudo-id)</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#e24b4a;">resolver ไม่ match → null → 0 บาท</span>
+  </div>
+  <p style="font-size:13px;margin:10px 0 4px;"><strong>หลัง (แก้):</strong></p>
+  <div>
+    <span class="flow-box">listCourses()</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#1D9E75;">map อ่าน mc.courseName || mc.name</span><span class="flow-arrow">→</span>
+    <span class="flow-box">cid = COURSES_…AE530C40</span><span class="flow-arrow">→</span>
+    <span class="flow-box" style="border-color:#1D9E75;">getRateForStaffCourse match rates[].courseId → 10 บาท (source: group)</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 · Product rate — เขียนที่กลุ่ม DF → อ่านที่ TFP</div>
+  <table style="font-size:13px;">
+    <tr><th>ขั้น</th><th>ที่ไหน</th><th>อะไรเกิดขึ้น</th></tr>
+    <tr><td>1</td><td>DfGroupFormModal (section ใหม่)</td><td>ค้นหา "Shock wave" จาก <code>listProductsForPicker()</code> → กดเพิ่ม → <code>rates[]</code> ได้แถว <code>{courseId: productId, courseName: "Shock wave", value: 300, type: 'baht', kind: 'product'}</code></td></tr>
+    <tr><td>2</td><td>saveDfGroup → be_df_groups</td><td><code>normalizeDfGroup</code> preserve <code>kind</code> · validator เดิมผ่าน (courseId = generic id, no-dup ทั้ง array)</td></tr>
+    <tr><td>3</td><td>TFP load</td><td><code>listDfGroups()</code> + <code>listProducts()</code> (มีอยู่แล้ว) → NEW <code>masterProductIdByName</code> (อ่าน <code>productName || name</code>)</td></tr>
+    <tr><td>4</td><td>TFP <code>treatmentCoursesForDf</code> Source 2</td><td>treatmentItem "Shock wave" → cid = courseId-by-name (พฤติกรรมเดิม) → <strong>ไม่เจอค่อย productId-by-name (ใหม่)</strong> → ไม่เจอค่อย pseudo-name</td></tr>
+    <tr><td>5</td><td>DfEntryModal / buildDefaultRows</td><td><code>getRateForStaffCourse</code> เทียบ id ตรงๆ — <strong>ไม่ต้องแก้ resolver</strong> → แถว Shock wave ขึ้น 300 บาท (จากกลุ่ม) อัตโนมัติ</td></tr>
+    <tr><td>6</td><td>บันทึก treatment</td><td><code>dfEntries[]</code> เก็บ rows ที่ materialize แล้ว (courseId + value) — dfPayout report อ่านค่าที่บันทึกไว้ ไม่ resolve ซ้ำ → ไม่กระทบ</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>ไฟล์</th><th>เปลี่ยนอะไร</th></tr>
+  <tr><td><code>src/components/TreatmentFormPage.jsx</code></td><td>(a) <code>masterCourseIdByName</code> อ่าน <code>courseName || name</code> · (b) NEW <code>masterProductIdByName</code> จาก productItems ที่โหลดอยู่แล้ว (อ่าน <code>productName || name</code>) · (c) Source 2 ของ <code>treatmentCoursesForDf</code>: cid = course-map → product-map → name</td></tr>
+  <tr><td><code>src/lib/dfGroupValidation.js</code></td><td><code>normalizeDfGroup</code> preserve <code>kind</code> ('product' เท่านั้น; ไม่มี = course) — validator/invariant DFG-3..5 เดิมใช้ต่อ</td></tr>
+  <tr><td><code>src/components/backend/DfGroupFormModal.jsx</code></td><td>Section ที่ 2 "อัตราค่ามือต่อสินค้า/หัตถการ": <code>listProductsForPicker()</code> + search + chip pool + rate rows (UI mirror section คอร์ส); แสดงแถวแยกตาม <code>kind</code>; ปุ่มเพิ่มจากสินค้า stamp <code>kind:'product'</code></td></tr>
+  <tr><td><code>DfEntryModal.jsx</code> / <code>dfEntryValidation.js</code> / <code>getRateForStaffCourse</code></td><td><strong>ไม่แก้</strong> — resolver เทียบ id string อยู่แล้ว; rows/DFE invariants เดิม</td></tr>
+  <tr><td>Tests</td><td>unit (map builders กับ fixture canonical จริง — ไม่มี field <code>name</code> เพื่อ lock บั๊ค) + Rule I flow-simulate (master→map→treatmentCoursesForDf→buildDefaultRows→resolver คืนอัตรา; repro case LC-26000009 Shock Wave + product row) + source-grep regression (ห้าม <code>mc?.name</code> เดี่ยวๆ กลับมา) + AVxx invariant ใหม่ (name-map จาก canonical list* ต้องอ่าน canonical field ก่อน)</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> ค่ามือสินค้า/หัตถการ ตั้งที่หน้ากลุ่ม DF (section ที่ 2) — ไม่ทำ override รายบุคคลสำหรับสินค้าในรอบนี้ (เพิ่มทีหลังได้ ไม่ต้องแก้ schema)</li>
+  <li><strong>Schema:</strong> ใช้ <code>rates[]</code> array เดิม + field <code>kind:'product'</code> — resolver ไม่แก้, ไม่ migrate ข้อมูลเก่า</li>
+  <li><strong>ลำดับจับคู่ Source 2:</strong> course-name ก่อน (คงพฤติกรรม Phase 14.4 เดิม) → product-name ใหม่ → pseudo-name</li>
+  <li><strong>Bugfix ไม่มีทางแยก:</strong> อ่าน <code>courseName || name</code> — canonical-first + legacy fallback</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>เปิด TFP (นครราชสีมา) ลูกค้าที่ใช้คอร์ส Shock Wave → modal เพิ่มค่ามือ เลือกยาหยี + กลุ่มผู้ช่วยแพทย์ → แถวคอร์ส Shock Wave ขึ้น <strong>10 บาท (จากกลุ่ม)</strong> อัตโนมัติ — ไม่ใช่ 0</li>
+  <li>กรอกอัตรา "Shock wave" (สินค้า) ในหน้ากลุ่ม DF ได้ → แถว "Shock wave" ใน modal ขึ้นอัตรานั้นอัตโนมัติ</li>
+  <li>อัตราคอร์สเดิมทั้ง 188 รายการ (120+68) ใช้ได้โดยไม่ต้อง migrate / กรอกใหม่</li>
+  <li>Rule Q L2: diag script เรียก resolver จริงกับข้อมูล prod จริง → คืนอัตราตรงกับที่กรอก · Rule Q L1: ผู้ใช้ยืนยันบนหน้าจริง</li>
+  <li>full vitest เขียว + build clean; แถวที่ไม่มีอัตรายังกรอกมือได้เหมือนเดิม</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>ชน id ข้าม namespace (คอร์ส vs สินค้า ใน rates[] เดียวกัน):</strong> id ProClinic เป็นตัวเลขทั้งคู่ (courses 56450+, products 38842+) — ช่วงไม่ทับกันในข้อมูลปัจจุบัน; DFG-4 (no-dup) กันซ้ำใน array อยู่แล้ว. ความเสี่ยงต่ำ, ยอมรับ</li>
+  <li><strong>Double-pay:</strong> ติ๊กใช้คอร์สทำให้เกิดทั้งแถวคอร์ส + แถวสินค้า — ถ้าตั้งอัตราทั้งคู่จะ default-ติ๊กทั้งคู่ → แอดมินติ๊กออกเอง (พฤติกรรม enabled=value&gt;0 เดิม). จะระบุใน docs/BUGS ไม่ทำ auto-dedupe</li>
+  <li><strong>ขยะ be_df_staff_rates 2 docs</strong> (staffId 3841/3842 — 174 อัตราค่า 0, id ยุค ProClinic, ไม่มี branchId → ไม่ถูกโหลดอยู่แล้วเพราะ branch-scoped): เสนอ ลบทิ้ง (Rule M two-phase) — <em>รอผู้ใช้อนุมัติตอน execute</em></li>
+</ul>
+
+</body>
+</html>
