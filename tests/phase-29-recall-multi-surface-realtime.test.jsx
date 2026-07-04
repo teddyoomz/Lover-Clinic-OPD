@@ -277,8 +277,10 @@ describe('Phase 29 · MS7 server-shape differs from optimistic shape', () => {
     rerender(<RecallTab />);
     // Same DOM node still here
     expect(screen.getByTestId('recall-row-R-x')).toBe(row);
-    // 2026-05-20: outcomeNote now fills the prominent note slot (Q1=A)
-    expect(screen.getByTestId('recall-note-R-x')).toHaveTextContent('มาแน่ใจ');
+    // 2026-07-04 Timeline: outcomeNote lives in the OUTCOME node; the reason
+    // node stays visible alongside it (supersedes the 2026-05-20 Q1=A box).
+    expect(screen.getByTestId('recall-outcome-note-R-x')).toHaveTextContent('มาแน่ใจ');
+    expect(screen.getByTestId('recall-note-R-x')).toHaveAttribute('data-note-source', 'reason');
   });
 });
 

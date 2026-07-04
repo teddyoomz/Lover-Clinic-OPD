@@ -96,9 +96,11 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
       outcomeBy: { name: 'พี่ X' },
     };
     render(<RecallRow recall={recall} todayISO={TODAY} />);
-    // Q1=A: outcomeNote takes the prominent note slot; byline shows who logged it.
-    expect(screen.getByTestId('recall-note-R1')).toHaveTextContent('ลูกค้าจะมา');
-    expect(screen.getByTestId('recall-note-R1')).toHaveAttribute('data-note-source', 'outcome');
+    // 2026-07-04 Timeline (supersedes 2026-05-20 Q1=A single box): the REASON
+    // node stays visible AND the outcome node shows the outcomeNote — both at
+    // once (user: "ให้ยังแสดงว่า Recall นั้นสร้างมาเพราะอะไรด้วย").
+    expect(screen.getByTestId('recall-note-R1')).toHaveAttribute('data-note-source', 'reason');
+    expect(screen.getByTestId('recall-outcome-note-R1')).toHaveTextContent('ลูกค้าจะมา');
     expect(screen.getByTestId('recall-logged-by-R1')).toHaveTextContent('พี่ X');
   });
 

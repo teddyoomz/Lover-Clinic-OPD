@@ -76,7 +76,7 @@ describe('RecallRow — prominent note (Q1=A: outcomeNote || reason)', () => {
     expect(note).toHaveAttribute('data-note-source', 'reason');
     expect(screen.queryByTestId('recall-logged-by-RX')).not.toBeInTheDocument();
   });
-  it('NT2 done w/ outcomeNote → note shows outcomeNote (source=outcome) + byline', () => {
+  it('NT2 done w/ outcomeNote → TIMELINE shows BOTH reason AND outcomeNote (2026-07-04)', () => {
     const r = {
       ...base,
       status: 'done',
@@ -85,17 +85,22 @@ describe('RecallRow — prominent note (Q1=A: outcomeNote || reason)', () => {
       outcomeBy: { name: 'พิมพ์ชนก' },
     };
     render(<RecallRow recall={r} todayISO={TODAY} />);
+    // 2026-07-04 Timeline (supersedes Q1=A): reason node ALWAYS visible +
+    // outcome node carries the outcomeNote — no more either/or.
     const note = screen.getByTestId('recall-note-RX');
-    expect(note).toHaveTextContent('ลูกค้ายืนยันจะมาวันจันทร์');
-    expect(note).toHaveAttribute('data-note-source', 'outcome');
+    expect(note).toHaveTextContent('ติดตามผลเลเซอร์ 7 วัน');
+    expect(note).toHaveAttribute('data-note-source', 'reason');
+    expect(screen.getByTestId('recall-outcome-note-RX')).toHaveTextContent('ลูกค้ายืนยันจะมาวันจันทร์');
     expect(screen.getByTestId('recall-logged-by-RX')).toHaveTextContent('พิมพ์ชนก');
   });
-  it('NT3 done w/o outcomeNote → falls back to reason (source=reason)', () => {
+  it('NT3 done w/o outcomeNote → reason stays + outcome node shows the outcome label only', () => {
     const r = { ...base, status: 'done', outcome: 'will-come', outcomeNote: '', outcomeBy: { name: 'พี่ X' } };
     render(<RecallRow recall={r} todayISO={TODAY} />);
     const note = screen.getByTestId('recall-note-RX');
     expect(note).toHaveTextContent('ติดตามผลเลเซอร์ 7 วัน');
     expect(note).toHaveAttribute('data-note-source', 'reason');
+    // outcome recorded (no free-text note) → node renders the chip label line
+    expect(screen.getByTestId('recall-outcome-note-RX')).toHaveTextContent('ผลการติดต่อ');
   });
 });
 
