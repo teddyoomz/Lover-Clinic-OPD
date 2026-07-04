@@ -25,6 +25,7 @@
 import { useMemo, useEffect } from 'react';
 import { X, Activity, Edit3, Stethoscope } from 'lucide-react';
 import TreatmentReadOnlyPanel from './TreatmentReadOnlyPanel.jsx';
+import { VipName } from '../VipBadge.jsx';
 
 // ─── Main modal ─────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export default function TreatmentTimelineModal({
             </h4>
             {customer && (
               <p className="text-xs text-[var(--tx-muted)] mt-0.5">
-                {customerName || '-'} {customerHN && <span className="font-mono">· HN {customerHN}</span>}
+                <VipName customerId={customer?.id || customer?.proClinicId}>{customerName || '-'}</VipName> {customerHN && <span className="font-mono">· HN {customerHN}</span>}
                 {totalCount > 0 && <span> · ทั้งหมด <span className="font-bold text-[var(--tx-secondary)]">{totalCount}</span> ครั้ง</span>}
               </p>
             )}

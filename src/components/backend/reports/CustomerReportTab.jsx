@@ -18,6 +18,7 @@ import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
 import PhoneLink from '../../PhoneLink.jsx';
+import { VipName } from '../../VipBadge.jsx';
 
 // Sortable columns — each maps to a key on the aggregator row.
 // Composite columns (ลูกค้า, การสั่งซื้อ) use a sub-key for the underlying value.
@@ -348,7 +349,7 @@ function CustomerMobileList({ rows, onOpenCustomer }) {
                   className="text-sm font-bold text-cyan-400 hover:text-cyan-300 leading-snug text-left break-words"
                   data-testid={`customer-mobile-link-${r.customerId}`}
                 >
-                  {r.customerName}
+                  <VipName customerId={r.customerId}>{r.customerName}</VipName>
                 </button>
               </div>
               <span className={`flex-shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${badge}`}>
@@ -493,7 +494,7 @@ function CustomerReportTable({ rows, totals, onOpenCustomer, sortKey, sortDir, o
                       className="font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2"
                       data-testid={`customer-link-${r.customerId}`}
                     >
-                      {r.customerName}
+                      <VipName customerId={r.customerId}>{r.customerName}</VipName>
                     </button>
                     {r.phone && (
                       <span className="text-[10px] text-[var(--tx-muted)]">โทร: <PhoneLink value={r.phone}>{r.phone}</PhoneLink></span>

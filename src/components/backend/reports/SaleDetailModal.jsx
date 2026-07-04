@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { X, Pill, ShoppingCart, Receipt, Users, Wallet, CreditCard } from 'lucide-react';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { resolveSellerName } from '../../../lib/documentFieldAutoFill.js';
+import { VipName } from '../../VipBadge.jsx';
 
 /** Format YYYY-MM-DD as dd/mm/yyyy ค.ศ. (admin convention — AR13). */
 function fmtDateCE(iso) {
@@ -106,7 +107,7 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer, sellerL
                 data-testid="open-customer-link"
                 disabled={!sale.customerId}
               >
-                {sale.customerHN ? `${sale.customerHN} ` : ''}{sale.customerName || '-'}
+                {sale.customerHN ? `${sale.customerHN} ` : ''}<VipName customerId={sale.customerId}>{sale.customerName || '-'}</VipName>
               </button>
               {' · '}{fmtDateCE(sale.saleDate)}
             </p>

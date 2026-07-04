@@ -15,6 +15,7 @@ import {
 } from '../../lib/onlineSaleValidation.js';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { VipName } from '../VipBadge.jsx';
 
 const STATUS_BADGE = {
   pending:   { label: 'รอชำระ',   cls: 'bg-amber-700/20 border-amber-700/40 text-amber-400',   icon: Clock },
@@ -167,7 +168,7 @@ export default function OnlineSalesTab({ clinicSettings, theme }) {
                 <BadgeIcon size={10} /> {badge.label}
               </span>
               <span className="text-xs text-[var(--tx-muted)]">{o.transferDate || '—'}</span>
-              <span className="font-bold">{o.customerName || o.customerId}</span>
+              <span className="font-bold"><VipName customerId={o.customerId}>{o.customerName || o.customerId}</VipName></span>
               {o.customerHN && <span className="text-xs text-[var(--tx-muted)]">{o.customerHN}</span>}
               <span className="text-xs text-[var(--tx-muted)]">· {o.bankAccountLabel || o.bankAccountId}</span>
               <span className="ml-auto font-bold text-emerald-400">{Number(o.amount).toLocaleString('th-TH')}</span>

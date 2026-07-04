@@ -5,6 +5,7 @@
 import { ChevronRight } from 'lucide-react';
 import { buildDepositDeepLinkUrl } from '../../../lib/depositReportUtils.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
+import { VipName } from '../../VipBadge.jsx';
 
 function fmtDateCE(iso) {
   if (!iso || typeof iso !== 'string') return '';
@@ -31,7 +32,7 @@ export default function DepositReceiptRow({ deposit }) {
     >
       <span className="text-[10px] font-mono text-[var(--tx-muted)] tabular-nums shrink-0">{fmtDateCE(d.paymentDate)}</span>
       {d.customerHN && <span className="text-[10px] font-mono text-[var(--tx-muted)] shrink-0">{d.customerHN}</span>}
-      <span className="text-xs text-[var(--tx-secondary)] truncate min-w-0">{name}</span>
+      <span className="text-xs text-[var(--tx-secondary)] truncate min-w-0"><VipName customerId={d.customerId}>{name}</VipName></span>
       {d.paymentChannel && (
         <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/30 text-teal-300 border-teal-700/50 shrink-0">
           {d.paymentChannel}

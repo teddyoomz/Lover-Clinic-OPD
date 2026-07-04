@@ -18,6 +18,7 @@ import { usePagination } from '../../lib/usePagination.js';
 // 2026-06-09 — resolve a movement's customer (id → name) for the clickable
 // customer link on treatment/sale deductions.
 import { useCustomerMap } from '../../hooks/useCustomerMap.js';
+import { VipName } from '../VipBadge.jsx';
 
 // Tailwind needs explicit class names in source for JIT — no dynamic `bg-${color}`.
 const BADGE_CLASSES = {
@@ -399,7 +400,7 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
                           title="เปิดหน้าข้อมูลลูกค้า (แท็บใหม่)"
                         >
                           <User size={10} className="shrink-0" />
-                          <span className="truncate max-w-[170px]">{custName}</span>
+                          <span className="truncate max-w-[170px]"><VipName customerId={custId}>{custName}</VipName></span>
                         </button>
                       ) : (
                         <div className="mt-0.5 italic">ลูกค้า: {custId}</div>

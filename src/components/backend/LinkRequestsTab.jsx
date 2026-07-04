@@ -28,6 +28,7 @@ import {
 import { getLanguageForCustomer } from '../../lib/lineBotResponder.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import LangPillToggle from './LangPillToggle.jsx';
+import { VipName } from '../VipBadge.jsx';
 
 const STATUS_TABS = [
   { id: 'pending',  label: 'รอตรวจสอบ', cls: 'bg-amber-700/30 border-amber-700/50 text-amber-200' },
@@ -214,7 +215,7 @@ export default function LinkRequestsTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="font-bold text-[var(--tx-heading)]">
-                        {req.customerName || '(ไม่มีชื่อ)'}
+                        <VipName customerId={req.customerId}>{req.customerName || '(ไม่มีชื่อ)'}</VipName>
                       </div>
                       {req.customerHN && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--tx-muted)]">
@@ -289,7 +290,7 @@ export default function LinkRequestsTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="font-bold text-[var(--tx-heading)]">
-                        {row.customerName || '(ไม่มีชื่อ)'}
+                        <VipName customerId={row.customerId}>{row.customerName || '(ไม่มีชื่อ)'}</VipName>
                       </div>
                       {row.customerHN && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--tx-muted)]">

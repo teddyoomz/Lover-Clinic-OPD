@@ -13,6 +13,7 @@ import {
   listAllSellers,
 } from '../../lib/scopedDataLayer.js';
 import QuotationFormModal from './QuotationFormModal.jsx';
+import { VipName } from '../VipBadge.jsx';
 import QuotationPrintView from './QuotationPrintView.jsx';
 import SalePrintView from './SalePrintView.jsx';
 import SalePaymentModal from './SalePaymentModal.jsx';
@@ -199,7 +200,7 @@ export default function QuotationTab({ clinicSettings, theme }) {
                   <span className="font-mono text-xs text-[var(--tx-muted)]">{id}</span>
                   <span className="text-xs text-[var(--tx-muted)]">· {formatDateThai(q.quotationDate)}</span>
                   <span className="font-bold text-[var(--tx-heading)] flex-1 min-w-0 truncate">
-                    {q.customerName || q.customerId || '(ไม่ระบุลูกค้า)'}
+                    <VipName customerId={q.customerId}>{q.customerName || q.customerId || '(ไม่ระบุลูกค้า)'}</VipName>
                     {q.customerHN && <span className="ml-2 text-[11px] font-normal text-[var(--tx-muted)]">{q.customerHN}</span>}
                   </span>
                   <span className="text-lg font-black text-emerald-400 shrink-0">{formatMoney(q.netTotal)}</span>

@@ -26,6 +26,7 @@ import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
+import { VipName } from '../../VipBadge.jsx';
 
 function fmtDateCE(iso) {
   if (!iso || typeof iso !== 'string') return '';
@@ -340,7 +341,7 @@ function AppointmentDrillTable({ rows, onOpenCustomer }) {
             <tr key={`${r.appointmentId}-${i}`} className="border-t border-[var(--bd)] hover:bg-cyan-900/10">
               <td className="px-3 py-2 whitespace-nowrap">
                 {r.customerHN && <span className="font-mono text-[10px] text-[var(--tx-muted)] mr-1">{r.customerHN}</span>}
-                <button type="button" onClick={() => onOpenCustomer?.(r.customerId)} className="font-bold text-cyan-400 hover:text-cyan-300">{r.customerName}</button>
+                <button type="button" onClick={() => onOpenCustomer?.(r.customerId)} className="font-bold text-cyan-400 hover:text-cyan-300"><VipName customerId={r.customerId}>{r.customerName}</VipName></button>
               </td>
               <td className="px-3 py-2 whitespace-nowrap tabular-nums">{fmtDateCE(r.date)}</td>
               <td className="px-3 py-2 text-[var(--tx-secondary)]">{r.appointmentTo}</td>
@@ -378,7 +379,7 @@ function UnexpectedSalesTable({ rows, onOpenCustomer }) {
             <tr key={`${r.saleId}-${i}`} className="border-t border-[var(--bd)]">
               <td className="px-3 py-2 whitespace-nowrap">
                 {r.customerHN && <span className="font-mono text-[10px] text-[var(--tx-muted)] mr-1">{r.customerHN}</span>}
-                <button type="button" onClick={() => onOpenCustomer?.(r.customerId)} className="font-bold text-cyan-400 hover:text-cyan-300">{r.customerName}</button>
+                <button type="button" onClick={() => onOpenCustomer?.(r.customerId)} className="font-bold text-cyan-400 hover:text-cyan-300"><VipName customerId={r.customerId}>{r.customerName}</VipName></button>
               </td>
               <td className="px-3 py-2 whitespace-nowrap tabular-nums">{fmtDateCE(r.saleDate)}</td>
               <td className="px-3 py-2 text-[var(--tx-secondary)]">{r.advisorName}</td>

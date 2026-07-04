@@ -50,6 +50,7 @@ import VisitPurposePicker from '../VisitPurposePicker.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock).
 import { CustomerOption } from '../CustomerOption.jsx';
+import { VipName } from '../VipBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
 // LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
@@ -744,7 +745,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium" data-testid="deposit-customer-cell">
                         {dep.customerId ? (
                           <a href={`/?backend=1&customer=${dep.customerId}`} target="_blank" rel="noopener noreferrer"
-                            className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 hover:underline transition-colors">{dep.customerName || '-'}</a>
+                            className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 hover:underline transition-colors"><VipName customerId={dep.customerId}>{dep.customerName || '-'}</VipName></a>
                         ) : (dep.customerName || '-')}
                         {dep.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{dep.customerHN}</span>}
                         {/* Phase 24.0-terdecies (2026-05-06) — when customerId is

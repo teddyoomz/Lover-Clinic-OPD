@@ -38,6 +38,7 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import { STATUS_OPTIONS } from '../../lib/saleInsuranceClaimValidation.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { VipName } from '../VipBadge.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import SaleInsuranceClaimFormModal from './SaleInsuranceClaimFormModal.jsx';
 
@@ -183,7 +184,7 @@ export default function SaleInsuranceClaimsTab({ clinicSettings }) {
                 </span>
                 <span className="text-xs text-[var(--tx-muted)]">{c.claimDate || '—'}</span>
                 <span className="font-mono text-xs">{c.saleId || '—'}</span>
-                <span className="font-bold">{c.customerName || c.customerId}</span>
+                <span className="font-bold"><VipName customerId={c.customerId}>{c.customerName || c.customerId}</VipName></span>
                 {c.customerHN && <span className="text-xs text-[var(--tx-muted)]">{c.customerHN}</span>}
                 {c.insuranceCompany && <span className="text-xs text-[var(--tx-muted)]">· {c.insuranceCompany}</span>}
                 {c.policyNumber && <span className="text-xs text-[var(--tx-muted)]">(#{c.policyNumber})</span>}

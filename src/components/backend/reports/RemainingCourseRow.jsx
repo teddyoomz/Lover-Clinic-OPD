@@ -15,6 +15,7 @@ import {
   STATUS_ACTIVE, STATUS_USED, STATUS_REFUNDED, STATUS_CANCELLED,
   isTerminalRow,
 } from '../../../lib/remainingCourseUtils.js';
+import { VipName } from '../../VipBadge.jsx';
 
 const STATUS_BADGE_CLASS = {
   [STATUS_ACTIVE]:    'bg-emerald-900/40 text-emerald-300 border-emerald-700/50',
@@ -68,10 +69,10 @@ export default function RemainingCourseRow({ row, onAction, onOpenCustomer }) {
             title="คลิกเพื่อเปิดข้อมูลลูกค้าในแท็บใหม่"
             data-testid={`remaining-course-customer-link-${row.customerId}`}
           >
-            {row.customerName}
+            <VipName customerId={row.customerId}>{row.customerName}</VipName>
           </button>
         ) : (
-          <div className="text-[var(--tx-muted)]">{row.customerName}</div>
+          <div className="text-[var(--tx-muted)]"><VipName customerId={row.customerId}>{row.customerName}</VipName></div>
         )}
       </td>
       <td className="px-3 py-2 text-xs">

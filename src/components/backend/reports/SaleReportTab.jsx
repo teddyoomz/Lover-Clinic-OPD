@@ -17,6 +17,7 @@ import { aggregateClaimsBySaleId } from '../../../lib/saleInsuranceClaimValidati
 import { depositsReceivedInRange, sumSystemRemainingDeposits, buildDepositDeepLinkUrl } from '../../../lib/depositReportUtils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
+import { VipName } from '../../VipBadge.jsx';
 
 const STATUS_OPTIONS = [
   { v: 'all',    t: 'ทุกสถานะ' },
@@ -337,7 +338,7 @@ function SaleMobileList({ items, onOpenCustomer, onViewSale }) {
               </div>
               <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                 {d.customerHN && <span className="font-mono text-[10px] text-teal-200/50">{d.customerHN}</span>}
-                <span className="text-sm font-bold text-teal-100/90">{d.customerName || d.customerNameTemp || '-'}</span>
+                <span className="text-sm font-bold text-teal-100/90"><VipName customerId={d.customerId}>{d.customerName || d.customerNameTemp || '-'}</VipName></span>
                 {d.paymentChannel && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-teal-900/30 text-teal-300 border-teal-700/40">{d.paymentChannel}</span>}
                 <span className={DEP_BADGE}>{DEP_STATUS_TH[d.status] || d.status || '—'}</span>
                 <ChevronRight size={12} className="ml-auto text-teal-400" />
@@ -395,10 +396,10 @@ function SaleMobileList({ items, onOpenCustomer, onViewSale }) {
                     className="text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 text-left"
                     data-testid={`mobile-customer-link-${r.saleId}`}
                   >
-                    {r.customerName || '-'}
+                    <VipName customerId={r.customerId}>{r.customerName || '-'}</VipName>
                   </button>
                 ) : (
-                  <span className="text-sm font-bold text-[var(--tx-primary)]">{r.customerName || '-'}</span>
+                  <span className="text-sm font-bold text-[var(--tx-primary)]"><VipName customerId={r.customerId}>{r.customerName || '-'}</VipName></span>
                 )}
               </div>
             )}

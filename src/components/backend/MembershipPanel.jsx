@@ -20,6 +20,7 @@ import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import { thaiTodayISO } from '../../utils.js';
+import { VipName } from '../VipBadge.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 function todayStr() { return thaiTodayISO(); }
@@ -286,7 +287,7 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
                   </div>
                   <div className="flex items-center gap-3 text-xs text-[var(--tx-secondary)]">
                     <a href={`/?backend=1&customer=${m.customerId}`} target="_blank" rel="noopener noreferrer"
-                      className="text-teal-400 hover:text-teal-300 hover:underline font-bold">{m.customerName || m.customerId}</a>
+                      className="text-teal-400 hover:text-teal-300 hover:underline font-bold"><VipName customerId={m.customerId}>{m.customerName || m.customerId}</VipName></a>
                     {m.customerHN && <span className="text-[var(--tx-muted)] font-mono">{m.customerHN}</span>}
                     <span className="text-[var(--tx-muted)]">·</span>
                     <span>ราคา ฿{fmtMoney(m.purchasePrice)}</span>

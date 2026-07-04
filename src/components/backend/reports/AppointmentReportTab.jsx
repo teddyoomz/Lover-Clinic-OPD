@@ -29,6 +29,7 @@ import { listAllSellers } from '../../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
+import { VipName } from '../../VipBadge.jsx';
 
 // Sortable columns — keys map onto aggregator row fields.
 const SORTABLE = {
@@ -376,7 +377,7 @@ function AppointmentMobileList({ rows, onOpenCustomer }) {
                     className="text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 text-left"
                     data-testid={`appt-mobile-customer-link-${r.appointmentId || i}`}
                   >
-                    {r.customerName || '-'}
+                    <VipName customerId={r.customerId}>{r.customerName || '-'}</VipName>
                   </button>
                   {r.customerType && r.customerType !== 'ลูกค้าทั่วไป' && (
                     <span className="text-[10px] text-[var(--tx-muted)] italic">· {r.customerType}</span>
@@ -505,7 +506,7 @@ function AppointmentReportTable({ rows, totals, onOpenCustomer, sortKey, sortDir
                         className="font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2"
                         data-testid={`appt-customer-link-${r.appointmentId || i}`}
                       >
-                        {r.customerName || '-'}
+                        <VipName customerId={r.customerId}>{r.customerName || '-'}</VipName>
                       </button>
                     </div>
                   ) : (

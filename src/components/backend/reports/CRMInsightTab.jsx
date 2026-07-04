@@ -18,6 +18,7 @@ import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
+import { VipName } from '../../VipBadge.jsx';
 
 // Segment display color classes — NO red on names (Thai culture). Red reserved
 // for cancelled/warnings; RFM segments use status-color continuum from emerald
@@ -263,7 +264,7 @@ function PerCustomerList({ rows, onOpenCustomer }) {
                     onClick={() => onOpenCustomer?.(r.customerId)}
                     className="font-bold text-sm text-cyan-400 hover:text-cyan-300 text-left leading-snug break-words"
                   >
-                    {r.customerName || '-'}
+                    <VipName customerId={r.customerId}>{r.customerName || '-'}</VipName>
                   </button>
                 </div>
                 <span className={`flex-shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${badge}`}>
@@ -323,7 +324,7 @@ function PerCustomerList({ rows, onOpenCustomer }) {
                         onClick={() => onOpenCustomer?.(r.customerId)}
                         className="font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2"
                       >
-                        {r.customerName || '-'}
+                        <VipName customerId={r.customerId}>{r.customerName || '-'}</VipName>
                       </button>
                     </div>
                   </td>
