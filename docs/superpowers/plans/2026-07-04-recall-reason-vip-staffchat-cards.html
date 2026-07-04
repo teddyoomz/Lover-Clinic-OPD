@@ -44,7 +44,7 @@
 <h2>Mockup Design</h2>
 <p>Mockup เต็ม (dark+light ทุก state) อยู่ในไฟล์ spec — สรุป target ที่ต้อง match:</p>
 <div class="mockup">
-  <div class="mockup-label">เป้าหมายรวม (ย่อ) — Recall Timeline · VIP gold · การ์ด 4 ชนิด + ปุ่ม violet</div>
+  <div class="mockup-label">เป้าหมายรวม (ย่อ) — Recall Timeline · VIP gold · การ์ด 4 ชนิด + ปุ่ม tinted ตามสีการ์ด (v2-A)</div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;">
     <div style="flex:1;min-width:250px;background:#0f0f0f;padding:10px;border-radius:8px;">
       <div style="font-size:9px;color:#777;">RECALL TIMELINE (RecallRow)</div>
@@ -68,9 +68,9 @@
       <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-top:6px;">คุณสมหญิง ใจดี
         <span style="margin-left:5px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45);color:#fcd34d;font-size:9px;font-weight:800;padding:1px 7px;border-radius:999px;">👑 VIP</span>
       </div>
-      <div style="font-size:9px;color:#777;margin-top:10px;">การ์ด TFP + ปุ่ม (btn-A violet glow)</div>
+      <div style="font-size:9px;color:#777;margin-top:10px;">การ์ด TFP + ปุ่ม (v2-A tinted ตามสีการ์ด — การ์ดแดง→ปุ่มแดง, การ์ดหมอ→ปุ่มม่วง; flat ไม่มี gradient/glow)</div>
       <div style="margin-top:4px;font-size:11px;color:#ececec;">🩺 แพทย์ลงบันทึกเสร็จแล้ว · <span style="color:#7dd3fc;text-decoration:underline;">คุณสมหญิง ↗</span><br><span style="color:#bbb;font-size:10px;">โดยแพทย์: นพ.สมชาย รักษาดี</span></div>
-      <span style="display:inline-flex;gap:5px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:10.5px;font-weight:800;padding:5px 12px;border-radius:8px;box-shadow:0 3px 12px rgba(139,92,246,.45);margin-top:5px;">🩺 เปิดบันทึกการรักษา ›</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.3);color:#fda4af;font-size:12px;font-weight:700;padding:6px 13px;border-radius:8px;">🩺 เปิดบันทึกการรักษา ›</span>
     </div>
   </div>
 </div>
@@ -103,7 +103,7 @@
   <tr><td><code>src/components/TreatmentFormPage.jsx</code></td><td>Modify</td><td>เรียก writeTfpChatCard หลัง save vitals/doctor</td></tr>
   <tr><td><code>firestore.rules</code></td><td>Modify (~:178-207)</td><td>system clause อนุญาต kind tfp-* จาก staff client</td></tr>
   <tr><td><code>src/lib/customerNavigation.js</code></td><td>Modify</td><td>+buildTreatmentEditUrl</td></tr>
-  <tr><td><code>src/components/staffchat/StaffChatSystemCard.jsx</code></td><td>Modify</td><td>kind ใหม่ 2 + ปุ่ม violet + โดยแพทย์ + ปุ่ม ⑤⑥</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatSystemCard.jsx</code></td><td>Modify</td><td>kind ใหม่ 2 + ปุ่ม tinted v2-A + โดยแพทย์ + ปุ่ม ⑤⑥</td></tr>
   <tr><td><code>src/components/OpdIntakeDetailBody.jsx</code></td><td>Create</td><td>สกัดจาก AdminDashboard renderViewingSessionModal (:5040-5230)</td></tr>
   <tr><td><code>src/components/staffchat/StaffChatIntakeModal.jsx</code></td><td>Create</td><td>portal modal + session→synthetic fallback</td></tr>
   <tr><td><code>src/components/staffchat/StaffChatEdModalLauncher.jsx</code></td><td>Create</td><td>fetch+deriveRounds → EDDetailModal</td></tr>
@@ -426,13 +426,17 @@ export function buildTreatmentEditUrl(customerId, treatmentId) {
 }</code></pre>
 <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2:</strong> BackendDashboard deep-link useEffect (:232-282) — อ่าน <code>params.get('treatment')</code>; ถ้ามีพร้อม customer: หลัง getCustomer สำเร็จ → แทน setViewingCustomer ด้วย setTreatmentFormMode โหมด edit — <b>mirror opener เดิม :482-502 ฟิลด์ต่อฟิลด์</b> (mode:'edit', customerId, treatmentId, customerHN: resolveCustomerHN(c), patientName: resolveCustomerDisplayName(c), patientData: c.patientData || {}). treatment ไม่มี/ผิด → TFP โหมด edit จะ handle not-found ตามเดิม (โหลดไม่เจอ → พฤติกรรม TFP เดิม)</label></div>
 <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3:</strong> StaffChatSystemCard.jsx — (a) HEADLINE map + icon/border: <code>'tfp-vitals': '📋 บันทึกซักประวัติเสร็จแล้ว'</code>, <code>'tfp-doctor': '🩺 แพทย์ลงบันทึกเสร็จแล้ว'</code>; borderLeft + avatar bg = <code>#7c3aed</code> เมื่อ tfp-doctor (การ์ดอื่น #ef4444 เดิม); (b) tfp kinds มี customerId เสมอ → ข้าม pending state; (c) ปุ่ม + บรรทัดแพทย์:</label></div>
-<pre><code>{(kind === 'tfp-vitals' || kind === 'tfp-doctor') &amp;&amp; sys?.treatmentId &amp;&amp; customerId &amp;&amp; (
+<pre><code>{/* v2-A (2026-07-04 รอบ 3): flat tint ตามสีการ์ด — ภาษาเดียวกับ chip ในแชท (ไม่มี gradient/glow)
+   dark: text rose-300/violet-300 · light: text red-700/violet-700 (AA) — Tailwind dark: variant ใช้ในไฟล์นี้อยู่แล้ว */}
+{(kind === 'tfp-vitals' || kind === 'tfp-doctor') &amp;&amp; sys?.treatmentId &amp;&amp; customerId &amp;&amp; (
   &lt;a href={buildTreatmentEditUrl(customerId, sys.treatmentId)} target="_blank" rel="noopener noreferrer"
      data-testid="system-card-open-treatment"
-     className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-[12.5px] font-extrabold text-white"
-     style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)', border: '1px solid rgba(255,255,255,.18)',
-              boxShadow: '0 4px 18px rgba(139,92,246,.45), inset 0 1px 0 rgba(255,255,255,.25)' }}&gt;
-    🩺 เปิดบันทึกการรักษา &lt;span style={{ opacity: .85 }}&gt;›&lt;/span&gt;
+     className={`mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold border transition-colors ${
+       kind === 'tfp-doctor'
+         ? 'bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300 hover:bg-violet-500/20'
+         : 'bg-red-500/10 border-red-500/25 text-red-700 dark:text-rose-300 hover:bg-red-500/20'
+     }`}&gt;
+    🩺 เปิดบันทึกการรักษา &lt;span className="opacity-75"&gt;›&lt;/span&gt;
   &lt;/a&gt;
 )}
 {kind === 'tfp-doctor' &amp;&amp; sys?.doctorName &amp;&amp; (
@@ -456,7 +460,7 @@ export function buildTreatmentEditUrl(customerId, treatmentId) {
 //        ทั้งคู่ไม่ได้ → "ไม่พบข้อมูลรับเข้า"
 // imports ผ่าน scopedDataLayer (BS-1); header: 📄 ประวัติผู้ป่วย OPD — {ชื่อ}
 // body: &lt;OpdIntakeDetailBody session={resolved} /&gt; (อ่านอย่างเดียว — ไม่มีปุ่ม action)</code></pre>
-<div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4:</strong> StaffChatSystemCard — kind==='intake' เพิ่มปุ่ม (สไตล์ violet เดียวกับ Task 9, testid <code>system-card-view-intake</code>): <code>📄 ดูข้อมูลรับเข้า ›</code> → setState เปิด StaffChatIntakeModal({sessionId: sys.sessionId, customerId, name})</label></div>
+<div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4:</strong> StaffChatSystemCard — kind==='intake' เพิ่มปุ่ม (v2-A tint แดง — class ก้อน non-doctor เดียวกับ Task 9, testid <code>system-card-view-intake</code>): <code>📄 ดูข้อมูลรับเข้า ›</code> → setState เปิด StaffChatIntakeModal({sessionId: sys.sessionId, customerId, name})</label></div>
 <div class="step"><input type="checkbox" id="t10s5"> <label for="t10s5"><strong>Step 5:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(staffchat): intake card view button + shared OpdIntakeDetailBody" &amp;&amp; git push</code></label></div>
 </div>
 
@@ -474,7 +478,7 @@ export function buildTreatmentEditUrl(customerId, treatmentId) {
 // 4) rounds ว่าง → กล่องเล็ก "ยังไม่มีแบบประเมิน"; มี → render:
 //    &lt;EDDetailModal type={type} round={hero} rounds={rounds} hero={hero} isDark={!isLight} onClose={onClose} /&gt;
 // 5) unmount → unsubscribe listener</code></pre>
-<div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3:</strong> StaffChatSystemCard — kind==='followup' && customerId เพิ่มปุ่ม <code>📊 ดูแบบประเมิน ›</code> (violet เดียวกัน, testid <code>system-card-view-assessment</code>) → เปิด launcher</label></div>
+<div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3:</strong> StaffChatSystemCard — kind==='followup' && customerId เพิ่มปุ่ม <code>📊 ดูแบบประเมิน ›</code> (v2-A tint แดงเดียวกับ intake, testid <code>system-card-view-assessment</code>) → เปิด launcher</label></div>
 <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4:</strong> <code>npm run build</code> clean → Commit: <code>git commit -m "feat(staffchat): followup card opens EDDetailModal (reuse, no fork)" &amp;&amp; git push</code></label></div>
 </div>
 
