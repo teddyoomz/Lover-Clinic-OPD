@@ -76,8 +76,15 @@ describe('Phase 29 · L3 getRecallTemplateVariables', () => {
     const vars = getRecallTemplateVariables(recall, customer);
     expect(vars['ชื่อ']).toBe('นาย Eee');
     expect(vars['เรื่อง']).toBe('ฟิลเลอร์ครบ 6 เดือน');
-    expect(vars['วันที่']).toBe('2026-11-14');
+    // 2026-07-05 Q1=B — {วันที่} is a customer-facing LINE var → full Thai date
+    // with พ.ศ. ("14 พ.ย. 2569"), NEVER the raw ISO "2026-11-14".
+    expect(vars['วันที่']).toBe('14 พ.ย. 2569');
     expect(vars['คลินิก']).toBe('Lover Clinic');
+  });
+  it('L3.1-bis {วันที่} empty/invalid recallDate → "" (no raw ISO leak, no "NaN")', () => {
+    expect(getRecallTemplateVariables({ reason: 'x' }, {})['วันที่']).toBe('');
+    expect(getRecallTemplateVariables({ recallDate: 'garbage' }, {})['วันที่']).toBe('');
+    expect(getRecallTemplateVariables(null, null)['วันที่']).toBe('');
   });
   it('L3.2 falls back to firstName when displayName missing', () => {
     const vars = getRecallTemplateVariables({ reason: 'x' }, { firstName: 'Bee' });

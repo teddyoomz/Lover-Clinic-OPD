@@ -2,6 +2,7 @@
  * Phase 29 (2026-05-14) — LINE template rendering for recall messages.
  * Pure JS. Template variables in `{key}` syntax; missing keys replaced with empty string.
  */
+import { formatThaiFullDate } from './recallResolvers.js';
 
 /**
  * Phase 29 — frozen array of 3 default templates that ship with the system.
@@ -50,7 +51,11 @@ export function getRecallTemplateVariables(recall, customer) {
   return {
     'ชื่อ': customer?.displayName || customer?.firstName || '',
     'เรื่อง': recall?.reason || '',
-    'วันที่': recall?.recallDate || '',
+    // 2026-07-05 (Q1=B — "recall ทุกที่ที่แสดงผลวันที่แบบเต็ม"): {วันที่} is
+    // exposed to admins for custom LINE templates sent to customers → must be
+    // the full Thai form "6 ก.ค. 2569" (พ.ศ. is correct for a Thai customer),
+    // never the raw ISO "2026-07-06". formatThaiFullDate returns '' on missing.
+    'วันที่': formatThaiFullDate(recall?.recallDate),
     'N เดือน': '',
     'คลินิก': 'Lover Clinic',
   };
