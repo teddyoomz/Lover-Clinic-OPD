@@ -68,7 +68,7 @@ export function appendTemplateToCc(existing, content) {
   return cur.replace(/\s+$/, '') + '\n\n' + add;
 }
 
-/** Rule C2 — crypto-random id (NOT Math.random). Shape: OPDT-{ts}-{16 hex}. */
+/** Rule C2 — crypto-random id (no pseudo-random source). Shape: OPDT-{ts}-{16 hex}. */
 export function mintOpdNoteTemplateId() {
   const bytes = new Uint8Array(8);
   crypto.getRandomValues(bytes);
