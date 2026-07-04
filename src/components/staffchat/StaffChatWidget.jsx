@@ -17,6 +17,7 @@ import { StaffChatPanel } from './StaffChatPanel.jsx';
 import { StaffChatMessageList } from './StaffChatMessageList.jsx';
 import { StaffChatComposer } from './StaffChatComposer.jsx';
 import { StaffChatNamePicker } from './StaffChatNamePicker.jsx';
+import { StaffChatSystemModalHost } from './StaffChatSystemModalHost.jsx';
 
 export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchName }) {
   const { branchId: selectedBranchId, branches } = useSelectedBranch();
@@ -80,15 +81,21 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
         loading={chat.loading}
         canMinimize={chat.canMinimize}
       >
-        <StaffChatMessageList
-          messages={chat.messages}
-          ownDeviceId={chat.deviceId}
-          onReply={handleReply}
-          onDelete={chat.deleteMessage}
-          onScrolledToBottom={chat.markScrolledToBottom}
-          unreadCount={chat.unreadCount}
-          visible={!chat.minimized}
-        />
+        {/* (2026-07-04, bug-hunt R1 #3) — SystemModalHost hoists the intake/
+            assessment modal ABOVE the 50-message window: the card snapshots its
+            payload at click time, so the open modal survives the card being
+            evicted by 50 incoming messages mid-read. */}
+        <StaffChatSystemModalHost>
+          <StaffChatMessageList
+            messages={chat.messages}
+            ownDeviceId={chat.deviceId}
+            onReply={handleReply}
+            onDelete={chat.deleteMessage}
+            onScrolledToBottom={chat.markScrolledToBottom}
+            unreadCount={chat.unreadCount}
+            visible={!chat.minimized}
+          />
+        </StaffChatSystemModalHost>
         {/* (2026-06-03 EOD+4, H2) — the staff chat is PER-BRANCH; the draft
             (text + staged files) belongs to the branch it was composed for.
             The Widget stays mounted across a BranchSelector switch (only

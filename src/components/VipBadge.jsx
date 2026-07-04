@@ -1,6 +1,6 @@
 import React from 'react';
 import { useIsVip } from '../lib/VipContext.jsx';
-import { useTheme } from '../hooks/useTheme.js';
+import { useResolvedTheme } from '../hooks/useTheme.js';
 
 /**
  * VIP display primitives (2026-07-04).
@@ -13,6 +13,11 @@ import { useTheme } from '../hooks/useTheme.js';
  * Renders NOTHING / plain children outside a VipProvider or for non-VIP
  * customers — safe to use on any surface; customer-facing pages never mount
  * the provider so VIP can never leak there (AV202).
+ *
+ * Theme via useResolvedTheme (bug-hunt R1 #9): READ-ONLY singleton
+ * subscription — a display primitive mounted hundreds of times per list must
+ * never run useTheme's write effect (setAttribute + localStorage +
+ * `theme-transitioning`) nor mount its own MutationObserver per instance.
  */
 
 export const VIP_GOLD = { dark: '#fbbf24', light: '#b45309' };
@@ -23,7 +28,7 @@ const CHIP = {
 
 export function VipBadge({ customerId, className = '' }) {
   const isVip = useIsVip(customerId);
-  const { resolvedTheme } = useTheme();
+  const resolvedTheme = useResolvedTheme();
   if (!isVip) return null;
   const c = resolvedTheme === 'light' ? CHIP.light : CHIP.dark;
   return (
@@ -43,22 +48,28 @@ export function VipBadge({ customerId, className = '' }) {
  * the customer is VIP; plain passthrough otherwise. Keeps the caller's own
  * classes intact (className forwarded).
  *
+ * Badge placement (bug-hunt R1 #10): the badge renders as a SIBLING after the
+ * name span — NOT inside it — so callers passing `truncate` classes ellipsize
+ * the NAME only; a long Thai name can never clip the 👑 VIP chip away.
+ *
  * @param {object} props
  * @param {string|number} props.customerId key into the VIP set
  * @param {boolean} [props.showBadge=true] set false in ultra-tight rows
  */
 export function VipName({ customerId, showBadge = true, className = '', children }) {
   const isVip = useIsVip(customerId);
-  const { resolvedTheme } = useTheme();
+  const resolvedTheme = useResolvedTheme();
   if (!isVip) {
     return <span className={className || undefined}>{children}</span>;
   }
   const gold = resolvedTheme === 'light' ? VIP_GOLD.light : VIP_GOLD.dark;
   return (
-    <span className={className || undefined} style={{ color: gold }} data-vip="true">
-      {children}
-      {showBadge && <VipBadge customerId={customerId} className="ml-1.5" />}
-    </span>
+    <>
+      <span className={className || undefined} style={{ color: gold }} data-vip="true">
+        {children}
+      </span>
+      {showBadge && <VipBadge customerId={customerId} className="ml-1.5 flex-none" />}
+    </>
   );
 }
 

@@ -82,13 +82,61 @@ export function resolveCardOpdState({ appt, linkedSession }) {
  * @param {object|null} appt - originating appointment (for context)
  * @returns {object|null} synth session, or null if customer missing
  */
+/**
+ * (2026-07-04, bug-hunt R1 #4/#6) Reverse-map CANONICAL be_customers.patientData
+ * health/identity fields → the KIOSK display fields the intake body renders.
+ *
+ * be_customers.patientData is the canonical camelCase shape written by
+ * buildPatientDataFromForm (drugAllergy/foodAllergy/congenitalDisease/gender
+ * M|F|LGBTQ/nationalId/source/...) — it never carries the kiosk radio/flag
+ * fields (hasAllergies, allergiesDetail, hasUnderlying, the ud_ flags,
+ * idCard, howFoundUs).
+ * Pre-fix, a synthetic session fed OpdIntakeDetailBody the canonical shape
+ * verbatim → แพ้ยา/โรคประจำตัว rendered "ไม่มี" for customers who REPORTED
+ * them — false health data on a medical view. Only ABSENT kiosk keys are
+ * derived; real kiosk data (opd_sessions) always wins.
+ */
+function reverseMapCanonicalPatientData(pd) {
+  if (!pd || typeof pd !== 'object' || Object.keys(pd).length === 0) return pd || {};
+  const out = { ...pd };
+  // แพ้ยา/อาหาร — canonical drugAllergy/foodAllergy → kiosk hasAllergies + detail
+  if (out.hasAllergies === undefined) {
+    const allergy = [
+      pd.drugAllergy && String(pd.drugAllergy).trim(),
+      pd.foodAllergy && String(pd.foodAllergy).trim() && `อาหาร: ${String(pd.foodAllergy).trim()}`,
+    ].filter(Boolean).join(' / ');
+    if (allergy) { out.hasAllergies = 'มี'; out.allergiesDetail = allergy; }
+  }
+  // โรคประจำตัว — canonical congenitalDisease string → kiosk ud_other bullet
+  if (out.hasUnderlying === undefined && String(pd.congenitalDisease || '').trim()) {
+    out.hasUnderlying = 'มี';
+    out.ud_other = true;
+    out.ud_otherDetail = String(pd.congenitalDisease).trim();
+  }
+  // เพศ — canonical M/F/LGBTQ codes → Thai display labels
+  if (out.gender === 'M') out.gender = 'ชาย';
+  else if (out.gender === 'F') out.gender = 'หญิง';
+  else if (out.gender === 'LGBTQ') out.gender = 'LGBTQ+';
+  // บัตร/Passport — canonical nationalId/passport → kiosk idCard
+  if (!out.idCard && (pd.nationalId || pd.passport)) out.idCard = pd.nationalId || pd.passport;
+  // สัญชาติ — canonical customerType2 → kiosk nationality radio
+  if (!out.nationality && pd.customerType2) out.nationality = pd.customerType2;
+  // การตั้งครรภ์ — canonical boolean → kiosk label (absent/false → block hidden)
+  if (!out.pregnancy && pd.pregnanted === true) out.pregnancy = 'กำลังตั้งครรภ์';
+  // รู้จักคลินิกจาก — canonical joined source string → kiosk howFoundUs array
+  if (!Array.isArray(out.howFoundUs) && typeof pd.source === 'string' && pd.source.trim()) {
+    out.howFoundUs = pd.source.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return out;
+}
+
 export function synthesizeSessionFromCustomer(customer, appt) {
   if (!customer || typeof customer !== 'object') return null;
   const cid = customer.id || customer.proClinicId || '';
   const aid = appt?.id || appt?.appointmentId || 'noappt';
   return {
     id: `synth-${cid || 'unknown'}-${aid}`,
-    patientData: customer.patientData || {},
+    patientData: reverseMapCanonicalPatientData(customer.patientData || {}),
     opdRecordedAt: customer.createdAt || null,
     brokerStatus: 'done',
     brokerProClinicId: customer.proClinicId || null,

@@ -3,10 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import React from 'react';
 
-// Controlled theme — VipName/VipBadge read useTheme themselves.
+// Controlled theme — VipName/VipBadge read the READ-ONLY useResolvedTheme
+// (bug-hunt R1 #9: display primitives never run useTheme's write effect).
 let mockTheme = 'dark';
 vi.mock('../src/hooks/useTheme.js', () => ({
   useTheme: () => ({ resolvedTheme: mockTheme }),
+  useResolvedTheme: () => mockTheme,
 }));
 
 // Controlled listener — capture the onChange so tests drive snapshots.

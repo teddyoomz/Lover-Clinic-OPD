@@ -19,6 +19,7 @@ import { buildTreatmentEditUrl } from '../../lib/customerNavigation.js';
 import { VipName } from '../VipBadge.jsx';
 import { StaffChatIntakeModal } from './StaffChatIntakeModal.jsx';
 import { StaffChatEdModalLauncher } from './StaffChatEdModalLauncher.jsx';
+import { useStaffChatSystemModal } from './StaffChatSystemModalHost.jsx';
 
 const HEADLINE = {
   intake: 'กรอกข้อมูลรับเข้าเสร็จแล้ว',
@@ -47,9 +48,21 @@ export function StaffChatSystemCard({ message }) {
   const time = formatTime(message.createdAt);
   const isDoctorCard = kind === 'tfp-doctor';
   const accent = isDoctorCard ? '#7c3aed' : '#ef4444';
-  // (⑤⑥) in-chat modal state — one at a time per card
+  // (⑤⑥) in-chat modals — PREFER the widget-level host (bug-hunt R1 #3: the
+  // 50-message window can evict this card while the modal is open; a hosted
+  // modal survives on a click-time snapshot). Cards mounted without the host
+  // (standalone tests / embeds) fall back to local state.
+  const modalHost = useStaffChatSystemModal();
   const [showIntake, setShowIntake] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
+  const openIntake = () => {
+    if (modalHost) modalHost.open({ type: 'intake', sessionId: sys.sessionId, customerId, name });
+    else setShowIntake(true);
+  };
+  const openAssessment = () => {
+    if (modalHost) modalHost.open({ type: 'assessment', customerId });
+    else setShowAssessment(true);
+  };
 
   return (
     <div
@@ -140,7 +153,7 @@ export function StaffChatSystemCard({ message }) {
           <button
             type="button"
             data-testid="system-card-view-intake"
-            onClick={() => setShowIntake(true)}
+            onClick={openIntake}
             className={BTN_RED}
           >
             📄 ดูข้อมูลรับเข้า <span className="opacity-75">›</span>
@@ -154,7 +167,7 @@ export function StaffChatSystemCard({ message }) {
           <button
             type="button"
             data-testid="system-card-view-assessment"
-            onClick={() => setShowAssessment(true)}
+            onClick={openAssessment}
             className={BTN_RED}
           >
             📊 ดูแบบประเมิน <span className="opacity-75">›</span>

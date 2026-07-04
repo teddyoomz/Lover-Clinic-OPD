@@ -12,6 +12,7 @@ import { ED_TYPE_META, scoreForType, formatRoundDate } from '../../lib/edScoreDi
 import { buildEdAnswerRows } from '../../lib/edQuestions.js';
 import { autoPickCompareRound, markChangedRows } from '../../lib/edCompare.js';
 import { useLayoutPreference } from '../../hooks/useLayoutPreference.js';
+import { useEscToClose } from '../../lib/useEscToClose.js';
 import { thaiTodayISO } from '../../utils.js';
 
 // accent per test — matches the box chips + AdminDashboard reference (no red on patient names; rule 04).
@@ -113,16 +114,17 @@ function RoundPanel({ round, hero, isDark, activeType, pickRounds, rows, onPick,
   );
 }
 
-export default function EDDetailModal({ type, round, rounds = [], hero, isDark, onClose }) {
+// zClassName (2026-07-04, bug-hunt R1 #1): default z-[110] serves the original
+// CustomerDetailView context; the staff-chat launcher passes z-[9600] so the
+// modal stacks ABOVE the chat panel (z-9000) — below lightbox/pdf (9700).
+export default function EDDetailModal({ type, round, rounds = [], hero, isDark, onClose, zClassName = 'z-[110]' }) {
   const [activeType, setActiveType] = useState(type);
   const [primaryId, setPrimaryId] = useState(round?.id);
   const [manualCompareId, setManualCompareId] = useState(null);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // ESC via the shared stack (bug-hunt R1 #12) — when this modal is stacked
+  // over another (chat-launched over CDV's), ONE ESC closes only the top.
+  useEscToClose(onClose);
 
   // device-persistent panel position — same mechanism as the TFP split-screen.
   const { isPrimaryLeft, swap } = useLayoutPreference('ed-compare', 'left');
@@ -171,7 +173,7 @@ export default function EDDetailModal({ type, round, rounds = [], hero, isDark, 
     // containing block for this fixed overlay → confines it to the box. Portaling
     // escapes the transformed ancestor. (User chose "keep V86 lift" → portal modals.)
     // AV78: backdrop has NO onClick → clicking outside does NOT close (✕ / ESC only).
-    <div className="fixed inset-0 z-[110] bg-black/55 flex items-start justify-center p-4 overflow-y-auto"
+    <div className={`fixed inset-0 ${zClassName} bg-black/55 flex items-start justify-center p-4 overflow-y-auto`}
       data-testid="ed-detail-backdrop" role="dialog" aria-modal="true" aria-labelledby="ed-detail-title">
       <div className={`w-full ${canCompare ? 'max-w-3xl' : 'max-w-xl'} my-8 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl overflow-hidden shadow-2xl`}
         data-testid="ed-detail-modal">

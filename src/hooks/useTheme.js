@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
 export const THEME_KEY = 'app-theme';
@@ -25,6 +25,33 @@ function readResolvedTheme() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
   return 'dark';
+}
+
+// ─── read-only resolved theme (2026-07-04, bug-hunt R1 #9) ──────────────────
+// useTheme's [theme] effect WRITES on every mount (setAttribute + localStorage
+// + the app-wide `theme-transitioning` * -transition class for 350ms) and
+// mounts one MutationObserver per consumer. Fine for the theme OWNER
+// (ThemeToggle / dashboards); churn for per-row display consumers — VipName ×
+// hundreds of list rows would fire hundreds of root writes per render pass.
+// This variant NEVER writes: one module-level singleton observer feeds every
+// subscriber via useSyncExternalStore.
+const _themeListeners = new Set();
+let _themeObserverStarted = false;
+function _startThemeObserver() {
+  if (_themeObserverStarted || typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+  _themeObserverStarted = true;
+  const obs = new MutationObserver(() => { for (const l of _themeListeners) l(); });
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+function _subscribeResolvedTheme(listener) {
+  _startThemeObserver();
+  _themeListeners.add(listener);
+  return () => _themeListeners.delete(listener);
+}
+
+/** Read-only 'dark' | 'light' — for display components that must NEVER own/write theme state. */
+export function useResolvedTheme() {
+  return useSyncExternalStore(_subscribeResolvedTheme, readResolvedTheme, () => 'dark');
 }
 
 export function useTheme() {

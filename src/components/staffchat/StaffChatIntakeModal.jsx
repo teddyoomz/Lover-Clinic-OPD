@@ -12,17 +12,15 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, FileText } from 'lucide-react';
 import { OpdIntakeDetailBody } from '../OpdIntakeDetailBody.jsx';
+import { useEscToClose } from '../../lib/useEscToClose.js';
 
 export function StaffChatIntakeModal({ sessionId, customerId, name, onClose }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
 
-  // ESC closes (AV78 — backdrop click does NOT close)
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // ESC closes (AV78 — backdrop click does NOT close). Stack-disciplined
+  // (bug-hunt R1 #12): when stacked over another modal, ESC closes only the top.
+  useEscToClose(onClose);
 
   useEffect(() => {
     let alive = true;
@@ -59,9 +57,12 @@ export function StaffChatIntakeModal({ sessionId, customerId, name, onClose }) {
   }, [sessionId, customerId]);
 
   return createPortal(
-    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / ESC)
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / ESC).
+    // z-[9600] (bug-hunt R1 #1): the staff-chat panel is z-[9000] — a modal
+    // launched FROM it must stack above (NamePicker 9500 / lightbox 9700 tier);
+    // the original low z rendered BENEATH the near-full-screen mobile panel.
     <div
-      className="fixed inset-0 z-[240] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[9600] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-sm"
       data-testid="staffchat-intake-modal"
     >
       <div

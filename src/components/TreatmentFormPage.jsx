@@ -530,6 +530,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Used by v26StatusPatch to preserve "first completion" time across
   // re-edits (Rule: completedAt is set ONCE per treatment, never updated).
   const [loadedTreatmentCompletedAt, setLoadedTreatmentCompletedAt] = useState(null);
+  // (2026-07-04 spec ③④, bug-hunt R1 #7) — the treatment's PERSISTED branchId,
+  // captured at edit-load. The staff-chat card write prefers it over the
+  // admin's CURRENT BranchSelector so a vitals-card and a doctor-card for the
+  // same treatment always land in the SAME branch chat even when the admin
+  // switches the top-right branch between the two saves.
+  const [loadedTreatmentBranchId, setLoadedTreatmentBranchId] = useState('');
   // Phase 26.2a (V26.2, 2026-05-13) — customer.note display above doctor-save button.
   const [customerNote, setCustomerNote] = useState('');
   // ED Score (2026-06-15) — the customer's follow-up assessment rounds (universal
@@ -1091,6 +1097,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             if (existing?.completedAt) setLoadedTreatmentCompletedAt(existing.completedAt);
             if (existing?.detail) {
               const t = existing.detail;
+              // (2026-07-04 bug-hunt R1 #7) capture the persisted branchId for
+              // the staff-chat card write (same-branch-chat invariant).
+              if (t.branchId) setLoadedTreatmentBranchId(t.branchId);
               // V136 (2026-05-31) — retro course-usage unlock eligibility.
               // "No course used" = NEITHER the deduction ledger (courseItems)
               // NOR the displayed treatment-items list has any entry. Captured
@@ -2797,7 +2806,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // fire-and-forget + NON-FATAL (writeTfpChatCard never throws). Uses the
         // resolved id (result.treatmentId on create OR treatmentId prop on edit —
         // V36-quater newTid pattern; do NOT read shadowed state, V104).
-        // branchId '' (all-branches view) → builder returns null → no card.
+        // branchId: EDIT prefers the treatment's PERSISTED branchId (bug-hunt R1
+        // #7 — vitals-card + doctor-card of ONE treatment must land in the SAME
+        // branch chat even if the admin switched the top-right branch between
+        // the two saves); CREATE uses the selector. '' (all-branches view with
+        // no persisted id) → builder returns null → no card.
         if (saveMode === 'vitals' || saveMode === 'doctor') {
           const cardTid = result?.treatmentId || treatmentId;
           if (cardTid) {
@@ -2808,7 +2821,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               customerName: patientName || '',
               customerHN: customerHNProp || '',
               doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
-              branchId: selectedBranchId || '',
+              branchId: (isEdit && loadedTreatmentBranchId) || selectedBranchId || '',
             })).catch(() => {});
           }
         }

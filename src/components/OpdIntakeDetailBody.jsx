@@ -131,7 +131,11 @@ export function OpdIntakeDetailBody({ session, showClinicalSummary = false }) {
                 </div>
                 <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
                   <span className="text-xs text-gray-500 font-semibold block mb-1">ยาที่ใช้ประจำ</span>
-                  <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || 'ไม่มี'}</span>
+                  {/* (bug-hunt R1 #4/#6) synthetic sessions: the canonical customer
+                      shape NEVER carries currentMedication — "unknown" must render
+                      '-', never assert "ไม่มี" on a medical view. Real kiosk
+                      sessions keep the explicit ไม่มี default. */}
+                  <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || (viewingSession.__synthetic ? '-' : 'ไม่มี')}</span>
                 </div>
                 {d.bloodType && d.bloodType !== 'ไม่ทราบ' && (
                   <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
