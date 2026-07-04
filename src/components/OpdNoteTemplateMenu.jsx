@@ -42,7 +42,10 @@ function TemplateEditorModal({ isDark, template, onSaved, onClose }) {
       });
       onSaved();
     } catch (e) {
-      setErr(e?.message || 'บันทึกไม่สำเร็จ');
+      // Hunt R1-B2 (2026-07-05): Thai copy per rule 04 — the raw Firebase
+      // permission message is English + cryptic (fires pre-rules-deploy).
+      const denied = e?.code === 'permission-denied' || /permission/i.test(e?.message || '');
+      setErr(denied ? 'ไม่มีสิทธิ์บันทึก template (ระบบยังไม่เปิดใช้งานส่วนนี้ กรุณาลองใหม่ภายหลัง)' : (e?.message || 'บันทึกไม่สำเร็จ'));
     } finally {
       setSaving(false);
     }
@@ -88,7 +91,6 @@ function TemplateEditorModal({ isDark, template, onSaved, onClose }) {
 export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
-  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState(false);
   const [editor, setEditor] = useState(null); // null | {mode:'create'} | {mode:'edit', template}
@@ -104,14 +106,17 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
       setItems([]);
     } finally {
       setLoading(false);
-      setLoaded(true);
     }
   }, []);
 
   const toggleOpen = () => {
     const next = !open;
     setOpen(next);
-    if (next && !loaded) refresh(); // lazy: first open only
+    // Hunt R1-B1 (2026-07-05): refresh EVERY open (not lazy-once) — a lazy-once
+    // cache went stale on branch switch mid-page AND on another staff's
+    // create/edit/delete. Built-ins render instantly; the branch rows show the
+    // loading line for the round-trip. Templates are a small collection.
+    if (next) refresh();
   };
 
   // Dropdown menu (NOT a modal) — closes on outside click, standard dropdown UX.
@@ -136,7 +141,8 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
       await deleteOpdNoteTemplate(t.id);
       await refresh();
     } catch (e) {
-      window.alert(e?.message || 'ลบไม่สำเร็จ');
+      const denied = e?.code === 'permission-denied' || /permission/i.test(e?.message || '');
+      window.alert(denied ? 'ไม่มีสิทธิ์ลบ template' : (e?.message || 'ลบไม่สำเร็จ'));
     }
   };
 
