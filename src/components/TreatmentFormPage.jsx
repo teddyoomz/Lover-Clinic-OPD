@@ -405,8 +405,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // in-edit blobs become harmless orphans (negligible Storage cost; the delete-
   // treatment cascade still cleans referenced blobs on full delete). Shared by the
   // 4 TFP remove handlers + ChartSection (onBlobRemoved).
-  const removeTreatmentBlob = useCallback((storagePath) => {
+  const removeTreatmentBlob = useCallback((storagePath, thumbStoragePath) => {
     if (storagePath && !isEdit) deleteTreatmentBlob(storagePath).catch(() => {});
+    // 2026-07-05 thumbs — the thumbnail blob dies with its full image
+    if (thumbStoragePath && !isEdit) deleteTreatmentBlob(thumbStoragePath).catch(() => {});
   }, [isEdit]);
   // Note: `canAddNewItems` flag is declared lower (after the
   // `loadedTreatmentStatus` useState declaration) to avoid a temporal
@@ -2449,9 +2451,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Chart images — sent as chart_image[] to ProClinic (data URLs from canvas)
         chartImages: charts.filter(c => c.dataUrl).map(c => c.dataUrl),
         // Treatment images — Before/After/Other galleries
-        beforeImages: beforeImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
-        afterImages: afterImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
-        otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
+        // 2026-07-05 thumbs (Q3=B) — thumbUrl/thumbStoragePath persist with each entry
+        beforeImages: beforeImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '', thumbUrl: i.thumbUrl || '', thumbStoragePath: i.thumbStoragePath || '' })),
+        afterImages: afterImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '', thumbUrl: i.thumbUrl || '', thumbStoragePath: i.thumbStoragePath || '' })),
+        otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '', thumbUrl: i.thumbUrl || '', thumbStoragePath: i.thumbStoragePath || '' })),
         labItems: labItems.map(l => ({
           id: l.id || '', productId: l.productId, productName: l.productName,
           unitName: l.unitName || '', productType: l.productType || 'บริการ',
@@ -2459,7 +2462,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           discount: l.discount || '0', discountType: l.discountType || 'บาท',
           isVatIncluded: l.isVatIncluded || false, rowId: l.rowId || '',
           information: l.information || '', fileId: l.fileId || '',
-          images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
+          images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '', thumbUrl: i.thumbUrl || '', thumbStoragePath: i.thumbStoragePath || '' })),
           pdfBase64: l.pdfBase64 || '', pdfStoragePath: l.pdfStoragePath || '', pdfFileName: l.pdfFileName || '',
         })),
         treatmentFiles: (isEdit
@@ -4066,7 +4069,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                           <Maximize2 size={10} />
                         </button>
                         <button onClick={() => {
-                            removeTreatmentBlob(img?.storagePath);
+                            removeTreatmentBlob(img?.storagePath, img?.thumbStoragePath);
                             setImages(prev => prev.filter((_, i) => i !== idx));
                           }}
                           aria-label={`ลบรูปที่ ${idx + 1}`}
@@ -4176,7 +4179,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/90 text-gray-700 shadow hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Maximize2 size={8} /></button>
                             <button onClick={() => {
                                 const removed = labItems[li]?.images?.[ii];
-                                removeTreatmentBlob(removed?.storagePath);
+                                removeTreatmentBlob(removed?.storagePath, removed?.thumbStoragePath);
                                 setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l));
                               }}
                               aria-label={`ลบรูป Lab ที่ ${ii + 1}`}

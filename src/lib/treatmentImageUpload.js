@@ -58,16 +58,34 @@ export function resizeImageDataUrl(dataUrl, { maxDim = 1920, mime = 'image/jpeg'
   });
 }
 
+// 2026-07-05 thumbnails (Q3=B — "TFP รูปเยอะโหลดนานมาก"): every image upload
+// also produces a ~320px JPEG thumbnail (~15-30 KB vs 0.3-3 MB full). Grids
+// render thumbUrl; the full image loads ONLY in the Lightbox on zoom.
+export const TREATMENT_THUMB_MAX_DIM = 320;
+export const TREATMENT_THUMB_QUALITY = 0.7;
+
 /**
- * Read → resize → upload an image to Firebase Storage. Returns the gallery
- * entry shape { dataUrl: <Storage URL>, storagePath, id } — NEVER inline base64,
- * so the persisted be_treatments doc stays small + the save can't blow the cap.
+ * Read → resize → upload an image to Firebase Storage — PLUS a thumbnail
+ * uploaded alongside. Returns the gallery entry shape
+ * { dataUrl: <Storage URL>, storagePath, thumbUrl, thumbStoragePath, id }.
+ * Thumb generation/upload is NON-FATAL: on failure the fields are '' and the
+ * readers fall back to the full URL (V14: never undefined).
  */
 export async function processAndUploadTreatmentImage({ file, customerId, kind = 'photo', maxDim = 1920, quality = 0.8 }) {
   const local = await readFileAsDataURL(file);
   const resized = await resizeImageDataUrl(local, { maxDim, quality });
   const { url, storagePath } = await uploadTreatmentBlob({ customerId, dataUrl: resized, kind });
-  return { dataUrl: url, storagePath, id: '' };
+  let thumbUrl = '';
+  let thumbStoragePath = '';
+  try {
+    const thumbDataUrl = await resizeImageDataUrl(resized, { maxDim: TREATMENT_THUMB_MAX_DIM, quality: TREATMENT_THUMB_QUALITY });
+    const up = await uploadTreatmentBlob({ customerId, dataUrl: thumbDataUrl, kind: `${kind}thumb` });
+    thumbUrl = up.url;
+    thumbStoragePath = up.storagePath;
+  } catch {
+    // non-fatal — grid falls back to the full image for this entry
+  }
+  return { dataUrl: url, storagePath, thumbUrl, thumbStoragePath, id: '' };
 }
 
 /**

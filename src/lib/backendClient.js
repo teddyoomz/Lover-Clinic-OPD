@@ -1568,7 +1568,12 @@ export async function deleteBackendTreatment(treatmentId) {
     if (snap.exists()) {
       const detail = snap.data()?.detail || {};
       const paths = [];
-      const pushImgPaths = (arr) => (arr || []).forEach(x => { if (x?.storagePath) paths.push(x.storagePath); });
+      // 2026-07-05 thumbs — each image entry may also carry thumbStoragePath;
+      // the thumbnail blob dies with its full image.
+      const pushImgPaths = (arr) => (arr || []).forEach(x => {
+        if (x?.storagePath) paths.push(x.storagePath);
+        if (x?.thumbStoragePath) paths.push(x.thumbStoragePath);
+      });
       pushImgPaths(detail.charts);
       pushImgPaths(detail.beforeImages);
       pushImgPaths(detail.afterImages);
