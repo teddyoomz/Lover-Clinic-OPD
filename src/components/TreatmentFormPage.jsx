@@ -1994,6 +1994,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     [masterCourses]
   );
 
+  // AV200 (2026-07-04): product/procedure rows from "+ เพิ่มรายการรักษา" or
+  // course-product ticks carry only a NAME — resolve to the be_products
+  // master id so DF group product rates (kind: 'product') auto-fill in the
+  // DF modal. Course-first keeps the Phase 14.4 contract; the product map
+  // is the NEW fallback.
+  const masterProductIdByName = useMemo(
+    () => buildMasterIdByName(options?.products, ['productName', 'name'], ['id', 'productId']),
+    [options?.products]
+  );
+
   const treatmentCoursesForDf = useMemo(() => {
     const seen = new Set();
     const out = [];
@@ -2048,12 +2058,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     for (const ti of (treatmentItems || [])) {
       const name = String(ti?.name || '').trim();
       if (!name) continue;
-      const masterId = masterCourseIdByName.get(name) || '';
+      // AV200 chain: course map first (Phase 14.4 contract) → product map
+      // (NEW — kind:'product' rates in be_df_groups) → pseudo-name fallback.
+      const masterId = masterCourseIdByName.get(name) || masterProductIdByName.get(name) || '';
       const price = priceByName.get(name) || (Number(ti.price) || 0);
       push(masterId || name, name, price);
     }
     return out;
-  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName, treatmentItems, purchasedItems]);
+  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName, masterProductIdByName, treatmentItems, purchasedItems]);
 
   // Audit P2 (2026-04-26 RP1/AV1): pick-modal course lookup. Extracted
   // from render-time IIFE at TFP:4589 (anti-IIFE-JSX rule alignment).

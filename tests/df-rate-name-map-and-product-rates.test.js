@@ -65,3 +65,79 @@ describe('A. buildMasterIdByName — canonical-first (บั๊ค 0 บาท 2
     expect(m.get('เว้นวรรค')).toBe('T1');
   });
 });
+
+// Pure mirror of treatmentCoursesForDf Source 2 cid resolution
+// (TreatmentFormPage.jsx — chain: course map → product map → pseudo-name).
+// Locked against the real implementation by source-grep group D.
+function simulateSource2Cid(name, courseMap, productMap) {
+  return courseMap.get(name) || productMap.get(name) || name;
+}
+
+describe('B. Source 2 chain — course → product → pseudo-name (Rule I mirror)', () => {
+  const courseMap = buildMasterIdByName(CANON_COURSES, ['courseName', 'name'], ['id', 'courseId']);
+  const productMap = buildMasterIdByName(CANON_PRODUCTS, ['productName', 'name'], ['id', 'productId']);
+  // Real prod group shape (DFG-0526-b1399741 "ผู้ช่วยแพทย์") + the NEW product rate row.
+  const GROUP = normalizeDfGroup({
+    id: 'DFG-0526-b1399741', name: 'ผู้ช่วยแพทย์', status: 'active',
+    rates: [
+      { courseId: 'COURSES_1778150447655_AE530C40', courseName: 'Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', value: 10, type: 'baht' },
+      { courseId: 'PRODUCTS_1778150429849_3D0F5DAE', courseName: 'Shock wave', value: 300, type: 'baht', kind: 'product' },
+    ],
+  });
+
+  it('B1: REPRO บั๊คผู้ใช้ (screenshot 2026-07-04) — แถวคอร์ส resolve เป็น 10 บาท จากกลุ่ม', () => {
+    const cid = simulateSource2Cid('Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', courseMap, productMap);
+    expect(cid).toBe('COURSES_1778150447655_AE530C40');
+    const rows = buildDefaultRows(
+      [{ courseId: cid, courseName: 'Shock Wave 6 ครั้ง ...' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse
+    );
+    expect(rows[0]).toMatchObject({ value: 10, type: 'baht', enabled: true, source: 'group' });
+  });
+
+  it('B2: แถวสินค้า Shock wave เฉยๆ resolve เป็น 300 บาท (kind: product)', () => {
+    const cid = simulateSource2Cid('Shock wave', courseMap, productMap);
+    expect(cid).toBe('PRODUCTS_1778150429849_3D0F5DAE');
+    const rows = buildDefaultRows(
+      [{ courseId: cid, courseName: 'Shock wave' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse
+    );
+    expect(rows[0]).toMatchObject({ value: 300, enabled: true, source: 'group' });
+  });
+
+  it('B3: ชื่อที่เป็นทั้งคอร์สและสินค้า → course-first (คงพฤติกรรม Phase 14.4)', () => {
+    const cm = buildMasterIdByName([{ id: 'C-BOTH', courseName: 'ชนกัน' }], ['courseName', 'name'], ['id', 'courseId']);
+    const pm = buildMasterIdByName([{ id: 'P-BOTH', productName: 'ชนกัน' }], ['productName', 'name'], ['id', 'productId']);
+    expect(simulateSource2Cid('ชนกัน', cm, pm)).toBe('C-BOTH');
+  });
+
+  it('B4: ไม่ match อะไรเลย → pseudo-name (แถวยังโผล่ กรอกมือได้ + ไม่มีอัตรา)', () => {
+    const cid = simulateSource2Cid('หัตถการลอย', courseMap, productMap);
+    expect(cid).toBe('หัตถการลอย');
+    const rows = buildDefaultRows(
+      [{ courseId: cid, courseName: 'หัตถการลอย' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse
+    );
+    expect(rows[0]).toMatchObject({ value: 0, enabled: false, source: null });
+  });
+
+  it('B5: PRE-FIX repro — map ที่อ่าน name (legacy) กับ docs canonical → 0 บาท (บั๊คเดิม)', () => {
+    const brokenMap = buildMasterIdByName(CANON_COURSES, ['name'], ['id']); // จำลองโค้ดก่อนแก้
+    expect(brokenMap.size).toBe(0);
+    const cid = simulateSource2Cid('Shock Wave 6 ครั้ง + ติดตามอาการกับแพทย์ 1 ครั้ง', brokenMap, new Map());
+    const rows = buildDefaultRows(
+      [{ courseId: cid, courseName: 'x' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], [], getRateForStaffCourse
+    );
+    expect(rows[0].value).toBe(0); // สิ่งที่ผู้ใช้เห็นก่อนแก้
+  });
+
+  it('B6: staff override ยังชนะ group (resolver contract ไม่เปลี่ยน)', () => {
+    const staffRates = [{ staffId: 'staff-yayee', rates: [{ courseId: 'PRODUCTS_1778150429849_3D0F5DAE', value: 500, type: 'baht' }] }];
+    const rows = buildDefaultRows(
+      [{ courseId: 'PRODUCTS_1778150429849_3D0F5DAE', courseName: 'Shock wave' }],
+      'staff-yayee', 'DFG-0526-b1399741', [GROUP], staffRates, getRateForStaffCourse
+    );
+    expect(rows[0]).toMatchObject({ value: 500, source: 'staff' });
+  });
+});
