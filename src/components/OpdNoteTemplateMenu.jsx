@@ -140,7 +140,7 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
     }
   };
 
-  const rowCls = `w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 ${isDark ? 'text-gray-200 hover:bg-[#1c1c1c] border-b border-[#222]' : 'text-gray-700 hover:bg-gray-50 border-b border-gray-100'}`;
+  const rowCls = `w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 ${isDark ? 'text-gray-200 hover:bg-[#1a1a1a] border-b border-[#222]' : 'text-gray-700 hover:bg-gray-50 border-b border-gray-100'}`;
 
   return (
     <div ref={rootRef} className="relative ml-auto" data-testid="opd-template-menu">
@@ -199,7 +199,7 @@ export default function OpdNoteTemplateMenu({ isDark, onInsert }) {
 
           <button type="button" data-testid="opd-template-create"
             onClick={() => { setEditor({ mode: 'create' }); setOpen(false); }}
-            className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors flex items-center gap-1.5 ${isDark ? 'text-green-400 hover:bg-[#1c1c1c]' : 'text-green-600 hover:bg-green-50'}`}>
+            className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors flex items-center gap-1.5 ${isDark ? 'text-green-400 hover:bg-[#1a1a1a]' : 'text-green-600 hover:bg-green-50'}`}>
             <Plus size={12} /> สร้าง template ใหม่…
           </button>
         </div>
