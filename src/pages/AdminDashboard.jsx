@@ -73,6 +73,7 @@ import AppointmentFormModal from '../components/backend/AppointmentFormModal.jsx
 // customer-picker so admin can see per-branch LINE linkage before
 // linking an appointment to a customer.
 import { CustomerOption } from '../components/CustomerOption.jsx';
+import { VipName } from '../components/VipBadge.jsx';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
 // LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
 import { LineNotifyConfirmation } from '../components/LineNotifyConfirmation.jsx';
@@ -7655,7 +7656,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               {session.isUnread && (
                                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shrink-0">New</span>
                               )}
-                              <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[160px] sm:max-w-none">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                              <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[160px] sm:max-w-none"><VipName customerId={session.brokerProClinicId}>{session.sessionName || 'ไม่ระบุชื่อ'}</VipName></span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-blue-400 shrink-0"><Edit3 size={12} /></button>
                             </div>
                           )}
@@ -7716,7 +7717,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {data ? (
                         <div className="flex flex-col gap-2 bg-[var(--bg-card)] rounded-xl p-3 border border-[var(--bd)]">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-bold text-[var(--tx-heading)] text-sm">{data.prefix !== 'ไม่ระบุ' ? data.prefix : ''} {data.firstName} {data.lastName}</span>
+                            <span className="font-bold text-[var(--tx-heading)] text-sm"><VipName customerId={session.brokerProClinicId}>{data.prefix !== 'ไม่ระบุ' ? data.prefix : ''} {data.firstName} {data.lastName}</VipName></span>
                             {isPerf && <Flame size={14} className="text-red-500" />}
                             {isHrt && <Activity size={14} className="text-orange-500" />}
                           </div>

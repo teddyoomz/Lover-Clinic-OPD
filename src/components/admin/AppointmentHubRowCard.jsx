@@ -25,6 +25,7 @@ import {
 import AppointmentOpdStepperRow from './AppointmentOpdStepperRow.jsx';
 import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
+import { VipName } from '../VipBadge.jsx';
 // V118 (2026-05-23) — card-level OPD lifecycle row (link send/view + save + view).
 import OpdLifecycleRow from './OpdLifecycleRow.jsx';
 
@@ -250,11 +251,11 @@ export default function AppointmentHubRowCard({
               data-customer-id={appt.customerId}
               title="เปิดข้อมูลลูกค้าใน tab ใหม่"
             >
-              {summary?.name || appt.customerName || '-'}
+              <VipName customerId={appt.customerId}>{summary?.name || appt.customerName || '-'}</VipName>
             </a>
           ) : (
             <div className="font-black text-lg text-sky-700 dark:text-sky-300 leading-tight" data-testid="row-name">
-              {summary?.name || appt.customerName || '-'}
+              <VipName customerId={appt.customerId}>{summary?.name || appt.customerName || '-'}</VipName>
             </div>
           )}
 

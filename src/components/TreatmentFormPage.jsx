@@ -3554,6 +3554,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       LR-5 (push-reminder dispatch) needs the same info. */}
                   <CustomerOption
                     customer={{
+                      // VIP (2026-07-04) — thread the customer id so the header
+                      // name goes gold + 👑 for VIP customers (CustomerOption
+                      // keys the VipProvider set by customer.id).
+                      id: customerId,
                       name: patientName,
                       branchId: patientData?.branchId,
                       lineUserId: patientData?.lineUserId,

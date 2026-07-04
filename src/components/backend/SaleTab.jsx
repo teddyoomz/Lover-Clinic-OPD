@@ -35,6 +35,7 @@ import { flattenPromotionsForStockDeduction, buildPromotionSubCourseProducts } f
 // display-time fallback when sale.customerName is empty (legacy auto-sale
 // write). See AV93 + V105 V-entry.
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
+import { VipName } from '../VipBadge.jsx';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 // 2026-05-31 — actual-paid resolvers for the ยอดชำระจริง column + pay-modal DRY.
 import { resolveSalePaidAmount, resolveSalePaidTone, resolveSaleOutstanding } from '../../lib/financeUtils.js';
@@ -1290,9 +1291,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                             onClick={e => e.stopPropagation()}
                             className="text-teal-400 hover:text-teal-300 hover:underline transition-colors truncate inline-block max-w-[170px] align-bottom"
                           >
-                            {_v105DisplayName}
+                            <VipName customerId={sale.customerId}>{_v105DisplayName}</VipName>
                           </a>
-                        ) : <span className="truncate inline-block max-w-[170px] align-bottom">{_v105DisplayName}</span>}
+                        ) : <span className="truncate inline-block max-w-[170px] align-bottom"><VipName customerId={sale.customerId}>{_v105DisplayName}</VipName></span>}
                         {_v105DisplayHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{_v105DisplayHN}</span>}
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>

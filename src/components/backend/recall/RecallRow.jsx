@@ -8,6 +8,7 @@ import {
 } from '../../../lib/recallResolvers.js';
 import { useTheme } from '../../../hooks/useTheme.js';
 import { RecallPairBadge } from './RecallPairBadge.jsx';
+import { VipName } from '../../VipBadge.jsx';
 
 /**
  * Phase 29 (2026-05-14) — single recall row.
@@ -177,11 +178,11 @@ export function RecallRow({
               title={`เปิดข้อมูล ${recall.customerName || ''} ในแท็บใหม่`}
               data-testid={`recall-customer-link-mobile-${recall.id}`}
             >
-              {recall.customerName || '—'}
+              <VipName customerId={recall.customerId}>{recall.customerName || '—'}</VipName>
             </a>
           ) : (
             <span className="text-sm font-black text-sky-700 dark:text-sky-300 leading-tight truncate">
-              {recall.customerName || '—'}
+              <VipName customerId={recall.customerId}>{recall.customerName || '—'}</VipName>
             </span>
           )}
           {recall.customerLineUserId && (
@@ -242,14 +243,14 @@ export function RecallRow({
               title={`เปิดข้อมูล ${recall.customerName || ''} ในแท็บใหม่`}
               data-testid={`recall-customer-link-${recall.id}`}
             >
-              {recall.customerName || '—'}
+              <VipName customerId={recall.customerId}>{recall.customerName || '—'}</VipName>
             </a>
           ) : (
             <span
               className="text-[12px] font-bold text-[var(--tx-primary)]"
               data-testid={`recall-customer-name-plain-${recall.id}`}
             >
-              {recall.customerName || '—'}
+              <VipName customerId={recall.customerId}>{recall.customerName || '—'}</VipName>
             </span>
           )}
           {recall.customerLineUserId && (

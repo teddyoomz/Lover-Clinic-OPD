@@ -23,6 +23,7 @@
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { CustomerLineBadge } from '../CustomerOption.jsx';
+import { VipName } from '../VipBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
 
 // Avatar gradient palette — 6 colors (no red per Thai cultural rule).
@@ -202,9 +203,9 @@ export default function CustomerCard({
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          {/* Name — NEVER red (Thai cultural rule) */}
+          {/* Name — NEVER red (Thai cultural rule); gold when VIP (2026-07-04) */}
           <h3 className="text-base font-extrabold text-[var(--tx-heading)] leading-tight tracking-tight truncate">
-            {name}
+            <VipName customerId={id}>{name}</VipName>
           </h3>
           {taglineParts.length > 0 && (
             <p className="text-xs text-[var(--tx-muted)] mt-1">

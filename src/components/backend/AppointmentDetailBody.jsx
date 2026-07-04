@@ -1,5 +1,6 @@
 import React from 'react';
 import PhoneLink from '../PhoneLink.jsx';
+import { VipName } from '../VipBadge.jsx';
 import { resolveAppointmentTypeLabel } from '../../lib/appointmentTypes.js';
 import {
   resolveAssistantNames,
@@ -58,14 +59,14 @@ export default function AppointmentDetailBody({ appt, roomName, doctorMap, varia
           data-testid="appt-detail-name"
           title="เปิดข้อมูลลูกค้าในแท็บใหม่"
         >
-          {apptDisplayName(appt)}
+          <VipName customerId={appt.customerId}>{apptDisplayName(appt)}</VipName>
         </button>
       ) : (
         <div
           className={`text-base font-bold text-[var(--tx-heading)] leading-tight${isPeek ? '' : ' pr-8'}`}
           data-testid="appt-detail-name"
         >
-          {apptDisplayName(appt)}
+          <VipName customerId={appt.customerId}>{apptDisplayName(appt)}</VipName>
         </div>
       )}
 

@@ -56,6 +56,7 @@ import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // so admin can see at-a-glance which appts are tied to LINE-linked
 // customers (for reminder dispatch readiness).
 import { CustomerOption } from '../CustomerOption.jsx';
+import { VipName } from '../VipBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
 // V68 (2026-05-15) — LINE Badge Surfacing. Surfaces a 🟢 LINE chip on
 // every appt cell whose notifyChannel includes 'line' (or legacy
@@ -1113,6 +1114,7 @@ export default function AppointmentCalendarView({
                                         (when denormalized) drive the per-branch badge. */}
                                     <CustomerOption
                                       customer={{
+                                        id: appt.customerId, // VIP (2026-07-04) — gold name + 👑 on VIP
                                         name: appt.customerName || appt.customerNameTemp || '-',
                                         branchId: appt.branchId,
                                         lineUserId: appt.lineUserId,
@@ -1170,7 +1172,7 @@ export default function AppointmentCalendarView({
                                         title={`ซ้ำ #${di + 2}: ${dup.customerName || '-'}`}
                                         data-testid="appt-collision-dupe"
                                       >
-                                        ↪ {dup.customerName || '-'}
+                                        ↪ <VipName customerId={dup.customerId} showBadge={false}>{dup.customerName || '-'}</VipName>
                                       </button>
                                     );
                                   })}
