@@ -5,6 +5,29 @@
 
 ---
 
+## Archived 2026-07-04 — SESSION_HANDOFF overflow: sessions `2026-06-19` → `2026-06-19` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-19 — AV98 ED-modal portal fix (modal trapped in its own box) — SHIPPED + DEPLOYED LIVE
+
+master `574141ad` (=origin pre-EOD-docs); prod = `lover-clinic-228lv6o7s` (vercel frontend) aliased lover-clinic-app.vercel.app HTTP 200; firestore.rules UNCHANGED → frontend-only, no Probe-Deploy-Probe. `/systematic-debugging` + Workflow census (rate-limited ×2 → recovered inline per V83) → fix → test → deploy.
+- **Root cause (AV98 recurrence)**: `EDScoreBox` renders `<EDDetailModal/>` INSIDE its own `rounded-xl` card; V86 auto-glow (index.css ~4043) → every rounded card in `[data-backend-menu-mode=new] [data-testid=backend-content]` is a containing block for `position:fixed` descendants → the 2-panel compare modal confined to the card box. Same class as recall V80; missed because that regression test was recall-DIR-scoped (the ED modals shipped 2026-06-15/18, after AV98).
+- **Census (Rule P, evidence-based)**: EDDetailModal = the LONE trapped instance. Every other overlay modal renders at a tab/panel/page ROOT as a SIBLING of (not descendant of) rounded cards — verified WalletPanel root `space-y-4` (modals@232/245/257 siblings of the toolbar card); FinanceTab/DepositPanel/OrderPanel/report-tabs likewise; matches the AV98 sanctioned-exceptions list. Scoped fix, not a 30-file over-reach.
+- **Fix**: `createPortal(…, document.body)` on `EDDetailModal` + `EDFollowupModal` (both `fixed inset-0` returns incl. the QR full-screen). AV98-canonical, byte-identical to the prod-proven recall/appt-popover portal.
+- **Guard**: NEW `tests/av98-ed-modal-portal.test.js` (A ED modals portal + B EDScoreBox-nesting neutralized + C card-spawn registry — a new card-component-that-spawns-a-modal must be registered). Dropped a universal static "nested-in-rounded-card" walk: false-positive-prone (matched `.map()`-callback rounded cards → flagged WalletPanel/PointsPanel/SaleInsuranceClaimsTab/LineReminderHistoryPanel, all verified-safe). AV98 SKILL.md updated with the recurrence + census + cross-link.
+- **Verified**: targeted 83/0 + full vitest **16767/0** + build clean. DEPLOYED `574141ad` → vercel-only. Honest gap (Rule Q): authed-CDV rendered-pixel = USER hands-on (auth-gated; same fix proven live for recall). Checkpoint `.agents/sessions/2026-06-19-av98-ed-modal-portal.md`.
+
+---
+
+📂 **Older sessions (`2026-06-18 EOD+1` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-19) — AV98 recurrence: ED detail/compare modal trapped in its own box — ✅ SHIPPED + DEPLOYED LIVE**: master `574141ad` (= origin pre-EOD-docs); prod = **`lover-clinic-228lv6o7s`** (vercel frontend, aliased lover-clinic-app.vercel.app HTTP 200); **firestore.rules UNCHANGED → frontend-only, no Probe-Deploy-Probe**. `/systematic-debugging` + Workflow census (rate-limited ×2 → recovered inline per V83). **Root cause**: `EDScoreBox` renders `<EDDetailModal/>` INSIDE its own `rounded-xl` card; the V86 auto-glow (index.css ~4043) makes every rounded card in `[data-backend-menu-mode=new] [data-testid=backend-content]` a containing block for `position:fixed` descendants → the 2-panel compare modal confined to the card box ("modal แค่ box ตัวเอง"). Same class as recall **V80** — missed because that regression test was recall-DIR-scoped. **Census (Rule P)**: EDDetailModal was the **LONE trapped instance** — every other overlay modal renders at a tab/panel/page ROOT as a SIBLING of (not descendant of) rounded cards (verified WalletPanel root=`space-y-4`, modals@232/245/257 siblings of the toolbar card; FinanceTab/DepositPanel/OrderPanel/report-tabs same; matches the AV98 sanctioned list). **Fix**: `createPortal(…, document.body)` on `EDDetailModal` + `EDFollowupModal` (incl. its full-screen QR sub-overlay) — AV98-canonical, byte-identical to the prod-proven recall/appt-popover portal. **Guard**: NEW `tests/av98-ed-modal-portal.test.js` (A portal lock + B EDScoreBox-nesting neutralized + C card-spawn registry); dropped a universal static "nested-in-card" walk (false-positive-prone — flagged 3 safe panels); AV98 SKILL.md updated. **Verified**: targeted 83/0 + **full vitest 16767/0** + build clean. **Honest gap (Rule Q)**: authed-CDV pixel render = USER hands-on (auth-gated; verified by code+tests+build + same fix proven LIVE for recall). Checkpoint `.agents/sessions/2026-06-19-av98-ed-modal-portal.md`.
+
+---
+
 ## Archived 2026-07-04 — SESSION_HANDOFF overflow: sessions `2026-06-18 EOD+1` → `2026-06-18 EOD+1` + Current-State index
 
 ### Session blocks (1)
