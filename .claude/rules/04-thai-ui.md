@@ -3,8 +3,8 @@
 
 ### Colors (วัฒนธรรมไทย — non-negotiable)
 1. **สีแดงห้ามใช้กับตัวอักษรชื่อ/HN ผู้ป่วย** — สีแดง = ชื่อคนตายในวัฒนธรรมไทย
-2. **สีทองห้ามใช้** — user บอก "สีทองนี่ขัดใจมาก"
-3. Avatar initials + HN badge: **white/gray** (`#e5e5e5`, `#d4d4d4`) เท่านั้น
+2. **สีทอง: อนุญาตแล้ว (user 2026-07-04 "ชื่อสีทองได้นะห้ามแดงเฉยๆ" — supersede คำสั่งเดิม "สีทองนี่ขัดใจมาก")** — ใช้กับ VIP name/badge ผ่าน `VipName`/`VipBadge` (`src/components/VipBadge.jsx`): dark `#fbbf24` / light `#b45309` (AA ทั้งคู่ — aaAccent V125 pattern). ห้ามเฉพาะสีแดงบนชื่อ/HN (ข้อ 1) เช่นเดิม
+3. Avatar initials + HN badge: **white/gray** (`#e5e5e5`, `#d4d4d4`) เป็นค่า default (ชื่อ VIP สีทอง = exception ที่ user สั่ง 2026-07-04)
 4. Palette หลัก: **แดง · ดำ · ขาว · ไฟ** + LINE green (`#06C755`) accent
 5. Glowing red border OK — **แค่ตัวอักษรชื่อ/HN ห้ามแดง**
 6. Aesthetic: dark, premium, masculine (fire/ember). Light theme map ผ่าน CSS var (`--bg-card`, `--tx-heading` ใน `index.css`)
