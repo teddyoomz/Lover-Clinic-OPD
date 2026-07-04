@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>OPD Note Templates (dropdown เหนือช่อง CC ใน TFP) — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    /* faithful TFP dark replica helpers */
+    .tfp-dark { background: #050505; border-radius: 12px; padding: 14px; }
+    .tfp-card { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 12px; padding: 16px; max-width: 520px; }
+    .tfp-label { font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
+    .tfp-input { background: #111; border: 1px solid #222; border-radius: 8px; color: #d4d4d4; }
+    .flow-box { display:inline-block; background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:6px 12px; font-size:0.85em; margin:2px; }
+    .flow-arrow { color:#888; padding:0 4px; }
+  </style>
+</head>
+<body>
+
+<h1>OPD Note Templates — dropdown template จดประวัติแพทย์ เหนือช่อง CC (TFP)</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-05 · <strong>Status:</strong> Approved by user (Q1=A, Q2=A, Q3=A, storage=แนวทาง 1) ·
+  <strong>Source:</strong> user .docx "เพิ่ม template สำหรับการจดประวัติของแพทย์ (1).docx" ·
+  <strong>Implementation plan:</strong> docs/superpowers/plans/2026-07-05-opd-note-templates.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+แพทย์ต้องจดประวัติซ้ำรูปแบบเดิมทุกครั้งในช่อง CC ของ TFP. ต้องการ dropdown ตรงคำว่า
+"OPD Card" (เหนือช่อง CC) ให้เลือก template ที่มีอยู่หรือสร้างใหม่เองได้ โดย template
+ที่สร้างใหม่<strong>บันทึกต่อสาขา</strong>. เมื่อเลือกแล้วข้อความ template เข้าไปอยู่ในช่อง CC
+โดยอัตโนมัติ. มี template <strong>บังคับ 1 อัน = "สมรรถภาพทางเพศ"</strong> (เนื้อหาตามไฟล์ .docx ด้านล่าง).
+ข้อบังคับ layout: ปุ่ม "บันทึกข้อมูลซักประวัติ" (เขียว, คอลัมน์ซ้าย) กับ "บันทึกสำหรับแพทย์"
+(ม่วง, คอลัมน์ขวา) ต้อง bottom-align ตรงกันเป๊ะเหมือนเดิม.
+</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · dark · เมนูปิด (สภาพปกติ — จำลองจากดีไซน์จริง: FormSection #0a0a0a / border #1a1a1a / accent #a78bfa)</div>
+  <div class="tfp-dark">
+    <div class="tfp-card">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <span style="color:#a78bfa;font-size:14px">▣</span>
+        <span style="font-size:12px;font-weight:700;letter-spacing:.03em;color:#a78bfa">OPD Card</span>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#a78bfa;border:1px solid rgba(167,139,250,.25);background:rgba(167,139,250,.04);border-radius:8px;padding:3px 8px;cursor:pointer">📄 template จดประวัติ ▾</span>
+      </div>
+      <div class="tfp-label">CC — อาการ (Chief Complaint)</div>
+      <div class="tfp-input" style="height:64px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · dark · เมนูเปิด (built-in บังคับ + template สาขา + สร้างใหม่; แถวสาขามี ✎/🗑)</div>
+  <div class="tfp-dark">
+    <div class="tfp-card" style="position:relative">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="color:#a78bfa;font-size:14px">▣</span>
+        <span style="font-size:12px;font-weight:700;color:#a78bfa">OPD Card</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:#a78bfa;border:1px solid rgba(167,139,250,.4);background:rgba(167,139,250,.1);border-radius:8px;padding:3px 8px">📄 template จดประวัติ ▴</span>
+      </div>
+      <div style="position:relative;height:150px">
+        <div style="position:absolute;right:0;top:-4px;z-index:2;background:#111;border:1px solid #333;border-radius:10px;min-width:250px;box-shadow:0 8px 24px rgba(0,0,0,.8);font-size:11.5px;color:#d4d4d4">
+          <div style="padding:8px 10px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center">
+            <span>สมรรถภาพทางเพศ</span>
+            <span style="font-size:9px;color:#fbbf24;border:1px solid rgba(251,191,36,.25);border-radius:6px;padding:1px 5px">บังคับ</span>
+          </div>
+          <div style="padding:8px 10px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center;color:#9ca3af">
+            <span>ปรึกษาผมร่วง <span style="font-size:9px;color:#555">(สาขา)</span></span>
+            <span style="font-size:10px;color:#666">✎ &nbsp; 🗑</span>
+          </div>
+          <div style="padding:8px 10px;color:#4ade80">+ สร้าง template ใหม่…</div>
+        </div>
+        <div style="opacity:.4">
+          <div class="tfp-label">CC — อาการ (Chief Complaint)</div>
+          <div class="tfp-input" style="height:110px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · dark · หลังเลือก "สมรรถภาพทางเพศ" (append เข้า CC — Q2=A)</div>
+  <div class="tfp-dark">
+    <div class="tfp-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="color:#a78bfa;font-size:14px">▣</span>
+        <span style="font-size:12px;font-weight:700;color:#a78bfa">OPD Card</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:#a78bfa;border:1px solid rgba(167,139,250,.25);background:rgba(167,139,250,.04);border-radius:8px;padding:3px 8px">📄 template จดประวัติ ▾</span>
+      </div>
+      <div class="tfp-label">CC — อาการ (Chief Complaint)</div>
+      <div class="tfp-input" style="padding:8px 10px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;color:#d4d4d4">สมรรถภาพทางเพศ
+1.ประวัติทางเพศ
+-อาการนำ / ระยะเวลาที่เริ่มมีอาการ :
+- ความแข็งตัว : ____%
+-Morning erection : ____วัน/สัปดาห์
+… (ต่อจนจบ template)</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Modal สร้าง/แก้ไข template (AV78: ปิดด้วย X / ยกเลิก / ESC เท่านั้น — backdrop click ไม่ปิด)</div>
+  <div class="tfp-dark" style="display:flex;justify-content:center">
+    <div style="background:#0a0a0a;border:1px solid #2a2a2a;border-radius:14px;padding:18px;width:360px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:13px;font-weight:700;color:#e5e5e5">สร้าง template ใหม่</span>
+        <span style="color:#666">✕</span>
+      </div>
+      <div class="tfp-label">ชื่อ template *</div>
+      <div class="tfp-input" style="height:34px;margin-bottom:10px"></div>
+      <div class="tfp-label">เนื้อหา (จะถูกเติมเข้าช่อง CC) *</div>
+      <div class="tfp-input" style="height:120px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <span style="font-size:11px;color:#9ca3af;border:1px solid #333;border-radius:8px;padding:6px 14px">ยกเลิก</span>
+        <span style="font-size:11px;font-weight:700;color:#fff;background:#7c3aed;border-radius:8px;padding:6px 14px">บันทึก template</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile (&lt;640px) — SectionHeader มี flex-wrap อยู่แล้ว: ปุ่ม pill ตกบรรทัดใหม่ได้โดยไม่ล้น; เมนูกว้างสุด = ความกว้าง card</div>
+  <div class="tfp-dark" style="max-width:320px">
+    <div class="tfp-card" style="padding:12px">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <span style="color:#a78bfa;font-size:13px">▣</span>
+        <span style="font-size:12px;font-weight:700;color:#a78bfa">OPD Card</span>
+        <span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#a78bfa;border:1px solid rgba(167,139,250,.25);border-radius:8px;padding:2px 7px">📄 template ▾</span>
+      </div>
+      <div class="tfp-label">CC — อาการ (Chief Complaint)</div>
+      <div class="tfp-input" style="height:56px"></div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 — เลือก template → append เข้า CC (Q2=A)</div>
+  <div>
+    <span class="flow-box">แพทย์กด "📄 template จดประวัติ ▾"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เปิดเมนูครั้งแรก: lazy-load <code>listOpdNoteTemplates({branchId})</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">เมนูแสดง: built-in "สมรรถภาพทางเพศ" (บังคับ) + template สาขา + "+ สร้างใหม่"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">กดเลือกรายการ</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>setOpdField('symptoms', cc ? cc + "\n\n" + content : content)</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">sync-in effect ของ OPDFieldWithPrev (<code>[value]</code>) พาเข้า textarea</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เมนูปิด (action ไม่ persist selection)</span>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Race-safety: blur ของ textarea fire ก่อน click บนเมนูเสมอ → parent state commit ผ่าน flushSync ก่อน append (กลไก OPDFieldWithPrev เดิม ไม่ต้องแก้).</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 — สร้าง / แก้ไข / ลบ template ของสาขา (Q3=A) + data-flow</div>
+  <div>
+    <span class="flow-box">"+ สร้างใหม่" หรือ ✎ บนแถว</span><span class="flow-arrow">→</span>
+    <span class="flow-box">modal ชื่อ+เนื้อหา (validate: ทั้งคู่ไม่ว่าง)</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>saveOpdNoteTemplate</code> (scopedDataLayer → stamp branchId ผ่าน <code>_resolveBranchIdForWrite</code>)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Firestore <code>be_opd_note_templates/{id}</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">refresh list ในเมนู</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flow-box">🗑 บนแถว</span><span class="flow-arrow">→</span>
+    <span class="flow-box">confirm ธรรมดา</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>deleteOpdNoteTemplate(id)</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">refresh list</span>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Built-in "สมรรถภาพทางเพศ" เป็น constant ในโค้ด — ไม่มี ✎/🗑, ไม่อยู่ใน Firestore, มีเสมอทุกสาขา.</p>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<ul>
+  <li><strong>NEW <code>src/lib/opdNoteTemplateValidation.js</code></strong> — pure: <code>MANDATORY_OPD_NOTE_TEMPLATES</code> (built-in "สมรรถภาพทางเพศ" — เนื้อหา verbatim ด้านล่าง), <code>validateOpdNoteTemplate</code>, <code>normalizeOpdNoteTemplate</code> (V14: ไม่มี undefined leaves), <code>appendTemplateToCc(existing, content)</code> (append + "\n\n" คั่น).</li>
+  <li><strong><code>src/lib/backendClient.js</code></strong> — Layer 1: <code>listOpdNoteTemplates({branchId, allBranches})</code> (safe-by-default ตาม BS-13 template), <code>saveOpdNoteTemplate</code> (stamp <code>_resolveBranchIdForWrite</code>), <code>deleteOpdNoteTemplate</code>. id = <code>OPDT-{ts}-{cryptoHex}</code> (Rule C2).</li>
+  <li><strong><code>src/lib/scopedDataLayer.js</code></strong> — Layer 2 auto-inject wrappers (BS-1).</li>
+  <li><strong>NEW <code>src/components/OpdNoteTemplateMenu.jsx</code></strong> — ปุ่ม pill + เมนู + modal สร้าง/แก้ไข + confirm ลบ; props: <code>{isDark, onInsert(content)}</code>; ไม่รู้จัก TFP state (boundary สะอาด). ESC ผ่าน <code>useEscToClose</code> (LIFO); modal ตาม AV78.</li>
+  <li><strong><code>src/components/TreatmentFormPage.jsx</code></strong> — จุดแตะเดียว: วาง <code>&lt;OpdNoteTemplateMenu onInsert={...}/&gt;</code> ใน children slot ของ SectionHeader "OPD Card" + handler append ผ่าน <code>setOpdField('symptoms', ...)</code>. ไม่แตะกลไก column-balance เดิม (CC grow + flex-col).</li>
+  <li><strong><code>firestore.rules</code></strong> — NEW match <code>be_opd_note_templates</code>: <code>allow read, write: if isClinicStaff();</code> → เข้า batch rules ที่ staged อยู่ (deploy พร้อม TFP cards) + probe ใหม่ (anon write → 403) ใน Rule B.</li>
+  <li><strong>BSA bookkeeping</strong> — จัด <code>be_opd_note_templates</code> เป็น branch-scoped ใน <code>branch-collection-coverage</code> matrix (BC1.1).</li>
+</ul>
+</div>
+
+<h2>เนื้อหา template บังคับ "สมรรถภาพทางเพศ" (verbatim จากไฟล์ .docx)</h2>
+<pre>สมรรถภาพทางเพศ
+1.ประวัติทางเพศ
+-อาการนำ / ระยะเวลาที่เริ่มมีอาการ	:
+- ความแข็งตัว		 : ____%
+-Morning erection	 : ____วัน/สัปดาห์
+- อารมณ์ทางเพศ		 : ปกติ/ลดลง/ไม่มี
+-หลั่งไว 			:  ไม่มี / มี __ นาที
+2.อาการทางฮอร์โมน
+-นอนหลับ  		: __ ชม.
+-หยุดหายใจขณะนอนหลับ : ไม่มี/มี
+-อารมณ์ ปกติ/สวิง/หงุดหงิดงาย/แปรปรวน : ไม่มี/มี
+- เบื่อหนาย ไม่มีแรง 	:ไม่มี/มี
+-น้ำหนักเพิ่ม 		: ไม่มี/มี
+-ออกกำลังกาย 		: เท่าเดิม/ลดลง/ไม่เคยออก
+3.ประวัติส่วนตัว
+-ดื่มแอลกอฮอล์		:ไม่ดื่ม/ดื่ม
+-บุหรี่/กัญชา		:ไม่สูบ/สูบ
+-ประวัติผ่าตัด โรคประจำตัว /ยาที่ทานประจำ :</pre>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> dropdown เป็นปุ่ม pill ชิดขวาในแถวหัวข้อ "OPD Card" (children slot ของ SectionHeader) — ไม่เพิ่มความสูง column.</li>
+  <li><strong>Q2 = A:</strong> เลือก template = <strong>append</strong> ต่อท้ายข้อความเดิมใน CC (เว้นบรรทัดคั่น "\n\n") — ไม่ทำข้อมูลหาย, ซ้อนหลาย template ได้, ไม่มี confirm popup.</li>
+  <li><strong>Q3 = A:</strong> จัดการครบใน dropdown — สร้าง (modal) / แก้ไข ✎ / ลบ 🗑 โดย staff ทุกคนที่เข้า TFP; built-in บังคับแก้/ลบไม่ได้.</li>
+  <li><strong>Storage = แนวทาง 1:</strong> NEW branch-scoped collection <code>be_opd_note_templates</code> (ไม่ใช้ clinic_settings เพราะ world-readable + เขียนทับกันได้; ไม่ใช้ system_config เพราะ universal).</li>
+  <li><strong>Built-in = hardcoded constant</strong> (precedent: DEFAULT_RECALL_TEMPLATES) — มีเสมอทุกสาขา ลบไม่ได้ ไม่ seed ลง Firestore.</li>
+  <li><strong>Lazy load</strong> ตอนเปิดเมนูครั้งแรก + refresh หลัง mutation — ไม่ใช้ real-time listener (template เปลี่ยนไม่บ่อย, ponytail).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>ปุ่ม "📄 template จดประวัติ ▾" อยู่ในแถวหัวข้อ OPD Card เหนือช่อง CC; เปิดเมนูเห็น "สมรรถภาพทางเพศ" (badge บังคับ, ไม่มี ✎/🗑) เป็นรายการแรกเสมอทุกสาขา.</li>
+  <li>เลือก template ตอน CC ว่าง → CC = เนื้อหา template ตรงตามต้นฉบับ; ตอน CC มีข้อความ → ข้อความเดิมคงอยู่ + template ต่อท้าย (คั่นด้วยบรรทัดว่าง) แล้ว save doc ได้ค่าครบ.</li>
+  <li>สร้าง template ใหม่ที่สาขา A → เห็นเฉพาะสาขา A (สลับ BranchSelector ไปสาขา B แล้วไม่เห็น — พิสูจน์ด้วย Rule Q L2 client SDK จริงบน prod).</li>
+  <li>แก้ไข ✎ อัปเดตชื่อ/เนื้อหา; ลบ 🗑 (confirm) แล้วหายจากเมนู; modal ไม่ปิดเมื่อคลิก backdrop (AV78) + ESC ปิดเฉพาะชั้นบนสุด (LIFO).</li>
+  <li>ปุ่ม "บันทึกข้อมูลซักประวัติ" (เขียว) กับ "บันทึกสำหรับแพทย์" (ม่วง) ยัง bottom-align ตรงกันเป๊ะ (source-grep + กลไก CC-grow เดิมไม่ถูกแตะ).</li>
+  <li>anon write ไป <code>be_opd_note_templates</code> → 403 (probe ใหม่ใน Rule B).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Live-gated on rules deploy:</strong> collection ใหม่ default-deny จนกว่า firestore.rules จะ deploy (batch เดียวกับ TFP cards) — ก่อน deploy เมนูจะโหลด template สาขาไม่ได้ (แสดง built-in ได้เสมอ + error เงียบเป็น list ว่าง; ไม่ block การใช้ built-in).</li>
+  <li><strong>เนื้อหา template ใช้ tab จัดคอลัมน์</strong> (จาก Word) — textarea แสดง tab ได้แต่ความกว้างต่างจาก Word เล็กน้อย; ยึด verbatim ตามไฟล์ ผู้ใช้แก้ template เองได้ภายหลังถ้าอยากปรับ (built-in แก้ไม่ได้ → ถ้าอยากปรับ format ให้แจ้งแก้ constant).</li>
+  <li>ไม่มี edit-concurrency guard (2 คนแก้ template เดียวกัน = last-write-wins) — ยอมรับได้ ไม่ใช่ Rule T domain (ไม่ใช่ balance RMW).</li>
+</ul>
+
+</body>
+</html>
