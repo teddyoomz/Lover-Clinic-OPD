@@ -263,9 +263,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                 patientData: c.patientData,
               });
             } else if (mode === 'edit') {
-              // Phase 24.0-duodecies — mode=edit opens the V33.3 full-page Edit
-              // Customer takeover instead of the read-only detail view.
-              setEditingCustomer(c);
+              setEditingCustomer(c); // Phase 24.0-duodecies — V33.3 full-page Edit takeover (not read-only view)
             } else {
               setViewingCustomer(c);
             }

@@ -54,13 +54,17 @@ describe('V135.R RemainingCourseRow clickable customer name', () => {
     expect(onOpen).toHaveBeenCalledWith('LC-26000123');
   });
 
-  it('R2: no onOpenCustomer → plain DIV, not clickable (back-compat for tests)', () => {
+  it('R2: no onOpenCustomer → plain (non-clickable) container, not a button', () => {
     renderRow({});
     expect(screen.queryByTestId('remaining-course-customer-link-LC-26000123')).toBeNull();
-    expect(screen.getByText('นาย ทดสอบ ระบบ').tagName).toBe('DIV');
+    // (2026-07-04 VIP) name text now sits inside <VipName> (a SPAN); the
+    // non-clickable contract = no button ancestor + the fallback DIV wrapper.
+    const nameEl = screen.getByText('นาย ทดสอบ ระบบ');
+    expect(nameEl.closest('button')).toBeNull();
+    expect(nameEl.closest('div')).not.toBeNull();
   });
 
-  it('R3: no customerId → plain DIV even with onOpenCustomer (defensive)', () => {
+  it('R3: no customerId → plain (non-clickable) even with onOpenCustomer (defensive)', () => {
     const onOpen = vi.fn();
     render(
       <table><tbody>
@@ -68,7 +72,9 @@ describe('V135.R RemainingCourseRow clickable customer name', () => {
       </tbody></table>,
     );
     expect(screen.queryByTestId('remaining-course-customer-link-')).toBeNull();
-    expect(screen.getByText('นาย ทดสอบ ระบบ').tagName).toBe('DIV');
+    const nameEl = screen.getByText('นาย ทดสอบ ระบบ');
+    expect(nameEl.closest('button')).toBeNull();
+    expect(nameEl.closest('div')).not.toBeNull();
   });
 
   it('R4: link uses cyan (NEVER red on a patient name — Thai-culture)', () => {

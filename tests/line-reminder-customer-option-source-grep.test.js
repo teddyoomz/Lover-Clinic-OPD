@@ -28,7 +28,10 @@ describe('LR-4 — CustomerOption usage in 6 appointment-creating callsites', ()
       // explicit customer={{...}} shape (AppointmentCalendarView + TFP).
       // Spec plan text wrote 200 chars; bumped at Task 9 ship time so
       // realistic multi-line shape doesn't fail the lock.
-      expect(text, `${site} must use <CustomerOption ... contextBranchId={...} />`).toMatch(/CustomerOption[\s\S]{0,600}contextBranchId/);
+      // (2026-07-04 VIP) 600 → 800: AppointmentCalendarView's deep-indented
+      // customer={{...}} gained `id:` (VIP identity) → distance ~597; widen
+      // so one more field can't silently break the lock.
+      expect(text, `${site} must use <CustomerOption ... contextBranchId={...} />`).toMatch(/CustomerOption[\s\S]{0,800}contextBranchId/);
     });
   }
 });

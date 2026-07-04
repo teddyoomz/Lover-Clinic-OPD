@@ -272,6 +272,10 @@ describe('V71.A U4 AV50 — setTreatmentFormMode customerId invariant', () => {
       file: 'src/pages/AdminDashboard.jsx',
       label: 'AdminDashboard.onEditTreatmentForAppt (V71.A FIX)',
     },
+    {
+      file: 'src/pages/BackendDashboard.jsx',
+      label: 'BackendDashboard deep-link ?treatment= (2026-07-04 spec ③④ staff-chat card → TFP edit; customerId: c.id || c.proClinicId)',
+    },
   ];
 
   // Read once per file
@@ -294,14 +298,17 @@ describe('V71.A U4 AV50 — setTreatmentFormMode customerId invariant', () => {
     }
   });
 
-  it('U4.2 AV50 classifier — exactly 6 callsites verified', () => {
+  it('U4.2 AV50 classifier — exactly 7 callsites verified', () => {
+    // 6 → 7 (2026-07-04): the BackendDashboard ?treatment= deep-link (staff-chat
+    // "เปิดบันทึกการรักษา" card) added the 7th callsite; U4.1 verifies it carries
+    // customerId like every other.
     let total = 0;
     for (const [, content] of fileContents) {
       const blockRegex = /setTreatmentFormMode\s*\(\s*\{[\s\S]{0,1500}?\}\s*\)/g;
       const blocks = content.match(blockRegex) || [];
       total += blocks.length;
     }
-    expect(total).toBe(6);
+    expect(total).toBe(7);
   });
 });
 

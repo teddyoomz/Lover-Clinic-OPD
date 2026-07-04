@@ -44,7 +44,16 @@ describe('AV198 — staff-chat System notification card invariants', () => {
   it('A10 firestore.rules — "ระบบ" system cards are SERVER-ONLY at the rule layer (no client forge or delete)', () => {
     const s = read('firestore.rules');
     expect(s).toMatch(/allow delete: if isClinicStaff\(\) && !\('system' in resource\.data\)/); // can't delete a system card
-    expect(s).toMatch(/&& !\('system' in request\.resource\.data\)/);                            // can't forge a system card on create
+    // (2026-07-04 spec ③④ / AV203) create arm is now an OR-form: no-system
+    // (human messages) OR a NARROW tfp-vitals/tfp-doctor allowlist with
+    // treatmentId/customerId validators. intake/followup stay unforgeable —
+    // any other kind falls through both arms → DENIED (L2:
+    // scripts/diag-tfp-chat-card-l2.mjs forge-intake test).
+    expect(s).toMatch(/&& \(\s*!\('system' in request\.resource\.data\)\s*\|\| \(/); // human arm survives, OR-form
+    expect(s).toMatch(/system\.get\('kind', ''\) in \['tfp-vitals', 'tfp-doctor'\]/); // ONLY the 2 tfp kinds
+    // server-only kinds NEVER appear in any client-create allowlist:
+    expect(s).not.toMatch(/in \[[^\]]*'intake'[^\]]*\]/);
+    expect(s).not.toMatch(/in \[[^\]]*'followup'[^\]]*\]/);
   });
 
   it('A9 card label colors are THEME-AWARE (AA in light mode) — no hardcoded soft-pink/tan that vanishes on a light card', () => {

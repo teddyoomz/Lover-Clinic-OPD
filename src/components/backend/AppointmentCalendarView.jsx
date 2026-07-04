@@ -1114,7 +1114,7 @@ export default function AppointmentCalendarView({
                                         (when denormalized) drive the per-branch badge. */}
                                     <CustomerOption
                                       customer={{
-                                        id: appt.customerId, // VIP (2026-07-04) — gold name + 👑 on VIP
+                                        id: appt.customerId,
                                         name: appt.customerName || appt.customerNameTemp || '-',
                                         branchId: appt.branchId,
                                         lineUserId: appt.lineUserId,

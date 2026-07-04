@@ -173,7 +173,10 @@ describe('Phase 24.0-duodecies — BackendDashboard deep-link wiring', () => {
     // Customers tab must be activated regardless of mode so the deep-link
     // lands inside the customer area, not on whatever tab the user last had
     // selected.
-    const customerBlock = BACKEND.match(/if\s*\(customerId\)\s*\{[\s\S]{0,800}?\}\s*else\s*\{/);
+    // (2026-07-04 spec ③④) window 800 → 2500: the ?treatment= deep-link branch
+    // (staff-chat card → TFP edit) landed inside this block; setActiveTab still
+    // runs FIRST, before any branching, so the invariant is unchanged.
+    const customerBlock = BACKEND.match(/if\s*\(customerId\)\s*\{[\s\S]{0,2500}?\}\s*else\s*\{/);
     expect(customerBlock).toBeTruthy();
     expect(customerBlock[0]).toMatch(/setActiveTab\(['"]customers['"]\)/);
   });

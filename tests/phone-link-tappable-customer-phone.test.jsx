@@ -174,10 +174,22 @@ describe('P3 — Customer phone display sites must use PhoneLink', () => {
       label: 'AdminDashboard',
       mustContain: [
         "import PhoneLink from '../components/PhoneLink.jsx';",
-        // (2026-05-26) deposit/no-deposit/history card phones removed with the tabs;
-        // queue card patient phone + emergency + appt list + picker = 4 PhoneLink occurrences
+        // (2026-05-26) deposit/no-deposit/history card phones removed with the tabs.
+        // (2026-07-04 spec ⑤) intake-detail patient+emergency phones EXTRACTED to
+        // OpdIntakeDetailBody.jsx (shared with the staff-chat intake modal) —
+        // remaining here: queue card + picker = 2 PhoneLink occurrences.
       ],
-      minPhoneLinkCount: 4,
+      minPhoneLinkCount: 2,
+    },
+    {
+      file: 'src/components/OpdIntakeDetailBody.jsx',
+      label: 'OpdIntakeDetailBody',
+      mustContain: [
+        "import PhoneLink from './PhoneLink.jsx';",
+        // (2026-07-04 spec ⑤) intake-detail body extracted from AdminDashboard —
+        // patient phone + emergency phone rows moved here verbatim.
+      ],
+      minPhoneLinkCount: 2,
     },
     {
       file: 'src/pages/PatientDashboard.jsx',
@@ -276,11 +288,11 @@ describe('P3 — Customer phone display sites must use PhoneLink', () => {
 
   // Anti-regression: legacy "raw phone display" patterns must not survive
   it('P3.anti.1 AdminDashboard no longer has bare formatPhoneNumberDisplay span at queue-card patient phone', () => {
-    const src = readSrc('src/pages/AdminDashboard.jsx');
-    // Must not have a bare span wrapping formatPhoneNumberDisplay(d.phone, ...) WITHOUT being wrapped in PhoneLink
-    // (2026-05-26) deposit/no-deposit/history card phones removed with the tabs.
-    // Conservative check: surviving formatPhoneNumberDisplay phones (queue card +
-    // emergency + appt secondary) are still wrapped in PhoneLink.
+    // (2026-07-04 spec ⑤) intake-detail rows extracted to OpdIntakeDetailBody.jsx —
+    // the 3 surviving formatPhoneNumberDisplay phones (queue card + intake patient +
+    // intake emergency) now span BOTH files; sum them so the extraction can't
+    // silently drop a PhoneLink wrap.
+    const src = readSrc('src/pages/AdminDashboard.jsx') + readSrc('src/components/OpdIntakeDetailBody.jsx');
     const phoneLinkMatches = src.match(/<PhoneLink\s+value=\{formatPhoneNumberDisplay\(/g) || [];
     expect(phoneLinkMatches.length).toBeGreaterThanOrEqual(3);
   });
