@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall full dates + empty state · Template dropdown realtime/portal · TFP image thumbnails — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .flow-box { display:inline-block; background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px; padding:6px 12px; font-size:0.85em; margin:2px; }
+    .flow-arrow { color:#888; padding:0 4px; }
+  </style>
+</head>
+<body>
+
+<h1>Recall full dates + empty state · Template dropdown realtime/portal · TFP image thumbnails</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-05 · <strong>Status:</strong> Approved by user (Q1=B, Q2=A, Q3=B + realtime-dropdown directive) ·
+  <strong>Source:</strong> user screenshot IMG_8920 (recall confusion) + 3 verbal bug reports ·
+  <strong>Implementation plan:</strong> docs/superpowers/plans/2026-07-05-recall-dates-templates-thumbs.html ·
+  <strong>Deploy:</strong> หยุดหลัง hunt loop converge — รอ user สั่ง "deploy" เท่านั้น (V18)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<ol>
+  <li><strong>Recall dates กำกวม</strong> — ชิป "06/07" (dd/mm ไม่มีปี) + ป้าย "6 ก.ค." (ไม่มีปี) อ่านพลาดได้ · user: "แสดงวันที่แบบเต็มเสมอกันพลาด"</li>
+  <li><strong>"Recall วันนี้" สับสนตอนวันนี้ว่าง</strong> — RecallList ข้าม section ว่าง → เห็นแต่กลุ่มพรุ่งนี้ใต้หัวข้อ "Recall วันนี้" ดูเหมือนเป็นของวันนี้</li>
+  <li><strong>Template editor modal ซ้อน/แว๊ปสลับ</strong> — modal `fixed` render ใต้ DOM เมนูใน TFP; ancestor ที่มี transform/filter สร้าง containing block → modal โผล่ "ในช่อง" และเด้งสลับกับ "ข้างนอก"</li>
+  <li><strong>Dropdown template โหลดนานผิดปกติ</strong> — getDocs รอ server round-trip ทุกการเปิดเมนู (มือถือ + long-polling = ช้าเป็นวินาที) ทั้งที่ข้อมูลจิ๋ว + user ต้องการเห็น create/edit/delete ทันทีไม่ต้อง refresh</li>
+  <li><strong>TFP รูปเยอะโหลดช้า</strong> — ทุก grid โหลดรูปเต็มจาก Storage; ต้องโหลดแค่ thumbnail แล้วค่อยโหลดเต็มตอน zoom + ประหยัด traffic</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">① + ② — Recall วันนี้ (compact) หลังแก้: วันที่เต็ม 6 ก.ค. 2569 ทุกจุด + 3 section เสมอ + กล่อง ✓ ไม่มี (จำลองจากรูปจริง IMG_8920 · light)</div>
+  <div style="background:#fff;border:1px solid #fecaca;border-radius:14px;padding:12px;max-width:430px">
+    <div style="font-size:15px;font-weight:900;color:#111">📞 Recall วันนี้</div>
+    <div style="font-size:10px;color:#9ca3af;margin-bottom:10px">วันนี้ · ค้าง/เลยกำหนด · พรุ่งนี้</div>
+    <div style="border-left:3px solid #ef4444;background:#fef2f2;padding:7px 10px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #eee">
+      <span>📅</span><span style="font-size:12px;font-weight:800;color:#111">วันนี้ · 5 ก.ค. 2569</span>
+      <span style="font-size:9px;background:rgba(239,68,68,.1);color:#b91c1c;border-radius:5px;padding:1px 6px;font-weight:700">วันนี้</span>
+      <span style="margin-left:auto;font-size:10px;color:#9ca3af;font-family:monospace">0 รายการ</span>
+    </div>
+    <div style="margin:6px 0 12px;background:#f0fdf4;border:1px dashed #86efac;border-radius:10px;padding:10px;text-align:center">
+      <span style="font-size:12.5px;font-weight:800;color:#15803d">✓ ไม่มี Recall วันนี้</span>
+    </div>
+    <div style="border-left:3px solid #dc2626;background:#fef2f2;padding:7px 10px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #eee">
+      <span>🚨</span><span style="font-size:12px;font-weight:800;color:#111">เกินกำหนด</span>
+      <span style="margin-left:auto;font-size:10px;color:#9ca3af;font-family:monospace">0 รายการ</span>
+    </div>
+    <div style="margin:6px 0 12px;background:#f0fdf4;border:1px dashed #86efac;border-radius:10px;padding:8px;text-align:center">
+      <span style="font-size:12px;font-weight:800;color:#15803d">✓ ไม่มีรายการค้าง</span>
+    </div>
+    <div style="border-left:3px solid #f59e0b;background:#fffbeb;padding:7px 10px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #eee">
+      <span>📅</span><span style="font-size:12px;font-weight:800;color:#111">พรุ่งนี้ · 6 ก.ค. 2569</span>
+      <span style="font-size:9px;background:rgba(245,158,11,.15);color:#b45309;border-radius:5px;padding:1px 6px;font-weight:700">พรุ่งนี้</span>
+      <span style="margin-left:auto;font-size:10px;color:#9ca3af;font-family:monospace">4 รายการ</span>
+    </div>
+    <div style="margin-top:8px;background:#fff;border:1px solid #fecaca;border-radius:12px;padding:10px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11.5px;font-weight:900;background:#f1f2f4;border:1px solid #e5e7eb;border-radius:7px;padding:3px 8px;color:#374151">6 ก.ค. 2569</span>
+        <span style="font-size:13px;font-weight:900;color:#0369a1">นาย บัญญัติ ประจง</span>
+        <span style="margin-left:auto;font-size:10px;font-weight:700;color:#b45309;background:#fef3c7;border:1px solid #fcd34d;border-radius:99px;padding:1px 8px">รอโทร</span>
+      </div>
+      <div style="margin-top:4px;font-size:10px;color:#0369a1;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:99px;display:inline-block;padding:1px 8px">📅 เลื่อนถึง 9 ก.ค. 2569</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">③ Template editor modal — portal ไป document.body (ข้างนอกที่เดียวเสมอ)</div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+    <div style="flex:1;min-width:230px">
+      <div style="font-size:11px;font-weight:700;color:#b91c1c;margin-bottom:4px">เดิม (บั๊ค)</div>
+      <div style="background:#050505;border-radius:10px;padding:10px;position:relative">
+        <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;color:#a78bfa;font-size:11px">OPD Card
+          <div style="background:#111;border:2px solid #ef4444;border-radius:8px;margin-top:6px;padding:8px;color:#eee;font-size:10px">modal โผล่ "ในช่อง"<br>(fixed โดน transform ancestor ดูด)<br>⇄ แว๊ปสลับกับข้างนอก</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:230px">
+      <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:4px">ใหม่ — createPortal(document.body)</div>
+      <div style="background:#050505;border-radius:10px;padding:10px;position:relative;min-height:130px">
+        <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;color:#a78bfa;font-size:11px;opacity:.35">OPD Card (อยู่ใต้ backdrop)</div>
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,.55);border-radius:10px;display:flex;align-items:center;justify-content:center">
+          <div style="background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;padding:12px;color:#e5e5e5;font-size:11px;font-weight:700">สร้าง template ใหม่ — กลางจอ นิ่ง ที่เดียว</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">⑤ TFP image grid — thumbnail ก่อน, รูปเต็มเฉพาะตอน zoom</div>
+  <div style="background:#050505;border-radius:10px;padding:12px;max-width:430px">
+    <div style="font-size:10px;color:#9ca3af;margin-bottom:6px">BEFORE (0/12) — โชว์ thumb ~320px (~15-30KB/รูป แทน 1-3MB)</div>
+    <div style="display:flex;gap:6px">
+      <div style="width:70px;height:70px;border-radius:8px;background:linear-gradient(135deg,#333,#555);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:9px">thumb</div>
+      <div style="width:70px;height:70px;border-radius:8px;background:linear-gradient(135deg,#333,#555);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:9px">thumb</div>
+      <div style="width:70px;height:70px;border-radius:8px;background:linear-gradient(135deg,#333,#555);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:9px">thumb</div>
+      <div style="width:70px;height:70px;border-radius:8px;border:1px dashed #444;display:flex;align-items:center;justify-content:center;color:#666;font-size:16px">+</div>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:#9ca3af">กด thumb → Lightbox โหลด <b style="color:#e5e5e5">รูปเต็ม</b> ณ ตอนนั้น (แสดง thumb ไปพลางระหว่างโหลด)</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">④ Template dropdown real-time (แทน getDocs-ตอนเปิด)</div>
+  <div>
+    <span class="flow-box">TFP mount</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>listenToOpdNoteTemplatesByBranch</code> subscribe (onSnapshot, branch-scoped)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เปิดเมนู = แสดง state ปัจจุบันทันที (ไม่มีรอโหลด)</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flow-box">staff สร้าง/แก้/ลบ (เครื่องไหนก็ได้)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Firestore write (local = latency compensation)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">snapshot fire</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เมนูอัพเดตทันที — ไม่ต้อง refresh/เปิดใหม่</span>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">unsubscribe ตอน TFP unmount · แถว "กำลังโหลด" เหลือเฉพาะช่วงก่อน snapshot แรกเท่านั้น · error (เช่นสิทธิ์) → แถวเทา + built-in ใช้ได้เสมอ</p>
+  </div>
+
+<div class="mockup">
+  <div class="mockup-label">⑤ Thumbnail — upload ใหม่ + backfill รูปเก่า (Q3=B)</div>
+  <div>
+    <span class="flow-box">เลือกรูปใน TFP</span><span class="flow-arrow">→</span>
+    <span class="flow-box">upload รูปเต็ม (เดิม)</span><span class="flow-arrow">+</span>
+    <span class="flow-box">canvas thumb ~320px JPEG (reuse pipeline staff-chat)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">upload thumb ควบคู่</span><span class="flow-arrow">→</span>
+    <span class="flow-box">entry = {dataUrl, storagePath, <b>thumbUrl, thumbStoragePath</b>}</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flow-box">แสดงรูปย่อทุก surface</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>img.thumbUrl || img.dataUrl</code> + loading="lazy"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">กด zoom → Lightbox src=รูปเต็ม</span>
+  </div>
+  <div style="margin-top:8px">
+    <span class="flow-box">backfill (Rule M): scan be_treatments</span><span class="flow-arrow">→</span>
+    <span class="flow-box">entry มี storagePath แต่ไม่มี thumbUrl</span><span class="flow-arrow">→</span>
+    <span class="flow-box">download → sharp resize 320 → upload thumb</span><span class="flow-arrow">→</span>
+    <span class="flow-box">stamp thumbUrl ลง doc (dry-run → --apply, idempotent, audit)</span>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<h3>① วันที่เต็ม (Q1=B — "6 ก.ค. 2569")</h3>
+<ul>
+  <li><code>src/lib/recallResolvers.js</code> — NEW export <code>formatThaiFullDate(iso)</code> → "6 ก.ค. 2569" (พ.ศ. = ปี+543, เดือนจาก THAI_MONTHS_SHORT); <code>_formatThaiShortDate</code> ทุก callsite (status chip "เลื่อนไป", formatPairBadge) เปลี่ยนมาใช้ตัวเต็ม</li>
+  <li><code>RecallRow.jsx</code> — <code>dateDisplay</code> (ชิป "06/07") → formatThaiFullDate; <code>recallDateChip</code> ("เลื่อนถึง dd/mm/yyyy") → formatThaiFullDate (uniform)</li>
+  <li><code>RecallSectionHeader.jsx</code> — รับ <code>todayISO</code> → วันนี้/พรุ่งนี้ แสดง " · {formatThaiFullDate}" ต่อท้าย label (เกินกำหนด/สัปดาห์/ภายหลัง = ช่วง ไม่มีวันเดียว → label เดิม)</li>
+  <li>โหมด full (backend รายการ) ได้ผลอัตโนมัติ — components ร่วมกัน; modal ใดที่ render วันที่ recall → ใช้ formatThaiFullDate (กวาดตอน implement)</li>
+</ul>
+<h3>② Empty state (Q2=A — compact mode เท่านั้น)</h3>
+<ul>
+  <li><code>RecallList.jsx</code> — mode='compact': render 3 section เสมอ (today/overdue/tomorrow); section ว่าง → กล่อง <code>data-testid="recall-bucket-empty-{key}"</code> เขียวประ: "✓ ไม่มี Recall วันนี้" / "✓ ไม่มีรายการค้าง" / "✓ ไม่มี Recall พรุ่งนี้"; <code>RecallSectionHeader</code> เดิม return null เมื่อ count=0 → รับ prop ให้ render ที่ count 0 ได้ (compact); mode='full' พฤติกรรมเดิมทุกอย่าง</li>
+</ul>
+<h3>③ Portal modal</h3>
+<ul>
+  <li><code>OpdNoteTemplateMenu.jsx</code> — <code>TemplateEditorModal</code> ห่อด้วย <code>createPortal(..., document.body)</code>; พฤติกรรม AV78 + useEscToClose เดิมครบ</li>
+</ul>
+<h3>④ Realtime dropdown</h3>
+<ul>
+  <li><code>backendClient.js</code> — NEW <code>listenToOpdNoteTemplatesByBranch(opts, onChange, onError)</code> (mirror listenToHolidays: branch-filter + safe-by-default + sort th + V38 spread) · <code>scopedDataLayer.js</code> passthrough</li>
+  <li><code>OpdNoteTemplateMenu.jsx</code> — แทน getDocs/refresh ทั้งหมดด้วย listener subscribe ตอน component mount (TFP mount) + unsubscribe ตอน unmount (BS-4: ผ่าน useBranchAwareListener ถ้า signature เข้า, ไม่งั้น useEffect + annotation) · ลบ refresh-after-mutation (snapshot จัดการเอง) · loading จนกว่า snapshot แรก</li>
+</ul>
+<h3>⑤ Thumbnails (Q3=B)</h3>
+<ul>
+  <li>Upload path ของรูป treatment (grids + lab) — เพิ่มสร้าง thumb ~320px JPEG q0.7 (reuse canvas primitives จาก staffChatImageResize) → upload <code>{storagePath}__thumb.jpg</code> → entry เพิ่ม <code>thumbUrl + thumbStoragePath</code> (V14: ไม่มี undefined)</li>
+  <li>Readers (กวาด V12 ทุก surface ที่ render รูปย่อจาก before/after/other/lab/chart images): <code>src={img.thumbUrl || img.dataUrl}</code> + <code>loading="lazy"</code>; zoom/Lightbox = full <code>dataUrl</code></li>
+  <li>ลบรูป → ลบ thumb ควบคู่ (ถ้า path ลบรูปเดิมลบ blob จริง; ถ้าเดิมลบแค่ entry ก็คงพฤติกรรมเดิม — ตรวจตอน implement)</li>
+  <li><code>scripts/backfill-treatment-image-thumbs.mjs</code> — Rule M two-phase + admin SDK + <code>sharp</code> (devDependency): scan be_treatments ทุก image entry ที่มี storagePath ไม่มี thumbUrl → gen+upload thumb → stamp doc (+forensic <code>_thumbBackfilledAt</code>) · idempotent · audit doc · inline base64 legacy = skip</li>
+  <li>Storage rules: thumb อยู่ path เดิมของ treatment uploads (image/* ครอบอยู่แล้ว — ยืนยันตอน implement; ถ้าต้องแก้ rules = แจ้งใน plan)</li>
+</ul>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = B:</strong> วันที่เต็มรูปแบบ "6 ก.ค. 2569" (เดือนไทย + ปี พ.ศ.) — ใช้เหมือนกันทุกจุดใน recall surfaces</li>
+  <li><strong>Q2 = A:</strong> compact mode แสดง 3 section เสมอ + กล่องเขียว ✓ ไม่มี ต่อ section ที่ว่าง</li>
+  <li><strong>Q3 = B:</strong> thumb สำหรับรูปใหม่ + backfill script รูปเก่าทั้งหมด</li>
+  <li><strong>Realtime (user directive):</strong> dropdown template ใช้ onSnapshot listener — create/edit/delete เห็นทันที ไม่ต้อง refresh/เปิดใหม่</li>
+  <li><strong>Portal (user directive):</strong> editor modal render "ข้างนอก" ที่เดียวผ่าน createPortal(document.body)</li>
+  <li><strong>Deploy:</strong> implement → hunt loop (agent ≤2/รอบ) จน 0 → หยุดรอคำสั่ง "deploy" (ไม่ auto)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>ทุกวันที่ใน recall surfaces (ชิปการ์ด, หัวข้อกลุ่มวันนี้/พรุ่งนี้, ป้ายเลื่อนถึง/เลื่อนไป, PairBadge, modal ที่โชว์วันที่) = "d เดือนย่อไทย ปีพ.ศ." — ไม่มี "dd/mm" เปล่าหรือ "d ก.ค." ไม่มีปี เหลืออยู่</li>
+  <li>Recall วันนี้ ตอนวันนี้ว่าง: เห็น "วันนี้ · {วันที่เต็ม} · 0 รายการ" + กล่อง "✓ ไม่มี Recall วันนี้" ชัดเจน — ไม่มีทางเข้าใจผิดว่ากลุ่มพรุ่งนี้คือของวันนี้; ค้าง/พรุ่งนี้ ว่างก็มีกล่อง ✓ ของตัวเอง</li>
+  <li>เปิด modal สร้าง/แก้ template → โผล่กลางจอที่เดียว นิ่ง ไม่มีสำเนาในช่อง OPD Card ไม่แว๊ปสลับ (ทดสอบ hover/scroll ระหว่างเปิด)</li>
+  <li>เปิด dropdown template → เห็นรายการทันที (ไม่มี "กำลังโหลด" ค้างหลัง snapshot แรกของหน้า); สร้าง→โผล่ทันที ลบ→หายทันที แก้→เปลี่ยนทันที โดยไม่ปิด/เปิดเมนูใหม่ (พิสูจน์ L2 ด้วย listener จริง + RTL)</li>
+  <li>TFP ที่รูปเยอะ: grid โหลดเฉพาะ thumb (~15-30KB/รูป) + zoom โหลดรูปเต็ม; backfill ทำให้รูปเก่ามี thumbUrl ครบ (dry-run นับ → --apply → re-run 0 writes)</li>
+  <li>full vitest 0 fail + build clean + hunt loop converge → หยุด ไม่ deploy จนกว่าจะสั่ง</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li>Backfill ดาวน์โหลดรูปเต็มทุกใบ (อาจหลาย GB ถ้ารูปเยอะมาก) — รัน local ครั้งเดียว, dry-run รายงานจำนวน/ขนาดก่อน apply</li>
+  <li>sharp เป็น native dependency (devDependency สำหรับ script เท่านั้น — ไม่เข้า bundle)</li>
+  <li>รูป legacy inline base64 ไม่ได้ thumb (skip) — แต่ไม่มี network cost อยู่แล้ว</li>
+  <li>listener เพิ่ม 1 subscription ต่อการเปิด TFP — collection จิ๋ว, cost ต่ำ</li>
+  <li>วันที่ พ.ศ. ใน recall: ยึด precedent ของ recall surfaces เดิม (ชิปเลื่อนนัดใช้ พ.ศ. อยู่แล้ว) — ต่างจาก backend finance ที่ใช้ ค.ศ. ตามกฎ 04 (คนละ surface, จงใจ)</li>
+</ul>
+
+</body>
+</html>
