@@ -164,8 +164,9 @@ describe('D — source-grep regression', () => {
     expect(TFP.includes('toDataURL')).toBe(false);
   });
   it('D4 TFP persist carries storagePath / pdfStoragePath (both save blocks)', () => {
-    expect(TFP).toMatch(/beforeImages: beforeImages\.map\(i => \(\{ dataUrl: i\.dataUrl, id: i\.id \|\| '', storagePath: i\.storagePath \|\| '' \}\)\)/);
-    expect(TFP).toMatch(/images: \(l\.images \|\| \[\]\)\.map\(i => \(\{ dataUrl: i\.dataUrl, id: i\.id \|\| '', storagePath: i\.storagePath \|\| '' \}\)\)/);
+    // 2026-07-05 thumbs (Q3=B) — persist mapping gained thumbUrl/thumbStoragePath
+    expect(TFP).toMatch(/beforeImages: beforeImages\.map\(i => \(\{ dataUrl: i\.dataUrl, id: i\.id \|\| '', storagePath: i\.storagePath \|\| '', thumbUrl: i\.thumbUrl \|\| '', thumbStoragePath: i\.thumbStoragePath \|\| '' \}\)\)/);
+    expect(TFP).toMatch(/images: \(l\.images \|\| \[\]\)\.map\(i => \(\{ dataUrl: i\.dataUrl, id: i\.id \|\| '', storagePath: i\.storagePath \|\| '', thumbUrl: i\.thumbUrl \|\| '', thumbStoragePath: i\.thumbStoragePath \|\| '' \}\)\)/);
     expect(TFP).toMatch(/pdfBase64: l\.pdfBase64 \|\| '', pdfStoragePath: l\.pdfStoragePath \|\| ''/);
     expect(TFP).toMatch(/pdfBase64: f\.pdfBase64 \|\| '', pdfStoragePath: f\.pdfStoragePath \|\| ''/);
     // doctor-save block

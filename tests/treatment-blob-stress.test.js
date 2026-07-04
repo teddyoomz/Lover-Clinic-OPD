@@ -178,10 +178,14 @@ describe('S7 — edit-remove-cancel broken-ref fix', () => {
     const d = []; removeTreatmentBlob('', false, p => d.push(p)); removeTreatmentBlob(null, true, p => d.push(p)); expect(d).toEqual([]);
   });
   it('S7.4 TFP: helper gated on !isEdit; all 4 remove handlers route through it; ZERO direct delete', () => {
-    expect(TFP).toMatch(/const removeTreatmentBlob = useCallback\(\(storagePath\) => \{\s*if \(storagePath && !isEdit\) deleteTreatmentBlob/);
+    // 2026-07-05 thumbs — helper gained a 2nd param (the thumbnail blob dies
+    // with its full image) → the helper now holds exactly TWO deleteTreatmentBlob
+    // calls; still ZERO direct deletes outside it.
+    expect(TFP).toMatch(/const removeTreatmentBlob = useCallback\(\(storagePath, thumbStoragePath\) => \{\s*if \(storagePath && !isEdit\) deleteTreatmentBlob/);
+    expect(TFP).toMatch(/if \(thumbStoragePath && !isEdit\) deleteTreatmentBlob\(thumbStoragePath\)/);
     expect((TFP.match(/removeTreatmentBlob\(/g) || []).length).toBeGreaterThanOrEqual(4); // 4 remove handlers
     expect(TFP).toMatch(/onBlobRemoved=\{removeTreatmentBlob\}/);                          // chart wire
-    expect((TFP.match(/deleteTreatmentBlob\(/g) || []).length).toBe(1);                    // only inside the helper
+    expect((TFP.match(/deleteTreatmentBlob\(/g) || []).length).toBe(2);                    // BOTH inside the helper only
   });
   it('S7.5 ChartSection routes delete + replace through onBlobRemoved (removeChartBlob)', () => {
     const CS = read('src/components/ChartSection.jsx');
