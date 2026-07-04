@@ -38,6 +38,8 @@
   <li><strong>VIP:</strong> toggle ลูกค้าเป็น VIP ในหน้าข้อมูลลูกค้า → ชื่อสีทอง + badge 👑 VIP <strong>ทุกที่ใน OPD system แบบ real-time ทันทีทุกจอ</strong> — ยกเว้นทุกช่องทางที่ลูกค้าเห็น (ลิ้ง/print/LINE) ห้ามแสดงเด็ดขาด</li>
   <li><strong>Staff chat — ซักประวัติ:</strong> เมื่อกดปุ่ม teal "บันทึกข้อมูลซักประวัติ" ใน TFP → การ์ด "ระบบ" ใน staff chat: ชื่อลูกค้ากดได้ + ปุ่ม "เปิดบันทึกการรักษา" เปิด TFP ใบนั้นตรงๆ ให้แพทย์ลงบันทึกต่อ</li>
   <li><strong>Staff chat — แพทย์บันทึกเสร็จ:</strong> เมื่อกดปุ่มม่วง "บันทึกสำหรับแพทย์" → การ์ดแบบเดียวกัน + แสดง "โดยแพทย์: {ชื่อแพทย์จากหัว TFP}" (<code>detail.doctorName</code>)</li>
+  <li><strong>(เพิ่ม 2026-07-04 รอบ 2) การ์ดรับเข้าเดิม:</strong> เพิ่มปุ่ม "📄 ดูข้อมูลรับเข้า" ใน bubble — เปิดดูข้อมูลรับเข้าที่ลูกค้ากรอก</li>
+  <li><strong>(เพิ่ม 2026-07-04 รอบ 2) การ์ดแบบประเมินติดตามเดิม:</strong> เพิ่มปุ่ม "📊 ดูแบบประเมิน" — เปิด <code>EDDetailModal</code> ตัวเดียวกับหน้าข้อมูลลูกค้า (modal สลับ/เปรียบเทียบรอบได้)</li>
 </ol>
 </div>
 
@@ -191,6 +193,38 @@
   </div>
 </div>
 
+<div class="mockup">
+  <div class="mockup-label">⑤⑥ การ์ดเดิม 2 ชนิด — เพิ่มปุ่ม (สไตล์ violet gradient เดียวกัน) · เปิด modal ในแชทได้ทั้ง 2 ฝั่ง dashboard</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:280px;background:#0f0f0f;padding:12px;border-radius:8px;">
+      <div style="background:#161616;border:1px solid #2e2e2e;border-left:4px solid #ef4444;border-radius:0 12px 12px 0;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:#fda4af;">ระบบ · LoverClinic</div>
+        <div style="font-size:13px;font-weight:700;color:#ececec;margin-bottom:4px;">กรอกข้อมูลรับเข้าเสร็จแล้ว</div>
+        <a style="font-size:13px;font-weight:700;color:#7dd3fc;text-decoration:underline;">นาย วิชิตพงษ์ ด่านกระโทก ↗</a>
+        <span style="font-size:11px;background:#222;color:#999;padding:2px 8px;border-radius:6px;margin-left:6px;">HN LC-26000197</span>
+        <div style="margin-top:8px;"><span style="display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:12.5px;font-weight:800;padding:7px 16px;border-radius:10px;box-shadow:0 4px 18px rgba(139,92,246,.45);">📄 ดูข้อมูลรับเข้า <span style="font-size:14px;opacity:.85;">›</span></span></div>
+      </div>
+      <div style="margin-top:10px;background:#161616;border:1px solid #2e2e2e;border-left:4px solid #ef4444;border-radius:0 12px 12px 0;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;color:#fda4af;">ระบบ · LoverClinic</div>
+        <div style="font-size:13px;font-weight:700;color:#ececec;margin-bottom:4px;">กรอกแบบประเมินติดตามเสร็จแล้ว</div>
+        <a style="font-size:13px;font-weight:700;color:#7dd3fc;text-decoration:underline;">นาย ชาติชาย มวยมั่น ↗</a>
+        <span style="font-size:11px;background:#222;color:#999;padding:2px 8px;border-radius:6px;margin-left:6px;">HN LC-26000052</span>
+        <div style="margin-top:8px;"><span style="display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:12.5px;font-weight:800;padding:7px 16px;border-radius:10px;box-shadow:0 4px 18px rgba(139,92,246,.45);">📊 ดูแบบประเมิน <span style="font-size:14px;opacity:.85;">›</span></span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">
+      <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">ปุ่ม ⑤ เปิด → modal "ประวัติผู้ป่วย OPD" (shared body เดียวกับหน้าคิว)</div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:11px;color:#334155;">
+        📄 <b>ประวัติผู้ป่วย OPD — นาย วิชิตพงษ์</b><br>ข้อมูลส่วนตัว · ติดต่อฉุกเฉิน · เหตุผลที่มา · แพ้ยา · โรคประจำตัว · ยาประจำ · กรุ๊ปเลือด · Clinical summary — <i>เนื้อหาเดียวกับกด "ดูข้อมูล" ในคิวเป๊ะ (OpdIntakeDetailBody ใช้ร่วม)</i>
+      </div>
+      <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;margin:8px 0 4px;">ปุ่ม ⑥ เปิด → EDDetailModal ตัวจริง</div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:11px;color:#334155;">
+        📊 <b>ADAM · IIEF · MRS · PE</b> — 2 panel เปรียบเทียบรอบ + round picker + swap + highlight ข้อที่เปลี่ยน — <i>component เดิมจากหน้าข้อมูลลูกค้า ไม่ fork</i>
+      </div>
+    </div>
+  </div>
+</div>
+
 <h2>Flow</h2>
 
 <div class="mockup">
@@ -219,6 +253,21 @@
   <div class="flowrow"><span class="flowbox">StaffChatSystemCard (kind ใหม่)</span><span class="flowarrow">→</span><span class="flowbox">ชื่อกดได้ → /?backend=1&customer={id}</span> <span class="flowbox">ปุ่ม → /?backend=1&customer={id}&treatment={BT-id}</span></div>
   <div class="flowrow"><span class="flowbox">BackendDashboard deep-link useEffect (ขยาย)</span><span class="flowarrow">→</span><span class="flowbox">?treatment= → getCustomer → setTreatmentFormMode({mode:'edit', treatmentId, ...})</span><span class="flowarrow">→</span><span class="flowbox" style="border-color:#7c3aed;color:#5b21b6;">TFP ใบนั้นเปิดทันที</span></div>
   <div class="flowrow"><span class="flowbox">เสียง + unread</span><span class="flowarrow">→</span><span class="flowbox">อัตโนมัติตาม pipeline เดิม (V82 cursor)</span></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow ⑤ — ปุ่ม "ดูข้อมูลรับเข้า" (fallback chain ใช้ได้เสมอแม้ session ถูกลบ)</div>
+  <div class="flowrow"><span class="flowbox">กดปุ่มบนการ์ดรับเข้า</span><span class="flowarrow">→</span><span class="flowbox">getDoc(opd_sessions/{sessionId})</span><span class="flowarrow">→</span><span class="flowbox">มี doc → ใช้ session ตรง</span></div>
+  <div class="flowrow" style="padding-left:40px;"><span class="flowarrow">↓ ไม่มี (booking flow ลบทิ้งแล้ว — AV131)</span></div>
+  <div class="flowrow" style="padding-left:40px;"><span class="flowbox">getCustomer(resolvedCustomerId) → synthesizeSessionFromCustomer() (__synthetic — pattern เดียวกับ AppointmentHub)</span></div>
+  <div class="flowrow"><span class="flowarrow">→</span><span class="flowbox">portal modal ในแชท (precedent: StaffChatImageLightbox)</span><span class="flowarrow">→</span><span class="flowbox" style="border-color:#7c3aed;color:#5b21b6;">OpdIntakeDetailBody (shared — สกัดจาก modal คิว AdminDashboard → สอง view ไม่ drift)</span></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow ⑥ — ปุ่ม "ดูแบบประเมิน" (EDDetailModal ตัวจริง)</div>
+  <div class="flowrow"><span class="flowbox">กดปุ่มบนการ์ด followup (มี customerId เสมอ)</span><span class="flowarrow">→</span><span class="flowbox">getCustomer → intakePerf (pickKioskAssessmentFields)</span> <span class="flowbox">listenToAssessments(customerId) — universal</span></div>
+  <div class="flowrow"><span class="flowarrow">→</span><span class="flowbox">deriveRounds(intakePerf, assessments)</span><span class="flowarrow">→</span><span class="flowbox" style="border-color:#7c3aed;color:#5b21b6;">&lt;EDDetailModal type={typeแรกที่มีข้อมูล} round={hero ล่าสุด} rounds hero isDark onClose /&gt; — portal to body อยู่แล้ว (AV98)</span></div>
+  <div class="flowrow"><span class="flowbox">Edge: Cloud Function เพิ่ง materialize รอบ (status pending ชั่วครู่)</span><span class="flowarrow">→</span><span class="flowbox">listener ยิงซ้ำ → modal อัปเดตเองในไม่กี่วินาที</span></div>
 </div>
 
 <h2>Architecture</h2>
@@ -252,6 +301,15 @@
   <li><strong>Card UI</strong>: ขยาย <code>StaffChatSystemCard.jsx</code> — kind ใหม่ 2 ตัว + ปุ่ม violet gradient (target _blank) + บรรทัดแพทย์; ชื่อลูกค้าลิงก์แบบเดิม; ไม่ต้อง live-resolve (ลูกค้าลงทะเบียนแล้ว ณ จุด TFP)</li>
   <li><strong>ไม่ทำ (YAGNI)</strong>: การ์ดตอน full staff-save (finalize) — user ขอเฉพาะซักประวัติ + แพทย์; Cloud Function trigger — Q2=A client-write</li>
 </ul>
+
+<h3>Feature ⑤⑥ — ปุ่มบนการ์ดเดิม (รับเข้า + แบบประเมินติดตาม)</h3>
+<ul>
+  <li><strong>⑤ ดูข้อมูลรับเข้า</strong>: สกัดส่วนแสดง patientData ของ <code>renderViewingSessionModal</code> (AdminDashboard.jsx:~5040-5230 — ข้อมูลส่วนตัว/ฉุกเฉิน/สุขภาพ/clinical summary) เป็น shared component ใหม่ <code>OpdIntakeDetailBody</code> (V127 shared-body pattern) → AdminDashboard modal เดิมใช้ (behavior เดิมเป๊ะ) + การ์ดแชทเปิด portal modal ใหม่ (precedent StaffChatImageLightbox) host ตัวเดียวกัน — ใช้ได้ทั้ง 2 dashboard mount</li>
+  <li><strong>⑤ data source</strong>: <code>getDoc(opd_sessions/{system.sessionId})</code> ก่อน → ไม่มี (booking flow ถูก hard-delete, AV131) → <code>getCustomer(customerId ที่ resolve แล้ว)</code> + <code>synthesizeSessionFromCustomer()</code> (<code>opdSessionState.js:85</code>, __synthetic — precedent AppointmentHubView:327) → เปิดได้เสมอ; ทั้งคู่ยังไม่มี (การ์ด pending + session หาย = case ผิดปกติ) → ข้อความ "ไม่พบข้อมูลรับเข้า"</li>
+  <li><strong>⑥ ดูแบบประเมิน</strong>: reuse <code>EDDetailModal</code> ตรงๆ (pure display + portal to body + AV78/AV98 อยู่แล้ว — <strong>ไม่ fork</strong>): กดปุ่ม → <code>getCustomer</code> → intakePerf = <code>pickKioskAssessmentFields(patientData)</code> + <code>listenToAssessments(customerId)</code> (universal, staff-read) → <code>deriveRounds</code> → เปิดที่ hero (รอบล่าสุด) + type แรกที่มีข้อมูล; ปิด → unsubscribe; listener ทำให้รอบที่ Cloud Function เพิ่ง materialize เด้งเข้า modal เอง</li>
+  <li><strong>ปุ่มทั้งคู่</strong>: สไตล์ violet gradient เดียวกับ "เปิดบันทึกการรักษา" (consistency ทุกการ์ดระบบ); isDark จาก useTheme (source เดียวกับ CDV)</li>
+  <li><strong>ไม่แตะ</strong>: ตัว writer ฝั่ง Cloud Function ของการ์ดรับเข้า/followup (การ์ดเดิมสมบูรณ์ — เพิ่มเฉพาะฝั่ง render)</li>
+</ul>
 </div>
 
 <h2>Decisions (locked via Q&A with user)</h2>
@@ -264,6 +322,7 @@
   <li><strong>Recall scope:</strong> เหตุผลแสดงทุกจุดที่แสดง recall (ลิสต์ ×3 ผ่าน RecallRow + modal ×3)</li>
   <li><strong>ปุ่มการ์ด = A:</strong> Violet gradient เรืองแสง + chevron, label "เปิดบันทึกการรักษา"</li>
   <li><strong>Theme:</strong> ทุกอย่างต้องเข้ากับ light theme ด้วย (AA ทั้งสองธีม — aaAccent V125 pattern)</li>
+  <li><strong>(รอบ 2, user "ok"):</strong> การ์ดรับเข้าเดิม + ปุ่ม "📄 ดูข้อมูลรับเข้า" (shared body + synthetic fallback) · การ์ด followup เดิม + ปุ่ม "📊 ดูแบบประเมิน" (EDDetailModal ตัวจริง ไม่ fork) · ปุ่มสไตล์ violet เดียวกันทุกการ์ด</li>
 </ul>
 
 <h2>Acceptance Criteria</h2>
@@ -278,6 +337,9 @@
   <li>กด save ซ้ำใบเดิมโหมดเดิม → ไม่มีการ์ดซ้ำ; การ์ดเขียนไม่สำเร็จ → การ save ไม่พัง</li>
   <li>Client ปลอมการ์ด kind intake/followup ไม่ได้ (rules ยังบล็อก); anon เขียนการ์ดใดๆ ไม่ได้ (403)</li>
   <li>ทุก UI ใหม่ผ่าน AA ทั้ง dark + light theme</li>
+  <li>การ์ดรับเข้า: ปุ่ม "ดูข้อมูลรับเข้า" เปิด modal ข้อมูลรับเข้า (เนื้อหาเดียวกับกด "ดูข้อมูล" ในคิว) ได้จากแชท<strong>ทั้งฝั่ง frontend และ backend</strong> — รวมถึงลูกค้า booking flow ที่ session ถูกลบแล้ว (synthetic จาก be_customers)</li>
+  <li>การ์ดแบบประเมินติดตาม: ปุ่ม "ดูแบบประเมิน" เปิด EDDetailModal (สลับ type / เปรียบเทียบรอบ / swap ได้ครบเหมือนใน CDV) โดยแสดงรอบล่าสุด; ถ้าคะแนนเพิ่ง materialize → เด้งเข้า modal เองไม่ต้องปิดเปิดใหม่</li>
+  <li>Modal ในคิว AdminDashboard เดิมแสดงผลเหมือนเดิมทุกประการหลังสกัด shared body (anti-regression test)</li>
 </ol>
 
 <h2>Risks / Open Questions</h2>
@@ -287,6 +349,8 @@
   <li><strong>Rules narrowing:</strong> การเปิดให้ staff เขียน system card kind tfp-* = staff ปลอมการ์ด tfp ได้ในทางทฤษฎี — ยอมรับ (staff auth แล้ว + พิมพ์ข้อความหลอกได้อยู่แล้ว); intake/followup ยัง server-only</li>
   <li><strong>AdminDashboard queue:</strong> คิวใช้ opd_sessions (denorm) — VIP ต้อง key ด้วย <code>session.brokerProClinicId</code>; ลูกค้า walk-in ที่ยังไม่ลงทะเบียน (ไม่มี customerId) จะยังไม่โชว์ VIP จนกว่าจะ link — ถูกต้องตาม semantic</li>
   <li><strong>Deploy:</strong> feature นี้ต้อง deploy ทั้ง vercel + firestore.rules (V15 combined + Rule B Probe-Deploy-Probe + probe ใหม่) — รอคำสั่ง "deploy" explicit (V18)</li>
+  <li><strong>⑤ AdminDashboard extraction (V21-class):</strong> การสกัด OpdIntakeDetailBody ออกจากไฟล์ 8000+ บรรทัด ต้อง byte-behavior-identical (destructive buttons gated __synthetic ตามเดิม) + เช็ค field-parity ของ synthetic session (be_customers.patientData เก็บ kiosk-shape ud_*/hasAllergies ครบไหม — V118 precedent บอกว่า render ได้ แต่ต้อง diff ตอน implement)</li>
+  <li><strong>⑥ be_assessments rules:</strong> ยืนยัน read rule ผ่านสำหรับ staff จาก context แชท (CDV ใช้ listener เดียวกันอยู่แล้ว — คาดผ่าน; เช็คตอน implement)</li>
 </ul>
 
 </body>
