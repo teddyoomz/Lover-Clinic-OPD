@@ -219,14 +219,34 @@ export default function AppointmentHubView({
     return () => { cancelled = true; };
   }, [loadAll, reloadKey]);
 
+  // perf P3.23 (2026-07-06) — coalesce change-signal bursts. A single TFP save
+  // fires the treatment + sale (+appointment) listeners within ~1s; each
+  // previously triggered its OWN loadAll = 7 whole-dataset fetches ×3 per save.
+  // One trailing 800ms debounce = one refetch per burst. Manual reconcile sites
+  // (onSaved / delete) stay DIRECT loadAll — user-facing immediacy unchanged.
+  const silentReloadTimer = useRef(null);
+  const scheduleSilentReload = useCallback(() => {
+    if (silentReloadTimer.current) clearTimeout(silentReloadTimer.current);
+    silentReloadTimer.current = setTimeout(() => {
+      silentReloadTimer.current = null;
+      loadAll({ silent: true });
+    }, 800);
+  }, [loadAll]);
+  // Cancel any pending debounced reload when loadAll identity changes (branch
+  // switch → its own fresh initial load covers it; prevents a stale-closure
+  // fetch of the previous branch) AND on unmount.
+  useEffect(() => () => {
+    if (silentReloadTimer.current) { clearTimeout(silentReloadTimer.current); silentReloadTimer.current = null; }
+  }, [loadAll]);
+
   // V64-fix7: silent reload when treatmentDataVersion bumps (post-TFP save
   // or treatment delete elsewhere). Skip first render (version=0 = baseline).
   const treatmentDataVersionPrev = useRef(treatmentDataVersion);
   useEffect(() => {
     if (treatmentDataVersion === treatmentDataVersionPrev.current) return;
     treatmentDataVersionPrev.current = treatmentDataVersion;
-    loadAll({ silent: true });
-  }, [treatmentDataVersion, loadAll]);
+    scheduleSilentReload();
+  }, [treatmentDataVersion, scheduleSilentReload]);
 
   // V64-fix9 (2026-05-09): silent reload when appointmentDataVersion bumps
   // (post-be_appointments mutation upstream — kiosk create / edit / cancel).
@@ -235,8 +255,8 @@ export default function AppointmentHubView({
   useEffect(() => {
     if (appointmentDataVersion === appointmentDataVersionPrev.current) return;
     appointmentDataVersionPrev.current = appointmentDataVersion;
-    loadAll({ silent: true });
-  }, [appointmentDataVersion, loadAll]);
+    scheduleSilentReload();  // perf P3.23 — coalesced
+  }, [appointmentDataVersion, scheduleSilentReload]);
 
   // ─── 2026-05-27 — LIVE CROSS-DEVICE ──────────────────────────────────────
   // Any trigger listener fire (treatments / deposits / sales) bumps
@@ -248,8 +268,8 @@ export default function AppointmentHubView({
   useEffect(() => {
     if (liveRefreshTick === liveRefreshTickPrev.current) return;
     liveRefreshTickPrev.current = liveRefreshTick;
-    loadAll({ silent: true });
-  }, [liveRefreshTick, loadAll]);
+    scheduleSilentReload();  // perf P3.23 — coalesced
+  }, [liveRefreshTick, scheduleSilentReload]);
 
   const bumpLive = useCallback((key) => {
     if (liveFirstFire.current[key]) { liveFirstFire.current[key] = false; return; } // skip mount fire

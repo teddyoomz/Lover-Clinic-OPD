@@ -83,6 +83,25 @@
   dithering), dark = starfield class. Note: the P2.13/14 wins are event-driven (chat/presence) so the
   5s idle window can't show them — the renderHook identity tests are the proof (Q-honest).
 
+## P3 RESULT (2026-07-06 — size-justified scoping via prod counts: docs/perf via diag-collection-counts.mjs)
+- Prod counts: opd_sessions 155 (143 archived) · be_treatments 412 · be_appointments 453 ·
+  be_stock_movements 1,498 · chat_history 4,265 · clinic_schedules 1 · be_recalls 53 · chat_conversations 11.
+- DONE: #24 chat_history client-delete removed (cron owns; own-write cascade gone) ·
+  #23 AppointmentHubView change-signal debounce 800ms (a TFP save fired 3 signals → 3× 7-dataset refetch;
+  now 1 per burst; manual reconcile stays direct; pending timer cancelled on branch switch) ·
+  **BONUS BUG FIX**: chat-history retention CRON was DEAD (Timestamp-vs-ISO-string type mismatch →
+  46 runs × scanned:0 while 4,265 docs accumulated) — dual-type query fix, TDD + Rule Q L2 dry-run on
+  prod (scanned 500/would-delete 500, was 0). Effective after next deploy; drains ≤500/day (~9 days),
+  or a one-shot CLI --apply can drain immediately (user call — destructive-scope callout).
+- DROPPED (size-justified): #27 clinic_schedules (1 doc) · #28 RecallTogglePill (53 docs + eff-date
+  OR edge would risk badge undercount).
+- DEFERRED (documented): #22 opd_sessions narrowing (155 docs now = no present cost; where()-excludes-
+  missing-field V23-class risk needs its own design; growth bounded by archive... which retains forever —
+  recommend a retention decision later) · #25 appointment date-bounds (453 docs total) ·
+  #26 movement-log pagination (1,498 grows forever — recommend when >5k) · link-patient LCP 4.3s =
+  serial anon-auth→settings→token-query chain — needs its own focused session (data-path redesign,
+  Rule Q L2 per change).
+
 ## Ordering inside phases
 P1: 1 → 2 → 3 → 4 → 5+6 → 9+8 → 10-12 → 7. P2: 13 → 14 → 16 → 17 → 15 → 19 → 18 → 20 (21 = evidence loop).
 P3: 24 → 23 → 28 → 26 → 25 → 27 → 22 (riskiest LAST; drop rule applies — anything un-enumerable gets dropped, documented).
