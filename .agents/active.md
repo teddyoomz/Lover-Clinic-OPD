@@ -1,31 +1,38 @@
 ---
-updated_at: "2026-07-05 LATE+1 — recall full-dates + empty-state + template realtime/portal + TFP image thumbnails SHIPPED + DEPLOYED LIVE; hunt loop converged R1(0)→R2(1 fixed)→self-grep(0)."
-status: "DEPLOYED. master = prod. Definitive green full vitest 17245/17245 · 0 fail. Awaiting user L1 hands-on."
+updated_at: "2026-07-07 — whole-app PERF CAMPAIGN (4 phases) SHIPPED + DEPLOYED LIVE + dead-cron fix drained on prod."
+status: "DEPLOYED. master = prod. Final full vitest 17287/17287 · 0 fail. Awaiting user L1 hands-on (perceived speed)."
 branch: "master"
-last_commit: "52938478 fix(state): active.md V54/V38 lineage marker (v50 F1.12)"
-tests: "full vitest 17245/17245 · 0 fail · 0 suites-fail (definitive clean run, --outputFile json). Build clean. All touched files green isolated."
+last_commit: "perf(T13) after-phase3 final metrics + report.html (see git log)"
+tests: "full vitest 17287/17287 · 0 fail (final clean run post-P3). Build clean. Reuse these counts — do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "52938478 (2026-07-05) — DEPLOYED vercel lover-clinic-j5brcikn6 aliased lover-clinic-app.vercel.app HTTP 200."
-firestore_rules_version: "UNCHANGED this batch → frontend-only deploy, NO Probe-Deploy-Probe. (be_opd_note_templates + tfp-card rules already live from prior a5b45c6f deploy.)"
+production_commit: "perf campaign head (2026-07-07) — vercel lover-clinic-lh9waq3po aliased, HTTP 200, live-verified markers"
+firestore_rules_version: "UNCHANGED entire campaign → frontend-only deploy, NO Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-05 LATE+1 — recall dates + empty-state + template realtime/portal + TFP thumbs
+# Active — 2026-07-07 — perf campaign shipped (P0 harness → P1 bundle → P2 render → P3 data)
 
-## State (5 features, from IMG_8920 + 3 verbal bugs; SHIPPED local, NOT deployed)
-- **① วันที่เต็ม (Q1=B)** — NEW `formatThaiFullDate` (recallResolvers) "6 ก.ค. 2569" (เดือนไทย+พ.ศ.); `_formatThaiShortDate` delegates → row date chip / snooze chip / section-header suffix / PairBadge / LINE `{วันที่}` var ทั้งหมด.
-- **② empty state (Q2=A)** — RecallList compact renders today/overdue/tomorrow ALWAYS; ว่าง → กล่องเขียวประ "✓ ไม่มี..." (data-testid recall-bucket-empty-*). full mode unchanged.
-- **③ modal portal** — TemplateEditorModal via createPortal(document.body) → ไม่ซ้อน/ไม่แว๊ป (transform-ancestor fix).
-- **④ dropdown realtime (user directive)** — listenToOpdNoteTemplatesByBranch (onSnapshot, V54 safe-by-default + V38 spread, BSA L1/L2/L3 via useBranchAwareListener) → create/edit/delete เห็นทันที ไม่ต้อง refresh; ฆ่า slow menu-open getDocs.
-- **⑤ TFP thumbnails (Q3=B)** — upload คู่ ~320px thumb (non-fatal) + persist/remove/cascade threading + readers 5 surface thumb-first||dataUrl + lazy; zoom=full. Rule M backfill รูปเก่า **543/543 patched** (idempotent re-run 0; HTTP-verify 5/5 = 200 image/jpeg 6.5-9KB).
-- **Hunt loop converged**: R1 (2 agents) 0 confirmed (backfill-URL SUSPECTED→REFUTED by HTTP 200 5/5; 92px cosmetic). R2 (2 agents) 1 latent fixed (lineTemplate {วันที่}→full) + carousel-thumb REFUTED (= user's explicit inline-thumb/click-full directive) + 4 dims CONFIRMED-SAFE. self-grep = 0 remaining raw-date exposure.
+## Measured results (median-of-3, local-preview; full table docs/perf/report.html)
+- Backend tabs JS/หน้า 852-889 → **449-561KB (−44%)** · entry chunk 365 → **31KB** · FCP −25% ·
+  backend LCP 1016-1236 → 924-976ms · frontend heap 69 → 48MB · customer links JS −4..−22%.
+- P2: chat/presence re-render storms killed (equality guards + renderHook locks) · CustomerCard/RecallRow memo.
+- P3: hub refetch debounced (3 bursts → 1) · chat_history client-delete → cron-owned.
+- **BONUS BUG**: chat-history retention cron DEAD (Timestamp-vs-ISO-string type mismatch, 46 runs × scanned:0)
+  → fixed (dual-type query) + verified LIVE on deployed code + drained 4,265 → 137 docs.
 
-## Rule Q
-- **L2 realtime ALL PASS real prod** (`diag-opd-templates-realtime-l2.mjs` — cross-writer create/edit/delete stream into ONE live client subscription, 4 snapshots).
-- Thumb URL-shape verified live (`diag-thumb-sample.mjs` 5/5 HTTP 200).
+## Key artifacts
+- Harness (reusable): scripts/perf-{lib,baseline,bundle-manifest,compare,visual-parity,find-links}.mjs + npm run perf:*
+- docs/perf/punchlist.md (verdicts + P1/P2/P3 results + deferred items w/ rationale) · docs/perf/report.html
+- Locks: tests/perf-p1-lazy-locks + perf-p2-render-guards + perf-p3-locks + perf-p3-chat-history-sweep-type-fix + perf-harness-lib
+
+## Deploy state
+- DEPLOYED + live-verified (Rule Q): preconnect ×4 ✓ · recall-chunk preload GONE ✓ · FOUC hack gone ✓ ·
+  /assets immutable cache header ✓ · CSP hashes intact ✓ · cron fix live (scanned 500 on first forced run) ✓.
 
 ## Next action
-- idle — DEPLOYED + LIVE. Await user L1 hands-on.
-- Post-deploy user L1: (1) หน้า Recall วันนี้ → ทุกวันที่เต็ม "6 ก.ค. 2569" + วันว่างขึ้น ✓ ไม่มี ชัด (2) dropdown template → สร้าง/แก้/ลบ เห็นทันที + modal เปิดกลางจอไม่ซ้อน (3) TFP รูปเยอะ → grid โหลดเร็ว (thumb) + กดซูมได้รูปเต็ม.
+- idle — await user L1 hands-on: (1) เปิดเว็บ/สลับ backend tabs ควรไวขึ้นชัด (2) พิมพ์ค้นหาลูกค้าลื่นขึ้น
+  (3) ทุกหน้าตาเหมือนเดิม 100% (4) chat/นัดหมาย realtime ปกติ.
+- Deferred perf items (มี rationale ใน punchlist): TFP keystroke isolation · link-patient LCP 4.3s data-chain ·
+  movement-log pagination (>5k) · opd_sessions archive retention decision.
 
 ## Outstanding user-triggered actions
-- (none — deployed; awaiting L1 feedback only)
+- (none — deployed + drained; L1 feedback only)
