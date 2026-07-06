@@ -517,12 +517,14 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
           || (!item.branchId && isLegacyNakhonBranch(selectedBranchId))
           || String(item.branchId) === String(selectedBranchId);
         if (!branchMatches) return;
-        if (item.resolvedAt && item.resolvedAt < sevenDaysAgo) {
-          // Auto-delete > 7 days
-          deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_history`, item.id)).catch(() => {});
-        } else {
-          valid.push(item);
-        }
+        // perf P3.24 (2026-07-06) — >7d items are DISPLAY-filtered only here;
+        // deletion is owned by api/cron/chat-history-retention-sweep.js (24h
+        // retention — STRICTER than this 7d view filter, so nothing lingers).
+        // The old deleteDoc-inside-onSnapshot was an own-write cascade: each
+        // delete re-fired the snapshot → full re-map ×N open admin tabs (same
+        // class the opd_sessions listener shed to a cron 2026-05-24).
+        if (item.resolvedAt && item.resolvedAt < sevenDaysAgo) return;
+        valid.push(item);
       });
       setHistory(valid);
     });
