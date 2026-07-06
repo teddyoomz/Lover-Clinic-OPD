@@ -2,7 +2,7 @@
 // Card grid layout similar to ProClinic's /admin/customer/search page.
 // Client-side search filtering by name, HN, phone.
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
 import { getAllCustomers, listBranches } from '../../lib/scopedDataLayer.js';
 import { hexToRgb } from '../../utils.js';
@@ -36,6 +36,9 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
   const [bulkOpen, setBulkOpen] = useState(false);
   // Phase 24.0 — non-null while delete modal is open
   const [deletingCustomer, setDeletingCustomer] = useState(null);
+  // perf P2.17 (2026-07-06) — stable handler so the memoized CustomerCard isn't
+  // re-rendered by a fresh inline arrow on every search-keystroke render.
+  const handleDeleteClick = useCallback((cust) => setDeletingCustomer(cust), []);
   // Phase 24.0 — transient success banner after a delete completes
   const [deleteStatus, setDeleteStatus] = useState('');
 
@@ -301,7 +304,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
                       mode="cloned"
                       branchesMap={branchesMap}
                       onView={selectMode ? null : onViewCustomer}
-                      onDeleteClick={selectMode ? null : (cust) => setDeletingCustomer(cust)}
+                      onDeleteClick={selectMode ? null : handleDeleteClick}
                     />
                   </div>
                 </div>

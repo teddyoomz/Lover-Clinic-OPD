@@ -111,12 +111,19 @@ export function isMembershipExpired(expiresAt) {
 
 // ─── Formatting ─────────────────────────────────────────────────────────────
 
+// perf P2.29 (2026-07-06) — hoisted formatters: toLocaleString constructs an
+// Intl.NumberFormat PER CALL; these two are called from table-row .map()s across
+// ~331 call sites (hundreds of constructions per report render). Same locale +
+// options → byte-identical output to the previous per-call form.
+const FMT_MONEY = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const FMT_POINTS = new Intl.NumberFormat('th-TH');
+
 export function fmtMoney(n) {
-  return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return FMT_MONEY.format(Number(n || 0));
 }
 
 export function fmtPoints(n) {
-  return Number(n || 0).toLocaleString('th-TH');
+  return FMT_POINTS.format(Number(n || 0));
 }
 
 // ─── Sale actual-paid resolvers (2026-05-31, spec Q1=A) ───────────────────────

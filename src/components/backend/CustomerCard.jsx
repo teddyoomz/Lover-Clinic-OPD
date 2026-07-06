@@ -1,4 +1,5 @@
 // ─── CustomerCard — Reusable card for displaying customer info ──────────────
+import { memo } from 'react';
 // V68 (2026-05-15) — V5 Editorial redesign. World-class polish for the
 // customer-list view. Initials avatar with hash-derived gradient (no
 // generic User icon). 4-layer shadow stack for depth (lit-from-above
@@ -87,7 +88,10 @@ function genderEmoji(gender) {
   return gender || '';
 }
 
-export default function CustomerCard({
+// perf P2.17 (2026-07-06) — memoized at export (bottom of file): the customer
+// grid re-rendered EVERY card per search keystroke (400+ customers, 5.4k DOM
+// nodes). Card props are identity-stable across filter renders → memo skips them.
+function CustomerCard({
   customer,
   // V68: `accentColor` accepted for API stability; the V5 design bakes the
   // accent into the shadow stack (fire-red dark / sakura light) rather than
@@ -273,3 +277,6 @@ export default function CustomerCard({
     </div>
   );
 }
+
+// perf P2.17 — see note above the component
+export default memo(CustomerCard);

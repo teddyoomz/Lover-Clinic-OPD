@@ -38,7 +38,10 @@ import { VipName } from '../../VipBadge.jsx';
  * @param {function} [props.onEdit] (recallId) → open edit modal
  * @param {boolean} [props.compact] hide source row + reduce padding (CDV variant)
  */
-export function RecallRow({
+// perf P2.19 (2026-07-06) — memoized at export (bottom of file): rows render
+// under the AdminDashboard monolith + RecallList; handlers arrive as stable
+// pass-through props, so memo skips untouched rows on parent re-renders.
+function RecallRowImpl({
   recall,
   todayISO,
   pairedRecall,
@@ -474,4 +477,6 @@ export function RecallRow({
   );
 }
 
+// perf P2.19 — memo wrapper preserves BOTH export forms
+export const RecallRow = React.memo(RecallRowImpl);
 export default RecallRow;
