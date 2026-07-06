@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Whole-App Performance Audit & Optimization — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    .phase { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8em; font-weight: 700; color: #fff; }
+    .p0 { background: #475569; } .p1 { background: #dc2626; } .p2 { background: #ea580c; } .p3 { background: #7c3aed; }
+    .flowbox { border: 2px solid #94a3b8; border-radius: 8px; padding: 0.6em 1em; background: #f8fafc; margin: 0.4em 0; }
+    .flowarrow { text-align: center; color: #94a3b8; font-size: 1.2em; margin: 0.1em 0; }
+    .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 0.5em 1em; border-radius: 0 6px 6px 0; margin: 0.8em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Whole-App Performance Audit & Optimization — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline — V81/V86: subagents thrash on this baseline). Audit + verification stages use Workflow fan-out (Ultracode, user-invoked). Steps use HTML checkboxes for tracking.<br>
+  <strong>Spec:</strong> <a href="../specs/2026-07-06-performance-audit-optimization-design.html">2026-07-06-performance-audit-optimization-design.html</a>
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Measurably faster load + smoother UI on every surface, zero visual change, zero new bugs — proven by before/after numbers.</p>
+  <p><strong>Architecture:</strong> Measurement-first 4-phase campaign. Phase 0 builds a reusable Playwright+CDP metrics harness + bundle manifest + pixel-parity gate, then runs an Ultracode Workflow audit producing a ranked punch-list. Phases 1–3 consume the punch-list (bundle → render → data), re-measuring + re-verifying after each phase.</p>
+  <p><strong>Tech Stack:</strong> Playwright (installed) + CDP, sharp (installed, pixel diff), zlib (gzip sizes), Vite 8/Rolldown ANALYZE=1, Workflow tool (audit fan-out), firebase-admin (Rule R link discovery only).</p>
+  <p><strong>Hard gates (every phase):</strong> full vitest green · build clean · pixel-parity both themes · Rule Q L1/L2 · iron-clad A revert on any break · NO firestore.rules change · NO visual change · deploy only on explicit "deploy" (V18).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>No UI is built — the deliverables are data artifacts. Their exact shapes:</p>
+
+<div class="mockup">
+  <div class="mockup-label">docs/perf/&lt;runId&gt;/&lt;surface&gt;.json — one per surface per run (median of 3)</div>
+<pre>{
+  "runId": "baseline",              // baseline | after-phase1 | after-phase2 | after-phase3
+  "target": "local-preview",         // local-preview (primary, low-noise) | prod (secondary)
+  "surface": "backend-tab-sale",
+  "url": "/?backend=1&tab=sale",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 1240, "LCP_ms": 2810, "CLS": 0.01,
+    "longTasks_count": 14, "longTasks_totalMs": 1830,
+    "jsTransferred_KB": 1420, "jsResources": 9,
+    "domNodes": 4200, "heapUsed_MB": 96,
+    "idleMutations_5s": 3,            // re-render-storm proxy: DOM mutations while idle
+    "interaction_ms": 410             // click tab / open modal → settled paint (interaction surfaces only)
+  }
+}</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">docs/perf/bundle-&lt;runId&gt;.json — per-chunk sizes from a real build</div>
+<pre>[
+  { "file": "assets/BackendDashboard-Cx1.js", "raw_KB": 933.4, "gzip_KB": 262.1 },
+  { "file": "assets/vendor-firebase-9k2.js",  "raw_KB": 498.0, "gzip_KB": 118.7 },
+  ...every js/css chunk, sorted desc
+]</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">docs/perf/report.html — generated comparison (shape; numbers illustrative)</div>
+  <table>
+    <tr><th>Surface</th><th>Metric</th><th>baseline</th><th>after-P1</th><th>after-P2</th><th>after-P3</th><th>Δ total</th></tr>
+    <tr><td>backend-tab-sale</td><td>jsTransferred_KB</td><td>1420</td><td>610</td><td>—</td><td>—</td><td style="color:#15803d"><b>−57%</b></td></tr>
+    <tr><td>frontend-queue</td><td>longTasks_totalMs</td><td>1830</td><td>1700</td><td>420</td><td>390</td><td style="color:#15803d"><b>−79%</b></td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">docs/perf/punchlist.md — ranked audit output (Workflow, adversarially verified)</div>
+<pre>| # | Area | Finding | Surface(s) | Est. impact | Risk | Verdict | Fix phase |
+|---|------|---------|-----------|-------------|------|---------|-----------|
+| 1 | bundle | backendClient.js statically imported by X → 933KB core | all backend | HIGH | low | CONFIRMED | P1 |
+| 2 | render | AdminDashboard queue re-renders all rows per snapshot | frontend | HIGH | med | CONFIRMED | P2 |
+...only CONFIRMED findings get fixes; REFUTED kept with evidence (V162)</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Campaign flow — measure → fix → re-measure → verify per phase</div>
+  <div class="flowbox"><span class="phase p0">P0</span> <strong>T1–T5</strong>: harness scripts (metrics / bundle-manifest / compare / visual-parity) → run <code>baseline</code> on ALL surfaces + bundle manifest + parity screenshots → Ultracode Workflow audit (6 lenses × adversarial verify) → <code>punchlist.md</code></div>
+  <div class="flowarrow">▼</div>
+  <div class="flowbox"><span class="phase p1">P1</span> <strong>T6–T8</strong>: bundle composition analysis → splits + lazy-proofs + preconnect (one change at a time: build + targeted tests each) → re-measure <code>after-phase1</code> + parity + full vitest + report</div>
+  <div class="flowarrow">▼ optional user "deploy" checkpoint</div>
+  <div class="flowbox"><span class="phase p2">P2</span> <strong>T9–T10</strong>: confirm render storms (idleMutations + interaction_ms + CDP trace) → memo / stable callbacks / virtualization (parity gate per list) → re-measure <code>after-phase2</code> + full vitest + report</div>
+  <div class="flowarrow">▼ optional user "deploy" checkpoint</div>
+  <div class="flowbox"><span class="phase p3">P3</span> <strong>T11–T12</strong>: onSnapshot census → limit/pagination per finding (each: Rule Q L2 exact query + Rule I flow-simulate) → re-measure <code>after-phase3</code></div>
+  <div class="flowarrow">▼</div>
+  <div class="flowbox"><strong>FINAL T13</strong>: consolidated <code>docs/perf/report.html</code> + full vitest + parity + Rule Q L1 pass → user L1 hands-on → user-triggered deploy</div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>scripts/perf-lib.mjs</code></td><td>Create</td><td>Shared: surface catalog, staff-auth injection, CDP metric collection, median-of-3 runner</td></tr>
+  <tr><td><code>scripts/perf-baseline.mjs</code></td><td>Create</td><td>CLI: run all (or one) surface → <code>docs/perf/&lt;runId&gt;/*.json</code></td></tr>
+  <tr><td><code>scripts/perf-bundle-manifest.mjs</code></td><td>Create</td><td>Build → per-chunk raw+gzip JSON</td></tr>
+  <tr><td><code>scripts/perf-compare.mjs</code></td><td>Create</td><td>Merge runs → <code>docs/perf/report.html</code></td></tr>
+  <tr><td><code>scripts/perf-visual-parity.mjs</code></td><td>Create</td><td>Screenshot set + sharp pixel-diff gate (both themes)</td></tr>
+  <tr><td><code>scripts/perf-find-links.mjs</code></td><td>Create</td><td>Rule R read-only: fetch one live schedule/patient link token for customer-surface measurement</td></tr>
+  <tr><td><code>tests/perf-harness-lib.test.js</code></td><td>Create</td><td>Unit tests for pure helpers (median, surface catalog shape, diff math)</td></tr>
+  <tr><td><code>docs/perf/</code></td><td>Create</td><td>Run JSONs + punchlist + report (git); <code>docs/perf/shots/</code> gitignored</td></tr>
+  <tr><td><code>index.html</code></td><td>Modify (P1)</td><td>preconnect/dns-prefetch Firestore + auth origins</td></tr>
+  <tr><td><code>src/…</code> (P1–P3)</td><td>Modify</td><td>Determined by punchlist — each fix = own commit + regression lock; candidates listed in T7/T10/T12</td></tr>
+</table>
+
+<div class="warn"><strong>Prime directive for every fix task:</strong> ONE change per commit · build + targeted tests before the next change · pixel-parity on affected surfaces · if anything breaks → <code>git revert</code> (iron-clad A), never patch forward mid-campaign.</div>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1 <span class="phase p0">P0</span>: Metrics harness — <code>perf-lib.mjs</code> + <code>perf-baseline.mjs</code> + link finder</h3>
+  <p><strong>Files:</strong> Create <code>scripts/perf-lib.mjs</code>, <code>scripts/perf-baseline.mjs</code>, <code>scripts/perf-find-links.mjs</code>, <code>tests/perf-harness-lib.test.js</code>. Modify <code>.gitignore</code> (+<code>docs/perf/shots/</code>), <code>package.json</code> (scripts).</p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Failing test for pure helpers</strong></label></div>
+<pre><code>// tests/perf-harness-lib.test.js
+import { describe, it, expect } from 'vitest';
+import { median, SURFACES, aggregateRuns } from '../scripts/perf-lib.mjs';
+
+describe('perf-lib', () => {
+  it('median of odd/even/single', () => {
+    expect(median([3, 1, 2])).toBe(2);
+    expect(median([4, 1, 2, 3])).toBe(2.5);
+    expect(median([7])).toBe(7);
+  });
+  it('SURFACES covers every app area', () => {
+    const ids = SURFACES.map(s => s.id);
+    // frontend + every backend nav area + customer links (schedule/patient/session/filler)
+    for (const need of ['frontend-queue', 'backend-home', 'backend-tab-sale',
+      'backend-tab-customers', 'backend-tab-stock', 'backend-tab-appointment-hub',
+      'backend-tab-finance-reports', 'link-schedule', 'link-filler']) {
+      expect(ids).toContain(need);
+    }
+    for (const s of SURFACES) {
+      expect(s.url).toBeTypeOf('string');
+      expect(typeof s.auth).toBe('boolean');
+    }
+  });
+  it('aggregateRuns takes per-metric median', () => {
+    const out = aggregateRuns([{ a: 1, b: 10 }, { a: 3, b: 30 }, { a: 2, b: 20 }]);
+    expect(out).toEqual({ a: 2, b: 20 });
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run — expect FAIL (module not found)</strong></label></div>
+  <p><code>npx vitest run tests/perf-harness-lib.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement <code>scripts/perf-lib.mjs</code></strong></label></div>
+<pre><code>// scripts/perf-lib.mjs — shared perf-measurement library (Playwright library mode + CDP)
+// Pure helpers exported for vitest; browser drivers used by perf-baseline/visual-parity.
+export const median = (a) => {
+  const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+export const aggregateRuns = (runs) => {
+  const out = {};
+  for (const k of Object.keys(runs[0] || {})) out[k] = median(runs.map(r => r[k] ?? 0));
+  return out;
+};
+
+// Surface catalog. auth:true → staff token injected. interaction: optional
+// { clickSel, settleSel } measured as interaction_ms. Customer-link URLs get
+// their token appended at runtime from perf-find-links output (env PERF_LINKS_JSON).
+export const SURFACES = [
+  { id: 'frontend-queue',            url: '/',                            auth: true },
+  { id: 'frontend-appointment-hub',  url: '/',                            auth: true, interaction: { clickSel: 'text=นัดหมาย', settle: 'networkidle' } },
+  { id: 'backend-home',              url: '/?backend=1',                  auth: true },
+  { id: 'backend-tab-customers',     url: '/?backend=1&tab=customers',    auth: true },
+  { id: 'backend-tab-sale',          url: '/?backend=1&tab=sale',         auth: true },
+  { id: 'backend-tab-stock',         url: '/?backend=1&tab=stock',        auth: true },
+  { id: 'backend-tab-appointment-hub', url: '/?backend=1&tab=appointment-hub', auth: true },
+  { id: 'backend-tab-promotions',    url: '/?backend=1&tab=promotions',   auth: true },
+  { id: 'backend-tab-finance-reports', url: '/?backend=1&tab=reports',    auth: true },
+  { id: 'backend-tab-df-report',     url: '/?backend=1&tab=reports-df-payout', auth: true },
+  { id: 'backend-tab-staff',         url: '/?backend=1&tab=staff',        auth: true },
+  { id: 'backend-tab-recall',        url: '/?backend=1&tab=recall',       auth: true },
+  { id: 'backend-tab-backup',        url: '/?backend=1&tab=backup-manager', auth: true },
+  { id: 'link-schedule',             url: '/?schedule={SCHEDULE_TOKEN}',  auth: false },
+  { id: 'link-patient',              url: '/?patient={PATIENT_TOKEN}',    auth: false },
+  { id: 'link-session',              url: '/?session={SESSION_ID}',       auth: false },
+  { id: 'link-filler',               url: '/?play=filler',                auth: false },
+];
+// NOTE: executor MUST cross-check tab ids against src/components/backend/nav/navConfig.js
+// at run time (Step 5) and fix any drifted id BEFORE the baseline run.
+
+export async function injectStaffAuth(context, baseURL) {
+  // Mirror tests/e2e/helpers.js: REST signInWithPassword → localStorage injection.
+  const apiKey = process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
+  const email = process.env.E2E_STAFF_EMAIL, password = process.env.E2E_STAFF_PASSWORD;
+  if (!apiKey || !email || !password) throw new Error('need FIREBASE_API_KEY + E2E_STAFF_EMAIL/PASSWORD in env (.env.local.prod pulled per Rule R)');
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
+  const tok = await res.json();
+  if (!tok.idToken) throw new Error('staff sign-in failed: ' + JSON.stringify(tok).slice(0, 200));
+  // (copy the EXACT authUser object shape from tests/e2e/helpers.js — single source; do not improvise)
+  await context.addInitScript(([key, user]) => {
+    localStorage.setItem(`firebase:authUser:${key}:[DEFAULT]`, JSON.stringify(user));
+  }, [apiKey, buildAuthUser(tok, email)]);
+}
+
+export function metricsInitScript() {
+  // Runs before page scripts: observers buffered from t=0.
+  return `(() => {
+    window.__perf = { longTasks: [], lcp: 0, fcp: 0, cls: 0, idleMutations: 0 };
+    try { new PerformanceObserver(l => l.getEntries().forEach(e => __perf.longTasks.push(e.duration))).observe({ type: 'longtask', buffered: true }); } catch {}
+    try { new PerformanceObserver(l => { const es = l.getEntries(); if (es.length) __perf.lcp = es[es.length-1].startTime; }).observe({ type: 'largest-contentful-paint', buffered: true }); } catch {}
+    try { new PerformanceObserver(l => l.getEntries().forEach(e => { if (e.name === 'first-contentful-paint') __perf.fcp = e.startTime; })).observe({ type: 'paint', buffered: true }); } catch {}
+    try { new PerformanceObserver(l => l.getEntries().forEach(e => { if (!e.hadRecentInput) __perf.cls += e.value; })).observe({ type: 'layout-shift', buffered: true }); } catch {}
+  })();`;
+}
+
+export async function collectMetrics(page) {
+  // 5s idle window for mutation counting (re-render-storm proxy)
+  await page.evaluate(() => new Promise(res => {
+    const mo = new MutationObserver(ms => { window.__perf.idleMutations += ms.length; });
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    setTimeout(() => { mo.disconnect(); res(); }, 5000);
+  }));
+  return page.evaluate(() => {
+    const p = window.__perf;
+    const js = performance.getEntriesByType('resource').filter(r => r.name.match(/\\.js(\\?|$)/));
+    return {
+      FCP_ms: Math.round(p.fcp), LCP_ms: Math.round(p.lcp), CLS: +p.cls.toFixed(4),
+      longTasks_count: p.longTasks.length,
+      longTasks_totalMs: Math.round(p.longTasks.reduce((a, b) => a + b, 0)),
+      jsTransferred_KB: Math.round(js.reduce((a, r) => a + (r.transferSize || 0), 0) / 1024),
+      jsResources: js.length,
+      domNodes: document.querySelectorAll('*').length,
+      heapUsed_MB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0,
+      idleMutations_5s: p.idleMutations,
+    };
+  });
+}</code></pre>
+  <p>(plus <code>buildAuthUser</code> copied verbatim from <code>tests/e2e/helpers.js</code> — read that file first, reuse its exact object shape)</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Implement <code>scripts/perf-baseline.mjs</code></strong></label></div>
+<pre><code>// scripts/perf-baseline.mjs — node scripts/perf-baseline.mjs --run baseline --target local-preview [--surface id]
+// local-preview: expects `npm run build && npx vite preview --port 4173` already running (low-noise primary)
+// prod: --target prod → https://lover-clinic-app.vercel.app (secondary, network-real)
+import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs';
+import { SURFACES, injectStaffAuth, metricsInitScript, collectMetrics, aggregateRuns } from './perf-lib.mjs';
+
+const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > -1 ? process.argv[i + 1] : d; };
+const runId = arg('run', 'baseline'), target = arg('target', 'local-preview'), only = arg('surface', null);
+const BASE = target === 'prod' ? 'https://lover-clinic-app.vercel.app' : 'http://localhost:4173';
+const links = existsSync('docs/perf/links.json') ? JSON.parse(readFileSync('docs/perf/links.json', 'utf8')) : {};
+const RUNS = 3;
+
+const browser = await chromium.launch();
+const outDir = `docs/perf/${runId}-${target}`; mkdirSync(outDir, { recursive: true });
+for (const s of SURFACES.filter(x => !only || x.id === only)) {
+  const url = BASE + s.url.replace('{SCHEDULE_TOKEN}', links.schedule || '')
+                         .replace('{PATIENT_TOKEN}', links.patient || '')
+                         .replace('{SESSION_ID}', links.session || '');
+  if (url.includes('{')) { console.log(`skip ${s.id} (no link token)`); continue; }
+  const runs = [];
+  for (let i = 0; i < RUNS; i++) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    if (s.auth) await injectStaffAuth(ctx, BASE);
+    const page = await ctx.newPage();
+    await page.addInitScript(metricsInitScript());
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+    const m = await collectMetrics(page);
+    if (s.interaction) {
+      const t0 = Date.now();
+      await page.click(s.interaction.clickSel).catch(() => {});
+      await page.waitForLoadState('networkidle').catch(() => {});
+      m.interaction_ms = Date.now() - t0;
+    }
+    runs.push(m); await ctx.close();
+  }
+  const rec = { runId, target, surface: s.id, url: s.url, runs: RUNS, metrics: aggregateRuns(runs) };
+  writeFileSync(`${outDir}/${s.id}.json`, JSON.stringify(rec, null, 2));
+  console.log(s.id, JSON.stringify(rec.metrics));
+}
+await browser.close();</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Cross-check SURFACES tab ids vs <code>src/components/backend/nav/navConfig.js</code></strong></label></div>
+  <p>Grep the real tab ids; fix any drift in SURFACES. Expected: every id resolves to a real tab.</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Implement <code>scripts/perf-find-links.mjs</code> (Rule R, READ-ONLY)</strong></label></div>
+<pre><code>// Reads prod Firestore (admin SDK, canonical artifacts/{APP_ID}/public/data path — Rule R):
+// newest clinic_schedules doc id → links.schedule; a customer with patientLinkToken → links.patient;
+// newest completed opd_sessions doc id → links.session. Writes docs/perf/links.json.
+// NO writes. Invocation guard per Rule M/R template (see scripts/diag-*.mjs for the canonical pattern).</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s7"> <label for="t1s7"><strong>Step 7: Tests pass + smoke one surface</strong></label></div>
+  <p><code>npx vitest run tests/perf-harness-lib.test.js</code> → PASS. Then: <code>npm run build && npx vite preview --port 4173</code> (background) → <code>node scripts/perf-find-links.mjs</code> → <code>node scripts/perf-baseline.mjs --run smoke --surface link-filler</code> → JSON appears with sane numbers (FCP &gt; 0, jsTransferred_KB &gt; 0). Delete the smoke dir.</p>
+
+  <div class="step"><input type="checkbox" id="t1s8"> <label for="t1s8"><strong>Step 8: Commit</strong></label></div>
+  <p><code>git add scripts/perf-lib.mjs scripts/perf-baseline.mjs scripts/perf-find-links.mjs tests/perf-harness-lib.test.js .gitignore package.json && git commit -m "feat(perf): P0 metrics harness — surface catalog + CDP collectors + median-of-3 runner" && git push</code></p>
+</div>
+
+<div class="task">
+  <h3>Task 2 <span class="phase p0">P0</span>: Bundle manifest + compare-report scripts</h3>
+  <p><strong>Files:</strong> Create <code>scripts/perf-bundle-manifest.mjs</code>, <code>scripts/perf-compare.mjs</code>.</p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: <code>perf-bundle-manifest.mjs</code></strong></label></div>
+<pre><code>// node scripts/perf-bundle-manifest.mjs --run baseline   (assumes `npm run build` already done)
+import { readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { gzipSync } from 'zlib';
+const runId = process.argv[process.argv.indexOf('--run') + 1] || 'baseline';
+const rows = [];
+for (const f of readdirSync('dist/assets')) {
+  if (!/\.(js|css)$/.test(f)) continue;
+  const buf = readFileSync(`dist/assets/${f}`);
+  rows.push({ file: `assets/${f}`, raw_KB: +(buf.length / 1024).toFixed(1), gzip_KB: +(gzipSync(buf).length / 1024).toFixed(1) });
+}
+rows.sort((a, b) => b.raw_KB - a.raw_KB);
+writeFileSync(`docs/perf/bundle-${runId}.json`, JSON.stringify(rows, null, 2));
+console.table(rows.slice(0, 15));
+console.log('TOTAL gzip KB:', rows.reduce((a, r) => a + r.gzip_KB, 0).toFixed(0));</code></pre>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: <code>perf-compare.mjs</code></strong></label></div>
+<pre><code>// node scripts/perf-compare.mjs → docs/perf/report.html
+// Reads every docs/perf/&lt;runId&gt;-&lt;target&gt;/*.json + bundle-*.json; groups by surface;
+// emits an HTML table (same skeleton as the spec's Artifact-2 mockup): one row per
+// surface×metric, one column per runId, Δ% column (green ≤ −5%, red ≥ +5%).
+// Also a bundle section: per-chunk gzip before/after. Pure node, no deps.</code></pre>
+  <p>(implement fully — straightforward fs + string templating, ~80 lines; no placeholder left in the actual script)</p>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Verify + commit</strong></label></div>
+  <p><code>npm run build && node scripts/perf-bundle-manifest.mjs --run smoke</code> → table prints, BackendDashboard/vendor chunks visible. <code>node scripts/perf-compare.mjs</code> → report.html renders. Delete smoke JSON. Commit + push: <code>"feat(perf): bundle manifest + compare-report generators"</code></p>
+</div>
+
+<div class="task">
+  <h3>Task 3 <span class="phase p0">P0</span>: Visual-parity gate (sharp pixel diff, both themes)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/perf-visual-parity.mjs</code>. Extend <code>tests/perf-harness-lib.test.js</code> (diff math).</p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Failing test for diff math</strong></label></div>
+<pre><code>import { diffRatio } from '../scripts/perf-visual-parity.mjs';
+it('diffRatio: identical buffers → 0; one-channel jump &gt; tol → counted', () => {
+  const w = 2, h = 1, ch = 3;
+  const a = Buffer.from([10, 10, 10, 200, 200, 200]);
+  const b = Buffer.from([10, 10, 10, 200, 200, 200]);
+  expect(diffRatio(a, b, w, h, ch, 24)).toBe(0);
+  const c = Buffer.from([10, 10, 10, 100, 200, 200]);   // pixel 2 red Δ=100 &gt; 24
+  expect(diffRatio(a, c, w, h, ch, 24)).toBe(0.5);
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Implement</strong></label></div>
+<pre><code>// scripts/perf-visual-parity.mjs
+// --capture &lt;setName&gt; : screenshot every SURFACE × {dark,light} → docs/perf/shots/&lt;setName&gt;/
+// --diff &lt;setA&gt; &lt;setB&gt; : sharp raw-pixel diff per pair → PASS/FAIL table (threshold 0.5%)
+// Theme switch: localStorage 'app-theme' via addInitScript. Animations frozen:
+//   page.emulateMedia({ reducedMotion: 'reduce' }) + CSS injection `*{animation:none!important;transition:none!important;caret-color:transparent}`
+// Dynamic data caveat: same local preview + same Firestore data, minutes apart → real drift small;
+//   any surface &gt; threshold → emit side-by-side for HUMAN eyeball (Rule Q-vis: screenshot wins).
+export function diffRatio(a, b, w, h, channels, tol) {
+  let diff = 0;
+  for (let p = 0; p &lt; w * h; p++) {
+    const i = p * channels;
+    if (Math.abs(a[i]-b[i]) &gt; tol || Math.abs(a[i+1]-b[i+1]) &gt; tol || Math.abs(a[i+2]-b[i+2]) &gt; tol) diff++;
+  }
+  return diff / (w * h);
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Test PASS → capture baseline set → commit</strong></label></div>
+  <p><code>node scripts/perf-visual-parity.mjs --capture baseline</code> (against local preview). Shots land in gitignored <code>docs/perf/shots/baseline/</code>. Commit scripts + tests + push: <code>"feat(perf): visual-parity pixel gate (sharp), both themes"</code></p>
+</div>
+
+<div class="task">
+  <h3>Task 4 <span class="phase p0">P0</span>: Run full baseline (local-preview primary + prod secondary)</h3>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1:</strong> <code>vercel env pull</code> if stale (Rule R standing) → <code>node scripts/perf-find-links.mjs</code></label></div>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2:</strong> <code>npm run build && npx vite preview --port 4173 &</code> → <code>node scripts/perf-baseline.mjs --run baseline --target local-preview</code> (all surfaces ×3)</label></div>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3:</strong> <code>node scripts/perf-baseline.mjs --run baseline --target prod</code> + <code>node scripts/perf-bundle-manifest.mjs --run baseline</code></label></div>
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4:</strong> Sanity-scan every JSON (no zero-FCP, no skipped-auth pages that rendered login instead of content — check domNodes plausible per surface). Fix harness bugs NOW if any.</label></div>
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5:</strong> Commit all baseline JSONs + push: <code>"perf(baseline): full-surface metrics + bundle manifest (local-preview + prod)"</code></label></div>
+</div>
+
+<div class="task">
+  <h3>Task 5 <span class="phase p0">P0</span>: Ultracode Workflow audit → adversarially-verified punch-list</h3>
+  <p><strong>Files:</strong> Create <code>docs/perf/punchlist.md</code> (output).</p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Launch Workflow</strong> — 6 read-only finder lenses, each fed the baseline numbers + bundle manifest:</label></div>
+<pre><code>Lenses (one agent each, schema-forced findings):
+  1. bundle-composition   — what's inside the 933KB BackendDashboard + 383KB AdminDashboard chunks;
+                            static-import chains dragging heavy libs eager (fabric via ChartCanvas? html2canvas
+                            static in AppointmentHubView/ClinicReportTab/ExpenseReportTab?); server-dep leaks
+                            (cheerio/firebase-admin in client graph — CRITICAL if found)
+  2. render-storms        — monolithic-state re-renders (AdminDashboard 8k lines), unmemoized list rows,
+                            inline object/fn props into big subtrees, context churn (BranchProvider/VipProvider)
+  3. listener-waste       — onSnapshot count per page, duplicate subscriptions, listeners alive on hidden tabs,
+                            missing limit() on large collections
+  4. main-thread-sync     — heavy sync work in render/effects (JSON.parse of big blobs, dataUrl handling,
+                            sync loops over 500+ items, uncached derived data)
+  5. asset-css            — index.css size, font loading, icon strategy, image dataUrl vs Storage-ref surfaces
+  6. quick-config         — preconnect/dns-prefetch, vite config wins, modulepreload, cache headers (vercel.json)
+Then: every finding → 2-of-3 adversarial refuters (V162: agents overstate — findings must survive refutation
+with file:line evidence). Output: CONFIRMED findings ranked by (est. impact × affected surfaces ÷ risk).</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2:</strong> Personally adjudicate every CONFIRMED finding (read the cited lines yourself — V162) → write <code>docs/perf/punchlist.md</code> in the mockup's table shape, REFUTED items kept with evidence.</label></div>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3:</strong> Commit + push: <code>"perf(audit): ranked punch-list — N confirmed / M refuted (ultracode fan-out + adversarial verify)"</code>. Report punch-list summary to user before starting P1.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 6 <span class="phase p1">P1</span>: Bundle composition analysis → split plan</h3>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1:</strong> <code>ANALYZE=1 npm run build</code> → open <code>dist/stats.html</code> → record top-20 modules inside BackendDashboard + AdminDashboard + index chunks into the punch-list.</label></div>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2:</strong> For each heavy member decide: (a) belongs in a lazy chunk (component only used behind a click) → <code>React.lazy</code>/dynamic import; (b) shared-by-all (backendClient.js) → candidates for <code>manualChunks</code> vendor-style split so tab chunks share ONE cached core instead of duplicating; (c) leave (genuinely needed at first paint). Write the decision per member into punchlist.md. NO code change yet.</label></div>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3:</strong> Commit analysis: <code>"perf(P1): bundle composition analysis + split decisions"</code></label></div>
+</div>
+
+<div class="task">
+  <h3>Task 7 <span class="phase p1">P1</span>: Execute bundle/load fixes — ONE change per commit</h3>
+  <p><strong>Known candidates (from exploration — each still gated on T6 confirmation):</strong></p>
+  <ul>
+    <li>Static <code>html2canvas</code>/<code>jspdf</code> in <code>AppointmentHubView.jsx</code> / <code>appointmentHubPrintTemplate.js</code> / <code>ClinicReportTab.jsx</code> / <code>ExpenseReportTab.jsx</code> → dynamic <code>await import()</code> at the print/export click (mirror <code>documentPrintEngine.js</code> V32 pattern)</li>
+    <li><code>fabric</code> static in <code>ChartCanvas.jsx</code>/<code>TabletChartCanvas.jsx</code> — verify whether vendor-fabric is fetched eagerly on TFP/tablet routes; if eager, lazy the canvas components at their mount sites (chart modal open / tablet route)</li>
+    <li><code>index.html</code>: <code>&lt;link rel="preconnect" href="https://firestore.googleapis.com"&gt;</code> + <code>identitytoolkit.googleapis.com</code> + <code>firebasestorage.googleapis.com</code></li>
+    <li><code>vercel.json</code>: immutable cache headers for <code>/assets/*</code> (hashed filenames) if not already set</li>
+    <li>Any T6-confirmed manualChunks split of shared core (e.g. <code>backendClient</code> chunk)</li>
+    <li>Confirm-absent: <code>cheerio</code>, <code>firebase-admin</code> in client graph (stats.html search) — if present ANYWHERE, that's the #1 fix</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Per change:</strong> edit → <code>npm run build</code> clean → chunk delta visible in manifest → targeted tests of touched files (<code>grep -rln &lt;module&gt; tests/</code>) → parity capture+diff on affected surfaces → commit + push.</label></div>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Regression locks:</strong> for each split/lazy change add a source-grep test (e.g. <code>tests/perf-p1-lazy-locks.test.js</code>: "no static html2canvas import outside documentPrintEngine dynamic path"; "index.html carries preconnect firestore") — real asserts, one file for the phase.</label></div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Rolldown watch:</strong> recall-chunk panic precedent (Phase 29) — if a split triggers a Rolldown error, adjust chunk boundaries rather than fighting it; document in punchlist.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 8 <span class="phase p1">P1</span>: Re-measure + report Phase 1</h3>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1:</strong> rebuild + preview → <code>perf-baseline.mjs --run after-phase1 --target local-preview</code> + <code>perf-bundle-manifest.mjs --run after-phase1</code></label></div>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2:</strong> <code>perf-visual-parity.mjs --capture after-phase1</code> → <code>--diff baseline after-phase1</code> → every surface ≤ threshold (flagged ones → eyeball per Q-vis; real change → revert per iron-clad A)</label></div>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3:</strong> FULL <code>npm test</code> (Rule N batch-end) + <code>npm run build</code> → green</label></div>
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4:</strong> <code>perf-compare.mjs</code> → report to user with numbers. Offer deploy checkpoint (user-triggered, V18).</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 9 <span class="phase p2">P2</span>: Confirm render-storm findings at runtime</h3>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1:</strong> For each P2 punch-list item: reproduce on local preview — <code>idleMutations_5s</code> &gt; ~50 on an idle page = storm confirmed; interaction traces (CDP <code>Tracing.start</code> around tab-switch/scroll/typing) for jank spikes. Record numbers per finding.</label></div>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2:</strong> Sort by measured (not estimated) cost; drop anything unconfirmed. Update punchlist + commit.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 10 <span class="phase p2">P2</span>: Render fixes — memo / stable callbacks / virtualization</h3>
+  <p><strong>Candidate classes (each fix = own commit + lock, only where T9 confirmed):</strong></p>
+  <ul>
+    <li><code>React.memo</code> on hot list rows (customer list rows, queue cards, movement-log rows, chat bubbles, timeline rows) + hoist inline handlers with <code>useCallback</code> ONLY where memo makes them effective</li>
+    <li>Derived-data caching: <code>useMemo</code> heavy sorts/filters recomputed per keystroke/snapshot</li>
+    <li>Virtualize ONLY lists T9 shows &gt; ~200 rendered rows AND parity holds (windowing via simple slice-on-scroll — NO new dependency; if slice-window can't hold parity → skip, note in punchlist)</li>
+    <li>Defer non-critical effects (<code>requestIdleCallback</code>/timeout) confirmed blocking interaction</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Per change:</strong> targeted tests + RTL of touched component → parity diff on its surface → re-run the ONE surface's metrics (<code>--surface</code> flag) proving improvement → commit + push.</label></div>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Phase-end:</strong> full vitest + build + <code>after-phase2</code> run + parity + report (mirror Task 8 steps). Offer deploy checkpoint.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 11 <span class="phase p3">P3</span>: onSnapshot census</h3>
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1:</strong> Instrumented count at runtime: patch page via CDP to wrap <code>onSnapshot</code> (count live subscriptions + collection + hasLimit) per surface → table into punchlist. Cross-check with grep census of <code>listenTo*</code> call sites.</label></div>
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2:</strong> Flag: duplicate subscriptions to the same query, listeners on hidden tabs never unsubscribed, unlimited listeners on collections &gt; 500 docs. Commit census.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 12 <span class="phase p3">P3</span>: Data-loading fixes — highest risk, strictest gates</h3>
+  <div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Per change</strong> (add <code>limit()</code>, paginate a whole-collection fetch, consolidate duplicate listeners): Rule Q <strong>L2 with the EXACT query the UI issues</strong> (real client SDK vs real prod — V66) + Rule I flow-simulate of the consuming flow + BSA locks stay green (<code>audit-branch-scope</code> tests) + parity + targeted tests → commit + push.</label></div>
+  <div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Drop rule:</strong> any query change whose full consumer set can't be enumerated with confidence (V12 multi-reader risk) → DROP, document in punchlist. Money-adjacent paths need explicit extra care (audit-money-flow green).</label></div>
+  <div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Phase-end:</strong> full vitest + build + <code>after-phase3</code> + parity + report.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 13 <span class="phase p3">P3</span>: Final consolidated report + wrap</h3>
+  <div class="step"><input type="checkbox" id="t13s1"> <label for="t13s1"><strong>Step 1:</strong> <code>perf-compare.mjs</code> full report → <code>docs/perf/report.html</code>; prod re-measure (<code>--target prod</code>) if a deploy checkpoint happened.</label></div>
+  <div class="step"><input type="checkbox" id="t13s2"> <label for="t13s2"><strong>Step 2:</strong> Final gates: full vitest green · build clean · parity both themes all surfaces · Rule Q L1 pass on key flows (login→queue, backend tab switches, TFP open+save-visible-check, customer links render).</label></div>
+  <div class="step"><input type="checkbox" id="t13s3"> <label for="t13s3"><strong>Step 3:</strong> Report numbers to user → user L1 hands-on → await explicit "deploy" (V18). <code>/session-end</code> artifacts.</label></div>
+</div>
+
+<h2>Verification Summary</h2>
+<table>
+  <tr><th>Gate</th><th>When</th><th>Command / evidence</th></tr>
+  <tr><td>Harness unit tests</td><td>T1–T3</td><td><code>npx vitest run tests/perf-harness-lib.test.js</code></td></tr>
+  <tr><td>Full suite</td><td>end of every phase</td><td><code>npm test</code> → 17,245+ green</td></tr>
+  <tr><td>Build</td><td>every commit that touches src/config</td><td><code>npm run build</code> clean</td></tr>
+  <tr><td>Visual parity</td><td>end of every phase + per risky change</td><td><code>perf-visual-parity.mjs --diff baseline after-phaseN</code> ≤ 0.5%/surface (flagged → human eyeball, Q-vis)</td></tr>
+  <tr><td>Perf improvement</td><td>end of every phase</td><td>re-measured numbers in report.html — claims ONLY from numbers (Q-honest)</td></tr>
+  <tr><td>Rule Q L1/L2</td><td>P2/P3 behavior-adjacent changes + final</td><td>real browser flows / real client SDK exact queries</td></tr>
+</table>
+
+</body>
+</html>
