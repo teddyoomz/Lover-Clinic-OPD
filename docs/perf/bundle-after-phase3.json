@@ -1,0 +1,982 @@
+[
+  {
+    "file": "assets/Filler3D-DCBAUO02.js",
+    "raw_KB": 524.9,
+    "gzip_KB": 131.1
+  },
+  {
+    "file": "assets/vendor-firebase-BpHna-P-.js",
+    "raw_KB": 504.4,
+    "gzip_KB": 149.2
+  },
+  {
+    "file": "assets/jspdf.es.min-Cj6L8BeP.js",
+    "raw_KB": 390.3,
+    "gzip_KB": 125.6
+  },
+  {
+    "file": "assets/AdminDashboard-huhflVVd.js",
+    "raw_KB": 297.6,
+    "gzip_KB": 64.3
+  },
+  {
+    "file": "assets/vendor-fabric-BbJhtlHQ.js",
+    "raw_KB": 295.8,
+    "gzip_KB": 89.3
+  },
+  {
+    "file": "assets/index-C-HWw5OM.css",
+    "raw_KB": 292.3,
+    "gzip_KB": 45
+  },
+  {
+    "file": "assets/TreatmentFormPage-Crw55X-q.js",
+    "raw_KB": 246.8,
+    "gzip_KB": 56.2
+  },
+  {
+    "file": "assets/thai-address-db-CjyTWPE1.js",
+    "raw_KB": 237.1,
+    "gzip_KB": 54.4
+  },
+  {
+    "file": "assets/backendClient-Ok7z0POR.js",
+    "raw_KB": 217.2,
+    "gzip_KB": 53.7
+  },
+  {
+    "file": "assets/CustomerDetailView-BGdSd05Q.js",
+    "raw_KB": 202.3,
+    "gzip_KB": 47.6
+  },
+  {
+    "file": "assets/html2canvas-B9Ed0YNC.js",
+    "raw_KB": 194.9,
+    "gzip_KB": 45.5
+  },
+  {
+    "file": "assets/vendor-react-B5gSYhnV.js",
+    "raw_KB": 188.7,
+    "gzip_KB": 59.2
+  },
+  {
+    "file": "assets/index.es-h6CeA3AJ.js",
+    "raw_KB": 147.9,
+    "gzip_KB": 47.4
+  },
+  {
+    "file": "assets/UnitField-DTAFuIpF.js",
+    "raw_KB": 141,
+    "gzip_KB": 27.7
+  },
+  {
+    "file": "assets/BackendDashboard-B6mDZcKV.js",
+    "raw_KB": 113.1,
+    "gzip_KB": 33.1
+  },
+  {
+    "file": "assets/FinanceTab-DrCpQ3RG.js",
+    "raw_KB": 94.1,
+    "gzip_KB": 19.5
+  },
+  {
+    "file": "assets/documentTemplateValidation-CE15reMr.js",
+    "raw_KB": 86.7,
+    "gzip_KB": 13.1
+  },
+  {
+    "file": "assets/StaffChatWidget-BJ_agtM_.js",
+    "raw_KB": 84.8,
+    "gzip_KB": 24.9
+  },
+  {
+    "file": "assets/SaleTab-eoys_Q2Q.js",
+    "raw_KB": 82,
+    "gzip_KB": 18.6
+  },
+  {
+    "file": "assets/PatientForm-CAEF-rWH.js",
+    "raw_KB": 77.4,
+    "gzip_KB": 18.1
+  },
+  {
+    "file": "assets/FillerSimulator-DKlEJ2Ib.js",
+    "raw_KB": 58.9,
+    "gzip_KB": 21
+  },
+  {
+    "file": "assets/useRecallCases-D1Zd-MiW.js",
+    "raw_KB": 58.9,
+    "gzip_KB": 14.2
+  },
+  {
+    "file": "assets/QuotationTab-Bo9zEVK2.js",
+    "raw_KB": 49.5,
+    "gzip_KB": 11.9
+  },
+  {
+    "file": "assets/AppointmentFormModal-NlbE5-w-.js",
+    "raw_KB": 49,
+    "gzip_KB": 11.3
+  },
+  {
+    "file": "assets/vendor-icons-BADBv7Ok.js",
+    "raw_KB": 48.9,
+    "gzip_KB": 15.8
+  },
+  {
+    "file": "assets/AppointmentHubView-TCBT-2M-.js",
+    "raw_KB": 45.4,
+    "gzip_KB": 13.2
+  },
+  {
+    "file": "assets/BackupManagerTab-LuOndRzP.js",
+    "raw_KB": 41.8,
+    "gzip_KB": 9.1
+  },
+  {
+    "file": "assets/StockTab-BIM9o3Sd.js",
+    "raw_KB": 41.2,
+    "gzip_KB": 9.4
+  },
+  {
+    "file": "assets/CentralStockTab-CrS1bgb2.js",
+    "raw_KB": 41,
+    "gzip_KB": 9.5
+  },
+  {
+    "file": "assets/CustomerCreatePage-7kiww6pX.js",
+    "raw_KB": 40.3,
+    "gzip_KB": 8.5
+  },
+  {
+    "file": "assets/LineSettingsTab-Dmav6jcM.js",
+    "raw_KB": 37.5,
+    "gzip_KB": 8.4
+  },
+  {
+    "file": "assets/MembershipPanel-DBUsVIjz.js",
+    "raw_KB": 36.7,
+    "gzip_KB": 8.3
+  },
+  {
+    "file": "assets/ClinicReportTab-CHfYuGns.js",
+    "raw_KB": 36.5,
+    "gzip_KB": 10.4
+  },
+  {
+    "file": "assets/AppointmentCalendarView-DbCasPNn.js",
+    "raw_KB": 34.9,
+    "gzip_KB": 10.9
+  },
+  {
+    "file": "assets/BranchesTab-Ce8yKMq2.js",
+    "raw_KB": 33.6,
+    "gzip_KB": 7.8
+  },
+  {
+    "file": "assets/CoursesTab-D1G1xVSy.js",
+    "raw_KB": 32.6,
+    "gzip_KB": 6.4
+  },
+  {
+    "file": "assets/PatientDashboard-sgd2w6cK.js",
+    "raw_KB": 32.1,
+    "gzip_KB": 9.2
+  },
+  {
+    "file": "assets/PrintTemplates-C0SuVwcm.js",
+    "raw_KB": 30.8,
+    "gzip_KB": 6
+  },
+  {
+    "file": "assets/PromotionTab-DD7deDCU.js",
+    "raw_KB": 30.6,
+    "gzip_KB": 6.3
+  },
+  {
+    "file": "assets/index-DSaK2bWo.js",
+    "raw_KB": 29.5,
+    "gzip_KB": 10
+  },
+  {
+    "file": "assets/CustomerListTab-YJ_Ehd66.js",
+    "raw_KB": 27.5,
+    "gzip_KB": 8.3
+  },
+  {
+    "file": "assets/SaleReportTab-oqHlaeus.js",
+    "raw_KB": 27.2,
+    "gzip_KB": 7.4
+  },
+  {
+    "file": "assets/SmartAudienceTab-CCqXOCkQ.js",
+    "raw_KB": 26.7,
+    "gzip_KB": 6.7
+  },
+  {
+    "file": "assets/TabletChartEditorPage-Dmv8WC-4.js",
+    "raw_KB": 26.5,
+    "gzip_KB": 9.6
+  },
+  {
+    "file": "assets/utils-CrIgUJfY.js",
+    "raw_KB": 26,
+    "gzip_KB": 8.8
+  },
+  {
+    "file": "assets/DoctorsTab-CvBr7EoJ.js",
+    "raw_KB": 23.7,
+    "gzip_KB": 5.4
+  },
+  {
+    "file": "assets/browser-pBwlB2M7.js",
+    "raw_KB": 22.9,
+    "gzip_KB": 8.6
+  },
+  {
+    "file": "assets/ScheduleEntryFormModal-B23zN4ox.js",
+    "raw_KB": 22.9,
+    "gzip_KB": 5.9
+  },
+  {
+    "file": "assets/ExpenseReportTab-DDj5PcDR.js",
+    "raw_KB": 22.8,
+    "gzip_KB": 7.2
+  },
+  {
+    "file": "assets/SystemSettingsTab-Bh-v5lkR.js",
+    "raw_KB": 22.8,
+    "gzip_KB": 6.1
+  },
+  {
+    "file": "assets/visitPurposeUtils-HcvQahKv.js",
+    "raw_KB": 22.7,
+    "gzip_KB": 6.8
+  },
+  {
+    "file": "assets/purify.es-CdM5mS7e.js",
+    "raw_KB": 22,
+    "gzip_KB": 8.6
+  },
+  {
+    "file": "assets/StaffTab-CfYfK33E.js",
+    "raw_KB": 21.7,
+    "gzip_KB": 5.2
+  },
+  {
+    "file": "assets/ClinicSchedule-BzREC5EV.js",
+    "raw_KB": 21.6,
+    "gzip_KB": 6.5
+  },
+  {
+    "file": "assets/scopedDataLayer-BLvzQxo3.js",
+    "raw_KB": 20.2,
+    "gzip_KB": 6.8
+  },
+  {
+    "file": "assets/RevenueAnalysisTab-Dw6KWtPK.js",
+    "raw_KB": 19.9,
+    "gzip_KB": 5.7
+  },
+  {
+    "file": "assets/CustomerReportTab-DL2p_v8z.js",
+    "raw_KB": 18.9,
+    "gzip_KB": 5
+  },
+  {
+    "file": "assets/AppointmentReportTab-TanPvA6R.js",
+    "raw_KB": 18.3,
+    "gzip_KB": 4.7
+  },
+  {
+    "file": "assets/SalePrintView-tLuXK_Xk.js",
+    "raw_KB": 18,
+    "gzip_KB": 5.5
+  },
+  {
+    "file": "assets/ProductGroupsTab-DPxYT37_.js",
+    "raw_KB": 17.2,
+    "gzip_KB": 4.8
+  },
+  {
+    "file": "assets/VendorSalesTab-LW0e1qdA.js",
+    "raw_KB": 17.2,
+    "gzip_KB": 4.3
+  },
+  {
+    "file": "assets/AppointmentAnalysisTab-DYUWBall.js",
+    "raw_KB": 17,
+    "gzip_KB": 4
+  },
+  {
+    "file": "assets/DeleteCustomerCascadeModal-DCfpBB_c.js",
+    "raw_KB": 16.5,
+    "gzip_KB": 5.8
+  },
+  {
+    "file": "assets/StockReportTab-DMzjBfzL.js",
+    "raw_KB": 16.4,
+    "gzip_KB": 4.2
+  },
+  {
+    "file": "assets/CrossBranchImportButton-D_0tswjG.js",
+    "raw_KB": 16.2,
+    "gzip_KB": 4.8
+  },
+  {
+    "file": "assets/CRMInsightTab-CiPDLjje.js",
+    "raw_KB": 15.8,
+    "gzip_KB": 5
+  },
+  {
+    "file": "assets/DocumentTemplatesTab-C7LG2o8c.js",
+    "raw_KB": 15.8,
+    "gzip_KB": 4.7
+  },
+  {
+    "file": "assets/BranchBackupTab-BhoLCyLV.js",
+    "raw_KB": 15.6,
+    "gzip_KB": 4.7
+  },
+  {
+    "file": "assets/ClinicSettingsPanel-DAiCt8DW.js",
+    "raw_KB": 15,
+    "gzip_KB": 3.6
+  },
+  {
+    "file": "assets/RemainingCourseTab-BpqWu3Xn.js",
+    "raw_KB": 15,
+    "gzip_KB": 4.6
+  },
+  {
+    "file": "assets/SaleInsuranceClaimsTab-CU6PjQ3-.js",
+    "raw_KB": 15,
+    "gzip_KB": 4.1
+  },
+  {
+    "file": "assets/ProductFormModal-RqKae4sO.js",
+    "raw_KB": 14.9,
+    "gzip_KB": 2.9
+  },
+  {
+    "file": "assets/MedicalInstrumentsTab-BTwg9iEF.js",
+    "raw_KB": 14.8,
+    "gzip_KB": 4
+  },
+  {
+    "file": "assets/ProductsTab-CLdswbqo.js",
+    "raw_KB": 14.5,
+    "gzip_KB": 5.1
+  },
+  {
+    "file": "assets/treatmentBuyHelpers-B9-195Yu.js",
+    "raw_KB": 14.3,
+    "gzip_KB": 4
+  },
+  {
+    "file": "assets/payrollHelpers-fTzh-3dl.js",
+    "raw_KB": 14.2,
+    "gzip_KB": 4.9
+  },
+  {
+    "file": "assets/permissionGroupValidation-CcxdL_tC.js",
+    "raw_KB": 14.2,
+    "gzip_KB": 3.2
+  },
+  {
+    "file": "assets/RecallTab-DVA_SN2L.js",
+    "raw_KB": 14,
+    "gzip_KB": 4.5
+  },
+  {
+    "file": "assets/EDDetailModal-BeUqTf4w.js",
+    "raw_KB": 13.5,
+    "gzip_KB": 4.5
+  },
+  {
+    "file": "assets/PaymentSummaryTab-D1KxsMbx.js",
+    "raw_KB": 13.5,
+    "gzip_KB": 4.3
+  },
+  {
+    "file": "assets/TreatmentTimeline-FuwD5vlt.js",
+    "raw_KB": 13.5,
+    "gzip_KB": 4.2
+  },
+  {
+    "file": "assets/DailyRevenueTab-Czq4qcCN.js",
+    "raw_KB": 13.4,
+    "gzip_KB": 3.8
+  },
+  {
+    "file": "assets/documentPrintEngine-DkwuB1qA.js",
+    "raw_KB": 13.2,
+    "gzip_KB": 5.5
+  },
+  {
+    "file": "assets/systemConfigClient-aTVg-v8C.js",
+    "raw_KB": 13.1,
+    "gzip_KB": 4.1
+  },
+  {
+    "file": "assets/FinanceMasterTab-CclgRWGQ.js",
+    "raw_KB": 13,
+    "gzip_KB": 3
+  },
+  {
+    "file": "assets/OpdIntakeDetailBody-Cwo-uxpH.js",
+    "raw_KB": 12.9,
+    "gzip_KB": 3.5
+  },
+  {
+    "file": "assets/CouponTab-B4-0jZ_T.js",
+    "raw_KB": 12.6,
+    "gzip_KB": 3.8
+  },
+  {
+    "file": "assets/HolidaysTab-DrLqz0XC.js",
+    "raw_KB": 12.5,
+    "gzip_KB": 3.8
+  },
+  {
+    "file": "assets/DfGroupsTab-DYg09u7g.js",
+    "raw_KB": 12.2,
+    "gzip_KB": 3.7
+  },
+  {
+    "file": "assets/LinkRequestsTab-CVWbyc_2.js",
+    "raw_KB": 12.1,
+    "gzip_KB": 3.5
+  },
+  {
+    "file": "assets/ProductUnitsTab-huHxkc0w.js",
+    "raw_KB": 12.1,
+    "gzip_KB": 3.7
+  },
+  {
+    "file": "assets/VoucherTab-B7P_u8cz.js",
+    "raw_KB": 11.6,
+    "gzip_KB": 3.5
+  },
+  {
+    "file": "assets/RecallLineTemplateModal-BD4HRE7G.js",
+    "raw_KB": 11.4,
+    "gzip_KB": 4.3
+  },
+  {
+    "file": "assets/PermissionGroupsTab-BmTWHJNF.js",
+    "raw_KB": 11.3,
+    "gzip_KB": 3.7
+  },
+  {
+    "file": "assets/WalletPicker-N-KiClQp.js",
+    "raw_KB": 11.2,
+    "gzip_KB": 3.2
+  },
+  {
+    "file": "assets/ScheduledTasksTab-_MgwUJKH.js",
+    "raw_KB": 11.1,
+    "gzip_KB": 4
+  },
+  {
+    "file": "assets/depositReportUtils-B-MqCZjd.js",
+    "raw_KB": 10.7,
+    "gzip_KB": 3.4
+  },
+  {
+    "file": "assets/CustomFormBuilder-BSoBLSuI.js",
+    "raw_KB": 10,
+    "gzip_KB": 2.8
+  },
+  {
+    "file": "assets/ExamRoomsTab-Blhrvvua.js",
+    "raw_KB": 10,
+    "gzip_KB": 3.2
+  },
+  {
+    "file": "assets/DfPayoutReportTab-RIF_Api_.js",
+    "raw_KB": 9.3,
+    "gzip_KB": 2.7
+  },
+  {
+    "file": "assets/StaffSalesTab-D1rANvAa.js",
+    "raw_KB": 9.3,
+    "gzip_KB": 2.6
+  },
+  {
+    "file": "assets/audienceValidation-DtBvDeiE.js",
+    "raw_KB": 9.1,
+    "gzip_KB": 2.9
+  },
+  {
+    "file": "assets/staffScheduleValidation-DGRrF6Zh.js",
+    "raw_KB": 9.1,
+    "gzip_KB": 3.2
+  },
+  {
+    "file": "assets/customerValidation-DiCzBI_g.js",
+    "raw_KB": 8.8,
+    "gzip_KB": 2.9
+  },
+  {
+    "file": "assets/PnLReportTab-xH99HXY3.js",
+    "raw_KB": 8.1,
+    "gzip_KB": 2.8
+  },
+  {
+    "file": "assets/courseValidation-B9cFBQY4.js",
+    "raw_KB": 8,
+    "gzip_KB": 2.3
+  },
+  {
+    "file": "assets/OnlineSalesTab-DzQZ43w4.js",
+    "raw_KB": 7.6,
+    "gzip_KB": 2.8
+  },
+  {
+    "file": "assets/ReportsHomeTab-B-cXJGoa.js",
+    "raw_KB": 7.5,
+    "gzip_KB": 2.3
+  },
+  {
+    "file": "assets/FancyCharts-B-53NQ29.js",
+    "raw_KB": 7.4,
+    "gzip_KB": 3
+  },
+  {
+    "file": "assets/quotationValidation-UR9DYmjp.js",
+    "raw_KB": 7.3,
+    "gzip_KB": 2.4
+  },
+  {
+    "file": "assets/FbSettingsTab-Dvwk0cr_.js",
+    "raw_KB": 6.5,
+    "gzip_KB": 2.2
+  },
+  {
+    "file": "assets/appointmentAnalysisAggregator-DH45jy9T.js",
+    "raw_KB": 6.1,
+    "gzip_KB": 2.2
+  },
+  {
+    "file": "assets/doctorValidation-FeY_i23o.js",
+    "raw_KB": 6.1,
+    "gzip_KB": 2.1
+  },
+  {
+    "file": "assets/lineBotResponder-5jX__tUJ.js",
+    "raw_KB": 6,
+    "gzip_KB": 2.6
+  },
+  {
+    "file": "assets/lineConfigClient-5DAsxaN_.js",
+    "raw_KB": 5.6,
+    "gzip_KB": 2
+  },
+  {
+    "file": "assets/fillerMath-R9yy3QCw.js",
+    "raw_KB": 5.4,
+    "gzip_KB": 2.7
+  },
+  {
+    "file": "assets/EmployeeSchedulesTab-BlmM2AsZ.js",
+    "raw_KB": 5.3,
+    "gzip_KB": 2.2
+  },
+  {
+    "file": "assets/DoctorSchedulesTab-zAGh4uv7.js",
+    "raw_KB": 5.2,
+    "gzip_KB": 2.2
+  },
+  {
+    "file": "assets/productValidation-B6o1apup.js",
+    "raw_KB": 5.2,
+    "gzip_KB": 1.8
+  },
+  {
+    "file": "assets/branchValidation-BS__xe6Y.js",
+    "raw_KB": 5.1,
+    "gzip_KB": 1.7
+  },
+  {
+    "file": "assets/staffValidation-CYlBw6W6.js",
+    "raw_KB": 5.1,
+    "gzip_KB": 1.8
+  },
+  {
+    "file": "assets/reportsLoaders-CWcOY6v6.js",
+    "raw_KB": 4.7,
+    "gzip_KB": 1.1
+  },
+  {
+    "file": "assets/stockUtils-Cz7cdyV9.js",
+    "raw_KB": 4.7,
+    "gzip_KB": 2
+  },
+  {
+    "file": "assets/clinicReportHelpers-CouPkocW.js",
+    "raw_KB": 4.6,
+    "gzip_KB": 1.9
+  },
+  {
+    "file": "assets/treatmentDisplayResolvers-DI1HFOf5.js",
+    "raw_KB": 4.6,
+    "gzip_KB": 1.7
+  },
+  {
+    "file": "assets/useTabAccess-DtzVxAA1.js",
+    "raw_KB": 4.6,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/dfGroupValidation-B3QcV_tT.js",
+    "raw_KB": 4.4,
+    "gzip_KB": 1.8
+  },
+  {
+    "file": "assets/revenueAnalysisAggregator-DPTjMo5-.js",
+    "raw_KB": 4.4,
+    "gzip_KB": 1.8
+  },
+  {
+    "file": "assets/courseExchange-CVXgpA6b.js",
+    "raw_KB": 4.3,
+    "gzip_KB": 1.6
+  },
+  {
+    "file": "assets/appointmentReportAggregator-CcFXHVcN.js",
+    "raw_KB": 4.2,
+    "gzip_KB": 1.7
+  },
+  {
+    "file": "assets/FileUploadField-7G2Nyk1Y.js",
+    "raw_KB": 4.2,
+    "gzip_KB": 1.8
+  },
+  {
+    "file": "assets/useLayoutPreference-CrAGJ9ku.js",
+    "raw_KB": 4.2,
+    "gzip_KB": 2
+  },
+  {
+    "file": "assets/depositValidation-C9qBz0yP.js",
+    "raw_KB": 4.1,
+    "gzip_KB": 1.5
+  },
+  {
+    "file": "assets/medicalInstrumentValidation-9A8aB9P_.js",
+    "raw_KB": 4.1,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/ReportShell-B4bUve6p.js",
+    "raw_KB": 4,
+    "gzip_KB": 1.6
+  },
+  {
+    "file": "assets/customerReportAggregator-BqKaOKf9.js",
+    "raw_KB": 3.9,
+    "gzip_KB": 1.7
+  },
+  {
+    "file": "assets/saleInsuranceClaimValidation-T6Nf5nin.js",
+    "raw_KB": 3.8,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/DepositAwareCancelDialog-BInCOo-X.js",
+    "raw_KB": 3.7,
+    "gzip_KB": 1.5
+  },
+  {
+    "file": "assets/onlineSaleValidation-DIWdUNUK.js",
+    "raw_KB": 3.7,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/staffSalesAggregator-Dr0pmacC.js",
+    "raw_KB": 3.7,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/TreatmentLifecycleStepper-D0SDbWS7.js",
+    "raw_KB": 3.7,
+    "gzip_KB": 1.5
+  },
+  {
+    "file": "assets/vendorSaleValidation-BL65mH9U.js",
+    "raw_KB": 3.6,
+    "gzip_KB": 1.5
+  },
+  {
+    "file": "assets/KpiTile-5eDNoaLh.js",
+    "raw_KB": 3.4,
+    "gzip_KB": 1.5
+  },
+  {
+    "file": "assets/remainingCourseUtils-D7j2MKCa.js",
+    "raw_KB": 3.4,
+    "gzip_KB": 1.5
+  },
+  {
+    "file": "assets/scheduleFilterUtils-BsHTcZ2n.js",
+    "raw_KB": 3.3,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/stockReportAggregator-DktIUOkk.js",
+    "raw_KB": 3.2,
+    "gzip_KB": 1.4
+  },
+  {
+    "file": "assets/MarketingTabShell-s6tkR_qZ.js",
+    "raw_KB": 2.8,
+    "gzip_KB": 1.2
+  },
+  {
+    "file": "assets/holidayValidation-D86Nexpl.js",
+    "raw_KB": 2.7,
+    "gzip_KB": 1.3
+  },
+  {
+    "file": "assets/MarketingFormShell-BuBmMeVj.js",
+    "raw_KB": 2.7,
+    "gzip_KB": 1.3
+  },
+  {
+    "file": "assets/productUnitValidation-B5dfGOZl.js",
+    "raw_KB": 2.7,
+    "gzip_KB": 1
+  },
+  {
+    "file": "assets/opdNoteTemplateValidation-rdJI06tC.js",
+    "raw_KB": 2.6,
+    "gzip_KB": 1.1
+  },
+  {
+    "file": "assets/expenseValidation-DgJW2aVd.js",
+    "raw_KB": 2.4,
+    "gzip_KB": 1.1
+  },
+  {
+    "file": "assets/orderItemsSummary-IHEteoQH.js",
+    "raw_KB": 2.4,
+    "gzip_KB": 1.2
+  },
+  {
+    "file": "assets/StaffSelectField-DVzfwIKM.js",
+    "raw_KB": 2.4,
+    "gzip_KB": 1.1
+  },
+  {
+    "file": "assets/opdSessionState-DksrEGgp.js",
+    "raw_KB": 2.3,
+    "gzip_KB": 1
+  },
+  {
+    "file": "assets/bankAccountValidation-BdXU4g3E.js",
+    "raw_KB": 2.2,
+    "gzip_KB": 0.9
+  },
+  {
+    "file": "assets/documentFieldAutoFill-M8nHjk-j.js",
+    "raw_KB": 2.2,
+    "gzip_KB": 1
+  },
+  {
+    "file": "assets/DateRangePicker-Cukha74a.js",
+    "raw_KB": 2.1,
+    "gzip_KB": 1
+  },
+  {
+    "file": "assets/appointmentSlotKeys-WF3Sbo9d.js",
+    "raw_KB": 2,
+    "gzip_KB": 0.7
+  },
+  {
+    "file": "assets/SettingsPrimitives-D7ngxDvf.js",
+    "raw_KB": 2,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/chartEditSession-D6DoD6h7.js",
+    "raw_KB": 1.9,
+    "gzip_KB": 0.9
+  },
+  {
+    "file": "assets/examRoomValidation-DVqherqd.js",
+    "raw_KB": 1.9,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/LineNotifyConfirmation-V1XRB_g0.js",
+    "raw_KB": 1.9,
+    "gzip_KB": 0.9
+  },
+  {
+    "file": "assets/BranchSelector-Q6TbZx0d.js",
+    "raw_KB": 1.8,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/dateFormat-A9S_8d9i.js",
+    "raw_KB": 1.7,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/storageClient-CVjduEDf.js",
+    "raw_KB": 1.7,
+    "gzip_KB": 1
+  },
+  {
+    "file": "assets/DateField-C7QMvtBW.js",
+    "raw_KB": 1.6,
+    "gzip_KB": 1
+  },
+  {
+    "file": "assets/fbConfigClient-D_K-57An.js",
+    "raw_KB": 1.6,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/makeFreshStateMachine-mpJ7M3gE.js",
+    "raw_KB": 1.6,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/tfpStaffChatNotify-0_ashZK8.js",
+    "raw_KB": 1.6,
+    "gzip_KB": 0.9
+  },
+  {
+    "file": "assets/chartImageStorage-C6WfdguM.js",
+    "raw_KB": 1.5,
+    "gzip_KB": 0.8
+  },
+  {
+    "file": "assets/staffChatRetentionCore-BDUOs7Ef.js",
+    "raw_KB": 1.4,
+    "gzip_KB": 0.7
+  },
+  {
+    "file": "assets/ActorPicker-H5Y0eLbF.js",
+    "raw_KB": 1.3,
+    "gzip_KB": 0.7
+  },
+  {
+    "file": "assets/reportsUtils-B7bDzQyO.js",
+    "raw_KB": 1.3,
+    "gzip_KB": 0.6
+  },
+  {
+    "file": "assets/CustomerOption-BMiIZ71y.js",
+    "raw_KB": 1.2,
+    "gzip_KB": 0.7
+  },
+  {
+    "file": "assets/preload-helper-zJ_50EbN.js",
+    "raw_KB": 1.2,
+    "gzip_KB": 0.7
+  },
+  {
+    "file": "assets/vendorValidation-Bt3Dy-5F.js",
+    "raw_KB": 1.2,
+    "gzip_KB": 0.6
+  },
+  {
+    "file": "assets/visitReasonOptions-DrI59WdD.js",
+    "raw_KB": 1.2,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/constants-CGV1RPA5.js",
+    "raw_KB": 1.1,
+    "gzip_KB": 0.6
+  },
+  {
+    "file": "assets/expenseCategoryValidation-CoFAucg4.js",
+    "raw_KB": 1.1,
+    "gzip_KB": 0.6
+  },
+  {
+    "file": "assets/VipBadge-CPxO8G1H.js",
+    "raw_KB": 1.1,
+    "gzip_KB": 0.7
+  },
+  {
+    "file": "assets/branchBackupCore-ffwkyA3f.js",
+    "raw_KB": 1,
+    "gzip_KB": 0.4
+  },
+  {
+    "file": "assets/courseUtils-BYZct3T_.js",
+    "raw_KB": 0.9,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/customerNavigation-BLc4a3mV.js",
+    "raw_KB": 0.9,
+    "gzip_KB": 0.3
+  },
+  {
+    "file": "assets/marketingUiUtils-Cj28d5vm.js",
+    "raw_KB": 0.9,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/useResilientLoad-DJuZXWWL.js",
+    "raw_KB": 0.9,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/useBranchAwareListener-uXXsjxRB.js",
+    "raw_KB": 0.8,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/csvExport-Cteg9OBv.js",
+    "raw_KB": 0.7,
+    "gzip_KB": 0.4
+  },
+  {
+    "file": "assets/PhoneLink-DjN8cmke.js",
+    "raw_KB": 0.7,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/rolldown-runtime-QTnfLwEv.js",
+    "raw_KB": 0.7,
+    "gzip_KB": 0.4
+  },
+  {
+    "file": "assets/themeAccent-CN8qAWKz.js",
+    "raw_KB": 0.7,
+    "gzip_KB": 0.4
+  },
+  {
+    "file": "assets/treatmentStockDiff-YLcQ_532.js",
+    "raw_KB": 0.7,
+    "gzip_KB": 0.3
+  },
+  {
+    "file": "assets/AppointmentLineBadge-BJVD3mJL.js",
+    "raw_KB": 0.6,
+    "gzip_KB": 0.5
+  },
+  {
+    "file": "assets/firebase-C6drW-dN.js",
+    "raw_KB": 0.6,
+    "gzip_KB": 0.4
+  },
+  {
+    "file": "assets/typeof-B5XbjTb1.js",
+    "raw_KB": 0.3,
+    "gzip_KB": 0.2
+  },
+  {
+    "file": "assets/RequiredAsterisk-5UWcAlkb.js",
+    "raw_KB": 0.2,
+    "gzip_KB": 0.2
+  }
+]

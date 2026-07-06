@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase3",
+  "target": "local-preview",
+  "surface": "backend-tab-staff",
+  "url": "/?backend=1&tab=staff",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 100,
+    "LCP_ms": 964,
+    "CLS": 0.0029,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 86,
+    "jsTransferred_KB": 461,
+    "jsResources": 46,
+    "domNodes": 503,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}

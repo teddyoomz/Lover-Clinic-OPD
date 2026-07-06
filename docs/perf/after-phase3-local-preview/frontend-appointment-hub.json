@@ -1,0 +1,20 @@
+{
+  "runId": "after-phase3",
+  "target": "local-preview",
+  "surface": "frontend-appointment-hub",
+  "url": "/",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 92,
+    "LCP_ms": 956,
+    "CLS": 0.0011,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 86,
+    "jsTransferred_KB": 508,
+    "jsResources": 50,
+    "domNodes": 302,
+    "heapUsed_MB": 45,
+    "idleMutations_5s": 54,
+    "interaction_ms": 608
+  }
+}

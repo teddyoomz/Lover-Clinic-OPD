@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase3",
+  "target": "local-preview",
+  "surface": "backend-tab-courses",
+  "url": "/?backend=1&tab=courses",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 92,
+    "LCP_ms": 964,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 82,
+    "jsTransferred_KB": 468,
+    "jsResources": 47,
+    "domNodes": 352,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}
