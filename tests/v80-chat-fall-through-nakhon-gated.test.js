@@ -71,11 +71,13 @@ describe('V80 — chat fall-through filters NAKHON-gated', () => {
     });
 
     it('A.4 — useChatUnread.branchScopedConvs filter NAKHON-gated', () => {
-      // The useChatUnread useMemo references isLegacyNakhonBranch
+      // perf P2.13 (2026-07-06): derivation moved into recompute() with a local
+      // `branchId` (from branchRef) — window widened + either identifier accepted.
+      // The V80 CONTRACT (legacy unstamped counts only for NAKHON) is unchanged.
       const useChatUnreadIdx = src.indexOf('useChatUnread');
       expect(useChatUnreadIdx).toBeGreaterThan(0);
-      const slice = src.slice(useChatUnreadIdx, useChatUnreadIdx + 1500);
-      expect(slice).toMatch(/!c\.branchId\s*&&\s*isLegacyNakhonBranch\(selectedBranchId\)/);
+      const slice = src.slice(useChatUnreadIdx, useChatUnreadIdx + 3200);
+      expect(slice).toMatch(/!c\.branchId\s*&&\s*isLegacyNakhonBranch\((selectedBranchId|branchId)\)/);
     });
 
     it('A.5 — handleResolve writer hardcoded NAKHON fallback (V77-bis mirror)', () => {
@@ -156,13 +158,11 @@ describe('V80 — chat fall-through filters NAKHON-gated', () => {
   // ─────────────────────────────────────────────────────────────────────
   describe('D. V80 P0a — useMemo import drift (black-screen origin)', () => {
     const src = read(CHAT_PANEL);
-    it('D.1 — ChatPanel.jsx imports useMemo from react', () => {
-      expect(src).toMatch(
-        /import\s*\{[^}]*\buseMemo\b[^}]*\}\s*from\s*['"]react['"]/m
-      );
-    });
-    it('D.2 — ChatPanel.jsx uses useMemo() at runtime', () => {
-      expect(src).toMatch(/\buseMemo\(/);
+    it('D.1+D.2 — useMemo import/usage CONSISTENT (V80 P0a class: used-but-not-imported = black screen). perf P2.13 removed the last useMemo call → import removed too; the lock is now the consistency invariant either way', () => {
+      const uses = (src.match(/\buseMemo\(/g) || []).length;
+      const imported = /import\s*\{[^}]*\buseMemo\b[^}]*\}\s*from\s*['"]react['"]/m.test(src);
+      if (uses > 0) expect(imported).toBe(true);   // used → MUST be imported (the V80 bug)
+      else expect(imported).toBe(false);           // unused → import removed (no dead import)
     });
     it('D.3 — diag-react-hook-import-drift.mjs scanner exists (Rule P Step 3 perpetual guard)', () => {
       expect(fs.existsSync(path.resolve('scripts/diag-react-hook-import-drift.mjs'))).toBe(true);

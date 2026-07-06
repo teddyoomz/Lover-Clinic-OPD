@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, getDocs, addDoc, limit as firestoreLimit } from 'firebase/firestore';
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
@@ -980,37 +980,49 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 //
 // Caller (AdminDashboard): `useChatUnread(db, appId, selectedBranchId)`.
 export function useChatUnread(db, appId, selectedBranchId = '') {
-  const [rawConvs, setRawConvs] = useState([]);
+  // perf P2.13 (2026-07-06) — pre-P2 this hook held the WHOLE raw
+  // chat_conversations doc array in state, so EVERY snapshot fire (any field
+  // change on any conversation) re-rendered the entire AdminDashboard monolith
+  // although only 4 numbers are consumed. Now the raw docs live in a ref and
+  // only the 4 derived numbers are state, committed through a shallow-equal
+  // guard → the dashboard re-renders ONLY when a badge number actually changes.
+  // V78 semantics preserved: subscribe-once allBranches; branch switch →
+  // instant client-side recompute WITHOUT resubscribe.
+  // V80 semantics preserved verbatim inside recompute(): NAKHON-gated
+  // fall-through — legacy unstamped chats count only for the NAKHON branch.
+  const rawConvsRef = useRef([]);
+  const branchRef = useRef(selectedBranchId);
+  const [counts, setCounts] = useState({ lineUnread: 0, fbUnread: 0, totalUnread: 0, totalConversations: 0 });
+
+  const recompute = useCallback(() => {
+    const raw = rawConvsRef.current;
+    const branchId = branchRef.current;
+    const branchScopedConvs = !branchId ? raw : raw.filter(c =>
+      (!c.branchId && isLegacyNakhonBranch(branchId))
+      || String(c.branchId) === String(branchId)
+    );
+    const { lineUnread, fbUnread, totalUnread } = countUnreadPeople(branchScopedConvs);
+    const next = { lineUnread, fbUnread, totalUnread, totalConversations: branchScopedConvs.length };
+    setCounts(prev => (
+      prev.lineUnread === next.lineUnread
+      && prev.fbUnread === next.fbUnread
+      && prev.totalUnread === next.totalUnread
+      && prev.totalConversations === next.totalConversations
+    ) ? prev : next);
+  }, []);
 
   useEffect(() => {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
     return onSnapshot(convsRef, snap => {
-      setRawConvs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      rawConvsRef.current = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      recompute();
     });
-  }, [db, appId]);
+  }, [db, appId, recompute]);
 
-  // V78: per-branch derivation.
-  // V80 (2026-05-16 NIGHT+4): NAKHON-gated fall-through. Pre-V80 the badge
-  // counted unstamped legacy chats for ALL branches → cross-branch chime +
-  // badge inflation on non-NAKHON branches. Strict per-branch from V80
-  // forward; legacy unstamped only counted for NAKHON (continuity contract).
-  const branchScopedConvs = useMemo(() => {
-    if (!selectedBranchId) return rawConvs;
-    return rawConvs.filter(c =>
-      (!c.branchId && isLegacyNakhonBranch(selectedBranchId))
-      || String(c.branchId) === String(selectedBranchId)
-    );
-  }, [rawConvs, selectedBranchId]);
+  useEffect(() => {
+    branchRef.current = selectedBranchId;
+    recompute();
+  }, [selectedBranchId, recompute]);
 
-  const { lineUnread, fbUnread, totalUnread } = useMemo(
-    () => countUnreadPeople(branchScopedConvs),
-    [branchScopedConvs]
-  );
-
-  return {
-    lineUnread,
-    fbUnread,
-    totalUnread,
-    totalConversations: branchScopedConvs.length,
-  };
+  return counts;
 }

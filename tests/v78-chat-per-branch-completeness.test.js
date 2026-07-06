@@ -105,8 +105,10 @@ describe('V78 BUG-CHAT-3 — useChatUnread per-branch (root user complaint)', ()
     expect(src).toMatch(/String\(c\.branchId\)\s*===\s*String\(selectedBranchId\)/);
   });
 
-  it('CHAT-3.3 — useMemo derives counts from branchScopedConvs', () => {
-    expect(src).toMatch(/useMemo\(\s*\(\)\s*=>\s*countUnreadPeople\(branchScopedConvs\)/);
+  it('CHAT-3.3 — counts derived from branchScopedConvs via countUnreadPeople (perf P2.13: useMemo → recompute+equality-guard; contract = derivation source, not mechanics)', () => {
+    expect(src).toMatch(/countUnreadPeople\(branchScopedConvs\)/);
+    // P2.13 shallow-equal guard: dashboard re-renders ONLY when a badge number changes
+    expect(src).toMatch(/prev\.totalUnread === next\.totalUnread/);
   });
 
   it('CHAT-3.4 — V78 marker comment near useChatUnread', () => {

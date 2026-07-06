@@ -688,7 +688,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const active = snap.docs
         .map(d => ({ ...d.data(), id: d.id }))
         .filter(d => d.lastSeen && (now - d.lastSeen) < staleMs);
-      setOnlineAdmins(active);
+      // perf P2.14 (2026-07-06) — every tab's 30s heartbeat write fires this
+      // snapshot for ALL tabs → full-dashboard re-render each ≤30s although the
+      // UI shows only id+email chips. Commit state ONLY when the visible
+      // membership actually changed (id|email signature).
+      setOnlineAdmins(prev => {
+        const sig = (arr) => arr.map(a => `${a.id}|${a.email || ''}`).sort().join(',');
+        return sig(prev) === sig(active) ? prev : active;
+      });
       // Clean up stale docs silently
       snap.docs.forEach(d => {
         const data = d.data();
