@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase2",
+  "target": "local-preview",
+  "surface": "backend-tab-backup-manager",
+  "url": "/?backend=1&tab=backup-manager",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 92,
+    "LCP_ms": 960,
+    "CLS": 0.0029,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 84,
+    "jsTransferred_KB": 458,
+    "jsResources": 41,
+    "domNodes": 344,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}

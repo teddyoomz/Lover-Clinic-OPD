@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase2",
+  "target": "local-preview",
+  "surface": "backend-tab-central-stock",
+  "url": "/?backend=1&tab=central-stock",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 92,
+    "LCP_ms": 964,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 80,
+    "jsTransferred_KB": 502,
+    "jsResources": 52,
+    "domNodes": 402,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}

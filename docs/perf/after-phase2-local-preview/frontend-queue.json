@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase2",
+  "target": "local-preview",
+  "surface": "frontend-queue",
+  "url": "/",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 104,
+    "LCP_ms": 1020,
+    "CLS": 0.0011,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 89,
+    "jsTransferred_KB": 508,
+    "jsResources": 50,
+    "domNodes": 293,
+    "heapUsed_MB": 51,
+    "idleMutations_5s": 52
+  }
+}

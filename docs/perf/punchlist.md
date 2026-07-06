@@ -69,6 +69,20 @@
   = RANDOM star positions per mount → 0.5-2.6% pixel diff with IDENTICAL layout (eyeball-confirmed);
   light theme all ≤0.35%. Baseline-v2 shots came from worktree build of `283dd9c5`.
 
+## P2 RESULT (2026-07-06 — parity eyeball-adjudicated; behavioral renderHook locks)
+- DONE: #13 useChatUnread equality guard (dashboard no longer re-renders per ANY chat doc change —
+  proven by renderHook identity test) · #14 admin_presence id|email signature guard (was a guaranteed
+  ≤30s full-dashboard re-render per open tab) · #17 CustomerCard memo + stable delete handler
+  (search keystroke re-rendered 400+ cards / 5.4k nodes) · #19 RecallRow memo (both export forms) ·
+  #29 fmtMoney/fmtPoints hoisted Intl (331 sites, byte-identical).
+- DEFERRED (documented): #15 60s tick (1/min re-render negligible post-13/14; moving clock state =
+  monolith surgery for ~nothing) · #16 month-calendar memo (only computes in non-default calendar view;
+  post-13/14 re-render frequency collapsed) · #18 StaffChatMessageList (V160/V161 mount-model minefield —
+  drop-rule) · #20 TFP keystroke isolation (money-critical 5.9k-line form — needs its own session).
+- Parity after-phase2 vs after-phase1-v2: light ≤0.56% (customers-light eyeballed = identical, glow
+  dithering), dark = starfield class. Note: the P2.13/14 wins are event-driven (chat/presence) so the
+  5s idle window can't show them — the renderHook identity tests are the proof (Q-honest).
+
 ## Ordering inside phases
 P1: 1 → 2 → 3 → 4 → 5+6 → 9+8 → 10-12 → 7. P2: 13 → 14 → 16 → 17 → 15 → 19 → 18 → 20 (21 = evidence loop).
 P3: 24 → 23 → 28 → 26 → 25 → 27 → 22 (riskiest LAST; drop rule applies — anything un-enumerable gets dropped, documented).

@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase2",
+  "target": "local-preview",
+  "surface": "backend-tab-reports-df-payout",
+  "url": "/?backend=1&tab=reports-df-payout",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 96,
+    "LCP_ms": 956,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 83,
+    "jsTransferred_KB": 468,
+    "jsResources": 49,
+    "domNodes": 425,
+    "heapUsed_MB": 16,
+    "idleMutations_5s": 14
+  }
+}

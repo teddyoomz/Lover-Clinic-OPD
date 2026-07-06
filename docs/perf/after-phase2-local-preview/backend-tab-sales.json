@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase2",
+  "target": "local-preview",
+  "surface": "backend-tab-sales",
+  "url": "/?backend=1&tab=sales",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 108,
+    "LCP_ms": 988,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 85,
+    "jsTransferred_KB": 490,
+    "jsResources": 50,
+    "domNodes": 353,
+    "heapUsed_MB": 18,
+    "idleMutations_5s": 0
+  }
+}

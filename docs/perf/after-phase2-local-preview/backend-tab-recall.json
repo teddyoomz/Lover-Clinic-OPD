@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase2",
+  "target": "local-preview",
+  "surface": "backend-tab-recall",
+  "url": "/?backend=1&tab=recall",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 96,
+    "LCP_ms": 960,
+    "CLS": 0.0029,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 80,
+    "jsTransferred_KB": 476,
+    "jsResources": 46,
+    "domNodes": 319,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}
