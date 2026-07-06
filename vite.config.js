@@ -143,12 +143,14 @@ export default defineConfig(({ command }) => ({
           if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'vendor-firebase';
           if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
           if (id.includes('node_modules/fabric')) return 'vendor-fabric';
-          // Phase 29 (2026-05-14) — bucket recall components into their own
-          // chunk. Workaround for Rolldown panic when AdminDashboard imports
-          // Thai-content components directly (byte-boundary slice error in
-          // hash_placeholder.rs). Splitting into own chunk shifts content
-          // offsets so the panic no longer triggers.
-          if (id.includes('/components/backend/recall/')) return 'recall';
+          // Phase 29 (2026-05-14) — recall components bucketed into their own
+          // chunk as a workaround for a Rolldown panic (byte-boundary slice
+          // error in hash_placeholder.rs). REMOVED 2026-07-06 (perf P1 #1):
+          // the bucket had absorbed the Firebase SDK + backendClient core into
+          // a 903KB chunk modulepreloaded on EVERY route (incl. patient links),
+          // and the panic no longer reproduces on Vite 8.0.16 Rolldown
+          // (verified by clean ANALYZE=1 build this date). If the panic ever
+          // returns, re-add a NARROW bucket — never let it capture shared core.
         },
       },
     },
