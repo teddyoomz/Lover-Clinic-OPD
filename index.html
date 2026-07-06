@@ -13,6 +13,13 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- perf P1.6 (2026-07-06) — preconnect Firebase origins so the first
+         auth/Firestore/Storage request skips DNS+TCP+TLS setup (the data
+         fetch is the LCP critical path on every route). -->
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://www.googleapis.com" crossorigin />
     <title>Lover Clinic OPD System</title>
     <style>
       /* Default accent color — overridden at runtime from Firestore settings */
@@ -20,9 +27,12 @@
         --accent: #dc2626;
         --accent-rgb: 220,38,38;
       }
-      /* Prevent FOUC: hide body until theme CSS loads */
-      body { opacity: 0; transition: opacity 0.15s ease; }
-      body.ready { opacity: 1; }
+      /* perf P1.11 (2026-07-06) — the FOUC-guard hidden-body rule + 0.15s fade
+         was REMOVED: the bundled CSS is render-blocking in <head> and data-theme
+         is applied pre-paint (script below), so an unstyled flash can't paint
+         in prod builds — the fade only delayed first visual by ~150ms.
+         The `body.ready` inline script stays UNTOUCHED (its sha256 is pinned
+         in the vercel.json CSP script-src — do NOT edit that script). */
     </style>
     <!-- Apply saved theme BEFORE first paint to prevent flash -->
     <script>

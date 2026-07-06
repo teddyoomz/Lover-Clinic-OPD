@@ -58,6 +58,8 @@ export default defineConfig(({ command }) => ({
     // practice (measured with Claude Preview MCP 2026-04-19).
     warmup: {
       clientFiles: [
+        // perf P1.9 (2026-07-06) — dropped V50-DELETED files (AppointmentTab /
+        // MasterDataTab / CloneTab) that errored at every dev-server start.
         './src/App.jsx',
         './src/pages/AdminDashboard.jsx',
         './src/pages/BackendDashboard.jsx',
@@ -72,12 +74,9 @@ export default defineConfig(({ command }) => ({
         './src/components/backend/nav/BackendTopBar.jsx',
         './src/components/backend/nav/BackendCmdPalette.jsx',
         './src/components/backend/SaleTab.jsx',
-        './src/components/backend/AppointmentTab.jsx',
         './src/components/backend/StockTab.jsx',
         './src/components/backend/FinanceTab.jsx',
-        './src/components/backend/MasterDataTab.jsx',
         './src/components/backend/CustomerListTab.jsx',
-        './src/components/backend/CloneTab.jsx',
       ],
     },
   },

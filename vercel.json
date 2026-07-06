@@ -88,6 +88,12 @@
   ],
   "headers": [
     {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'sha256-jhKhyPvr0JOQoE9IF68QXUG8JTbLtGj3uqD2F6mECq0=' 'sha256-T+bx+QVVwvjDDdzlgJkDATGtn1kUUXXH67ga61CdNlw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' https: data: blob:; connect-src 'self' https://*.googleapis.com wss://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://*.cloudfunctions.net https://www.gstatic.com; worker-src 'self' blob:; manifest-src 'self'; frame-src 'self'; frame-ancestors 'self'; form-action 'self'; upgrade-insecure-requests" },

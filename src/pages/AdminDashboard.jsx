@@ -67,7 +67,8 @@ import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 // Reused from BackendDashboard's tab=appointment-all. Imported eagerly here
 // because handleOpdClick can open it on click; no lazy boundary needed
 // (modal is small + already built).
-import AppointmentFormModal from '../components/backend/AppointmentFormModal.jsx';
+// perf P1.4 (2026-07-06) — walk-in modal opens on click only; lazy chunk.
+const AppointmentFormModal = lazy(() => import('../components/backend/AppointmentFormModal.jsx'));
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock). Used in the appointment
 // customer-picker so admin can see per-branch LINE linkage before
@@ -132,7 +133,8 @@ import { AppointmentLineBadge } from '../components/AppointmentLineBadge.jsx';
 // branch clinics. BranchProvider already at App.jsx (Phase 17.2) so this
 // component picks up the per-user-keyed selectedBranchId immediately.
 import BranchSelector from '../components/backend/BranchSelector.jsx';
-import AppointmentHubView from '../components/admin/AppointmentHubView.jsx';
+// perf P1.4 (2026-07-06) — hub renders only in adminMode='appointment' list view; lazy.
+const AppointmentHubView = lazy(() => import('../components/admin/AppointmentHubView.jsx'));
 // Phase 29 (2026-05-14) — Recall System (Frontend daily-work view).
 // Both imports bucketed into the 'recall' manualChunk (vite.config.js) to
 // isolate Thai-content components from AdminDashboard's chunk (works around
@@ -147,10 +149,23 @@ import { RecallTogglePill } from '../components/backend/recall/RecallTogglePill.
 // "ทำให้ลิ้งค์ตารางที่ส่ง สัมพันธ์กับหมอที่เข้างานจริง สัมพันธ์กับห้องตรวจนั้นๆ
 //  คือใช้ได้จริงและแสดงข้อมูลจริงๆในทุกๆการเลือกใน modal".
 import { useSelectedBranch, useEffectiveClinicSettings } from '../lib/BranchContext.jsx';
-import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
-import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
+// perf P1.4 (2026-07-06) — settings/builder/timeline render behind clicks; lazy.
+// ChatPanel stays STATIC: its named exports (useChatUnread + sound helpers) are
+// consumed at AdminDashboard top level — split planned in P2 (punchlist #13).
+const ClinicSettingsPanel = lazy(() => import('../components/ClinicSettingsPanel.jsx'));
+const CustomFormBuilder = lazy(() => import('../components/CustomFormBuilder.jsx'));
 import ChatPanel, { useChatUnread, playAlertSound, playChatNotificationSound } from '../components/ChatPanel.jsx';
-import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
+const TreatmentTimeline = lazy(() => import('../components/TreatmentTimeline.jsx'));
+
+// perf P1.4 — shared in-flow fallback for lazy view sections (module-level so
+// it isn't remounted every parent render — mirror BackendTabFallback pattern).
+function LazyViewFallback() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 size={24} className="animate-spin text-[var(--tx-muted)]" />
+    </div>
+  );
+}
 // perf P1.2 (2026-07-06) — TreatmentFormPage (347KB chunk) lazy: renders only
 // when a treatment form opens; stops eager fetch on the frontend first paint.
 const TreatmentFormPage = lazy(() => import('../components/TreatmentFormPage.jsx'));
@@ -5119,6 +5134,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {/* Treatment History from ProClinic */}
             {viewingSession.brokerProClinicId && (
               <div className="mt-8 pt-6 border-t border-[var(--bd)]">
+                {/* perf P1.4 — lazy timeline; in-flow loader */}
+                <Suspense fallback={<LazyViewFallback />}>
                 <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark}
                   refreshKey={treatmentRefreshKey} autoExpandId={autoExpandTreatmentId}
                   onOpenCreateForm={(cid) => {
@@ -5131,6 +5148,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
                     setTreatmentFormMode({ mode: 'edit', customerId: cid, treatmentId: tid, patientName: name });
                   }} />
+                </Suspense>
               </div>
             )}
           </div>
@@ -6190,7 +6208,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       ) : adminMode === 'clinicSettings' ? (
         <div className="flex flex-col gap-6">
-          <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('appointment')} theme={theme} setTheme={setTheme} />
+          {/* perf P1.4 — lazy settings panel */}
+          <Suspense fallback={<LazyViewFallback />}>
+            <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('appointment')} theme={theme} setTheme={setTheme} />
+          </Suspense>
           {/* Form Builder shortcut */}
           <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -6231,7 +6252,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
         </div>
       ) : adminMode === 'formBuilder' ? (
-        <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('clinicSettings')} />
+        /* perf P1.4 — lazy form builder */
+        <Suspense fallback={<LazyViewFallback />}>
+          <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('clinicSettings')} />
+        </Suspense>
       ) : adminMode === 'appointment' ? (
         <div>
           {/* V64 — view-toggle pill. Phase 29 (2026-05-14) extends to 3 states
@@ -6270,6 +6294,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           {apptViewMode === 'recall' ? (
             <RecallFrontendView />
           ) : apptViewMode === 'list' ? (
+            /* perf P1.4 — lazy hub view (default appointment list) */
+            <Suspense fallback={<LazyViewFallback />}>
             <AppointmentHubView
               branchName={(branches || []).find(b => b.id === selectedBranchId)?.name || ''}
               doctors={(practitioners || []).filter(p => p.role === 'doctor')}
@@ -6444,6 +6470,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               opdLinkBusyByApptId={opdLinkBusyByApptId}
               opdSaveBusyByApptId={opdSaveBusyByApptId}
             />
+            </Suspense>
           ) : renderJsxBlock(() => {
         // ── Appointment Calendar ──
         const [y, m] = apptMonth.split('-').map(Number);
@@ -8502,6 +8529,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           เป็นรอยืนยัน, ล็อคช่องทางนัดหมายเป็น walk-in, ล็อคสาขาเป็นสาขา
           ที่สร้างคิว, ส่วนอันอื่นๆไม่ล็อค". */}
       {walkInModal && (
+        /* perf P1.4 — lazy modal; fixed overlay loader while its chunk fetches (first open only) */
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--overlay-bg)] backdrop-blur-sm">
+            <Loader2 size={28} className="animate-spin text-[var(--tx-muted)]" />
+          </div>
+        }>
         <AppointmentFormModal
           mode="create"
           lockedAppointmentType="walk-in"
@@ -8523,6 +8556,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           }}
           onClose={() => setWalkInModal(null)}
         />
+        </Suspense>
       )}
 
       {/* V118 (2026-05-23) — SendCustomerLinkModal for card-level OPD link
