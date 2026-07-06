@@ -1,0 +1,599 @@
+[
+  {
+    "lens": "main-thread sync work",
+    "file": "agent-a18dbf7bb76379efa.jsonl",
+    "findings": [
+      {
+        "area": "bundle/critical-path",
+        "title": "The 'recall' manualChunks bucket swallowed the entire Firebase SDK (Firestore+Auth), src/firebase.js, and the ~10k-line backendClient data layer into a 903KB chunk that is modulepreloaded on ENTRY for every surface — including mobile patient links",
+        "file": "vite.config.js",
+        "line": 151,
+        "evidence": "vite.config.js:151 `if (id.includes('/components/backend/recall/')) return 'recall';` (comment 146-150: 'Workaround for Rolldown panic'). dist/index.html:36 `<link rel=\"modulepreload\" crossorigin href=\"/assets/recall-8hrOki3D.js\">` + entry chunk index-CM1i0cpP.js references recall-8hrOki3D ×2 (static import). Greps across ALL dist/assets: 'firestore.googleapis.com' ×1 ONLY in recall chunk; 'identitytoolkit' ×1 ONLY in recall; '@firebase/firestore' registerVersion ×3 ONLY in recall; 'initializeFirestore|experimentalAutoDetectLongPolling' (src/firebase.js code) ×3 in recall; backendClient marker 'STOCK_RACE_RETRY' ×1 ONLY in recall. Meanwhile vendor-firebase-DXK1SpG1.js is only 19KB and contains ZERO 'Firestore' strings — a decoy. recall = 903.3KB raw / 252.7KB gz (bundle-baseline.json), #2 chunk overall.",
+        "estImpact": "HIGH",
+        "affectedSurfaces": "EVERY page load: entry critical path = index 365KB + recall 903KB + vendor-react 185KB + vendor-icons 37KB ≈ 1.49MB JS (~350KB gz) downloaded+parsed before first render. Patient links (PatientForm / ED-Scoring / PatientDashboard / ClinicSchedule — the exact mobile-load-reliability surfaces) pay for the full backend data layer + 18 recall staff components they never use.",
+        "risk": "med",
+        "suggestedFix": "Re-scope or remove the 'recall' manualChunks rule (the Rolldown byte-boundary panic it worked around dates to 2026-05-14 — re-test on current Rolldown; if it still panics, make AdminDashboard.jsx:140-141's static `import { RecallFrontendView/RecallTogglePill } from '../components/backend/recall/...'` lazy instead so the bucket isn't entry-reachable). After the change, verify with a rebuild + grep that 'firestore.googleapis.com' lands in vendor-firebase and recall drops to a few KB lazily loaded. Zero visual change; needs build + smoke test of dashboard + one patient link."
+      },
+      {
+        "area": "bundle/backend-shell",
+        "title": "BackendDashboard statically imports ~20 heavy tabs (SaleTab, StockTab, FinanceTab, CustomerDetailView, AppointmentCalendarView, marketing/master-data tabs) plus TreatmentFormPage, so the 976KB shell chunk + the 347KB TFP chunk load eagerly although only one tab renders at a time",
+        "file": "src/pages/BackendDashboard.jsx",
+        "line": 33,
+        "evidence": "BackendDashboard.jsx:33-51 static `import CustomerListTab/CustomerCreatePage/CustomerDetailView/DeleteCustomerCascadeModal/AppointmentCalendarView/SaleTab/FinanceTab/StockTab/PromotionTab/CouponTab/VoucherTab/VendorSalesTab`, :86-99 static `ProductGroupsTab...CoursesTab/FinanceMasterTab/OnlineSalesTab/SaleInsuranceClaimsTab`, :120 `import TreatmentFormPage from '../components/TreatmentFormPage.jsx'` (also static in AdminDashboard.jsx:154 → TFP-ymcdAYNt.js 347.5KB is a shared STATIC dep of both dashboards, fetched before either executes, though TFP only renders when a treatment form opens — BackendDashboard.jsx:771). Proof tabs are inlined: SaleTab's unique string 'ใบเสร็จยังคงอยู่' found ONLY in dist/assets/BackendDashboard-CwwrEXDG.js (976.1KB/199.2gz). The file's own comment (52-56) documents the lazy() pattern already used for 20+ other tabs with one shared Suspense boundary.",
+        "estImpact": "MED",
+        "affectedSurfaces": "Backend first load (staff): ~976KB + 347KB parsed before the shell paints. AdminDashboard first load also eagerly pulls the 347KB TFP chunk.",
+        "risk": "low",
+        "suggestedFix": "Convert the rarely-landed-first static tabs to the existing `lazy(() => import(...))` pattern (same Suspense boundary at the tab switch already handles 20+ tabs — behavior identical apart from an already-established spinner on first open). Keep the default landing tab (CustomerListTab) static. Make TreatmentFormPage lazy in both dashboards (it renders only behind `treatmentFormMode` conditionals at AdminDashboard.jsx:7713 / BackendDashboard.jsx:771)."
+      },
+      {
+        "area": "main-thread/render",
+        "title": "AdminDashboard appointment month-calendar recomputes full month availability (per-day × per-slot × per-appointment overlap scans with parseInt/split string parsing in the innermost loop) on EVERY render, unmemoized — and the 8k-line monolith re-renders on every snapshot tick and keystroke",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 6445,
+        "evidence": "AdminDashboard.jsx:6445 `) : renderJsxBlock(() => {` where renderJsxBlock (194-196) is `function renderJsxBlock(fn) { return fn(); }` — executes inline each render, no memo. Inside: :6470-6478 rebuilds doctorIdSet/assistantIdSet + filteredAppointments; :6490-6519 loop `for (let d2 = 1; d2 <= daysInMonth; d2++)` with `filteredAppointments.filter(a => a.date === ds2)` per day and per-slot `dayAppts2.some(a => { const aS = parseInt(a.startTime.split(':')[0]) * 60 + parseInt(a.startTime.split(':')[1]); ... })` — 4 split+parseInt per appointment per slot; :6522-6550 repeats the whole pattern for doctor-hours (`docAvailByDate`); :6553-6555 selectedAppts filter+sort. ~30 days × ~13 slots × dayAppts iterations of string parsing per render, re-run whenever any of AdminDashboard's listeners fires (opd_sessions :2335, chat_conversations via useChatUnread :560, appointments month :1184, presence :668, clinic_schedules :1384) or any controlled input changes.",
+        "estImpact": "MED",
+        "affectedSurfaces": "Frontend staff page นัดหมาย tab (calendar view) — jank on every live update / keystroke while the calendar is visible.",
+        "risk": "low",
+        "suggestedFix": "Hoist the block's pure computations (doctorIdSet, filteredAppointments, countByDate, availByDate, docAvailByDate, selectedAppts) into useMemo keyed on [apptMonth, apptData, apptFilterPractitioner, apptSlotDuration, monFriOpen/Close, satSunOpen/Close, clinicSettings doctor hours, schedDoctorDays, practitioners, apptSelectedDate]; additionally bucket filteredAppointments by date once (single pass) and pre-parse startTime/endTime to minutes once per appointment instead of 4× parseInt(split) per slot-check. Pure computation → provably identical output, zero DOM change."
+      },
+      {
+        "area": "main-thread/listeners",
+        "title": "opd_sessions listener subscribes to the ENTIRE unbounded collection (no where/limit — including all archived history, which is retained forever) and on every snapshot fire re-runs 8 full-array filter+sort passes plus an O(n²) prev-session lookup with 2× deep sort-and-JSON.stringify of patientData per session",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 2335,
+        "evidence": ":2334-2335 `const sessionsRef = collection(db, ..., 'opd_sessions'); const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {` — no query constraints; :2344-2346 branch filter is CLIENT-side (`allDocsRaw.filter(s => !s.branchId || ...)`) so all branches' docs (each with full patientData) come down the wire and stay on the heap; :2367-2414 six setState-feeding `.filter().sort()` passes over allDocs + :2417-2467 queue filter+sort + :2477 cardFlowNotif filter — all rebuilt per fire; :2487-2491 `allNotifData.forEach(newS => { const oldS = prevSessionsRef.current.find(s => s.id === newS.id); ... const oldStr = stableStr(oldS.patientData || {}); const newStr = stableStr(newS.patientData || {});` — O(n²) find + stableStr (:251-260) deep-sorts every nested key then JSON.stringify, twice per session per fire. The file's own comment :2352-2354 records the historical symptom: 'Frontend page slow because opd_sessions listener pulled 110 docs'. Archived sessions are kept (history page, :2367-2371) so doc count and heap grow with clinic lifetime.",
+        "estImpact": "MED",
+        "affectedSurfaces": "Frontend staff page — every kiosk form edit anywhere re-triggers the full pipeline; initial load downloads the whole collection; memory grows unboundedly with archived history.",
+        "risk": "low",
+        "suggestedFix": "Provably-safe layer: replace `prevSessionsRef.current.find` with a Map keyed by id built once per fire (O(n)), and cache stableStr per doc keyed by `id + updatedAt.toMillis()` so unchanged sessions skip the deep sort+stringify (Firestore snapshots reuse unchanged docs). Larger (needs verification, keep behavior): bound the query (e.g. where isArchived == false for the live pipeline + a separate lazy/paginated query for the history tab) — legacy no-branchId fall-through prevents a server-side branch filter today, so keep that client-side."
+      },
+      {
+        "area": "main-thread/listeners",
+        "title": "useChatUnread subscribes to the whole chat_conversations collection and stores the raw doc array in AdminDashboard state — a brand-new array identity per snapshot means every inbound chat message/echo/unread tick force-re-renders the entire 8k-line AdminDashboard",
+        "file": "src/components/ChatPanel.jsx",
+        "line": 987,
+        "evidence": "ChatPanel.jsx:985-990 `useEffect(() => { const convsRef = collection(db, .../chat_conversations); return onSnapshot(convsRef, snap => { setRawConvs(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }); }, [db, appId]);` — no limit, setState with a fresh array every fire regardless of whether unread counts changed. Consumed at AdminDashboard.jsx:560 `const { totalUnread: chatUnread } = useChatUnread(db, appId, selectedBranchId);` — so each chat_conversations write (lastMessage update on ANY message) re-renders the whole monolith, re-running the unmemoized calendar block (finding above) and all inline JSX filters.",
+        "estImpact": "MED",
+        "affectedSurfaces": "Frontend staff page — render storm proportional to chat traffic, even when the chat panel is closed and counts are unchanged.",
+        "risk": "low",
+        "suggestedFix": "Compute the derived counts inside the listener (countUnreadPeople is already a pure shared helper) and only setState when {lineUnread, fbUnread, totalUnread, totalConversations} actually change (shallow compare vs previous). Keep raw docs in a ref for the branch-scoped derivation on selectedBranchId change. Hook return shape unchanged → zero behavior/UI change."
+      },
+      {
+        "area": "main-thread/listeners",
+        "title": "ChatPanel per-conversation messages listener uses an unbounded query and issues deleteDoc for every >7-day message INSIDE the snapshot callback — the exact write-in-listener cascade anti-pattern already excised from the opd_sessions listener (each own-write delete re-fires the snapshot; N open admin tabs race the same deletes)",
+        "file": "src/components/ChatPanel.jsx",
+        "line": 178,
+        "evidence": "ChatPanel.jsx:176-190 `const q = query(messagesRef, orderBy('timestamp', 'asc')); return onSnapshot(q, snap => { const sevenDaysAgo = ...; snap.docs.forEach(d => { const data = d.data(); if (data.timestamp && data.timestamp < sevenDaysAgo) { deleteDoc(d.ref).catch(() => {}); } else { msgs.push(...); } }); setMessages(msgs); });` — no limit() (firestoreLimit is imported at :2 but unused here). Compare AdminDashboard.jsx:2348-2358 comment documenting why this same pattern was removed for opd_sessions: 'this listener body called updateDoc/deleteDoc on every snapshot fire ... Each write triggered ANOTHER snapshot fire (own-write mirror) → cascade. With N admin tabs open, N parallel cleanup runs raced for the same docs.'",
+        "estImpact": "MED",
+        "affectedSurfaces": "Chat panel — opening a conversation with expired messages fires a burst of deletes + snapshot re-fires + setMessages re-renders; every admin tab with the conversation open repeats the deletes.",
+        "risk": "med",
+        "suggestedFix": "Move the 7-day purge out of the snapshot callback: run it once per conversation-open (a one-shot getDocs+delete in the same effect before subscribing) or fold it into the existing cron sweep pattern (api/cron/opd-session-cleanup-sweep.js precedent). Optionally add limit()/limitToLast() to bound the live window. Rendering output unchanged (expired messages were already filtered out client-side)."
+      },
+      {
+        "area": "main-thread/formatting",
+        "title": "fmtMoney/fmtPoints call Number.toLocaleString('th-TH', options) per invocation — constructing an Intl.NumberFormat each call — across 331 call sites, most inside report/sale table row .map()s (hundreds-to-thousands of formatter constructions per render of a report tab)",
+        "file": "src/lib/financeUtils.js",
+        "line": 114,
+        "evidence": "financeUtils.js:114-120 `export function fmtMoney(n) { return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); } export function fmtPoints(n) { return Number(n || 0).toLocaleString('th-TH'); }`. Grep: 331 fmtMoney( occurrences across 47 files, heaviest in per-row render maps: SaleTab.jsx ×30, DfPayoutReportTab.jsx ×29, RevenueAnalysisTab.jsx ×24, AppointmentAnalysisTab.jsx ×23, SaleReportTab.jsx ×22, DailyRevenueTab.jsx ×17. toLocaleString with an explicit locale+options bypasses engines' cached fast path → a fresh Intl.NumberFormat per call (~µs each; thousands per table render).",
+        "estImpact": "LOW",
+        "affectedSurfaces": "All report tabs, SaleTab list, finance panels — additive per-render cost proportional to row count.",
+        "risk": "low",
+        "suggestedFix": "Hoist module-level formatters: `const MONEY_NF = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); const POINTS_NF = new Intl.NumberFormat('th-TH');` and return `MONEY_NF.format(Number(n || 0))`. Output is byte-identical (same locale/options); one file, two functions, all 331 call sites benefit."
+      },
+      {
+        "area": "bundle/build-warning",
+        "title": "appointmentDepositBatch.js is BOTH statically imported (AdminDashboard, AppointmentFormModal, DepositPanel) and dynamically imported in 13 places — Rolldown's INEFFECTIVE_DYNAMIC_IMPORT: the module can never code-split, and every `await import()` is dead async indirection",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 92,
+        "evidence": "Static: AdminDashboard.jsx:92 `import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';`, AppointmentFormModal.jsx:71, DepositPanel.jsx:36. Dynamic in the same modules: AdminDashboard.jsx:3330/3709/4245/4342/4456/4534/5512/6328 + AppointmentFormModal.jsx:795/851/898/947 + AppointmentCalendarView.jsx:1303, all `await import('../lib/appointmentDepositBatch.js')`. Matches the build's INEFFECTIVE_DYNAMIC_IMPORT warning — the static edge forces the module into the importing chunk, so the dynamic imports never split anything.",
+        "estImpact": "LOW",
+        "affectedSurfaces": "Build clarity + trivial runtime microtask overhead on deposit/appointment actions; no chunk savings currently realized.",
+        "risk": "low",
+        "suggestedFix": "Pick one form: extend the existing static import lists with the needed named exports and delete the 13 `await import(...)` wrappers (simplest, behavior-identical since the module is already loaded), OR drop the 3 static imports and keep it dynamic if splitting is desired. Either silences the warning; the first is provably safe."
+      },
+      {
+        "area": "dev-server",
+        "title": "vite server.warmup still lists three V50-DELETED files (AppointmentTab.jsx, MasterDataTab.jsx, CloneTab.jsx) — dev-server warmup requests files that no longer exist on every dev start",
+        "file": "vite.config.js",
+        "line": 75,
+        "evidence": "vite.config.js:75 './src/components/backend/AppointmentTab.jsx', :78 './src/components/backend/MasterDataTab.jsx', :80 './src/components/backend/CloneTab.jsx' in server.warmup.clientFiles. Glob confirms none of the three files exist (V50 deleted CloneTab/MasterDataTab; Phase 21.0 renamed AppointmentTab → AppointmentCalendarView per BackendDashboard.jsx:38-40 comment).",
+        "estImpact": "LOW",
+        "affectedSurfaces": "Dev server only — wasted warmup attempts + missing warmup for the renamed AppointmentCalendarView.jsx (cold first click on the appointments tab pays the ESM-transform cost the warmup list was built to avoid).",
+        "risk": "low",
+        "suggestedFix": "Remove the three dead entries and add './src/components/backend/AppointmentCalendarView.jsx' (the rename target). Config-only, dev-only, zero prod effect."
+      }
+    ]
+  },
+  {
+    "lens": "React re-render storms",
+    "file": "agent-a2d1402cab366bb30.jsonl",
+    "findings": [
+      {
+        "area": "bundle/critical-path",
+        "title": "The 903KB 'recall' manualChunk swallowed the entire Firestore SDK + backendClient data layer and is modulepreloaded on EVERY page load (including anonymous public patient links)",
+        "file": "vite.config.js",
+        "line": 151,
+        "evidence": "vite.config.js:143 `if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'vendor-firebase';` produced only a 19KB vendor-firebase chunk (bundle-baseline.json: vendor-firebase-DXK1SpG1.js raw 19KB), while vite.config.js:151 `if (id.includes('/components/backend/recall/')) return 'recall';` produced recall-8hrOki3D.js 903.3KB/252.7KB-gz. Grep inside dist/assets/recall-8hrOki3D.js finds Firestore SDK internals (`new We(`@firebase/firestore`)`, `firestore_zombie_`, `Firestore shutting down`) AND backendClient markers (`be_stock_movements` collection accessors). dist/index.html: `<link rel=\"modulepreload\" crossorigin href=\"/assets/recall-8hrOki3D.js\">`; the entry chunk index-CM1i0cpP.js statically imports ONLY rolldown-runtime + recall + vendor-react + vendor-icons — so recall is on the critical path of every surface, and ~75 other chunks also import it.",
+        "estImpact": "HIGH",
+        "risk": "med",
+        "suggestedFix": "Remove or rework the 'recall' manualChunks bucket (it was a 2026-05-14 workaround for a Rolldown hash_placeholder.rs panic — re-verify the panic still fires on current Rolldown). After removal, confirm with ANALYZE=1 that @firebase/* actually lands in vendor-firebase and that the shared data layer (backendClient/scopedDataLayer) gets its own shared chunk instead of riding a feature-named chunk. Zero visual change; verify public-link pages (?session=/?patient=/?schedule=) first-load bytes drop.",
+        "affectedSurfaces": "Every page: public patient links (PatientForm/PatientDashboard/ClinicSchedule anon users), AdminDashboard, BackendDashboard, tablet chart — all pay 903KB raw / 252KB gz + parse before interactive."
+      },
+      {
+        "area": "react/re-render-storm",
+        "title": "AdminDashboard is a single 8,620-line component with 104 useState + 26 useEffect and ZERO React.memo children — every one of its 7+ onSnapshot listeners re-renders the entire tree (queue cards, calendar, QR panel, recall view, chat badge) on each fire",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 416,
+        "evidence": "Line 416 `export default function AdminDashboard({...})` is the only component wrapping ~8,200 lines of JSX/logic; grep counts: 104 `useState(`, 26 `useEffect(`, 0 `React.memo`/`memo(`. Listeners that setState at this top level: opd_sessions whole-collection (line 2335 `onSnapshot(sessionsRef, ...)` → 7 setStates incl. setSessions:2617/setDepositSessions:2377/setNoDepositSessions:2410), clinic_schedules (1384), be_appointments month (1184 → `setApptData({appointments, syncedAt: new Date().toISOString()})` — always-new object), admin_presence (668), form_templates (2284), settings (1146), chat_conversations via useChatUnread (560). Queue rows render inline at line 7514 `sessions.map(session => {...})` with no memoized row component; RecallFrontendView (line 140 import) and the whole calendar re-render with every fire.",
+        "estImpact": "HIGH",
+        "risk": "med",
+        "suggestedFix": "Behavior-preserving extraction: wrap the biggest render islands (queue card list, appointment calendar block, QR panel, RecallFrontendView wrapper) in React.memo child components fed by already-derived state, and pass useCallback-stable handlers. No JSX/DOM structure change → pixel-identical. Verify with React Profiler: a chat_conversations or presence snapshot should no longer re-render queue cards.",
+        "affectedSurfaces": "Frontend staff page (/admin) — queue list, appointment calendar/hub, recall view, schedule modal all re-render on every Firestore fire from any of 7 listeners."
+      },
+      {
+        "area": "react/re-render-storm",
+        "title": "useChatUnread stores the FULL chat_conversations doc array in AdminDashboard state — every chat message (any field change on any conversation) re-renders the whole 8.6k-line dashboard although only 2 numbers are consumed",
+        "file": "src/components/ChatPanel.jsx",
+        "line": 988,
+        "evidence": "ChatPanel.jsx:982-990 `export function useChatUnread(db, appId, selectedBranchId) { const [rawConvs, setRawConvs] = useState([]); ... return onSnapshot(convsRef, snap => { setRawConvs(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });` — a fresh array identity per snapshot. AdminDashboard.jsx:560 `const { totalUnread: chatUnread } = useChatUnread(db, appId, selectedBranchId);` consumes only the count, but the hook's state lives inside AdminDashboard, so every conversation update (e.g. lastMessage timestamp churn from webhooks) re-renders the entire dashboard.",
+        "estImpact": "HIGH",
+        "risk": "low",
+        "suggestedFix": "Derive counts INSIDE the listener (countUnreadPeople + branch filter already exist as pure helpers at lines 997-1008) and setState only the {lineUnread, fbUnread, totalUnread, totalConversations} numbers, guarded by a compare-before-set so identical counts skip the re-render. API shape unchanged → all 3 consumers unaffected; ChatPanel keeps its own separate listener for the list view.",
+        "affectedSurfaces": "Frontend staff page — full-tree re-render per inbound/outbound chat message even when the badge number doesn't change."
+      },
+      {
+        "area": "react/re-render-storm",
+        "title": "admin_presence heartbeat guarantees a full AdminDashboard re-render every ≤30s per open admin tab (self-inflicted churn: each tab writes presence every 30s and every tab listens to the whole presence collection)",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 668,
+        "evidence": "Line 648-655: `const writePresence = () => setDoc(myDocRef, { ... lastSeen: Date.now(), ... }); writePresence(); const interval = setInterval(writePresence, 30000);` — every tab writes each 30s (lastSeen always changes). Line 666-674: `return onSnapshot(presenceCol, snap => { ... setOnlineAdmins(active); ...})` — fresh array identity per fire → whole-monolith re-render. With N admin tabs open the dashboard re-renders ~N times per 30s forever, even fully idle.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Shallow-compare the derived active-admins list (ids + emails) against previous state inside the listener and skip setOnlineAdmins when unchanged (lastSeen churn alone should not re-render); optionally extract the online-admins indicator into a memoized child that owns this listener. No UI change.",
+        "affectedSurfaces": "Frontend staff page — steady-state idle re-render churn of the entire 8.6k-line tree, multiplied by number of open admin tabs."
+      },
+      {
+        "area": "react/re-render-storm",
+        "title": "opd_sessions listener subscribes to the ENTIRE collection with no query filter and sets 7 separate state arrays with fresh identities per fire — any change to any session doc (incl. archived/history) re-derives and re-renders everything",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 2335,
+        "evidence": "Line 2334-2335: `const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'); const unsubscribe = onSnapshot(sessionsRef, (snapshot) => { ... snapshot.docs.map(...)` — no where()/limit(); branch filter is client-side (line 2344). Each fire runs 7 filter+sort passes and calls setArchivedSessions (2367), setDepositSessions (2377), setArchivedDepositSessions (2387), setNoDepositSessions (2410), setArchivedNoDepositSessions (2411), setSessions (2617) + notification state — each a brand-new array reference, so React always re-renders even when a fire changed only an irrelevant archived doc. The 2026-05-24 comment at 2348-2354 already documents this listener 'pulled 110 docs' per fire.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Render-side (safe now): guard each setX with a cheap identity check (e.g. compare joined `id:updatedAtMillis` keys) so unchanged derived lists keep their prior array reference and skip re-render. Data-side (coordinate with data-loading lens): add branchId where-clause / exclude long-archived docs to shrink snapshot size. No visual change.",
+        "affectedSurfaces": "Frontend staff page — queue, deposit, no-deposit, history tabs re-render as a block on every opd_sessions write from any device."
+      },
+      {
+        "area": "bundle/eager-import",
+        "title": "TreatmentFormPage (347KB chunk) is statically imported by BOTH dashboards although it renders only when a treatment form is opened — the built AdminDashboard and BackendDashboard chunks statically pull TreatmentFormPage-ymcdAYNt.js on first paint",
+        "file": "src/pages/BackendDashboard.jsx",
+        "line": 120,
+        "evidence": "BackendDashboard.jsx:120 `import TreatmentFormPage from '../components/TreatmentFormPage.jsx';` and AdminDashboard.jsx:154 same static import; rendered only conditionally (`{treatmentFormMode && (<TreatmentFormPage .../>)}` BackendDashboard.jsx:770). Built output: both dist/assets/AdminDashboard-C_UuH8aL.js and dist/assets/BackendDashboard-CwwrEXDG.js list `from\"./TreatmentFormPage-ymcdAYNt.js\"` (347.5KB raw / 79.6KB gz) in their static import statement, so it downloads+parses eagerly on dashboard load.",
+        "estImpact": "HIGH",
+        "risk": "low",
+        "suggestedFix": "Convert to `const TreatmentFormPage = lazy(() => import('../components/TreatmentFormPage.jsx'))` in both dashboards; the conditional mount means a `<Suspense fallback={null}>` wrapper shows nothing extra (form appears after a one-time ~80KB-gz fetch, cached thereafter). Pixel-identical steady state; also removes fabric/perfect-freehand transitive weight from first paint if it rides TFP.",
+        "affectedSurfaces": "First load of both the staff queue page and the backend — ~350KB raw parse deferred until a treatment form is actually opened."
+      },
+      {
+        "area": "bundle/eager-import",
+        "title": "BackendDashboard shell eagerly (statically) imports ~20 heavy tabs (SaleTab, FinanceTab, StockTab, CustomerDetailView, AppointmentCalendarView, ProductsTab, CoursesTab, marketing tabs...) — the 976KB chunk loads in full even though only ONE tab renders",
+        "file": "src/pages/BackendDashboard.jsx",
+        "line": 33,
+        "evidence": "Lines 33-99 are static imports: `import CustomerListTab...`, `import CustomerDetailView...`, `import AppointmentCalendarView...` (41), `import SaleTab` (42), `import FinanceTab` (43), `import StockTab` (44), `import PromotionTab/CouponTab/VoucherTab/VendorSalesTab` (48-51), `import ProductGroupsTab...SaleInsuranceClaimsTab` (86-99), while sibling reports/settings tabs are already `lazy()` (57-119). bundle-baseline.json: BackendDashboard-CwwrEXDG.js = 976.1KB raw / 199.2KB gz. The file's own comment (52-56) documents the lazy pattern cut the payload before; the eager set has since grown back.",
+        "estImpact": "MED",
+        "risk": "med",
+        "suggestedFix": "Extend the existing lazy() pattern (already proven for 25+ tabs in this same file, shared Suspense boundary at line 452 already in place) to the heavy eager tabs, starting with the largest: SaleTab, FinanceTab, StockTab, CustomerDetailView, AppointmentCalendarView. Keep CustomerListTab/default-tab eager to avoid a first-paint spinner on the landing tab. Fallback spinner only shows on first click of a cold tab (~50-200ms per existing comment) — same behavior the 25 lazy tabs already exhibit.",
+        "affectedSurfaces": "Backend first load — download+parse of ~976KB raw before the default appointments tab is interactive."
+      },
+      {
+        "area": "react/list-render",
+        "title": "Staff chat: StaffChatMessage rows are not memoized and groupMessagesByDay(messages) is recomputed inline on every render — all ~50 rows (attachments, stickers, reply-preview logic) re-render on every scroll isAtBottom flip, every snapshot, and even while the panel is hidden (always-mounted display:none)",
+        "file": "src/components/staffchat/StaffChatMessageList.jsx",
+        "line": 191,
+        "evidence": "Line 191 `{groupMessagesByDay(messages).map(group => (` — computed in render body, no useMemo. Rows: line 200-210 `<StaffChatMessage key={m.id} ... onReply={onReply} .../>`; StaffChatMessage.jsx:84 `export function StaffChatMessage({...})` with plain `export default StaffChatMessage` (319) — no memo(). List-local state `setIsAtBottom(entry.isIntersecting)` (line 150) re-renders the whole list on scroll transitions. Parent StaffChatWidget.jsx:65 `const handleReply = (msg) => {...}` is re-created every widget render (no useCallback), and StaffChatWidget.jsx:71-83 keeps the panel ALWAYS mounted (`hidden={chat.minimized}` → display:none in StaffChatPanel.jsx:53), so 50 hidden rows still re-render on every message snapshot.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Wrap StaffChatMessage in React.memo, useMemo the groupMessagesByDay(messages) result keyed on messages, and useCallback handleReply in StaffChatWidget (chat.deleteMessage/markScrolledToBottom must be stable from useStaffChat — verify or wrap). No DOM/visual change; verify with Profiler that a scroll flip re-renders only the jump-button, not 50 bubbles.",
+        "affectedSurfaces": "Staff chat widget on both dashboards — jank while scrolling the message list and background CPU while minimized."
+      },
+      {
+        "area": "react/list-render",
+        "title": "CustomerListTab renders EVERY filtered customer as a non-memoized CustomerCard with a fresh inline onDeleteClick arrow — each search keystroke re-renders the entire card grid (getAllCustomers loads the whole collection, no pagination)",
+        "file": "src/components/backend/CustomerListTab.jsx",
+        "line": 278,
+        "evidence": "Line 127 `onChange={(e) => setFilterQuery(e.target.value)}` re-renders the tab per keystroke; line 278 `{filtered.map(customer => {` renders ALL matches (line 68 `getAllCustomers()` = full collection, no limit; line 96 filter is memoized but the JSX is not); line 297-305 `<CustomerCard customer={customer} ... onDeleteClick={selectMode ? null : (cust) => setDeletingCustomer(cust)} />` — inline arrow = new prop identity every render, and CustomerCard.jsx:90 `export default function CustomerCard({` has no memo(). With 400+ customers (prod be_customers ~400-600 docs per V-log), each keystroke re-mounts render work for 400+ cards each containing VipName/avatar/badge trees.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "memo(CustomerCard) + hoist onView/onDeleteClick to useCallback (toggleSelect already keyed by id). Optionally wrap the grid in a memoized child so header-state changes (selectMode banner, deleteStatus toast) don't re-render cards. Search typing then re-renders only cards entering/leaving the filtered set. Grid markup untouched → pixel-identical.",
+        "affectedSurfaces": "Backend tab=customers — search-box typing latency scales linearly with customer count."
+      },
+      {
+        "area": "react/re-render-storm",
+        "title": "AdminDashboard 60s wall-clock tick (setCurrentTime) re-renders the entire 8.6k-line dashboard every minute just to refresh queue-card remaining-time labels",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 1125,
+        "evidence": "Line 1124-1127: `useEffect(() => { const timer = setInterval(() => setCurrentTime(Date.now()), 60000); return () => clearInterval(timer); }, []);` — currentTime (state, line 533) is consumed only by formatRemainingTime (line 2679 `const left = expiresAt - currentTime;`) for per-card countdown text and the isChatActive memo (line 594). Because the component is a monolith with no memo children, this guarantees a full-tree re-render every 60s even when idle and offline.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Once queue cards are extracted per finding #2, keep the tick local to the (memoized) queue-card list component (or a tiny <RemainingTime> leaf). Interim zero-risk option: none needed if #2 lands; the tick itself is fine — the blast radius is the problem.",
+        "affectedSurfaces": "Frontend staff page — baseline once-a-minute full re-render floor, compounding with presence/chat churn."
+      },
+      {
+        "area": "react/re-render-storm",
+        "title": "TreatmentFormPage buy-modal search input commits per keystroke into the 5.9k-line component — every character re-renders the entire treatment form behind the modal (form sections, items tables, payment block)",
+        "file": "src/components/TreatmentFormPage.jsx",
+        "line": 5100,
+        "evidence": "Line 5100 `<input value={buyQuery} onChange={e => setBuyQuery(e.target.value)}` — buyQuery is top-level TFP state; TFP has 144 useState in one component. The filter itself is memoized (line 1786-1794 `const buyFilteredItems = useMemo(...)`) but each keystroke still re-executes the whole 5,937-line component render (the OPD textareas were already converted to local-state+debounce for exactly this reason — see OPDFieldWithPrev at 292-317 and the comment at 230-232 — but the buy/med modal query inputs were not).",
+        "estImpact": "LOW",
+        "risk": "med",
+        "suggestedFix": "Mirror the existing OPDFieldWithPrev pattern: keep the query in modal-local state (extract the buy-modal into a memo child receiving buyItems + callbacks, or debounce setBuyQuery 150ms like the OPD fields). Same treatment for medModalQuery (line 1431). Markup unchanged → pixel-identical.",
+        "affectedSurfaces": "Treatment form buy-course/product modal and medication modal — typing lag proportional to the whole TFP tree."
+      },
+      {
+        "area": "build/dev-config",
+        "title": "vite.config.js server.warmup still lists three V50-DELETED files (AppointmentTab.jsx, MasterDataTab.jsx, CloneTab.jsx) — dev-server warmup wastes work / logs errors on files that no longer exist",
+        "file": "vite.config.js",
+        "line": 75,
+        "evidence": "Lines 75/78/80 in warmup.clientFiles: `'./src/components/backend/AppointmentTab.jsx'`, `'./src/components/backend/MasterDataTab.jsx'`, `'./src/components/backend/CloneTab.jsx'` — all three deleted in V50 (BackendDashboard.jsx:32 comment 'CloneTab DELETED', :37 'MasterDataTab DELETED', :38 'renamed from AppointmentTab to AppointmentCalendarView'). Meanwhile the actually-hot heavy files (AppointmentCalendarView.jsx, TreatmentFormPage.jsx, CustomerDetailView.jsx) are absent from the list.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Remove the 3 stale entries; optionally add './src/components/backend/AppointmentCalendarView.jsx', './src/components/TreatmentFormPage.jsx', './src/components/backend/CustomerDetailView.jsx' to restore the intended dev cold-start benefit. Dev-only; zero prod effect.",
+        "affectedSurfaces": "Dev server cold start only."
+      },
+      {
+        "area": "bundle/ineffective-dynamic-import",
+        "title": "appointmentDepositBatch.js is statically imported AND dynamically imported by the same modules — Rolldown INEFFECTIVE_DYNAMIC_IMPORT: the 8 `await import()` sites gain nothing (module is already in the chunk) and add dead promise ceremony",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 92,
+        "evidence": "AdminDashboard.jsx:92 `import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';` (static) coexists with dynamic `await import('../lib/appointmentDepositBatch.js')` at lines 3330, 3709, 4245, 4342, 4456, 4534, 5512, 6328 in the same file; AppointmentFormModal.jsx repeats the pattern (static at :71, dynamic at :795/:851/:898/:947). DepositPanel.jsx:36 also imports it statically. A static import forces the module into the importer's chunk, so every dynamic import resolves to the already-loaded module — this is the build's INEFFECTIVE_DYNAMIC_IMPORT warning.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Replace the dynamic `await import(...)` call-sites with the already-present static named imports (add missing names to the top import). Behavior-identical (module is loaded either way); silences the Rolldown warning and removes async indirection in click handlers.",
+        "affectedSurfaces": "AdminDashboard + AppointmentFormModal code paths; negligible runtime win, build hygiene."
+      },
+      {
+        "area": "react/list-render",
+        "title": "RecallRow (24.7KB source per row, rendered inside AdminDashboard's RecallFrontendView) is not memoized — recall rows re-render on every AdminDashboard monolith fire",
+        "file": "src/components/backend/recall/RecallRow.jsx",
+        "line": 41,
+        "evidence": "RecallRow.jsx:41 `export function RecallRow({` + :477 `export default RecallRow;` — no memo(). RecallList.jsx memoizes bucket grouping (lines 44-58) but rows re-render whenever the parent renders; RecallFrontendView is statically rendered inside AdminDashboard (import at AdminDashboard.jsx:140), whose monolith re-renders on every listener fire (see finding #2), so all recall rows re-render on presence/chat/session churn.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "memo(RecallRow) — its props are data objects + parent handlers; ensure RecallTab/RecallFrontendView pass useCallback-stable handlers (RecallList already forwards props verbatim). Markup untouched.",
+        "affectedSurfaces": "Frontend recall pill view + Backend tab=recall — row re-render churn tied to unrelated dashboard state."
+      }
+    ]
+  },
+  {
+    "lens": "config quick wins",
+    "file": "agent-a72946028c3014919.jsonl",
+    "findings": [
+      {
+        "area": "vite.config.js / manualChunks",
+        "title": "The 'recall' manualChunks bucket swallowed the ENTIRE Firebase SDK + backendClient data layer into a 903KB chunk that is modulepreloaded on the critical path of every route (including public patient links), while the intended vendor-firebase chunk got only 19KB",
+        "file": "vite.config.js",
+        "line": 151,
+        "evidence": "vite.config.js:141-152 manualChunks: `if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'vendor-firebase';` ... `if (id.includes('/components/backend/recall/')) return 'recall';` (comment: Rolldown-panic workaround). BUILD REALITY (verified in dist): recall-8hrOki3D.js = 903.3KB raw / 252.7KB gz and contains `@firebase/firestore` (grep hits: \"var Is=new We(`@firebase/firestore`)\"), `@firebase/auth` + `identitytoolkit` (4 hits), the storage implementation (`firebasestorage.googleapis.com`, `uploadBytesResumable` x2), src/firebase.js itself (`experimentalAutoDetectLongPolling` x11) and `backendClient` markers (x11). vendor-firebase-DXK1SpG1.js = 19.0KB, 0 'firestore' hits, and its first line is `import{...}from\"./recall-8hrOki3D.js\"` — it holds only @firebase/installations. dist/index.html:35 `<link rel=\"modulepreload\" crossorigin href=\"/assets/recall-8hrOki3D.js\">` sits in the ENTRY preload set, and `grep -l recall-8hrOki3D dist/assets/*.js` shows essentially every lazy chunk imports from it — 'recall' is the de-facto commons chunk.",
+        "estImpact": "HIGH",
+        "risk": "med",
+        "suggestedFix": "Rework chunking so the Firebase SDK + shared data layer land in stable vendor chunks instead of the 'recall' bucket: (1) re-test whether the 2026-05-14 Rolldown byte-boundary panic still reproduces on the current rolldown-vite — if not, delete the recall rule (vite.config.js:151) entirely; (2) if the panic persists, express the split via Rolldown-native `advancedChunks.groups` with explicit priority so `node_modules/@firebase/*` is captured by 'vendor-firebase' BEFORE the recall group can absorb its dependency subtree; (3) verify with `ANALYZE=1 vite build` (visualizer already wired at vite.config.js:52) + regenerate docs/perf/bundle-baseline.json and diff. Payoffs: (a) public patient links (?session/?patient/?schedule) stop shipping backendClient (~10k lines) + 18 recall UI components at boot; (b) cache stability — today ANY edit to backendClient.js or a recall component re-hashes the 903KB chunk, forcing every user to re-download 252.7KB gz including the never-changing Firebase SDK on every deploy. A build-level regression fails loudly (panic) or is caught by the bundle-manifest diff — no runtime behavior change.",
+        "affectedSurfaces": "Every route's first load (staff frontend, backend, TFP, PatientForm/PatientDashboard/ClinicSchedule public links) + every repeat visit after any deploy that touched backendClient or recall components"
+      },
+      {
+        "area": "vercel.json / cache headers",
+        "title": "No Cache-Control headers for hashed /assets/* files — every chunk is revalidated (or re-fetched) on repeat visits instead of served immutable from disk cache",
+        "file": "vercel.json",
+        "line": 89,
+        "evidence": "vercel.json:89-101 defines a single `\"source\": \"/(.*)\"` headers block containing ONLY security headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-DNS-Prefetch-Control) — there is no `Cache-Control` anywhere in the file, and `\"framework\": null` (vercel.json:4) means Vercel applies its static default `cache-control: public, max-age=0, must-revalidate` to dist assets. All Vite assets are content-hashed (e.g. assets/recall-8hrOki3D.js, assets/index-CM1i0cpP.js per docs/perf/bundle-baseline.json), so they are safe to cache forever; today every navigation pays conditional-request round-trips for the entry + 4 modulepreloaded chunks (dist/index.html:33-38) plus each lazy chunk on tab open.",
+        "estImpact": "HIGH",
+        "risk": "low",
+        "suggestedFix": "Add a headers entry BEFORE the catch-all: `{ \"source\": \"/assets/(.*)\", \"headers\": [{ \"key\": \"Cache-Control\", \"value\": \"public, max-age=31536000, immutable\" }] }`. Safe because every file under /assets/ carries a build hash in its name (Vite default). Keep index.html on the revalidating default so new deploys are picked up. Zero runtime/UI change; verify with `curl -I https://lover-clinic-app.vercel.app/assets/<chunk>.js` post-deploy.",
+        "affectedSurfaces": "All pages, all repeat visits and intra-session lazy-chunk loads (staff dashboards reopened daily on mobile + desktop)"
+      },
+      {
+        "area": "index.html / connection hints",
+        "title": "No preconnect/dns-prefetch for Firebase origins, while vercel.json actively disables speculative DNS — the first Firestore/auth connection pays DNS+TCP+TLS serially only after ~1.2MB of JS has downloaded and parsed",
+        "file": "index.html",
+        "line": 3,
+        "evidence": "index.html:3-34 <head> contains icons/manifest/meta/theme script but zero `<link rel=\"preconnect\">` or `dns-prefetch` hints; the app's very first meaningful work is `onSnapshot(doc(db,'artifacts',...))` (src/App.jsx:74) + `onAuthStateChanged/signInAnonymously` (src/App.jsx:2) hitting firestore.googleapis.com and identitytoolkit.googleapis.com / securetoken.googleapis.com — reachable only after index-CM1i0cpP.js (365KB) + recall-8hrOki3D.js (903KB) load and execute. Additionally vercel.json:99 sets `\"X-DNS-Prefetch-Control\": \"off\"`, disabling the browser's automatic DNS prefetching, so nothing warms these origins during the JS download window.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Add to index.html <head>: `<link rel=\"preconnect\" href=\"https://firestore.googleapis.com\" crossorigin>` and `<link rel=\"preconnect\" href=\"https://identitytoolkit.googleapis.com\" crossorigin>` (optionally `<link rel=\"dns-prefetch\" href=\"https://firebasestorage.googleapis.com\">` + `https://securetoken.googleapis.com` — keep preconnects to 2-3 origins). rel=preconnect is NOT governed by X-DNS-Prefetch-Control, and CSP connect-src already allows https://*.googleapis.com (vercel.json:93), so this overlaps the DNS+TCP+TLS handshake (~100-300ms on mobile RTTs) with the JS download. No visual or behavioral change.",
+        "affectedSurfaces": "First load of every surface — staff login, admin dashboard boot, and especially mobile public links (?session/?patient/?schedule) where handshake latency dominates"
+      },
+      {
+        "area": "index.html / FOUC hack",
+        "title": "body{opacity:0} + 0.15s opacity transition adds an artificial ~150ms fade-in to first paint on every load — and the guard is redundant because the theme is applied pre-paint and the built CSS is already render-blocking",
+        "file": "index.html",
+        "line": 24,
+        "evidence": "index.html:23-25 `/* Prevent FOUC: hide body until theme CSS loads */ body { opacity: 0; transition: opacity 0.15s ease; } body.ready { opacity: 1; }` + index.html:38 `<script>document.body.classList.add('ready');</script>`. In the prod build the stylesheet is a render-blocking `<link rel=\"stylesheet\" ... index-5gmns05S.css>` injected in <head> (dist/index.html:38) and the theme attribute is set on <html> BEFORE paint by the head script (index.html:28-33) — so no FOUC is possible without the hack. The hack's cost: the classic inline script at body end executes after pending stylesheets, then content ramps opacity 0→1 over 150ms, delaying full content visibility on EVERY load (including warm cache) and pushing perceived FCP.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Remove the `body { opacity: 0; transition: ... }` rules and the `document.body.classList.add('ready')` inline script (index.html:24-25, 38) — or minimally drop just the `transition` so reveal is instant. IMPORTANT coupled edit: vercel.json:93 CSP `script-src` pins two sha256 hashes for the two inline scripts; removing/altering the ready script requires removing/updating its hash. End state is pixel-identical (same content, just not faded in); verify no theme flash by loading with data-theme=light in localStorage.",
+        "affectedSurfaces": "First paint of every page load on every surface, warm and cold cache alike"
+      },
+      {
+        "area": "src imports / dead dynamic imports",
+        "title": "appointmentDepositBatch.js is statically imported AND dynamically imported from the same modules — the 13 `await import()` sites can never code-split (Rolldown INEFFECTIVE_DYNAMIC_IMPORT) and are pure runtime/build noise",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 92,
+        "evidence": "Static: AdminDashboard.jsx:92 `import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';`, AppointmentFormModal.jsx:71 `} from '../../lib/appointmentDepositBatch.js';`, DepositPanel.jsx:36 same. Dynamic in the SAME files: AdminDashboard.jsx:3330, 3709, 4245, 4342, 4456, 4534, 5512, 6328 (`const mod = await import('../lib/appointmentDepositBatch.js')` / `const { deleteDepositBookingPair } = await import(...)`), AppointmentFormModal.jsx:795, 851, 898, 947, AppointmentCalendarView.jsx:1303. Because the static imports force the module into the eager graph of those chunks, Rolldown emits INEFFECTIVE_DYNAMIC_IMPORT: the module is inlined, no lazy chunk is ever created, and each call site still pays a dynamic-import promise indirection inside hot booking/cancel handlers.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Pick one mechanism per file. Since the module is already eagerly bundled via the static imports, the provably-safe change is to add the needed names to the existing static import statements and replace the 13 `await import('../lib/appointmentDepositBatch.js')` sites with direct references (no chunk-graph change — the code is already in those chunks; identical behavior, removes the build warning and per-call promise hop). Do NOT instead delete the static imports hoping to split — the module is used in first-render paths of AppointmentFormModal/DepositPanel.",
+        "affectedSurfaces": "AdminDashboard booking/deposit handlers, AppointmentFormModal, AppointmentCalendarView, DepositPanel (build hygiene + minor runtime); unblocks trusting the Rolldown warning list"
+      },
+      {
+        "area": "src/firebase.js / eager SDK init",
+        "title": "getStorage(app) is initialized eagerly at module top-level, pulling the full firebase/storage implementation into the boot-critical chunk even though uploads/downloads happen only in staff flows",
+        "file": "src/firebase.js",
+        "line": 28,
+        "evidence": "src/firebase.js:4 `import { getStorage } from 'firebase/storage';` + :28 `export const storage = getStorage(app);` — firebase.js is imported by src/App.jsx:5 (`import { auth, db, appId } from './firebase.js'`), so the storage SDK rides the entry's static graph. Confirmed in the build: the storage implementation strings `firebasestorage.googleapis.com` and `uploadBytesResumable` (x2) are inside recall-8hrOki3D.js, the chunk modulepreloaded at first paint (dist/index.html:35). vite.config.js:93 also pre-bundles 'firebase/storage' in optimizeDeps.include. Public patient links and the login screen never touch Storage.",
+        "estImpact": "LOW",
+        "risk": "med",
+        "suggestedFix": "Convert to lazy memoized init: in firebase.js export `let _storage; export function getAppStorage() { return _storage ??= getStorage(app); }` with the `import { getStorage } from 'firebase/storage'` moved into a dynamic `import('firebase/storage')` inside the getter (or keep a tiny sync getter and move the storage export into src/lib/storageClient.js, which is already its own 1.7KB chunk). Then update the (few) `import { storage } from '../firebase.js'` consumers. Estimated ~10-15KB gz off the boot path once finding #1 restores sane chunking. Risk is medium only because multiple consumer files must be touched — behavior is unchanged (same singleton).",
+        "affectedSurfaces": "First-load JS bytes on every route, most valuable for public patient links and mobile first paint"
+      },
+      {
+        "area": "src/App.jsx / entry chunk weight",
+        "title": "PrintTemplates (41.5KB source) is statically imported into the entry chunk but only rendered when printMode is active",
+        "file": "src/App.jsx",
+        "line": 23,
+        "evidence": "src/App.jsx:23 `import { OfficialOPDPrint, DashboardOPDPrint } from './components/PrintTemplates.jsx';` — the components are rendered only inside `{printMode !== null && viewingSession && (...)}` (src/App.jsx:333-350), i.e. after a staff member explicitly opens OPD print. File size: `wc -c src/components/PrintTemplates.jsx` = 41,534 bytes. Meanwhile all heavy pages in the same file are already lazy (src/App.jsx:28-38 `const AdminDashboard = lazy(...)` etc.), so this is the odd eager import in an otherwise lazy entry.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Mirror the existing pattern: `const OfficialOPDPrint = lazy(() => import('./components/PrintTemplates.jsx').then(m => ({ default: m.OfficialOPDPrint })))` (and same for DashboardOPDPrint), wrapping the print overlay render at App.jsx:348-350 in the existing Suspense (fallback null — the overlay only appears on user action, and the chunk loads in ms before the print dialog is usable). ~8-10KB gz off the entry chunk; print output remains pixel-identical.",
+        "affectedSurfaces": "Entry chunk (index-CM1i0cpP.js 365KB) parsed on every route's first load, including public patient links that can never print"
+      },
+      {
+        "area": "vite.config.js / dev warmup",
+        "title": "server.warmup lists three V50-deleted files (AppointmentTab.jsx, MasterDataTab.jsx, CloneTab.jsx) — dead warmup entries error at every dev-server start",
+        "file": "vite.config.js",
+        "line": 75,
+        "evidence": "vite.config.js:75 `'./src/components/backend/AppointmentTab.jsx'`, :78 `'./src/components/backend/MasterDataTab.jsx'`, :80 `'./src/components/backend/CloneTab.jsx'` in server.warmup.clientFiles. Verified nonexistent: `ls src/components/backend/AppointmentTab.jsx src/components/backend/MasterDataTab.jsx src/components/backend/CloneTab.jsx` → 'No such file or directory' for all three (deleted in V50, commit b1ecf59, per v-log). Each dead entry makes the dev server attempt + fail a transform at startup and wastes warmup slots that could pre-compile real hot paths (e.g. TreatmentFormPage.jsx is NOT in the list).",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Delete the three dead lines from server.warmup.clientFiles (vite.config.js:75, 78, 80); optionally replace with actually-hot current files such as './src/components/TreatmentFormPage.jsx' and './src/components/backend/AppointmentCalendarView.jsx'. Dev-only config — zero production risk.",
+        "affectedSurfaces": "Dev-server cold start only (no production impact)"
+      }
+    ]
+  },
+  {
+    "lens": "assets & CSS",
+    "file": "agent-a83885a320ff397df.jsonl",
+    "findings": [
+      {
+        "area": "assets/preload",
+        "title": "Built index.html modulepreloads the 903KB (252.7KB gz) recall chunk on EVERY route — including patient-facing QR/schedule/filler pages — even though the entry chunk has no static import of it",
+        "file": "dist/index.html",
+        "line": 36,
+        "evidence": "dist/index.html head: `<link rel=\"modulepreload\" crossorigin href=\"/assets/recall-8hrOki3D.js\">` sits alongside preloads for rolldown-runtime/vendor-react/vendor-icons. But extracting static import specifiers from dist/assets/index-CM1i0cpP.js yields ONLY {rolldown-runtime, vendor-react, vendor-icons} — recall is NOT statically imported by the entry (it appears only in the __vite__mapDeps dynamic-import dep map, as a dep of the lazy AdminDashboard chunk, dist/assets/index-CM1i0cpP.js:1). bundle-baseline.json: recall-8hrOki3D.js = 903.3KB raw / 252.7KB gzip — the single largest first-load fetch, bigger than the entry itself (365KB/87KB). Chunk created by vite.config.js:151 `if (id.includes('/components/backend/recall/')) return 'recall';` yet src/components/backend/recall/ is only ~200KB source (18 files) — ~700KB of absorbed non-recall code rides in it (composition = bundle lens). Only importers of recall components are src/pages/AdminDashboard.jsx:140-141, and AdminDashboard is lazy (src/App.jsx:28).",
+        "estImpact": "HIGH",
+        "risk": "low",
+        "affectedSurfaces": "Every page: staff AdminDashboard, BackendDashboard, and critically the patient-facing mobile surfaces (?session= PatientForm, ?patient= PatientDashboard, ?schedule= ClinicSchedule, ?tablet=chart, ?play=filler) — all force-download+compile 252.7KB gz they never use",
+        "suggestedFix": "Config-only, zero-behavior-change: add `build.modulepreload.resolveDependencies` in vite.config.js to filter the 'recall' chunk (and any non-entry-static chunk) out of the index.html preload list — preload hints don't affect execution semantics, and the admin route still preloads recall via the __vite__mapDeps entry when AdminDashboard is lazily imported. Root-cause of why Rolldown marks recall entry-adjacent (likely the static+dynamic appointmentDepositBatch.js import mix, AdminDashboard.jsx:92 vs :3330 etc. — INEFFECTIVE_DYNAMIC_IMPORT warning) belongs to the bundle-composition lens; fixing that should also be verified to drop this preload. Verify post-fix: dist/index.html contains no recall modulepreload; network trace of ?schedule= page shows no recall fetch."
+      },
+      {
+        "area": "assets/images",
+        "title": "public/icon-512.png ships 247.2KB unoptimized and is declared as a favicon candidate + apple-touch-icon + PWA manifest icon, while an existing 546B favicon.svg goes unused",
+        "file": "index.html",
+        "line": 6,
+        "evidence": "public/icon-512.png = 247.2KB on disk for a 512×512 Format32bppArgb PNG (~0.94 bytes/pixel — no palette/compression optimization; well-optimized 512px icons are typically 30–80KB). Referenced three ways: index.html:6 `<link rel=\"icon\" type=\"image/png\" sizes=\"512x512\" href=\"/icon-512.png\" />`, index.html:14 `<link rel=\"apple-touch-icon\" sizes=\"512x512\" href=\"/icon-512.png\" />`, and public/manifest.json:18-22 (`\"src\": \"/icon-512.png\" ... \"purpose\": \"any maskable\"`). Browsers that select the largest rel=icon candidate (Chrome on hi-DPI, Safari behaviors vary) download 247KB for a tab icon on first visit; PWA install/splash and iOS add-to-home-screen also fetch it. Meanwhile public/favicon.svg (546B) exists and is only used by FCM push (functions/index.js:111-112) — never referenced in index.html. icon-192.png (46.2KB) is also mildly oversized.",
+        "estImpact": "MED",
+        "risk": "low",
+        "affectedSurfaces": "First visit of every page (favicon selection), PWA install prompt/splash, iOS add-to-home-screen — notably the mobile patient QR-link surfaces where first-load bandwidth is the known pain point",
+        "suggestedFix": "Losslessly recompress public/icon-512.png and icon-192.png (oxipng/zopflipng/pngquant-lossless pass — one-off tool run, NOT an app dependency; output is pixel-identical so provably safe). Expect ~60-80% reduction on the 512. Optionally (slightly higher risk, tab-icon rendering could differ per browser): drop the sizes=512 rel=icon candidate from index.html or point rel=icon at the existing favicon.svg, keeping manifest + apple-touch-icon PNGs for install contexts."
+      },
+      {
+        "area": "css",
+        "title": "~8.7KB (45 rules) of provably-dead V85 glow-variant CSS (fx-glow-v2/v4/v6/v7/v8, fx-glow-u1/u2/u4–u8, six unused fx-glow-u9-* section variants) ships in the single global stylesheet on every page — and a source-grep test locks the dead rules in place",
+        "file": "src/index.css",
+        "line": 1613,
+        "evidence": "src/index.css V85 region (banner at lines 1613-1615 referencing 'docs/superpowers/specs/2026-05-18-v85-glow-effect-universal' + 'public/v85-glow-variants.html') defines all ten v-variants, ten u-variants and eight u9-section variants. Rule-level byte scan: 45 rules / 8,743 bytes match ONLY unused variant selectors. Usage grep across src/**/*.{js,jsx}: only fx-glow-v3, v5, v9, v10, u3, u9, u9-sales, u9-customers, u10 appear (e.g. BackendDashboard.jsx:446, SaleTab.jsx:1162, MarketingFormShell.jsx:82-85); zero matches for fx-glow-v2|v4|v6|v7|v8, u1|u2|u4-u8, u9-appointments/finance/marketing/master/reports/stock, and zero dynamic construction (`fx-glow-u9-${`, `fx-glow-v${`, backtick `fx-glow` all no-match). Hand-written CSS is NOT Tailwind-purged, so all of it ships in dist/assets/index-5gmns05S.css (292.2KB/45KB gz). CAUTION: tests/v85-glow-utility-css.test.js:29-52 iterates every variant and asserts `.fx-glow-${v}` + its [data-theme=\"light\"] override EXIST in index.css — a V21-style lock that must be updated in the same commit.",
+        "estImpact": "LOW",
+        "risk": "med",
+        "affectedSurfaces": "All pages (single global index.css) — saves ~8.7KB raw / ~1-2KB gz and a little style-matching work; every selector removed also shrinks the 857-selector [data-theme] recalc set slightly",
+        "suggestedFix": "Delete the 45 unused fx-glow variant rules from src/index.css and update tests/v85-glow-utility-css.test.js to assert only the shipped variants (v3/v5/v9/v10/u3/u9/u9-sales/u9-customers/u10) plus an anti-regression that the removed variant names do NOT reappear. Rendered output is pixel-identical since no removed selector matches any DOM node (verified: no literal or template-string usage anywhere in src)."
+      },
+      {
+        "area": "css/fonts/icons/manifest — clean verdicts",
+        "title": "No defect found in Tailwind purge config, web fonts, lucide-react import strategy, or PWA manifest — these are verified clean (informational; no action)",
+        "file": "tailwind.config.js",
+        "line": 9,
+        "evidence": "HONEST NEGATIVES per lens: (1) Tailwind purge IS correct — tailwind.config.js:9-12 `content: [\"./index.html\", \"./src/**/*.{js,ts,jsx,tsx}\"]` (excludes tests/, no over-broad globs, no missing safelist issues found). The 292KB/45KB-gz single index.css is dominated by FUNCTIONAL hand-written CSS: 94.5KB source / 372 rules are the V124/V125 `[data-theme=\"light\"]` override architecture (857 [data-theme selectors total) — not dead weight; one global cached stylesheet at 45KB gz is acceptable and NOT worth route-splitting (visual-regression risk >> benefit). (2) Fonts: zero @font-face, zero fonts.googleapis/gstatic, zero CSS @import in src + index.html; built CSS uses pure system stack (`font-family:ui-sans-serif,system-ui,...`) — no render-blocking font fetches. (3) Icons: zero `import * as ... from 'lucide-react'` in src (all named imports); manualChunks vendor-icons (vite.config.js:144) = 36.9KB raw / 11.3KB gz — tree-shaking working (full lucide would be ~600KB+). (4) manifest.json (536B) is minimal and valid; public/sounds 8KB, chart-templates 28KB SVGs, stickers 336KB fetched on demand — all fine. (The ~130KB of v83/v85/v86 design-variant HTML files in public/ are never fetched at runtime → zero perf cost, not flagged.)",
+        "estImpact": "LOW",
+        "risk": "low",
+        "affectedSurfaces": "None — documented so the consolidated punchlist doesn't re-investigate these surfaces",
+        "suggestedFix": "No action needed."
+      }
+    ]
+  },
+  {
+    "lens": "Firestore listener waste",
+    "file": "agent-ad088ce0d041bfcdc.jsonl",
+    "findings": [
+      {
+        "area": "Firestore listener waste — unbounded listener",
+        "title": "listenToTreatmentsByDateRange subscribes onSnapshot to the ENTIRE be_treatments collection (no where, no limit) and is mounted on the default staff landing view (AppointmentHubView), with all date/branch filtering done client-side",
+        "file": "src/lib/backendClient.js",
+        "line": 4136,
+        "evidence": "backendClient.js:4136 `return onSnapshot(treatmentsCol(), (snap) => { let items = snap.docs.map((d) => ({ ...d.data(), id: d.id })); if (from) items = items.filter((t) => (t?.detail?.treatmentDate || '') >= from); ...`. The function's own JSDoc (4118-4120) admits: \"Mirrors loadTreatmentsByDateRange (reportsLoaders.js) — whole-collection read + client-filter\". Mounted at AppointmentHubView.jsx:266-272 with `{ from: wideRange.from, to: wideRange.to, allBranches: true }` — allBranches:true means even the branchId where-clause is skipped, so the watch target covers EVERY treatment ever written (be_treatments is append-per-visit; one customer alone had 122 treatments per V-log). Payload is discarded — the callback `onTxLive` only bumps a refresh tick. Because Firestore persistence is disabled (firebase.js mobile-load fix, 'NO persistence per Q1'), every page load re-downloads and re-bills the full collection.",
+        "estImpact": "HIGH",
+        "risk": "med",
+        "suggestedFix": "Bound the trigger query server-side to the window the hub actually consumes: `query(treatmentsCol(), where('detail.treatmentDate','>=',from), where('detail.treatmentDate','<=',to))` (single-field auto index on the nested path; from/to are already passed in and loadAll only fetches the same ±30d window, so a treatment edited outside the window changing nothing user-visible). Verify legacy docs all carry detail.treatmentDate (Rule R diag) before shipping; keep client-side status/branch filters unchanged.",
+        "affectedSurfaces": "Frontend AdminDashboard appointment list (adminMode='appointment' + apptViewMode='list' — the default staff landing view); cost recurs on every page load and every treatment write"
+      },
+      {
+        "area": "Firestore listener waste — refetch amplification",
+        "title": "Every treatment/deposit/sale/appointment write anywhere triggers AppointmentHubView.loadAll, which re-fetches 7 whole datasets via getDocs (whole be_customers, whole be_memberships, whole be_treatments allBranches, whole-branch sales/deposits/appointments) with no debounce",
+        "file": "src/components/admin/AppointmentHubView.jsx",
+        "line": 174,
+        "evidence": "loadAll (AppointmentHubView.jsx:174-190) runs `Promise.all([getAppointmentsByDateRange(...), getAllCustomers(), getAllDeposits(...), getAllSales(...), getAllMemberships(), listStaffSchedules(...), loadTreatmentsByDateRange({ from, to, allBranches: true })])`. getAllCustomers = `getDocs(customersCol())` whole collection (backendClient.js:200); getAllMemberships = `getDocs(membershipsCol())` whole collection (backendClient.js:6015); loadTreatmentsByDateRange = `getDocs(treatmentsCol())` whole collection client-filtered (reportsLoaders.js:189); getAllSales/getAllDeposits/getAppointmentsByDateRange fetch the whole branch collection (backendClient.js:4050-4053, 5252-5254, 3097-3100). This loadAll is re-run by FOUR live triggers: liveRefreshTick from the 3 trigger listeners (lines 248-252 + 258-260, fed by listenToTreatmentsByDateRange:266, listenToAllDeposits:277, listenToAllSales:287) plus appointmentDataVersion (235-239) which bumps on EVERY be_appointments snapshot fire (AdminDashboard.jsx:1197-1198). No debounce/coalescing — N rapid writes = N full multi-collection refetches.",
+        "estImpact": "HIGH",
+        "risk": "med",
+        "suggestedFix": "Debounce the silent-reload path (e.g. trailing 1-2s coalesce of liveRefreshTick/appointmentDataVersion bumps) so bursts collapse to one loadAll; independently, scope getAllCustomers/getAllMemberships to the customerIds actually present in apptList (the wallets fetch at line 191-192 already does exactly this per-id pattern). Pixel-identical: same data, fewer round-trips.",
+        "affectedSurfaces": "Frontend AdminDashboard appointment list; every staff device with the page open re-fetches on every write from any device (multiplies reads by open-tab count)"
+      },
+      {
+        "area": "Firestore listener waste — unbounded listener",
+        "title": "be_appointments listeners (listenToAppointmentsByMonth / listenToAppointmentsByDate) query only where('branchId') with NO date bounds — the whole branch appointment history is streamed and the month/day filter is applied client-side on every fire",
+        "file": "src/lib/backendClient.js",
+        "line": 3281,
+        "evidence": "backendClient.js:3281-3283 `const q = useFilter ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId))) : appointmentsCol();` then 3286-3292 filters to the target month client-side (`if (!iso || iso.slice(0, 7) !== target) return null;`). Same pattern in listenToAppointmentsByDate (3213-3219, filters to ONE day client-side). Subscribed permanently at AdminDashboard.jsx:1184-1203 (alive in ALL adminModes incl. chat/settings), and twice more in the backend calendar (AppointmentCalendarView.jsx:415 month + :455 day — identical queries, so the SDK dedupes the watch target, but each fire maps the full branch doc set twice). getAppointmentsByDateRange has the same shape (backendClient.js:3097-3106) with the documented reason: \"composite query ... requires a Firestore composite index that wasn't deployed\" (3093-3095). Appointment history grows unbounded (every booking forever); with persistence disabled each page load re-reads all of it.",
+        "estImpact": "MED",
+        "risk": "med",
+        "suggestedFix": "Deploy the (branchId, date) composite index in firestore.indexes.json and add the server-side `where('date','>=',monthStart), where('date','<=',monthEnd)` range. Precondition: normalize heterogeneous stored date shapes first (normalizeApptDate exists; a Rule M backfill script stamping canonical YYYY-MM-DD makes the server range safe). Keep the client-side normalizeApptDate filter as defense-in-depth so behavior stays identical.",
+        "affectedSurfaces": "Frontend AdminDashboard (all modes, always-on listener) + Backend appointment-* tabs (calendar day grid + month strip)"
+      },
+      {
+        "area": "Firestore listener waste — unbounded listener",
+        "title": "opd_sessions queue listener subscribes to the whole collection with zero query constraints (no where, no limit, no branch filter server-side) and stays alive on every AdminDashboard mode",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 2335,
+        "evidence": "AdminDashboard.jsx:2334-2335 `const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'); const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {` — bare collection ref. Branch filtering is client-side only (2344-2346 `allDocsRaw.filter(s => !s.branchId || ...)`), and each fire maps + sorts the full doc set at least 4 times (setArchivedSessions 2367-2371, setDepositSessions 2377-2386, setArchivedDepositSessions 2387-2391, plus the main queue). The in-repo comment at 2352-2354 already measured the cost: \"opd_sessions listener pulled 110 docs + cascaded writes per fire. Backend stayed fast because it doesn't subscribe to opd_sessions\". Archived/permanent history docs are retained, so the set grows with every patient intake.",
+        "estImpact": "MED",
+        "risk": "med",
+        "suggestedFix": "Add the server-side branch filter `where('branchId','==',selectedBranchId)` after the one-shot legacy backfill the code comment already references (2342-2343: \"one-shot migration script stamps existing docs with default branch\") has been verified applied — legacy fall-through (`!s.branchId`) is the only reason the filter is client-side. Alternatively bound archived history with a date floor (createdAt >= N months). Re-subscribe on branch switch is already wired (deps include selectedBranchId via queueRetryKey/resetKey).",
+        "affectedSurfaces": "Every Frontend AdminDashboard page (queue, chat, settings, appointment) — the listener is unconditional at component top level"
+      },
+      {
+        "area": "Firestore listener waste — duplicate subscription",
+        "title": "chat_conversations is streamed TWICE by two different query shapes: useChatUnread holds a bare whole-collection onSnapshot (always-on at AdminDashboard top level) while ChatPanel holds a second allBranches+orderBy listener when chat is open — different query shapes defeat SDK watch-target dedupe",
+        "file": "src/components/ChatPanel.jsx",
+        "line": 987,
+        "evidence": "useChatUnread (ChatPanel.jsx:986-989): `const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`); return onSnapshot(convsRef, snap => { setRawConvs(...) });` — no where, no orderBy, no limit; mounted unconditionally at AdminDashboard.jsx:560 `const { totalUnread: chatUnread } = useChatUnread(db, appId, selectedBranchId);`. ChatPanel itself (ChatPanel.jsx:457) opens a SECOND listener over the same collection: `return listenToChatConversationsByBranch({ allBranches: true }, ...)` which builds `query(col, orderBy('lastMessageAt', 'desc'))` (backendClient.js:3411-3417). Because the two queries differ (bare ref vs orderBy), the Firestore SDK cannot share the watch target — with adminMode='chat' the full collection is streamed twice in parallel, and both re-emit every doc set on each message.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Make useChatUnread subscribe through the same listenToChatConversationsByBranch({allBranches:true}) helper (identical query shape → SDK shares one watch target), or lift the raw conversations array into a small context provider that both the badge hook and ChatPanel consume from one subscription. Badge math (countUnreadPeople) is already derived via useMemo, unchanged.",
+        "affectedSurfaces": "Every Frontend AdminDashboard page (badge listener always-on); doubled while chat mode is open"
+      },
+      {
+        "area": "Firestore listener waste — whole-collection getDocs",
+        "title": "Movement Log fetches the ENTIRE be_stock_movements collection (append-only MOPH audit ledger, never deleted) on every panel load — branchId/date/typeGroup are all filtered client-side",
+        "file": "src/lib/backendClient.js",
+        "line": 6511,
+        "evidence": "listStockMovements (backendClient.js:6505-6512): only link-ID/type filters become where-clauses; branchId deliberately does not — `const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol(); const snap = await getDocs(q);` then client-filters branch at 6515+. MovementLogPanel.jsx:184-186 calls it with `const filters = { branchId: BRANCH_ID, includeReversed }; ... const all = await listStockMovements(filters);` — with no productId picked, clauses = [] → whole-collection getDocs. The in-code comment accepts this explicitly: \"For clinic-scale data (<50k movements per collection) the extra fetch is acceptable; trade reliability for a small bandwidth tax\" (6492-6494). The ledger only ever grows (movements are audit-immutable per firestore.rules `allow update: if false` except reversedByMovementId), so this read grows monotonically.",
+        "estImpact": "MED",
+        "risk": "med",
+        "suggestedFix": "Add `where('branchIds','array-contains',branchId)` OR keep the dual-arm read but bound it with a server-side date floor: movements already store createdAt; add `orderBy('createdAt','desc'), limit(N)` sized to the panel's default date window, fetching older pages only when the admin widens the range (data shown for the default view is identical). Verify createdAt shape homogeneity first (_v105NormalizeCreatedAt exists because shapes vary — a Rule M normalization backfill unblocks the server-side bound).",
+        "affectedSurfaces": "Backend tab=stock Movement Log panel — full-ledger read on every open, every filter change, and every includeReversed toggle"
+      },
+      {
+        "area": "Firestore listener waste — listener alive on hidden views",
+        "title": "clinic_schedules whole-collection listener (schedule-link docs with large bookedSlots/doctorDays/customDoctorHours maps) is always-on for every AdminDashboard mode, with branch filtering client-side",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 1384,
+        "evidence": "AdminDashboard.jsx:1384-1389 `const unsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules'), (snap) => { const allDocs = snap.docs.map(d => ({ ...d.data(), id: d.id })); const list = allDocs.filter(s => !s.branchId || String(s.branchId) === String(selectedBranchId || '')) ...` — no where/limit; effect deps `[db, appId, selectedBranchId]` (line 1400) tear down + re-attach the SAME unfiltered query on every branch switch (full re-map, and with persistence disabled a fresh target attach). The schedList UI is only used inside the appointment/schedule-settings surfaces, but the listener runs in chat/formBuilder/clinicSettings modes too. Each schedule-link doc carries per-slot maps (bookedSlots, doctorBookedSlots, customDoctorHours, doctorDays — see updateActiveSchedules at 1402-1429), making per-doc payloads large.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Drop selectedBranchId from the subscription effect deps and keep it only in the client-side filter (a useMemo over a raw list — the V77-fix3 pattern already used for chat at ChatPanel.jsx:447-476) so branch switches stop re-attaching the watch target; optionally gate the subscription on the adminModes that actually render schedList.",
+        "affectedSurfaces": "Every Frontend AdminDashboard page; re-attach churn on every branch switch"
+      },
+      {
+        "area": "Firestore listener waste — write cascade inside listener",
+        "title": "chat_history listener performs deleteDoc() inside its own onSnapshot callback (auto-delete >7 days) — each delete triggers another snapshot fire re-running the full 200-doc map, the exact own-write cascade class the repo already banished from the opd_sessions listener to a cron",
+        "file": "src/components/ChatPanel.jsx",
+        "line": 520,
+        "evidence": "ChatPanel.jsx:520-522 inside the listenToChatHistoryByBranch snapshot callback: `if (item.resolvedAt && item.resolvedAt < sevenDaysAgo) { // Auto-delete > 7 days\\n deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_history`, item.id)).catch(() => {}); }`. Each deleteDoc mutates the query result → the listener re-fires → re-maps all ≤200 docs and issues the next batch of deletes (serial fire-per-delete). AdminDashboard.jsx:2348-2358 documents why this pattern was removed from opd_sessions: \"Each write triggered ANOTHER snapshot fire (own-write mirror) → cascade. With N admin tabs open, N parallel cleanup runs raced for the same docs.\" The same N-tab race applies here (every admin with history open issues the same deletes). Additionally, because the query is limit(200) ordered by resolvedAt desc, expired docs beyond position 200 are never deleted, so the collection can still grow past the window (3,281 docs observed 2026-05-16).",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Move the >7-day purge into the existing cron family (mirror api/cron/opd-session-cleanup-sweep.js — the repo's own canonical fix for this class), leaving the listener pure read-only; keep the client-side `item.resolvedAt < sevenDaysAgo` display filter so the UI is pixel-identical while the cron catches up.",
+        "affectedSurfaces": "Chat history view (Frontend chat mode, ⏰ history toggle) — cascade multiplies by number of admin tabs with history open"
+      },
+      {
+        "area": "Firestore listener waste — missing server-side filter",
+        "title": "RecallTogglePill badge subscribes to ALL be_recalls for the branch (filters:{} — including every done/closed historical recall) even though listenToRecalls already supports server-side status and dateBefore filters",
+        "file": "src/components/backend/recall/RecallTogglePill.jsx",
+        "line": 12,
+        "evidence": "RecallTogglePill.jsx:12 `const { recalls } = useRecallListener({ filters: {} });` → listenToRecalls builds only `where('branchId','==',...)` + `orderBy('recallDate','asc')` when no filters are passed, though the function natively supports narrowing: backendClient.js:12956-12957 `if (status) clauses.push(where('status', '==', status)); if (dateBefore) clauses.push(where('recallDate', '<=', dateBefore));`. The badge derivation then discards most docs client-side (RecallTogglePill.jsx:20-23: skips status done/closed-no-answer and anything with eff > today). Recalls accumulate as permanent customer-care history, so the subscribed set grows monotonically while the badge needs only the today-or-earlier pending slice. The pill renders whenever adminMode==='appointment' (AdminDashboard.jsx:6251), i.e. the default staff landing.",
+        "estImpact": "LOW",
+        "risk": "med",
+        "suggestedFix": "Pass `filters: { dateBefore: thaiTodayISO() }` (recallDate <= today is a superset of the badge's eff<=today test whenever snoozedUntil >= recallDate — verify that invariant with a Rule R diag over prod recalls first), keeping the existing client-side status/snooze checks unchanged so the count is identical. Collection is small today — this is a growth guard, not a current hotspot.",
+        "affectedSurfaces": "Frontend AdminDashboard appointment mode (pill always rendered there); RecallFrontendView shares the identical query so the SDK dedupes when the recall view is open"
+      }
+    ]
+  },
+  {
+    "lens": "bundle composition",
+    "file": "agent-aeb555170ebe1fd8d.jsonl",
+    "findings": [
+      {
+        "area": "bundle-composition / manualChunks",
+        "title": "The 'recall' manualChunks bucket absorbed the app core (Firebase app+auth+firestore SDKs, src/firebase.js init, backendClient.js, scopedDataLayer) into one 903KB chunk that is statically imported by the entry and modulepreloaded on first paint of EVERY route — including patient-facing QR links",
+        "file": "vite.config.js",
+        "line": 151,
+        "evidence": "vite.config.js:151 `if (id.includes('/components/backend/recall/')) return 'recall';` (comment 146-150: Rolldown-panic workaround dated 2026-05-14). Built output proves the chunk absorbed far more than the 18 small recall components: dist/assets/recall-8hrOki3D.js (903.3KB raw / 252.7KB gz per docs/perf/bundle-baseline.json) contains the Firestore SDK error string \"Firestore has already been started\" (byte offset ~420894), the Auth SDK string \"INVALID_LOGIN_CREDENTIALS\", src/firebase.js init markers \"experimentalAutoDetectLongPolling\" + \"loverclinic-opd-4c39b\", and backendClient.js marker \"_resolveProductNameLive\" (offset ~677729; backendClient.js source = 620,630 bytes). Meanwhile the intended vendor-firebase rule (vite.config.js:143) captured only 19KB — dist/assets/vendor-firebase-DXK1SpG1.js contains only \"@firebase/installations\" + \"@firebase/messaging\", no firestore/auth markers. Consequence: dist/index.html:36 `<link rel=\"modulepreload\" ... href=\"/assets/recall-8hrOki3D.js\">` and the entry chunk index-CM1i0cpP.js statically imports `from\"./recall-8hrOki3D.js\"` — so every route (PatientForm QR, PatientDashboard, ClinicSchedule, admin login) downloads 252.7KB gz of which the 10k-line backend data layer + recall UI are dead weight on patient links. Every dashboard/tab chunk also statically imports it (grep -l recall-8hrOki3D → 40+ chunks). Cache granularity is destroyed too: any edit to backendClient.js (the most-edited file in the repo) re-hashes the whole 903KB chunk including the never-changing Firebase SDK.",
+        "estImpact": "HIGH",
+        "risk": "med",
+        "suggestedFix": "Build-config-only change (zero runtime/UI code touched): remove or rework the 'recall' rule at vite.config.js:151. The rule was a workaround for a Rolldown hash_placeholder.rs panic on 2026-05-14; retest on the current Vite 8/Rolldown toolchain — if the panic is gone, delete the rule; if not, replace manualChunks with Rolldown `advancedChunks` groups scoped so the recall group cannot capture its dependency subtree (or narrow the test to the exact panic-triggering files). Verify with ANALYZE=1 stats.html + the bundle manifest that (a) firebase app/auth/firestore land in vendor-firebase, (b) backendClient.js lands in a chunk loaded only by the dashboards, (c) index.html no longer modulepreloads a 900KB chunk. Pixel-identical by construction.",
+        "affectedSurfaces": "ALL routes first paint: patient QR links (PatientForm/PatientDashboard/ClinicSchedule — mobile, the surfaces the 2026-06-16 mobile-load-reliability work targets), admin login, AdminDashboard, BackendDashboard; plus every re-deploy re-downloads 903KB when backendClient changes"
+      },
+      {
+        "area": "bundle-composition / eager tab imports",
+        "title": "BackendDashboard chunk is 976KB because ~25 tabs (SaleTab, CustomerDetailView, AppointmentCalendarView, marketing tabs, 14 master-data tabs, etc.) are statically imported while 30 sibling tabs in the same file already use the proven lazy() pattern",
+        "file": "src/pages/BackendDashboard.jsx",
+        "line": 33,
+        "evidence": "Static imports at BackendDashboard.jsx:33-51 (`import CustomerListTab...`, `import CustomerDetailView...` [152,456 bytes src], `import AppointmentCalendarView...` [79,739 bytes], `import SaleTab...` [149,923 bytes], FinanceTab, StockTab, PromotionTab, CouponTab, VoucherTab, VendorSalesTab) and :85-99 (ProductGroupsTab...SaleInsuranceClaimsTab — 14 master-data tabs). The SAME file already lazy-loads 30 other tabs (:47 CentralStockTab, :57-74 all 13 report tabs, :76-119 settings/backup/quotation/schedules/DfGroups/RecallTab) behind an existing Suspense boundary with BackendTabFallback (:136), and the in-file comment :52-56 documents the rationale: \"lazy() splits each into its own chunk so the initial BackendDashboard payload drops from ~1.2MB to the shell + the active tab\". The static half was never converted. Result: dist BackendDashboard-CwwrEXDG.js = 976.1KB raw / 199.2KB gz (bundle-baseline.json lines 3-6) — all of it downloaded+parsed before the backend shell renders, regardless of which tab the user opens. It also statically drags ProductFormModal-CqELioHP.js (158.9KB) and SalePrintView chunks (see `from\"./ProductFormModal-CqELioHP.js\"` in the built chunk's static import list).",
+        "estImpact": "HIGH",
+        "risk": "low",
+        "suggestedFix": "Convert the static tab imports at :33-51 and :85-99 to the identical `const X = lazy(() => import(...))` pattern already used for the other 30 tabs — same Suspense boundary + BackendTabFallback already in place, so behavior/pixels match the existing lazy tabs. Expected: BackendDashboard chunk shrinks from 976KB to shell-size (~150-250KB) + per-tab chunks fetched on demand.",
+        "affectedSurfaces": "BackendDashboard first load (staff back-office) — every backend session pays 199KB gz + parse of ~25 tabs to render one"
+      },
+      {
+        "area": "bundle-composition / eager page import",
+        "title": "TreatmentFormPage (347.5KB raw / 79.6KB gz chunk) is statically imported by BOTH AdminDashboard and BackendDashboard but rendered only conditionally — its chunk is fetched eagerly on both dashboards' first paint",
+        "file": "src/pages/BackendDashboard.jsx",
+        "line": 120,
+        "evidence": "BackendDashboard.jsx:120 `import TreatmentFormPage from '../components/TreatmentFormPage.jsx';` and AdminDashboard.jsx:154 `import TreatmentFormPage from '../components/TreatmentFormPage.jsx';`. Because two chunks share it, Rolldown emits it as its own chunk (dist TreatmentFormPage-ymcdAYNt.js, 347.5KB/79.6KB gz per bundle-baseline.json) — and BOTH dashboard chunks list it as a STATIC dependency (`from\"./TreatmentFormPage-ymcdAYNt.js\"` appears in the static-import preambles of AdminDashboard-C_UuH8aL.js and BackendDashboard-CwwrEXDG.js), so it downloads+parses with each dashboard even though it renders only when a treatment form is opened: AdminDashboard.jsx:7712 `{treatmentFormMode && (` → :7713 `<TreatmentFormPage`. Note fabric itself is already safe: vendor-fabric is only referenced in TFP's dynamic __vite__mapDeps (ChartCanvas.jsx:42 `const fabric = await import('fabric')`), so lazifying TFP does NOT pull fabric earlier.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Change both import sites to `const TreatmentFormPage = lazy(() => import('../components/TreatmentFormPage.jsx'))` and wrap the conditional render in the existing Suspense/fallback pattern (BackendDashboard already has the boundary; AdminDashboard can reuse its LoadErrorRetry/spinner pattern). Defers ~80KB gz + ~350KB parse until the first treatment-form open on each dashboard.",
+        "affectedSurfaces": "AdminDashboard (staff frontend) first paint AND BackendDashboard first paint"
+      },
+      {
+        "area": "bundle-composition / eager conditional surfaces",
+        "title": "AdminDashboard.jsx contains ZERO lazy() imports — heavy conditional/secondary surfaces (AppointmentHubView, ChatPanel, CustomFormBuilder, ClinicSettingsPanel, TreatmentTimeline, AppointmentFormModal) are all bundled into the 357KB AdminDashboard chunk",
+        "file": "src/pages/AdminDashboard.jsx",
+        "line": 135,
+        "evidence": "grep `lazy(` in src/pages/AdminDashboard.jsx returns no matches, while its static import list includes AdminDashboard.jsx:135 `import AppointmentHubView from '../components/admin/AppointmentHubView.jsx'` (42,862 bytes src), :152 `import ChatPanel, { useChatUnread, ... } from '../components/ChatPanel.jsx'` (58,228 bytes), :151 `import CustomFormBuilder`, :150 `import ClinicSettingsPanel`, :153 `import TreatmentTimeline`, :70 `import AppointmentFormModal`. Result: dist AdminDashboard-C_UuH8aL.js = 357.5KB raw / 77.9KB gz (bundle-baseline.json). These are tab-panel/modal surfaces not visible on the default queue view. Contrast: App.jsx:28-33 lazy-loads all pages, and BackendDashboard lazy-loads 30 tabs — the pattern exists everywhere except inside AdminDashboard.",
+        "estImpact": "MED",
+        "risk": "low",
+        "suggestedFix": "Apply the in-repo lazy() + Suspense pattern to the conditional surfaces (start with the largest: ChatPanel, AppointmentHubView, CustomFormBuilder, ClinicSettingsPanel, TreatmentTimeline). Note ChatPanel exports helpers (useChatUnread, playAlertSound) consumed eagerly at :152 — those helpers must first be split into a small module so the component can be lazified without touching behavior. Fix per-surface, verifying the chunk manifest after each.",
+        "affectedSurfaces": "AdminDashboard (staff frontend) first paint — the highest-traffic staff page"
+      },
+      {
+        "area": "build-warning / ineffective dynamic import",
+        "title": "appointmentDepositBatch.js is both statically imported (3 files) and dynamically imported (13+ sites) — every `await import()` is a no-op split (INEFFECTIVE_DYNAMIC_IMPORT) adding runtime awaits and masking real build warnings",
+        "file": "src/lib/appointmentDepositBatch.js",
+        "line": 1,
+        "evidence": "Static importers: AdminDashboard.jsx:92 `import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';`, AppointmentFormModal.jsx:71 `import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../../lib/appointmentDepositBatch.js';`, DepositPanel.jsx:36 (cancelDepositBookingPair, deleteDepositBookingPair, provisionOpdLinkForBookingPair). Dynamic importers of the SAME module: AdminDashboard.jsx:3330, 3709, 4245, 4342, 4456, 4534, 5512, 6328; AppointmentFormModal.jsx:795, 851, 898, 947; AppointmentCalendarView.jsx:1303 — e.g. `const mod = await import('../lib/appointmentDepositBatch.js');`. Because the module is in the static graph of the same chunks, Rolldown cannot split it (build warns INEFFECTIVE_DYNAMIC_IMPORT) and the dynamic form only adds a needless promise/microtask per call. Making the statics dynamic instead would win nothing: the module is 63,780 bytes and its deps (firebase.js, branchSelection) already load with the entry.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Unify on the static form: replace the 13 `await import('.../appointmentDepositBatch.js')` call sites with the already-imported static named bindings (module identity is unchanged — provably safe, no behavior difference). Kills the INEFFECTIVE_DYNAMIC_IMPORT warning so future genuine split regressions stay visible.",
+        "affectedSurfaces": "AdminDashboard + AppointmentFormModal + AppointmentCalendarView deposit-booking handlers (micro runtime cost); build-log signal quality"
+      },
+      {
+        "area": "dev-server config rot",
+        "title": "server.warmup lists three V50-DELETED files (AppointmentTab.jsx, MasterDataTab.jsx, CloneTab.jsx) — dead warmup entries that error/no-op on every dev-server start",
+        "file": "vite.config.js",
+        "line": 75,
+        "evidence": "vite.config.js:75 `'./src/components/backend/AppointmentTab.jsx',`, :78 `'./src/components/backend/MasterDataTab.jsx',`, :80 `'./src/components/backend/CloneTab.jsx',` — all three files verified nonexistent (`ls` → No such file or directory; deleted in V50, 2026-05-08, per BackendDashboard.jsx:32/:37 comments \"CloneTab DELETED\"/\"MasterDataTab DELETED\"). The warmup list also predates the current tab set (e.g. no reports/recall entries), so the dev cold-start pre-compile budget is spent on the wrong files.",
+        "estImpact": "LOW",
+        "risk": "low",
+        "suggestedFix": "Delete the three dead lines; optionally replace with the current heaviest real entry points (e.g. './src/components/backend/AppointmentCalendarView.jsx', './src/components/TreatmentFormPage.jsx'). Dev-only, zero prod effect.",
+        "affectedSurfaces": "Dev server cold start only (no production impact)"
+      },
+      {
+        "area": "bundle-composition / entry chunk",
+        "title": "PatientForm (116KB src) and PrintTemplates (41KB src) are statically imported in App.jsx while all six sibling pages are lazy — they inflate the shared entry chunk (365KB/87KB gz) paid by staff/backend routes too",
+        "file": "src/App.jsx",
+        "line": 25,
+        "evidence": "App.jsx:23 `import { OfficialOPDPrint, DashboardOPDPrint } from './components/PrintTemplates.jsx';`, :25 `import PatientForm from './pages/PatientForm.jsx';` (116,402 + 41,534 bytes src) versus :28-33 where AdminDashboard/PatientDashboard/ClinicSchedule/BackendDashboard/TabletChartEditorPage/FillerSimulator are all `lazy(() => import(...))`. dist entry index-CM1i0cpP.js = 365.3KB raw / 87.1KB gz (bundle-baseline.json) and is the `<script type=module>` in dist/index.html:33 — every route, including the staff dashboards that never render PatientForm, parses it at first paint. CAUTION: eager PatientForm may be a deliberate reliability choice — the 2026-06-16 mobile-load-reliability fix hardened patient QR links against stalled lazy-chunk fetches; lazifying PatientForm adds one chunk fetch back onto that mobile-critical path.",
+        "estImpact": "LOW",
+        "risk": "med",
+        "suggestedFix": "Measure-first candidate, only AFTER the recall-chunk fix lands: if entry size still matters, lazy-load PatientForm + PrintTemplates with the same LoadErrorRetry-guarded pattern the other pages use, and L1-verify patient-QR first-load on a throttled mobile profile (Rule Q) before shipping. If the mobile-reliability tradeoff is judged not worth it, leave as-is (documented intentional).",
+        "affectedSurfaces": "Every route's entry download/parse; primarily wasted on AdminDashboard/BackendDashboard sessions"
+      }
+    ]
+  }
+]
