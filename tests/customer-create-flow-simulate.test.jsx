@@ -315,7 +315,10 @@ describe('V33.GG — source-grep regression guards (locked patterns)', () => {
   it('GG3 — CustomerCreatePage rendered via takeover in BackendDashboard (V33.2)', async () => {
     const fs = await import('node:fs/promises');
     const dashSrc = await fs.readFile('src/pages/BackendDashboard.jsx', 'utf-8');
-    expect(dashSrc).toMatch(/import CustomerCreatePage/);
+    // perf P1.2 (2026-07-06) — import shape changed static → lazy(); the contract
+    // this test locks is "CustomerCreatePage is imported + rendered via takeover",
+    // not the import mechanics. Accept either form (V21 repoint).
+    expect(dashSrc).toMatch(/import CustomerCreatePage|CustomerCreatePage = lazy\(\(\) => import\('\.\.\/components\/backend\/CustomerCreatePage\.jsx'\)\)/);
     expect(dashSrc).toMatch(/<CustomerCreatePage/);
     expect(dashSrc).toMatch(/creatingCustomer/);
 

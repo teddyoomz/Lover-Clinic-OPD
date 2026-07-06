@@ -9,7 +9,8 @@ const TP = readFileSync('src/lib/tabPermissions.js', 'utf8');
 
 describe('Phase 21.0 — R1 BackendDashboard routing + redirect', () => {
   test('R1.1 BackendDashboard imports AppointmentCalendarView (not AppointmentTab)', () => {
-    expect(BD).toMatch(/import\s+AppointmentCalendarView\s+from\s+['"]\.\.\/components\/backend\/AppointmentCalendarView\.jsx['"]/);
+    // perf P1.2 (2026-07-06) — static import → lazy(); lock "imported" either form (V21 repoint)
+    expect(BD).toMatch(/import\s+AppointmentCalendarView\s+from\s+['"]\.\.\/components\/backend\/AppointmentCalendarView\.jsx['"]|AppointmentCalendarView = lazy\(\(\) => import\('\.\.\/components\/backend\/AppointmentCalendarView\.jsx'\)\)/);
     expect(BD).not.toMatch(/import\s+AppointmentTab\s+from/);
   });
 

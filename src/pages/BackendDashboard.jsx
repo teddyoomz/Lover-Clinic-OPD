@@ -30,25 +30,30 @@ import { ALL_ITEM_IDS, NAV_SECTIONS } from '../components/backend/nav/navConfig.
 import BranchSelector from '../components/backend/BranchSelector.jsx';
 
 // V50 (2026-05-08) — CloneTab DELETED. ProClinic strip per Rule H-bis EXECUTED.
-import CustomerListTab from '../components/backend/CustomerListTab.jsx';
-import CustomerCreatePage from '../components/backend/CustomerCreatePage.jsx';
-import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
+// perf P1.2 (2026-07-06) — the ~25 remaining STATIC tab imports below converted
+// to lazy() (same pattern + same Suspense boundary as the 30 pre-existing lazy
+// tabs). Pre-fix the BackendDashboard chunk was 976KB because every tab shipped
+// eagerly although only one renders at a time. All render sites sit inside the
+// existing <Suspense fallback={<BackendTabFallback/>}> boundary.
+const CustomerListTab = lazy(() => import('../components/backend/CustomerListTab.jsx'));
+const CustomerCreatePage = lazy(() => import('../components/backend/CustomerCreatePage.jsx'));
+const CustomerDetailView = lazy(() => import('../components/backend/CustomerDetailView.jsx'));
 import DeleteCustomerCascadeModal from '../components/backend/DeleteCustomerCascadeModal.jsx';
 // V50 (2026-05-08) — MasterDataTab DELETED. Master data CRUD via dedicated be_* tabs.
 // Phase 21.0 (2026-05-06) — renamed from AppointmentTab to AppointmentCalendarView
 // + parameterized via `appointmentType` prop so the same component renders
 // each of the 4 new นัดหมาย sub-tabs.
-import AppointmentCalendarView from '../components/backend/AppointmentCalendarView.jsx';
-import SaleTab from '../components/backend/SaleTab.jsx';
-import FinanceTab from '../components/backend/FinanceTab.jsx';
-import StockTab from '../components/backend/StockTab.jsx';
+const AppointmentCalendarView = lazy(() => import('../components/backend/AppointmentCalendarView.jsx'));
+const SaleTab = lazy(() => import('../components/backend/SaleTab.jsx'));
+const FinanceTab = lazy(() => import('../components/backend/FinanceTab.jsx'));
+const StockTab = lazy(() => import('../components/backend/StockTab.jsx'));
 // Phase 15.1 (2026-04-27) — Central Stock Conditional, lazy-loaded so the
 // shell stays slim for branches that don't use central warehouse.
 const CentralStockTab = lazy(() => import('../components/backend/CentralStockTab.jsx'));
-import PromotionTab from '../components/backend/PromotionTab.jsx';
-import CouponTab from '../components/backend/CouponTab.jsx';
-import VoucherTab from '../components/backend/VoucherTab.jsx';
-import VendorSalesTab from '../components/backend/VendorSalesTab.jsx';
+const PromotionTab = lazy(() => import('../components/backend/PromotionTab.jsx'));
+const CouponTab = lazy(() => import('../components/backend/CouponTab.jsx'));
+const VoucherTab = lazy(() => import('../components/backend/VoucherTab.jsx'));
+const VendorSalesTab = lazy(() => import('../components/backend/VendorSalesTab.jsx'));
 // Audit P2 (2026-04-26 P2 — performance code-split): the 13 report tabs
 // are heavy + each is rarely viewed in a single session. lazy() splits
 // each into its own chunk so the initial BackendDashboard payload drops
@@ -83,20 +88,20 @@ const BranchBackupTab        = lazy(() => import('../components/backend/BranchBa
 // this tab was the LAST orphaned consumer of the dead 'customer' filter chip.
 const BackupManagerTab        = lazy(() => import('../components/backend/BackupManagerTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
-import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
-import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
-import MedicalInstrumentsTab from '../components/backend/MedicalInstrumentsTab.jsx';
-import HolidaysTab from '../components/backend/HolidaysTab.jsx';
-import BranchesTab from '../components/backend/BranchesTab.jsx';
-import ExamRoomsTab from '../components/backend/ExamRoomsTab.jsx';
-import PermissionGroupsTab from '../components/backend/PermissionGroupsTab.jsx';
-import StaffTab from '../components/backend/StaffTab.jsx';
-import DoctorsTab from '../components/backend/DoctorsTab.jsx';
-import ProductsTab from '../components/backend/ProductsTab.jsx';
-import CoursesTab from '../components/backend/CoursesTab.jsx';
-import FinanceMasterTab from '../components/backend/FinanceMasterTab.jsx';
-import OnlineSalesTab from '../components/backend/OnlineSalesTab.jsx';
-import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab.jsx';
+const ProductGroupsTab = lazy(() => import('../components/backend/ProductGroupsTab.jsx'));
+const ProductUnitsTab = lazy(() => import('../components/backend/ProductUnitsTab.jsx'));
+const MedicalInstrumentsTab = lazy(() => import('../components/backend/MedicalInstrumentsTab.jsx'));
+const HolidaysTab = lazy(() => import('../components/backend/HolidaysTab.jsx'));
+const BranchesTab = lazy(() => import('../components/backend/BranchesTab.jsx'));
+const ExamRoomsTab = lazy(() => import('../components/backend/ExamRoomsTab.jsx'));
+const PermissionGroupsTab = lazy(() => import('../components/backend/PermissionGroupsTab.jsx'));
+const StaffTab = lazy(() => import('../components/backend/StaffTab.jsx'));
+const DoctorsTab = lazy(() => import('../components/backend/DoctorsTab.jsx'));
+const ProductsTab = lazy(() => import('../components/backend/ProductsTab.jsx'));
+const CoursesTab = lazy(() => import('../components/backend/CoursesTab.jsx'));
+const FinanceMasterTab = lazy(() => import('../components/backend/FinanceMasterTab.jsx'));
+const OnlineSalesTab = lazy(() => import('../components/backend/OnlineSalesTab.jsx'));
+const SaleInsuranceClaimsTab = lazy(() => import('../components/backend/SaleInsuranceClaimsTab.jsx'));
 // 5 more heavy tabs split for the same reason — DocumentTemplatesTab
 // pulls the print engine, QuotationTab + DfGroupsTab + DoctorSchedulesTab +
 // EmployeeSchedulesTab each pull rich form modals + scheduling components.
@@ -117,7 +122,9 @@ const DoctorSchedulesTab   = lazy(() => import('../components/backend/DoctorSche
 const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTab.jsx'));
 // Phase 29 (2026-05-14) — Recall System (Backend tab)
 const RecallTab            = lazy(() => import('../components/backend/recall/RecallTab.jsx'));
-import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
+// perf P1.2 — TreatmentFormPage (347KB chunk) renders only when a treatment
+// form opens; lazy so both dashboards stop fetching it on first paint.
+const TreatmentFormPage = lazy(() => import('../components/TreatmentFormPage.jsx'));
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 // Phase 24.0-vicies-novies-ter (2026-05-07) — backend dashboard now points
 // at PRODUCTION ProClinic (same as Frontend). The legacy setUseTrialServer
@@ -767,7 +774,9 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           and remove the matching tabId from this stub.) */}
 
       {/* ── Treatment Form Overlay ── */}
+      {/* perf P1.2 — own Suspense (renders OUTSIDE the tab boundary) */}
       {treatmentFormMode && (
+        <Suspense fallback={<BackendTabFallback />}>
         <TreatmentFormPage
           mode={treatmentFormMode.mode}
           customerId={treatmentFormMode.customerId}
@@ -793,6 +802,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             if (refreshed) setViewingCustomer(refreshed);
           }}
         />
+        </Suspense>
       )}
       {/* Phase 24.0 — cascade-delete modal for the prominent "ลบลูกค้า" button
           on CustomerDetailView. Mounted here so the modal overlays the detail

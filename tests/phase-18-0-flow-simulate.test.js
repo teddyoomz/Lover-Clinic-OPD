@@ -168,7 +168,8 @@ describe('Phase 18.0 Task 10 — Rule I full-flow simulate', () => {
     });
     it('F7.3 BackendDashboard renders ExamRoomsTab', () => {
       const src = readFileSync('src/pages/BackendDashboard.jsx', 'utf8');
-      expect(src).toMatch(/import ExamRoomsTab from/);
+      // perf P1.2 (2026-07-06) — static import → lazy(); lock "imported" either form (V21 repoint)
+      expect(src).toMatch(/import ExamRoomsTab from|ExamRoomsTab = lazy\(\(\) => import\('\.\.\/components\/backend\/ExamRoomsTab\.jsx'\)\)/);
       expect(src).toMatch(/activeTab === 'exam-rooms' \? \(\s*<ExamRoomsTab/);
     });
     it('F7.4 permissionGroupValidation has exam_room_management key', () => {

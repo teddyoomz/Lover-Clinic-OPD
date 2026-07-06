@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { app } from '../firebase.js';
@@ -151,7 +151,9 @@ import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound, playChatNotificationSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
-import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
+// perf P1.2 (2026-07-06) — TreatmentFormPage (347KB chunk) lazy: renders only
+// when a treatment form opens; stops eager fetch on the frontend first paint.
+const TreatmentFormPage = lazy(() => import('../components/TreatmentFormPage.jsx'));
 import { shouldBlockScheduleSlot, shouldBlockDoctorSlot, getVisibleTimeSlotsForDate } from '../lib/scheduleFilterUtils.js';
 import { shouldRingChatAlert, shouldRingChatInterval } from '../lib/chatUnreadUtils.js';
 import { resolveAppointmentTypeLabel } from '../lib/appointmentDisplay.js';
@@ -7709,7 +7711,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
       {viewingSession && renderViewingSessionModal()}
       {/* Treatment Create/Edit Full Page */}
+      {/* perf P1.2 — lazy TFP; full-screen loader while its chunk fetches (first open only) */}
       {treatmentFormMode && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--bg-base)]">
+            <Loader2 size={28} className="animate-spin text-[var(--tx-muted)]" />
+          </div>
+        }>
         <TreatmentFormPage
           mode={treatmentFormMode.mode || 'create'}
           customerId={treatmentFormMode.customerId}
@@ -7741,6 +7749,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             }
           }}
         />
+        </Suspense>
       )}
 
       {/* Unified Create Session Modal */}
