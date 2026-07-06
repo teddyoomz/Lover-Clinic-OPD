@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "prod",
+  "surface": "backend-tab-customers",
+  "url": "/?backend=1&tab=customers",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 348,
+    "LCP_ms": 1248,
+    "CLS": 0,
+    "longTasks_count": 3,
+    "longTasks_totalMs": 359,
+    "jsTransferred_KB": 872,
+    "jsResources": 49,
+    "domNodes": 5419,
+    "heapUsed_MB": 16,
+    "idleMutations_5s": 36
+  }
+}

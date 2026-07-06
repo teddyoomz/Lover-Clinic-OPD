@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "prod",
+  "surface": "frontend-queue",
+  "url": "/",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 424,
+    "LCP_ms": 1368,
+    "CLS": 0.0011,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 94,
+    "jsTransferred_KB": 658,
+    "jsResources": 25,
+    "domNodes": 262,
+    "heapUsed_MB": 61,
+    "idleMutations_5s": 65
+  }
+}

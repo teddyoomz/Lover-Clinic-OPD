@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "local-preview",
+  "surface": "backend-home",
+  "url": "/?backend=1",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 116,
+    "LCP_ms": 1016,
+    "CLS": 0.072,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 88,
+    "jsTransferred_KB": 852,
+    "jsResources": 49,
+    "domNodes": 508,
+    "heapUsed_MB": 14,
+    "idleMutations_5s": 0
+  }
+}

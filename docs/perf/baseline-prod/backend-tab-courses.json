@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "prod",
+  "surface": "backend-tab-courses",
+  "url": "/?backend=1&tab=courses",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 340,
+    "LCP_ms": 1524,
+    "CLS": 0.0029,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 90,
+    "jsTransferred_KB": 872,
+    "jsResources": 49,
+    "domNodes": 349,
+    "heapUsed_MB": 13,
+    "idleMutations_5s": 57
+  }
+}

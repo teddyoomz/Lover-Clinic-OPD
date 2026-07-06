@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "prod",
+  "surface": "link-patient",
+  "url": "/?patient={PATIENT_TOKEN}",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 332,
+    "LCP_ms": 3472,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 61,
+    "jsTransferred_KB": 440,
+    "jsResources": 8,
+    "domNodes": 111,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 11
+  }
+}

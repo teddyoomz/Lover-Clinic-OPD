@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "prod",
+  "surface": "backend-tab-central-stock",
+  "url": "/?backend=1&tab=central-stock",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 344,
+    "LCP_ms": 1412,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 89,
+    "jsTransferred_KB": 882,
+    "jsResources": 50,
+    "domNodes": 396,
+    "heapUsed_MB": 13,
+    "idleMutations_5s": 75
+  }
+}

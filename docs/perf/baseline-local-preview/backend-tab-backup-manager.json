@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "local-preview",
+  "surface": "backend-tab-backup-manager",
+  "url": "/?backend=1&tab=backup-manager",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 124,
+    "LCP_ms": 1068,
+    "CLS": 0.0061,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 92,
+    "jsTransferred_KB": 861,
+    "jsResources": 50,
+    "domNodes": 348,
+    "heapUsed_MB": 13,
+    "idleMutations_5s": 54
+  }
+}

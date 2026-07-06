@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "local-preview",
+  "surface": "link-session",
+  "url": "/?session={SESSION_ID}",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 116,
+    "LCP_ms": 1652,
+    "CLS": 0,
+    "longTasks_count": 0,
+    "longTasks_totalMs": 0,
+    "jsTransferred_KB": 411,
+    "jsResources": 5,
+    "domNodes": 41,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 10
+  }
+}

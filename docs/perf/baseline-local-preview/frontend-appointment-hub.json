@@ -1,0 +1,20 @@
+{
+  "runId": "baseline",
+  "target": "local-preview",
+  "surface": "frontend-appointment-hub",
+  "url": "/",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 112,
+    "LCP_ms": 984,
+    "CLS": 0.0011,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 94,
+    "jsTransferred_KB": 639,
+    "jsResources": 25,
+    "domNodes": 262,
+    "heapUsed_MB": 51,
+    "idleMutations_5s": 57,
+    "interaction_ms": 610
+  }
+}

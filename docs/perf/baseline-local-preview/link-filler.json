@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "local-preview",
+  "surface": "link-filler",
+  "url": "/?play=filler",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 112,
+    "LCP_ms": 420,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 93,
+    "jsTransferred_KB": 436,
+    "jsResources": 7,
+    "domNodes": 200,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}

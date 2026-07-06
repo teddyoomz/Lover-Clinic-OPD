@@ -1,0 +1,19 @@
+{
+  "runId": "baseline",
+  "target": "local-preview",
+  "surface": "backend-tab-appointment-all",
+  "url": "/?backend=1&tab=appointment-all",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 116,
+    "LCP_ms": 1236,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 88,
+    "jsTransferred_KB": 852,
+    "jsResources": 49,
+    "domNodes": 508,
+    "heapUsed_MB": 13,
+    "idleMutations_5s": 101
+  }
+}
