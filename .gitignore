@@ -73,3 +73,7 @@ scripts/.tmp-*.mjs
 dist-filler
 
 .env.filler-deploy
+
+# perf harness screenshots (large, regenerable)
+docs/perf/shots/
+docs/perf/links.json
