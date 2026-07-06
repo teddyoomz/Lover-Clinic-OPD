@@ -140,6 +140,25 @@ export async function waitForDomQuiet(page, quietMs = 600, capMs = 15000) {
   }), [quietMs, capMs]);
 }
 
+/**
+ * Content-settle for SCREENSHOTS: dom-quiet is NOT enough — a loading spinner
+ * animates via CSS (no DOM mutations) so dom-quiet can fire mid-load (caught
+ * 2026-07-06: baseline parity shots captured spinners). Wait until no
+ * .animate-spin is visible, then re-quiet, then a small grace.
+ */
+export async function waitForContentSettle(page) {
+  await waitForDomQuiet(page);
+  await page.waitForFunction(
+    () => document.querySelectorAll('.animate-spin').length === 0,
+    undefined,
+    { timeout: 25000 },
+  ).catch(() => {});
+  await waitForDomQuiet(page);
+  // JS-staggered entrance animations (bloom-menu orb mount) render AFTER
+  // dom-quiet + spinner-gone — long grace so captures never catch a pre-orb frame.
+  await page.waitForTimeout(1500);
+}
+
 /** Collect metrics after page settle. Includes a 5s idle-mutation window (re-render-storm proxy). */
 export async function collectMetrics(page) {
   const idleMutations = await page.evaluate(() => new Promise((resolve) => {

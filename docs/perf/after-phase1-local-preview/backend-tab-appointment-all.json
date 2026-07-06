@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase1",
+  "target": "local-preview",
+  "surface": "backend-tab-appointment-all",
+  "url": "/?backend=1&tab=appointment-all",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 84,
+    "LCP_ms": 952,
+    "CLS": 0,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 81,
+    "jsTransferred_KB": 449,
+    "jsResources": 40,
+    "domNodes": 504,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}

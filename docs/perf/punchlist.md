@@ -54,6 +54,21 @@
 | 28 | CONFIRMED-F | `RecallTogglePill.jsx:12` subscribes ALL be_recalls incl. done/closed though server-side filters exist | Pass status/dateBefore filters | LOW-MED / low |
 | 29 | **CONFIRMED-V** (financeUtils:114) | fmtMoney/fmtPoints construct Intl per call × 331 call sites in table rows | Hoist 2 `Intl.NumberFormat` instances (byte-identical output) | LOW / none |
 
+## P1 RESULT (2026-07-06 — measured, full vitest 17,276/0, parity eyeball-adjudicated)
+- DONE: #1 recall-chunk (903KB bucket removed; vendor-firebase 504KB consolidated; backendClient own 215KB) ·
+  #2 ~25 backend tabs + TFP lazy (976KB chunk dissolved; AdminDashboard 365→297KB) ·
+  #3 entry 365→31KB (PatientForm/PrintTemplates lazy) · #4 AdminDashboard heavy children lazy ·
+  #5 immutable /assets cache · #6 preconnect ×4 · #9 warmup cleaned · #10 icons lossless −15KB ·
+  #11 FOUC fade removed (CSP-hashed inline scripts untouched).
+- Measured (local-preview, median-of-3): backend tabs JS 852-889 → **449-561KB (−44%)** · FCP −25% ·
+  backend LCP 1016-1236 → **924-976ms** · frontend heap 69→48MB · link JS −4..−22%.
+- link-patient LCP ~4.4s UNCHANGED → data-wait bound (serial anon-auth→settings→token query) → P3 focus.
+- DEFERRED (documented, low gain vs blast radius): #7 getStorage eager (many consumers) ·
+  #8 appointmentDepositBatch static+dynamic mix (runtime no-op noise) · #12 dead V85 glow CSS (~1.5KB gz).
+- Parity noise classes (v2 sets, spinner-aware harness + 1.5s entrance grace): dark bloom-menu starfield
+  = RANDOM star positions per mount → 0.5-2.6% pixel diff with IDENTICAL layout (eyeball-confirmed);
+  light theme all ≤0.35%. Baseline-v2 shots came from worktree build of `283dd9c5`.
+
 ## Ordering inside phases
 P1: 1 → 2 → 3 → 4 → 5+6 → 9+8 → 10-12 → 7. P2: 13 → 14 → 16 → 17 → 15 → 19 → 18 → 20 (21 = evidence loop).
 P3: 24 → 23 → 28 → 26 → 25 → 27 → 22 (riskiest LAST; drop rule applies — anything un-enumerable gets dropped, documented).

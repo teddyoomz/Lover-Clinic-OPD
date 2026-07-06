@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase1",
+  "target": "local-preview",
+  "surface": "backend-tab-promotions",
+  "url": "/?backend=1&tab=promotions",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 84,
+    "LCP_ms": 952,
+    "CLS": 0.0029,
+    "longTasks_count": 1,
+    "longTasks_totalMs": 86,
+    "jsTransferred_KB": 469,
+    "jsResources": 48,
+    "domNodes": 333,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 0
+  }
+}

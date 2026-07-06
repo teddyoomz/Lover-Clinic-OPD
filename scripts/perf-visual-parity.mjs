@@ -26,8 +26,9 @@ const FREEZE_CSS = '*,*::before,*::after{animation:none!important;transition:non
 
 async function capture(setName, only) {
   const { chromium } = await import('@playwright/test');
-  const { SURFACES, resolveSurfaceUrl, injectStaffAuth, injectTheme, waitForDomQuiet, loadLinks } = await import('./perf-lib.mjs');
-  const BASE = 'http://localhost:4173';
+  const { SURFACES, resolveSurfaceUrl, injectStaffAuth, injectTheme, waitForContentSettle, loadLinks } = await import('./perf-lib.mjs');
+  const bi = process.argv.indexOf('--base');
+  const BASE = bi > -1 ? process.argv[bi + 1] : 'http://localhost:4173';
   const links = loadLinks();
   const dir = `docs/perf/shots/${setName}`;
   mkdirSync(dir, { recursive: true });
@@ -43,7 +44,11 @@ async function capture(setName, only) {
         const page = await ctx.newPage();
         await page.goto(BASE + rel, { waitUntil: 'load', timeout: 60000 }).catch(() => {});
         await page.addStyleTag({ content: FREEZE_CSS }).catch(() => {});
-        await waitForDomQuiet(page);
+        await waitForContentSettle(page);
+        if (s.interaction?.clickSel) {
+          await page.locator(s.interaction.clickSel).first().click({ timeout: 10000 }).catch(() => {});
+          await waitForContentSettle(page);
+        }
         await page.screenshot({ path: `${dir}/${s.id}--${theme}.png` });
         console.log(`shot ${s.id}--${theme}`);
       } finally {

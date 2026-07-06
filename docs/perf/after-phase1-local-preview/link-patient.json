@@ -1,0 +1,19 @@
+{
+  "runId": "after-phase1",
+  "target": "local-preview",
+  "surface": "link-patient",
+  "url": "/?patient={PATIENT_TOKEN}",
+  "runs": 3,
+  "metrics": {
+    "FCP_ms": 88,
+    "LCP_ms": 4340,
+    "CLS": 0,
+    "longTasks_count": 0,
+    "longTasks_totalMs": 0,
+    "jsTransferred_KB": 336,
+    "jsResources": 21,
+    "domNodes": 66,
+    "heapUsed_MB": 10,
+    "idleMutations_5s": 12
+  }
+}
