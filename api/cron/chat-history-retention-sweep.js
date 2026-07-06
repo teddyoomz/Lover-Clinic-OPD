@@ -45,19 +45,28 @@ function initAdmin() {
 // (Rule of 3). `apply=false` = dry-run (count only, no writes).
 export async function sweepChatHistoryRetention({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true, retentionHours = RETENTION_HOURS }) {
   let scanned = 0, deleted = 0, kept = 0, noTimestamp = 0;
-  const cutoff = Timestamp.fromMillis(now - retentionHours * 60 * 60 * 1000);
-
-  // Server-side filter for efficiency. Docs with NO resolvedAt won't match
-  // this filter (Firestore treats missing field as "not less than X") → those
-  // get the noTimestamp branch via a fallback scan if SWEEP_LIMIT not reached.
-  const snap = await db.collection(CHAT_HISTORY_COL)
-    .where('resolvedAt', '<', cutoff)
-    .limit(limit)
-    .get();
-  scanned = snap.size;
+  const cutoffMillis = now - retentionHours * 60 * 60 * 1000;
+  const cutoffTs = Timestamp.fromMillis(cutoffMillis);
+  // perf P3 (2026-07-06) — TYPE-MISMATCH FIX. Real prod docs store resolvedAt
+  // as an ISO STRING (ChatPanel handleResolve writes new Date().toISOString());
+  // the original Timestamp-typed range query matched NOTHING because Firestore
+  // orders values by TYPE first — a string never compares against a Timestamp.
+  // Result: 46 daily runs each reported scanned:0/deleted:0 while 4,265 docs
+  // accumulated (oldest 2026-05-23). V67 schema-drift class — the query's
+  // assumed type diverged from the writer's actual type.
+  // FIX: query BOTH types (ISO-8601 Zulu strings sort chronologically, so the
+  // lexicographic string range is correct) and merge; the client-side
+  // resolvedAtMs/isExpired pass below re-verifies every doc either way.
+  const cutoffIso = new Date(cutoffMillis).toISOString();
+  const [strSnap, tsSnap] = await Promise.all([
+    db.collection(CHAT_HISTORY_COL).where('resolvedAt', '<', cutoffIso).limit(limit).get(),
+    db.collection(CHAT_HISTORY_COL).where('resolvedAt', '<', cutoffTs).limit(limit).get(),
+  ]);
+  const matchedDocs = [...strSnap.docs, ...tsSnap.docs];
+  scanned = matchedDocs.length;
 
   const toDelete = [];
-  for (const d of snap.docs) {
+  for (const d of matchedDocs) {
     const data = d.data();
     const ms = resolvedAtMs(data);
     if (ms == null) {
