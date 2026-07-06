@@ -20,9 +20,15 @@ import { DEFAULT_CLINIC_SETTINGS } from './constants.js';
 import { applyThemeColor, hexToRgb } from './utils.js';
 import { useTheme } from './hooks/useTheme.js';
 import { useV86GlowApply } from './hooks/useV86GlowApply.js';
-import { OfficialOPDPrint, DashboardOPDPrint } from './components/PrintTemplates.jsx';
 import AdminLogin from './pages/AdminLogin.jsx';
-import PatientForm from './pages/PatientForm.jsx';
+// perf P1.3 (2026-07-06) — PatientForm (116KB src) + PrintTemplates (41KB src)
+// were the ONLY static page-level imports left in the entry chunk; they dragged
+// backendClient/scopedDataLayer/courseUtils into the entry modulepreload graph
+// paid by EVERY route (incl. customer links). Lazy like the 7 sibling pages.
+// PrintTemplates has named exports → .then(m => ({default: m.X})) shim.
+const PatientForm = lazy(() => import('./pages/PatientForm.jsx'));
+const OfficialOPDPrint = lazy(() => import('./components/PrintTemplates.jsx').then(m => ({ default: m.OfficialOPDPrint })));
+const DashboardOPDPrint = lazy(() => import('./components/PrintTemplates.jsx').then(m => ({ default: m.DashboardOPDPrint })));
 
 // Lazy load heavy pages (AdminDashboard=6.5K lines, BackendDashboard+tabs, PatientDashboard)
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
@@ -237,7 +243,11 @@ export default function App() {
   if (sessionFromUrl) {
     return (
       <div className="min-h-screen bg-[var(--bg-base)] font-sans text-gray-200" style={{['--selection-bg']: `rgba(${acRgb},0.4)`}}>
-        <PatientForm db={db} appId={appId} user={user} sessionId={sessionFromUrl} isSimulation={false} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />
+        {/* perf P1.3 — lazy PatientForm; spinner = same pattern as ?patient= route
+            (V16 loading-gate class: patient sees loader, never an error flash) */}
+        <Suspense fallback={<LazyFallback />}>
+          <PatientForm db={db} appId={appId} user={user} sessionId={sessionFromUrl} isSimulation={false} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />
+        </Suspense>
       </div>
     );
   }
@@ -311,12 +321,17 @@ export default function App() {
               />
             </div>
             {adminView === 'simulation' && (
-              <PatientForm
-                db={db} appId={appId} user={user} sessionId={simulatedSessionId} isSimulation={true}
-                suppressNotif={simulationSuppressNotif}
-                onBack={() => setAdminView('dashboard')} clinicSettings={clinicSettings}
-                theme={theme} setTheme={setTheme}
-              />
+              /* perf P1.3 — NESTED Suspense so a suspending lazy PatientForm hits THIS
+                 boundary, not the page-level one (which would unmount the always-mounted
+                 AdminDashboard and tear down its live listeners) */
+              <Suspense fallback={<LazyFallback />}>
+                <PatientForm
+                  db={db} appId={appId} user={user} sessionId={simulatedSessionId} isSimulation={true}
+                  suppressNotif={simulationSuppressNotif}
+                  onBack={() => setAdminView('dashboard')} clinicSettings={clinicSettings}
+                  theme={theme} setTheme={setTheme}
+                />
+              </Suspense>
             )}
             {/* V73 (2026-05-16) — staff chat widget mounted inside BranchProvider
                 so useSelectedBranch resolves. Widget self-gates on user +
@@ -345,9 +360,12 @@ export default function App() {
               <Printer size={15} /> พิมพ์
             </button>
           </div>
-          {printMode === 'official'
-            ? <OfficialOPDPrint session={viewingSession} clinicSettings={clinicSettings} />
-            : <DashboardOPDPrint session={viewingSession} clinicSettings={clinicSettings} />}
+          {/* perf P1.3 — lazy print templates; chunk loads on first print open (cached after) */}
+          <Suspense fallback={<LazyFallback />}>
+            {printMode === 'official'
+              ? <OfficialOPDPrint session={viewingSession} clinicSettings={clinicSettings} />
+              : <DashboardOPDPrint session={viewingSession} clinicSettings={clinicSettings} />}
+          </Suspense>
         </div>
       )}
     </>
