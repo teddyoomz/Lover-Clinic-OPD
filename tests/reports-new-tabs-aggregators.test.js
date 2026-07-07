@@ -50,18 +50,19 @@ describe('AS aggregateAltSales', () => {
 });
 
 describe('OS aggregateOutstanding', () => {
-  // Sale total = billing.netTotal (recon canonical, verified live 2026-07-07).
-  // Paid = totalPaidAmount. Exclude cancelled/refunded + AUDIT_SALE_SOURCES
-  // (course-mutation records, not money — the recon false-positive lesson).
+  // Sale total = billing.netTotal (recon canonical). Paid = Σ payment.channels[]
+  // (the REAL money field on be_sales — verified prod 2026-07-08; totalPaidAmount
+  // is undefined on live sales). Exclude cancelled/refunded + AUDIT_SALE_SOURCES.
   const sales = [
-    { id: 'S1', saleId: 'INV-1', saleDate: '2026-07-01', customerName: 'ก', billing: { netTotal: 1000 }, totalPaidAmount: 400, status: 'draft' },
-    { id: 'S2', saleId: 'INV-2', saleDate: '2026-07-02', customerName: 'ข', billing: { netTotal: 500 }, totalPaidAmount: 500, status: 'draft' },   // fully paid → excluded
-    { id: 'S3', saleId: 'INV-3', saleDate: '2026-07-03', customerName: 'ค', billing: { netTotal: 800 }, totalPaidAmount: 0, status: 'cancelled' }, // cancelled → excluded
-    { id: 'S4', saleId: 'INV-4', saleDate: '2026-07-04', customerName: 'ง', billing: { netTotal: 200 }, totalPaidAmount: 0, source: 'reduceRemaining' }, // audit-source → excluded
+    { id: 'S1', saleId: 'INV-1', saleDate: '2026-07-01', customerName: 'ก', billing: { netTotal: 1000 }, payment: { channels: [{ method: 'เงินสด', amount: 400, enabled: true }] }, status: 'active' },
+    { id: 'S2', saleId: 'INV-2', saleDate: '2026-07-02', customerName: 'ข', billing: { netTotal: 500 }, payment: { status: 'paid', channels: [{ method: 'QR', amount: 500, enabled: true }] }, status: 'active' }, // fully paid → excluded
+    { id: 'S3', saleId: 'INV-3', saleDate: '2026-07-03', customerName: 'ค', billing: { netTotal: 800 }, payment: { channels: [] }, status: 'cancelled' }, // cancelled → excluded
+    { id: 'S4', saleId: 'INV-4', saleDate: '2026-07-04', customerName: 'ง', billing: { netTotal: 200 }, payment: { channels: [] }, source: 'reduceRemaining' }, // audit-source → excluded
   ];
-  it('OS1 only unpaid, non-cancelled, non-audit rows', () => {
+  it('OS1 only genuinely-unpaid, non-cancelled, non-audit rows (paid = Σchannels)', () => {
     const r = aggregateOutstanding(sales);
     expect(r.rows.map(x => x.ref)).toEqual(['INV-1']);
+    expect(r.rows[0].paid).toBe(400);
     expect(r.rows[0].outstanding).toBe(600);
   });
   it('OS2 outstanding total === Σ row outstanding (audit-reports-accuracy)', () => {
@@ -70,15 +71,24 @@ describe('OS aggregateOutstanding', () => {
     expect(r.totals.count).toBe(1);
   });
   it('OS3 float precision → 2dp, epsilon skips ~0', () => {
-    const r = aggregateOutstanding([{ id: 'z', billing: { netTotal: 100.001 }, totalPaidAmount: 100 }]);
+    const r = aggregateOutstanding([{ id: 'z', billing: { netTotal: 100.001 }, payment: { channels: [{ amount: 100, enabled: true }] } }]);
     expect(r.rows).toHaveLength(0); // 0.001 < 0.005 epsilon
   });
-  it('OS4 fallback total fields + missing paid → 0, no throw', () => {
+  it('OS4 disabled channels excluded + legacy totalPaidAmount fallback', () => {
     const r = aggregateOutstanding([
-      { id: 'a', total: 300, status: 'draft' },                       // legacy `total` field, no paid → outstanding 300
-      { id: 'b', billing: { grandTotal: 150 }, payment: { totalPaid: 50 } }, // grandTotal + payment.totalPaid → 100
+      { id: 'a', billing: { netTotal: 300 }, payment: { channels: [{ amount: 100, enabled: true }, { amount: 50, enabled: false }] }, status: 'active' }, // paid 100 (disabled skipped) → 200
+      { id: 'b', total: 150, totalPaidAmount: 50 }, // legacy: no payment.channels → falls back to totalPaidAmount 50 → 100
     ]);
-    expect(r.rows.map(x => x.outstanding).sort((a, b) => a - b)).toEqual([100, 300]);
+    expect(r.rows.map(x => x.outstanding).sort((a, b) => a - b)).toEqual([100, 200]);
+  });
+  it('OS5 netTotal already nets deposit/wallet — paid=Σchannels must not double-count (false-positive guard)', () => {
+    // real prod shape: subtotal 17900 − billDiscount 1000 − depositApplied 1000 = netTotal 15900,
+    // fully covered by a 15900 channel → outstanding 0. The bug read totalPaidAmount(undefined→0) → flagged 15900.
+    const r = aggregateOutstanding([
+      { id: 'd', billing: { subtotal: 17900, billDiscount: 1000, depositApplied: 1000, netTotal: 15900 }, payment: { status: 'paid', channels: [{ amount: 15900, enabled: true }] }, status: 'active' },
+    ]);
+    expect(r.rows).toHaveLength(0);
+    expect(r.totals.outstanding).toBe(0);
   });
 });
 

@@ -1,20 +1,36 @@
 // ─── Outstanding-sales report aggregator — pure ────────────────────────────
-// "รายการขายค้างชำระ": sales whose net total exceeds the amount paid.
+// "รายการขายค้างชำระ": sales whose net total exceeds the amount actually paid.
 //
 // Sale total  = billing.netTotal (recon canonical, verified on live sales
-//               2026-07-07) with grandTotal/total/legacy fallbacks.
-// Paid        = totalPaidAmount (+ snake_case / payment.totalPaid / paidAmount).
+//               2026-07-07). netTotal is ALREADY net of billDiscount +
+//               depositApplied + walletApplied, so those must NOT be re-added.
+// Paid        = Σ payment.channels[].amount (enabled) — this is the REAL money
+//               field on be_sales (verified against prod 2026-07-08: the
+//               `totalPaidAmount` field is undefined on every live sale; payment
+//               is recorded in payment.channels[{method,amount,enabled}]).
+//               Legacy fallback to totalPaidAmount/etc for pre-channels docs.
 // Outstanding = total − paid, rounded to 2dp; rows with outstanding ≤ 0.005 skip.
 //
 // Excludes cancelled/refunded sales AND AUDIT_SALE_SOURCES — course-mutation
 // records (reduceRemaining/addRemaining/exchange/share) are NOT money sales
 // (the reconciliation false-positive lesson, 2026-07-07). Never judge them.
+//
+// L2 (2026-07-08): with the correct paid field, prod outstanding = 0 (the clinic
+// is pay-at-point-of-sale). The earlier `totalPaidAmount` read produced ฿1.67M
+// of fake receivables — caught by Rule Q L2 before ship (see V-log).
 
 const AUDIT_SALE_SOURCES = ['reduceRemaining', 'addRemaining', 'exchange', 'share'];
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const round2 = (n) => Math.round(n * 100) / 100;
 const saleTotal = (s) => num(s?.billing?.netTotal ?? s?.billing?.grandTotal ?? s?.billing?.total ?? s?.total);
-const salePaid = (s) => num(s?.totalPaidAmount ?? s?.total_paid_amount ?? s?.payment?.totalPaid ?? s?.paidAmount);
+const salePaid = (s) => {
+  const chans = s?.payment?.channels;
+  if (Array.isArray(chans)) {
+    return round2(chans.filter(c => c && c.enabled !== false).reduce((t, c) => t + num(c.amount), 0));
+  }
+  // legacy docs without payment.channels[]
+  return num(s?.totalPaidAmount ?? s?.total_paid_amount ?? s?.payment?.totalPaid ?? s?.paidAmount);
+};
 
 /**
  * @param {Array<object>} sales — be_sales docs
