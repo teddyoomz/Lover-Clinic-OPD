@@ -46,6 +46,35 @@ describe('B1 — swrRun contract', () => {
     })).rejects.toThrow('net');
     expect(paints).toEqual(['CACHED']);
   });
+
+  it("B1.4-bis HONESTY (B1-fix, caught by S1 e2e): a network-down 'server' leg that actually served cache (__fromCache tag) reports fromCache:true", async () => {
+    const paints = [];
+    const cacheyRows = Object.defineProperty([{ id: 'x' }], '__fromCache', { value: true, enumerable: false });
+    await swrRun({
+      cacheLoad: async () => ({ hasData: false, data: null }),
+      serverLoad: async () => cacheyRows,
+      apply: (d, { fromCache }) => paints.push(fromCache),
+    });
+    expect(paints).toEqual([true]); // indicator stays ON — data is still cache
+
+    // composite tuple result (hub loadCore shape) — any tagged member counts
+    const paints2 = [];
+    await swrRun({
+      cacheLoad: async () => ({ hasData: false, data: null }),
+      serverLoad: async () => [cacheyRows, [{ id: 's' }]],
+      apply: (d, { fromCache }) => paints2.push(fromCache),
+    });
+    expect(paints2).toEqual([true]);
+
+    // untagged (true server) result → confirmed
+    const paints3 = [];
+    await swrRun({
+      cacheLoad: async () => ({ hasData: false, data: null }),
+      serverLoad: async () => [{ id: 'y' }],
+      apply: (d, { fromCache }) => paints3.push(fromCache),
+    });
+    expect(paints3).toEqual([false]);
+  });
 });
 
 describe('B1 — {source} threading (source-grep)', () => {

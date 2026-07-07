@@ -114,7 +114,7 @@ describe('B2 — source-grep locks', () => {
   const card = readFileSync('src/components/admin/AppointmentHubRowCard.jsx', 'utf8');
 
   it('B2.6 silent reloads bypass the cache leg in BOTH stages (server-only, no loading flash)', () => {
-    expect(hub).toMatch(/if \(silent\) \{ applyCore\(await fetchCore\(undefined\), \{ fromCache: false \}\); return; \}/);
+    expect(hub).toMatch(/if \(silent\) \{ const r = await fetchCore\(undefined\); applyCore\(r, \{ fromCache: _resultFromCache\(r\) \}\); return; \}/);
     expect(hub).toMatch(/if \(silent\) \{ applyEnrich\(await fetchEnrich\(undefined\)\); return; \}/);
   });
 
@@ -123,8 +123,16 @@ describe('B2 — source-grep locks', () => {
     expect(hub).toMatch(/setSummaryLoading\(false\);\s*\}\);/);
   });
 
-  it('B2.8 offline server-leg fallback keeps the indicator honest (navigator.onLine check)', () => {
-    expect(hub).toMatch(/navigator\.onLine === false/);
+  it('B2.8 offline server-leg fallback keeps the indicator honest (__fromCache metadata, B1-fix from S1 e2e)', () => {
+    // a network-down "server" getDocs silently serves cache — the data layer
+    // tags it (_tagCache) and swrRun/_resultFromCache surface it so the
+    // indicator NEVER clears while cache data is on screen.
+    expect(hub).toMatch(/_resultFromCache/);
+    const swr = readFileSync('src/lib/swrRead.js', 'utf8');
+    expect(swr).toMatch(/_resultFromCache\(fresh\)/);
+    const bc = readFileSync('src/lib/backendClient.js', 'utf8');
+    expect(bc).toMatch(/function _tagCache\(/);
+    expect(bc).toMatch(/metadata\?\.fromCache/);
   });
 
   it('B2.9 RowCard renders skeleton chips gated on summaryLoading && !summary', () => {

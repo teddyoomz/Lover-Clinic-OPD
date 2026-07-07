@@ -22,6 +22,16 @@ async function _getDocsBySource(ref, source) {
   return await getDocs(ref);
 }
 
+// B1-fix (2026-07-07) — honest fromCache tag (mirror backendClient._tagCache):
+// a "server" getDocs falls back to cache when the network is down; the SWR
+// SyncIndicator reads this non-enumerable flag to stay truthful.
+function _tagCache(arr, snap) {
+  try {
+    Object.defineProperty(arr, '__fromCache', { value: !!snap?.metadata?.fromCache, enumerable: false });
+  } catch { /* non-fatal */ }
+  return arr;
+}
+
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 const salesCol = () => collection(db, ...basePath(), 'be_sales');
 const treatmentsCol = () => collection(db, ...basePath(), 'be_treatments');
@@ -201,7 +211,7 @@ export async function loadTreatmentsByDateRange({ from = '', to = '', includeCan
   if (wantBranch) items = items.filter((t) => t.branchId === branchId);
   if (!includeCancelled) items = items.filter((t) => t?.detail?.status !== 'cancelled');
   items.sort((a, b) => (b?.detail?.treatmentDate || '').localeCompare(a?.detail?.treatmentDate || ''));
-  return items;
+  return _tagCache(items, snap);
 }
 
 /**

@@ -34,7 +34,7 @@ import {
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
 // B2 (2026-07-07 instant cold-start) — stale-while-revalidate one-shot orchestrator
 // + the "กำลังซิงค์…" indicator shown while on-screen data is still the cache leg.
-import { swrRun } from '../../lib/swrRead.js';
+import { swrRun, _resultFromCache } from '../../lib/swrRead.js';
 import SyncIndicator from '../SyncIndicator.jsx';
 import {
   buildPrintRows,
@@ -202,11 +202,13 @@ export default function AppointmentHubView({
       setAppts(apptList);
       setScheduleEntries(schedules);
       setLoading(false);
-      // syncing stays ON when the "server" leg actually served from cache —
-      // true-offline getDocs falls back to cache (navigator.onLine === false).
-      setSyncing(fromCache || (typeof navigator !== 'undefined' && navigator.onLine === false));
+      // B1-fix honesty: swrRun's server leg already reads the data-layer
+      // __fromCache tag (a network-down getDocs silently serves cache) — the
+      // fromCache param here is the REAL SDK metadata, so the indicator never
+      // clears while cache data is on screen.
+      setSyncing(fromCache);
     };
-    if (silent) { applyCore(await fetchCore(undefined), { fromCache: false }); return; }
+    if (silent) { const r = await fetchCore(undefined); applyCore(r, { fromCache: _resultFromCache(r) }); return; }
     await swrRun({
       cacheLoad: async () => { const r = await fetchCore('cache'); return { hasData: r[0].length > 0, data: r }; },
       serverLoad: () => fetchCore(undefined),

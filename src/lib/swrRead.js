@@ -43,6 +43,19 @@ export async function swrRun({ cacheLoad, serverLoad, apply }) {
     }
   } catch { /* cold cache / persistence unavailable — silent, server leg decides */ }
   const fresh = await serverLoad(); // throws → caller's error path
-  apply(fresh, { fromCache: false });
+  // B1-fix (caught by the S1 Playwright spec): a network-down "server" getDocs
+  // silently falls back to cache — the data layer tags such results with a
+  // non-enumerable __fromCache so the syncing indicator stays HONEST.
+  apply(fresh, { fromCache: _resultFromCache(fresh) });
   return { paintedFromCache };
+}
+
+// true when the server-leg result actually came from the local cache (network
+// down). Checks the array itself, or — for composite results (tuple/object of
+// arrays) — any member array.
+export function _resultFromCache(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (data.__fromCache === true) return true;
+  if (Array.isArray(data)) return data.some((v) => v && v.__fromCache === true);
+  return Object.values(data).some((v) => v && v.__fromCache === true);
 }

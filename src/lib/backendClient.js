@@ -134,13 +134,26 @@ async function _getDocsBySource(ref, source) {
   return await getDocs(ref);
 }
 
+// B1-fix (2026-07-07, caught by the S1 Playwright spec): when the network is
+// down, a "server" getDocs silently FALLS BACK to cache (snap.metadata
+// .fromCache === true) — without surfacing that, the SyncIndicator would clear
+// while the screen still shows cache data (dishonest). Tag the result array
+// with a NON-ENUMERABLE __fromCache flag (JSON/spread-invisible) so swrRead
+// keeps `syncing` honest from the REAL SDK metadata.
+function _tagCache(arr, snap) {
+  try {
+    Object.defineProperty(arr, '__fromCache', { value: !!snap?.metadata?.fromCache, enumerable: false });
+  } catch { /* frozen array — display still works, indicator degrades gracefully */ }
+  return arr;
+}
+
 async function _listWithBranch(colRef, { branchId, allBranches = false, source } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(colRef, where('branchId', '==', String(branchId)))
     : colRef;
   const snap = await _getDocsBySource(ref, source);
-  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  return _tagCache(snap.docs.map(d => ({ ...d.data(), id: d.id })), snap);
 }
 
 // ─── Base path ──────────────────────────────────────────────────────────────
@@ -216,7 +229,7 @@ export async function getAllCustomers({ source } = {}) {
     const tB = b.clonedAt || '';
     return tB.localeCompare(tA);
   });
-  return customers;
+  return _tagCache(customers, snap);
 }
 
 /**
@@ -3109,14 +3122,14 @@ export async function getAppointmentsByDateRange({ from, to, branchId = '', allB
     ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
     : appointmentsCol();
   const snap = await _getDocsBySource(ref, source); // B1: SWR cache leg support
-  return snap.docs
+  return _tagCache(snap.docs
     .map(d => ({ ...d.data(), id: d.id }))
     .filter(a => {
       const iso = normalizeApptDate(a.date);
       if (!iso) return false;
       return iso >= String(from) && iso <= String(to);
     })
-    .map(a => ({ ...a, date: normalizeApptDate(a.date) })); // normalize outbound shape
+    .map(a => ({ ...a, date: normalizeApptDate(a.date) })), snap); // normalize outbound shape + honest fromCache
 }
 
 /** Get all appointments for a customer */
@@ -4065,7 +4078,7 @@ export async function getAllSales(opts = {}) {
   const sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by createdAt (has time) desc — latest first
   sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
-  return sales;
+  return _tagCache(sales, snap);
 }
 
 /** Get all sales for a customer */
@@ -5485,7 +5498,11 @@ export async function getWalletsForCustomerIds(customerIds = [], { source } = {}
     )
   );
   // V77-fix3 (S-4): docId wins spread order (V38 lesson)
-  return snaps.flatMap(s => s.docs.map(d => ({ ...d.data(), id: d.id })));
+  // B1-fix: multi-chunk read = fromCache if ANY chunk fell back to cache
+  return _tagCache(
+    snaps.flatMap(s => s.docs.map(d => ({ ...d.data(), id: d.id }))),
+    { metadata: { fromCache: snaps.some(s => s.metadata?.fromCache) } },
+  );
 }
 
 /** Get balance for a specific wallet (0 if wallet missing). */
@@ -6027,7 +6044,7 @@ export async function getAllMemberships({ source } = {}) {
   const snap = await _getDocsBySource(membershipsCol(), source);
   const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  return list;
+  return _tagCache(list, snap);
 }
 
 /** Get discount % for a customer's active membership (0 if none). */
@@ -6555,7 +6572,7 @@ export async function listStockMovements(filters = {}) {
     mvts = mvts.filter(m => !m.reversedByMovementId && !m.reverseOf);
   }
   mvts.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-  return mvts;
+  return _tagCache(mvts, snap);
 }
 
 // ─── Stock Order CRUD ───────────────────────────────────────────────────────
@@ -11010,7 +11027,7 @@ export async function listBranches({ source } = {}) {
     if (ua !== ub) return ub.localeCompare(ua);
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   });
-  return items;
+  return _tagCache(items, snap);
 }
 
 export async function saveBranch(branchId, data) {
@@ -11244,7 +11261,7 @@ export async function listStaff({ includeHidden = false, source } = {}) {
     if (ua !== ub) return ub.localeCompare(ua);
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   });
-  return visible;
+  return _tagCache(visible, snap);
 }
 
 export async function saveStaff(staffId, data) {
@@ -11336,7 +11353,7 @@ export async function listDoctors({ includeHidden = false, source } = {}) {
     if (ua !== ub) return ub.localeCompare(ua);
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   });
-  return visible;
+  return _tagCache(visible, snap);
 }
 
 // ─── Phase 14.10-tris (2026-04-26) — unified seller loader ──────────────
@@ -11437,7 +11454,7 @@ export async function listMembershipTypes({ source } = {}) {
   const snap = await _getDocsBySource(membershipTypesCol(), source); // C2: SWR cache leg
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  return items;
+  return _tagCache(items, snap);
 }
 
 // Phase 14.10-tris — be_wallet_types listing (was master_data/wallet_types)
@@ -11445,7 +11462,7 @@ export async function listWalletTypes({ source } = {}) {
   const snap = await _getDocsBySource(walletTypesCol(), source); // C2: SWR cache leg
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  return items;
+  return _tagCache(items, snap);
 }
 
 export async function saveDoctor(doctorId, data) {
@@ -11543,7 +11560,7 @@ export async function listProducts({ branchId, allBranches = false, source } = {
     const nb = (b.productName || '').toLowerCase();
     return na.localeCompare(nb, 'th');
   });
-  return items;
+  return _tagCache(items, snap);
 }
 
 export async function saveProduct(productId, data) {
@@ -11610,7 +11627,7 @@ export async function listCourses({ branchId, allBranches = false, source } = {}
     const nb = (b.courseName || '').toLowerCase();
     return na.localeCompare(nb, 'th');
   });
-  return items;
+  return _tagCache(items, snap);
 }
 
 export async function saveCourse(courseId, data) {
@@ -12564,7 +12581,7 @@ export async function listStaffSchedules(filters = {}) {
     if (d !== 0) return d;
     return (a.startTime || '').localeCompare(b.startTime || '');
   });
-  return items;
+  return _tagCache(items, snap);
 }
 
 export async function saveStaffSchedule(scheduleId, data) {
