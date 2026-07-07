@@ -9,6 +9,8 @@ import { Loader2, Activity, Filter, Search, Plus, Minus, Package, User } from 'l
 // V49 (2026-05-08) — listProducts → listProductsForPicker for the dropdown
 // at line 216 which renders `{p.name}`. Canonical be_products has productName.
 import { listStockMovements, listProductsForPicker, listStockLocations } from '../../lib/scopedDataLayer.js';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
@@ -178,15 +180,16 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
     return '';
   };
 
+  // C2 (2026-07-07 instant cold-start) — SWR display read (movement log is a
+  // read-only audit view; AV206.c-safe). Cache leg paints last-seen movements
+  // instantly + "กำลังซิงค์…", server leg corrects.
+  const [syncing, setSyncing] = useState(false);
   const loadMovements = useCallback(async () => {
     setLoading(true);
-    try {
-      const filters = { branchId: BRANCH_ID, includeReversed };
-      if (productId) filters.productId = productId;
-      const all = await listStockMovements(filters);
-      // V105-followup: normalize createdAt to ISO string for safe sort/filter
+    // V105-followup: normalize createdAt to ISO string for safe sort/filter,
+    // then client-side typeGroup + date filters (list query can't combine all).
+    const processRows = (all) => {
       const allNormalized = all.map(m => ({ ...m, createdAt: _v105NormalizeCreatedAt(m) }));
-      // Filter by typeGroup and date range client-side (list query can't combine all)
       let filtered = allNormalized;
       if (typeGroup) {
         const group = TYPE_GROUPS.find(g => g.id === typeGroup);
@@ -199,8 +202,16 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
       if (dateTo) filtered = filtered.filter(m => (m.createdAt || '') < dateTo + 'T99:99:99');
       // Sort newest first
       filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-      setMovements(filtered);
-    } catch (e) { console.error('[MovementLog] load failed:', e); setMovements([]); }
+      return filtered;
+    };
+    try {
+      const filters = { branchId: BRANCH_ID, includeReversed };
+      if (productId) filters.productId = productId;
+      await swrList(
+        (source) => listStockMovements({ ...filters, source }),
+        (all, { fromCache }) => { setMovements(processRows(all)); setLoading(false); setSyncing(fromCache); },
+      );
+    } catch (e) { console.error('[MovementLog] load failed:', e); setMovements([]); setSyncing(false); }
     finally { setLoading(false); }
   }, [productId, typeGroup, dateFrom, dateTo, includeReversed, BRANCH_ID]);
 
@@ -310,6 +321,10 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
         )}
       </div>
 
+      {/* C2 — SWR sync indicator (cache-painted log, server not yet confirmed) */}
+      {!loading && syncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-[var(--tx-muted)] text-xs">

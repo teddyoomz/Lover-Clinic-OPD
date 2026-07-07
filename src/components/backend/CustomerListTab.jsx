@@ -5,6 +5,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
 import { getAllCustomers, listBranches } from '../../lib/scopedDataLayer.js';
+import { swrRun } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 import { hexToRgb } from '../../utils.js';
 import { resolveCustomerHN } from '../../lib/customerDisplayName.js'; // V131 — HN search via hn_no; AV150
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -62,31 +64,43 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
   );
 
   // Fetch all cloned customers + branches (parallel — branches are universal)
+  // C2 (2026-07-07 instant cold-start) — SWR: cache leg paints the last-seen
+  // customer list instantly + "กำลังซิงค์…", server leg corrects (AV206.c-safe:
+  // display-only; edits/deletes go through their own server flows).
+  const [syncing, setSyncing] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
 
-    Promise.all([
-      getAllCustomers(),
+    const fetchBoth = (source) => Promise.all([
+      getAllCustomers({ source }),
       // V81-fix4 (Bug "branches มั่ว"): listBranches() with allBranches:true so we get
       // every branch regardless of selector; needed for ID→name lookup on customer cards.
-      listBranches({ allBranches: true }).catch(() => []),
-    ])
-      .then(([customerData, branchData]) => {
-        if (cancelled) return;
-        setCustomers(customerData);
-        const map = new Map();
-        for (const b of (branchData || [])) {
-          if (b?.id) map.set(b.id, { id: b.id, name: b.name || b.id });
-          // Some branch docs may store the canonical id under `branchId` field too
-          if (b?.branchId && b.branchId !== b.id) map.set(b.branchId, { id: b.id, name: b.name || b.id });
-        }
-        setBranchesMap(map);
-      })
+      listBranches({ allBranches: true, source }).catch(() => []),
+    ]);
+    const applyBoth = ([customerData, branchData], { fromCache }) => {
+      if (cancelled) return;
+      setCustomers(customerData);
+      const map = new Map();
+      for (const b of (branchData || [])) {
+        if (b?.id) map.set(b.id, { id: b.id, name: b.name || b.id });
+        // Some branch docs may store the canonical id under `branchId` field too
+        if (b?.branchId && b.branchId !== b.id) map.set(b.branchId, { id: b.id, name: b.name || b.id });
+      }
+      setBranchesMap(map);
+      setLoading(false);
+      setSyncing(fromCache);
+    };
+
+    swrRun({
+      cacheLoad: async () => { const r = await fetchBoth('cache'); return { hasData: r[0].length > 0, data: r }; },
+      serverLoad: () => fetchBoth(undefined),
+      apply: applyBoth,
+    })
       .catch(err => {
         console.error('[CustomerListTab] Failed to load customers:', err);
-        if (!cancelled) setLoadError(err.message || 'โหลดข้อมูลลูกค้าไม่สำเร็จ');
+        if (!cancelled) { setLoadError(err.message || 'โหลดข้อมูลลูกค้าไม่สำเร็จ'); setSyncing(false); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -170,7 +184,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
             <Info size={12} /> ลูกค้าที่ Clone มาจาก ProClinic จะแสดงที่นี่
           </p>
           <span className="text-xs text-[var(--tx-muted)] font-bold">
-            {filtered.length} / {customers.length} รายการ
+            {filtered.length} / {customers.length} รายการ {syncing && <SyncIndicator show />}
           </span>
         </div>
       </div>

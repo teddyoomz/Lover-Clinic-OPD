@@ -19,6 +19,8 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import MonthCalendarGrid from './scheduling/MonthCalendarGrid.jsx';
 import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 import ScheduleEntryFormModal from './scheduling/ScheduleEntryFormModal.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
@@ -90,18 +92,27 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
 
   // Phase 13.2.8-bis (2026-04-26 user correction): calendar shows ALL
   // staff at once. Sidebar selection filters only the right-rail sections.
+  // C2 (2026-07-07 instant cold-start) — SWR display read (mirror of
+  // DoctorSchedulesTab; AV206.c-safe).
+  const [syncing, setSyncing] = useState(false);
   const loadSchedules = useCallback(async () => {
     if (staff.length === 0) { setSchedules([]); return; }
     setScheduleLoading(true);
+    const staffIdSet = new Set(staff.map((s) => String(s.staffId || s.id)));
     try {
       // Phase BS V2 — branch-scoped fetch.
-      const all = await listStaffSchedules({ branchId: selectedBranchId });
-      const staffIdSet = new Set(staff.map((s) => String(s.staffId || s.id)));
-      const filtered = all.filter((e) => staffIdSet.has(String(e.staffId)));
-      setSchedules(filtered);
+      await swrList(
+        (source) => listStaffSchedules({ branchId: selectedBranchId, source }),
+        (all, { fromCache }) => {
+          setSchedules(all.filter((e) => staffIdSet.has(String(e.staffId))));
+          setScheduleLoading(false);
+          setSyncing(fromCache);
+        },
+      );
     } catch (e) {
       setError(e?.message || 'โหลดตารางล้มเหลว');
       setSchedules([]);
+      setSyncing(false);
     } finally {
       setScheduleLoading(false);
     }
@@ -217,6 +228,10 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
         </div>
       )}
 
+      {/* C2 — SWR sync indicator (cache-painted calendar, server not yet confirmed) */}
+      {!scheduleLoading && syncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       <div className="flex flex-col xl:flex-row gap-3">
         <div className="flex-1 min-w-0">
           {scheduleLoading ? (

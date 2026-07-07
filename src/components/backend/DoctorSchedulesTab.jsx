@@ -19,6 +19,8 @@ import {
 import MonthCalendarGrid from './scheduling/MonthCalendarGrid.jsx';
 import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
 import ScheduleEntryFormModal from './scheduling/ScheduleEntryFormModal.jsx';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
@@ -99,18 +101,27 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   // (multi-staff per cell, color-coded). Sidebar selection only filters
   // the right-rail "งานประจำสัปดาห์/รายวัน/วันลา" sections.
   // Therefore: load ALL schedules + filter to staffIds∈be_doctors.
+  // C2 (2026-07-07 instant cold-start) — SWR display read: last-seen calendar
+  // paints instantly + "กำลังซิงค์…", server leg corrects (AV206.c-safe).
+  const [syncing, setSyncing] = useState(false);
   const loadSchedules = useCallback(async () => {
     if (doctors.length === 0) { setSchedules([]); return; }
     setScheduleLoading(true);
+    const doctorIdSet = new Set(doctors.map((d) => String(d.doctorId || d.id)));
     try {
       // Phase BS V2 — branch-scoped fetch.
-      const all = await listStaffSchedules({ branchId: selectedBranchId });
-      const doctorIdSet = new Set(doctors.map((d) => String(d.doctorId || d.id)));
-      const filtered = all.filter((e) => doctorIdSet.has(String(e.staffId)));
-      setSchedules(filtered);
+      await swrList(
+        (source) => listStaffSchedules({ branchId: selectedBranchId, source }),
+        (all, { fromCache }) => {
+          setSchedules(all.filter((e) => doctorIdSet.has(String(e.staffId))));
+          setScheduleLoading(false);
+          setSyncing(fromCache);
+        },
+      );
     } catch (e) {
       setError(e?.message || 'โหลดตารางล้มเหลว');
       setSchedules([]);
+      setSyncing(false);
     } finally {
       setScheduleLoading(false);
     }
@@ -232,6 +243,10 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
         </div>
       )}
 
+      {/* C2 — SWR sync indicator (cache-painted calendar, server not yet confirmed) */}
+      {!scheduleLoading && syncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       {/* Main layout: calendar (flex-1) + sidebar (288px) */}
       <div className="flex flex-col xl:flex-row gap-3">
         <div className="flex-1 min-w-0">
