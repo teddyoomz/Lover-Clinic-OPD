@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Reports Home — Wire-Up + Data-Ready New Reports · Design Spec</title>
+  <style>
+    :root { --accent:#0891b2; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666;
+      --ok:#10b981; --wire:#f43f5e; --new:#38bdf8; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:1000px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+    h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.85em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+    .section { background:var(--bg-section); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.6em; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.92em; }
+    th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+    th { background:var(--bg-meta); }
+    .tag { font-size:.7em; font-weight:800; text-transform:uppercase; padding:2px 7px; border-radius:20px; color:#fff; }
+    .t-ok{background:var(--ok)} .t-wire{background:var(--wire)} .t-new{background:var(--new)}
+    /* mockup mini-grid */
+    .mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+    .mc{border:1px solid #ddd;border-radius:10px;overflow:hidden;background:#fafafa}
+    .mc h4{margin:0;padding:6px 10px;font-size:.72em;font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:#eef2f6;color:#0891b2}
+    .mc h4.an{color:#d97706}
+    .mr{display:flex;align-items:center;gap:6px;padding:4px 10px;border-top:1px solid #eee;font-size:.78em}
+    .mr .l{flex:1}.mr .a{color:#38bdf8;font-weight:800}
+    .rpt{border:1px solid #ddd;border-radius:8px;overflow:hidden;font-size:.78em}
+    .rpt .hd{background:#0891b2;color:#fff;padding:6px 10px;font-weight:700}
+    .rpt table{margin:0;font-size:1em}
+    .rpt th{background:#f0f4f8;font-size:.9em}
+  </style>
+</head>
+<body>
+
+<h1>Reports Home — Wire-Up + Data-Ready New Reports</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-07 · <strong>Status:</strong> Approved by user (design) · <strong>Plan:</strong> docs/superpowers/plans/2026-07-07-reports-home-wire-and-new-reports.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The Reports home landing page (<code>ReportsHomeTab.jsx</code>) is a flat card grid replicating ProClinic
+<code>/admin/report</code>. Its card list is a <strong>hand-maintained mirror</strong> of "which reports exist" that has
+<strong>drifted from reality</strong> (a V52-class multi-reader / adoption gap):</p>
+<ul>
+  <li><strong>6 fully-built, registered, working report tabs</strong> (~2,445 lines of real report code) are shown on the
+  landing page as <em>"เร็วๆนี้"</em> (coming-soon, disabled) OR are not shown at all — even though navigating to them via
+  the left menu works fine. Mislabeled/hidden: <code>reports-pnl</code>, <code>expense-report</code>,
+  <code>reports-df-payout</code>, <code>reports-remaining-course</code>, <code>clinic-report</code>,
+  <code>reports-payment</code>.</li>
+  <li><strong>~20 more cards</strong> are genuinely un-built. Some are cheap to build from data + loaders that already exist;
+  the rest are complex/low-value.</li>
+</ul>
+<p>User goal (verbatim): <em>"ทำให้หน้านี้ใช้ได้ทุก function และเอาที่แนะนำเพิ่มเติมด้วย ... ถ้าได้ก็จัดการเลย"</em>.
+Scope locked via Q&amp;A: <strong>(A) wire every existing tab + build the data-ready new reports</strong>, and
+<strong>remove every card that isn't wired to a working tab this round</strong> → the page ends with <em>zero</em> dead cards.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State — Loaded (desktop &amp; mobile card grid) · every card opens a working report</div>
+  <div class="mg">
+    <div class="mc"><h4 class="an">⭐ วิเคราะห์เชิงลึก</h4>
+      <div class="mr"><span class="l">CRM Insight (RFM)</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">วิเคราะห์รายได้ตามหัตถการ</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">วิเคราะห์นัดหมาย</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">ตรวจความครบธุรกรรม</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">รายงานคลินิก (ภาพรวม)</span><span class="a">›</span><span class="tag t-wire">ผูกสาย</span></div>
+    </div>
+    <div class="mc"><h4>รายงานการขาย</h4>
+      <div class="mr"><span class="l">รายรับประจำวัน</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">การขาย (ใบเสร็จ)</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">ยอดขายรายแพทย์/พนักงาน ×2</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">กำไร/ขาดทุน (P&amp;L)</span><span class="a">›</span><span class="tag t-wire">ผูกสาย</span></div>
+      <div class="mr"><span class="l">สรุปบัญชีรับชำระ</span><span class="a">›</span><span class="tag t-wire">ผูกสาย</span></div>
+      <div class="mr"><span class="l">การขายออนไลน์</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+      <div class="mr"><span class="l">ยอดขายคู่ค้า</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+      <div class="mr"><span class="l">รายการขายค้างชำระ</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+    </div>
+    <div class="mc"><h4>รายงานลูกค้า</h4>
+      <div class="mr"><span class="l">ลูกค้าสาขา</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">คอร์สคงเหลือ</span><span class="a">›</span><span class="tag t-wire">ผูกสาย</span></div>
+    </div>
+    <div class="mc"><h4>รายงานรายจ่าย</h4>
+      <div class="mr"><span class="l">รายจ่ายทั้งหมด (แยกหมวดในแท็บ)</span><span class="a">›</span><span class="tag t-wire">ผูกสาย</span></div>
+      <div class="mr"><span class="l">ค่ามือแพทย์ (DF)</span><span class="a">›</span><span class="tag t-wire">ผูกสาย</span></div>
+    </div>
+    <div class="mc"><h4>รายงานนัดหมาย</h4>
+      <div class="mr"><span class="l">รายงานนัดหมาย</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+    </div>
+    <div class="mc"><h4>รายงานสต็อคสินค้า</h4>
+      <div class="mr"><span class="l">สต็อคสินค้า (คงเหลือ)</span><span class="a">›</span><span class="tag t-ok">เดิม</span></div>
+      <div class="mr"><span class="l">รายการเคลื่อนไหวสต็อค</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+      <div class="mr"><span class="l">ล็อตใกล้หมดอายุ</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+      <div class="mr"><span class="l">ล็อตหมดอายุ</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+      <div class="mr"><span class="l">สินค้าใกล้หมดสต็อค</span><span class="a">›</span><span class="tag t-new">ใหม่</span></div>
+    </div>
+  </div>
+  <p style="font-size:.8em;color:#666;margin-top:.8em">No card carries a "เร็วๆนี้" badge or <code>disabled</code>. Header subtitle drops the coming-soon sentence.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State — a NEW report tab (example: reports-stock-alert · แจ้งเตือนสต็อค) reusing ReportShell</div>
+  <div class="rpt">
+    <div class="hd">🔔 แจ้งเตือนสต็อค — นครราชสีมา · ช่วง [DateRangePicker n/a — snapshot] · Export CSV</div>
+    <div style="padding:6px 10px;font-weight:700;background:#fff5f5;color:#e11d48;font-size:.85em">ล็อตหมดอายุแล้ว (2)</div>
+    <table>
+      <thead><tr><th>สินค้า</th><th>ล็อต</th><th>คงเหลือ</th><th>หมดอายุ</th><th>เกินมา (วัน)</th></tr></thead>
+      <tbody>
+        <tr><td>Botox 100u</td><td>BATCH-…m33s</td><td>3</td><td>05/06/2569</td><td style="color:#e11d48">32</td></tr>
+        <tr><td>Filler X</td><td>BATCH-…z1oh</td><td>1</td><td>20/06/2569</td><td style="color:#e11d48">17</td></tr>
+      </tbody>
+    </table>
+    <div style="padding:6px 10px;font-weight:700;background:#fffbeb;color:#b45309;font-size:.85em">ใกล้หมดอายุ (≤ alertDayBeforeExpire)</div>
+    <table>
+      <thead><tr><th>สินค้า</th><th>ล็อต</th><th>คงเหลือ</th><th>หมดอายุ</th><th>อีก (วัน)</th></tr></thead>
+      <tbody><tr><td>Vitamin C inj</td><td>BATCH-…a4</td><td>12</td><td>15/08/2569</td><td style="color:#b45309">39</td></tr></tbody>
+    </table>
+    <div style="padding:6px 10px;font-weight:700;background:#f0fdf4;color:#047857;font-size:.85em">สินค้าใกล้หมดสต็อค (คงเหลือ ≤ alertQtyBeforeOutOfStock)</div>
+    <table>
+      <thead><tr><th>สินค้า</th><th>คงเหลือรวม</th><th>เกณฑ์แจ้งเตือน</th></tr></thead>
+      <tbody><tr><td>Needle 30G</td><td style="color:#047857">4</td><td>10</td></tr></tbody>
+    </table>
+  </div>
+  <p style="font-size:.8em;color:#666">Names on the report are display-only (red allowed on product names — not patient names, per Thai-culture rule). Other new tabs (alt-sales, outstanding, stock-movements) are single-table variants of the same ReportShell scaffold.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow — card click → navigate → registered tab loads (+ drift-guard invariant)</div>
+  <table>
+    <thead><tr><th>#</th><th>Stage</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Render home</td><td><code>ReportsHomeTab</code> maps <code>CATEGORIES</code> + <code>ANALYTICS</code> → cards. Post-change: every card has <code>status:'active'</code> + a real <code>tabId</code>. No <code>'soon'</code>, no disabled.</td></tr>
+      <tr><td>2</td><td>Click card</td><td><code>onNavigate(tabId)</code> → BackendDashboard sets the active sub-tab (same mechanism the left menu uses).</td></tr>
+      <tr><td>3</td><td>Tab mount (existing)</td><td>Wired cards (pnl / expense / df / remaining-course / clinic / payment) mount their <em>already-working</em> tab. Zero code change to those tabs.</td></tr>
+      <tr><td>4</td><td>Tab mount (new)</td><td>New tab: <code>useSelectedBranch()</code> → loader(<code>branchId</code>) → pure aggregator → ReportShell renders table + totals + CSV. (V52 BS-11 branch-scope; Rule E Firestore-only.)</td></tr>
+      <tr><td>5</td><td>Deep link</td><td>All 4 new tab ids added to <code>ALL_ITEM_IDS</code> so <code>?tab=…</code> deep-links resolve (the recon-tab L1 lesson).</td></tr>
+      <tr><td>6</td><td>Drift guard (test)</td><td>A source-grep test asserts: <strong>every active home card's <code>tabId</code> ∈ navConfig registered ids</strong>. A future card that points at an unregistered/soon tab fails the build → this bug class cannot recur.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow — new-report data pipeline (all 4 tabs share this shape)</div>
+  <pre>useSelectedBranch → branchId
+        │
+        ▼
+   loader(branchId, {from,to})          Rule E: reportsLoaders.js / scopedDataLayer.js (Firestore-only)
+        │   alt-sales   → listOnlineSales + listVendorSales
+        │   outstanding → loadSalesByDateRange(includeCancelled:false)
+        │   movements   → loadStockMovementsByDateRange
+        │   stock-alert → loadAllStockBatchesForReport + listProductsForPicker
+        ▼
+   pure aggregator (src/lib/*Aggregator.js)   → { rows, totals, columns }
+        │   audit-reports-accuracy: Σ(footer) === Σ(source rows), exact
+        ▼
+   ReportShell + &lt;table&gt; + DateRangePicker + downloadCSV</pre>
+</div>
+
+<h2>Architecture</h2>
+
+<div class="section">
+<h3>New units (each small, single-purpose, independently testable)</h3>
+<table>
+  <thead><tr><th>Unit</th><th>File</th><th>Depends on</th><th>Public shape</th></tr></thead>
+  <tbody>
+    <tr><td>Alt-sales aggregator</td><td><code>src/lib/altSalesReportAggregator.js</code></td><td>online+vendor arrays, fmtMoney</td><td><code>aggregate(online, vendor) → {onlineRows, vendorRows, totals, columns}</code></td></tr>
+    <tr><td>Outstanding aggregator</td><td><code>src/lib/outstandingSalesAggregator.js</code></td><td>sales array</td><td><code>aggregate(sales) → {rows, totals, columns}</code> — rows where <code>outstanding&gt;0.005</code>, excl. cancelled/refunded</td></tr>
+    <tr><td>Stock-movement aggregator</td><td><code>src/lib/stockMovementReportAggregator.js</code></td><td>movements array</td><td><code>aggregate(movements, {typeFilter}) → {rows, totalsByType, columns}</code></td></tr>
+    <tr><td>Stock-alert aggregator</td><td><code>src/lib/stockAlertReportAggregator.js</code></td><td>batches + products, stockUtils(hasExpired/daysUntilExpiry)</td><td><code>aggregate(batches, products) → {expired, nearExpiry, lowStock}</code></td></tr>
+    <tr><td>4 tab components</td><td><code>reports/{AltSalesTab,OutstandingTab,StockMovementTab,StockAlertTab}.jsx</code></td><td>ReportShell, DateRangePicker, loaders, aggregators, useSelectedBranch</td><td>default React component <code>({clinicSettings, theme})</code></td></tr>
+  </tbody>
+</table>
+<p><strong>New loaders (if needed):</strong> alt-sales uses existing <code>listOnlineSales</code>/<code>listVendorSales</code> (scopedDataLayer). Movements uses existing <code>loadStockMovementsByDateRange</code>. Stock-alert uses existing <code>loadAllStockBatchesForReport</code> + <code>listProductsForPicker</code>. Outstanding uses existing <code>loadSalesByDateRange</code>. <strong>→ zero new loaders required.</strong></p>
+</div>
+
+<div class="section">
+<h3>Modified units</h3>
+<ul>
+  <li><code>reports/ReportsHomeTab.jsx</code> — rewrite <code>CATEGORIES</code> + <code>ANALYTICS</code>: flip 6 to active, add clinic-report + payment cards, add 7 new cards, remove all dead cards + the Smart Audience card, drop the "เร็วๆนี้" subtitle sentence. Legend/header untouched otherwise.</li>
+  <li><code>nav/navConfig.js</code> — register 4 new tab ids (label/icon/color/palette) in the <code>reports</code> section.</li>
+  <li><code>BackendDashboard.jsx</code> — lazy-import + render case for the 4 new tab ids + add them to <code>ALL_ITEM_IDS</code> (deep-link whitelist).</li>
+  <li><code>lib/tabPermissions.js</code> — 4 new tabs inherit the reports-section gate (same as sibling report tabs).</li>
+  <li><code>shell/subTabEmoji.js</code> — optional emoji for the 4 new ids (cosmetic).</li>
+</ul>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Wire every existing working tab <em>and</em> build the data-ready new reports (not wiring-only, not everything-including-complex).</li>
+  <li><strong>Q2 = Remove all:</strong> Every card not wired to a working tab this round is deleted — the page has zero dead/"เร็วๆนี้"/disabled cards. Includes Smart Audience.</li>
+  <li><strong>Consolidation:</strong> online + vendor share one tab (<code>reports-alt-sales</code>, 2 cards → 1 tab); the 3 stock-health cards share one tab (<code>reports-stock-alert</code>) — mirrors the existing "2 staff-sales cards → 1 tab" precedent; fewer files, less risk.</li>
+  <li><strong>Expense collapse:</strong> "รายจ่ายทั้งหมด" → <code>expense-report</code> (which has an in-page category breakdown); a distinct "ค่ามือแพทย์ (DF)" → <code>reports-df-payout</code>. รายจ่ายพนักงาน/อื่นๆ removed (they are category filters inside expense-report).</li>
+  <li><strong>Customer-sales dupe:</strong> ยอดขายลูกค้า / ยอดขายรายลูกค้า removed — <code>reports-customer</code> (ลูกค้าสาขา) already shows per-customer purchase summary.</li>
+  <li><strong>Branch scope:</strong> all new tabs are branch-scoped (V52 BS-11) via <code>useSelectedBranch</code> + <code>branchId</code>; loaders are Firestore-only (Rule E).</li>
+  <li><strong>Names on stock/sales reports may use red</strong> (product / invoice names) — the Thai-culture red rule forbids red only on <em>patient</em> names/HN.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>ReportsHomeTab renders <strong>zero</strong> cards with <code>status:'soon'</code> or <code>disabled</code>; every visible card navigates to a registered tab.</li>
+  <li>The 6 wired cards open their existing tabs unchanged (pnl / expense-report / df-payout / remaining-course / clinic-report / payment).</li>
+  <li>4 new tabs render real data for the selected branch + re-fetch on branch switch + on date-range change + Export CSV works.</li>
+  <li>Each new aggregator reconciles exactly to its source (audit-reports-accuracy: footer total === Σ row values); adversarial inputs (empty / null / cancelled / missing fields / Thai text) handled.</li>
+  <li>All 4 new tab ids resolve as <code>?tab=…</code> deep-links (present in <code>ALL_ITEM_IDS</code>).</li>
+  <li>Drift-guard test: every active home card's <code>tabId</code> is a registered navConfig id (build fails otherwise).</li>
+  <li>Full vitest green + build clean; Rule Q L2 (aggregators vs real prod) + L1 Playwright (click each new/wired card → correct tab + real data).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Outstanding definition:</strong> uses <code>netTotal − totalPaidAmount</code> with a 0.005 epsilon; must exclude cancelled/refunded and treat missing paid-amount as 0. Reconcile against a couple of known unpaid sales on prod (Rule Q L2) before trusting.</li>
+  <li><strong>Stock-alert thresholds:</strong> per-product <code>alertQtyBeforeOutOfStock</code> / <code>alertDayBeforeExpire</code> may be unset for some products → fall back to sane defaults (e.g. near-expiry ≤ 90 days; skip low-stock rows with no threshold) and label the default clearly.</li>
+  <li><strong>Deep-link-to-section</strong> (e.g. "ล็อตหมดอายุ" card scrolling stock-alert to the expired section) is deferred — v1 lands on the combined tab with all sections visible.</li>
+  <li><strong>No new Firestore collections / rules</strong> → deploy is vercel-only (no Probe-Deploy-Probe). Confirmed all data + loaders already exist.</li>
+</ul>
+
+</body>
+</html>

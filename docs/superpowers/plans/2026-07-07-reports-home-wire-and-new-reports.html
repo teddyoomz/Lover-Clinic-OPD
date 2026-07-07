@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reports Home Wire-Up + New Reports Implementation Plan</title>
+  <style>
+    :root { --accent: #0891b2; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: .9em; }
+    th,td { border: 1px solid var(--bd); padding: .4em .7em; text-align: left; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Reports Home Wire-Up + New Reports Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline, batch-with-checkpoints) — per project "no large agent fan-out" lock. Steps use HTML checkboxes.
+  Spec: <code>docs/superpowers/specs/2026-07-07-reports-home-wire-and-new-reports-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Make every card on the Reports home page open a working report — wire 6 already-built tabs that were mislabeled "เร็วๆนี้"/hidden, build 4 new data-ready report tabs (7 cards), remove all dead cards.</p>
+  <p><strong>Architecture:</strong> Rewrite <code>ReportsHomeTab</code> card map + add a drift-guard test. Add 4 new report tabs, each = pure aggregator (<code>src/lib/*Aggregator.js</code>) + tab component reusing the <code>ReportShell</code>/<code>DateRangePicker</code>/<code>downloadCSV</code>/<code>useSelectedBranch</code> scaffold. Register in navConfig + BackendDashboard + ALL_ITEM_IDS + tabPermissions. Firestore-only (Rule E); branch-scoped (V52 BS-11); zero new loaders/collections/rules → deploy = vercel-only.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vitest, existing reportsLoaders + scopedDataLayer + stockUtils, lucide-react icons.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">After — ReportsHomeTab: every card active (no "เร็วๆนี้", no disabled)</div>
+  <p>See spec §Mockup for the full card grid. Card map (final):</p>
+  <table>
+    <thead><tr><th>Category</th><th>Cards → tabId</th></tr></thead>
+    <tbody>
+      <tr><td>⭐ วิเคราะห์เชิงลึก</td><td>CRM Insight→reports-rfm · วิเคราะห์รายได้→reports-revenue · วิเคราะห์นัดหมาย→reports-appt-analysis · ตรวจความครบธุรกรรม→reports-reconciliation · <b>รายงานคลินิก→clinic-report</b> (added)</td></tr>
+      <tr><td>รายงานการขาย</td><td>รายรับประจำวัน→reports-daily-revenue · การขาย→reports-sale · ยอดขายรายแพทย์/พนักงาน ×2→reports-staff-sales · <b>กำไร/ขาดทุน→reports-pnl</b> (was soon) · <b>สรุปบัญชีรับชำระ→reports-payment</b> (added) · <b>การขายออนไลน์→reports-alt-sales</b> (new) · <b>ยอดขายคู่ค้า→reports-alt-sales</b> (new) · <b>รายการขายค้างชำระ→reports-outstanding</b> (new)</td></tr>
+      <tr><td>รายงานลูกค้า</td><td>ลูกค้าสาขา→reports-customer · <b>คอร์สคงเหลือ→reports-remaining-course</b> (was soon)</td></tr>
+      <tr><td>รายงานรายจ่าย</td><td><b>รายจ่ายทั้งหมด→expense-report</b> (was soon) · <b>ค่ามือแพทย์ (DF)→reports-df-payout</b> (added)</td></tr>
+      <tr><td>รายงานนัดหมาย</td><td>รายงานนัดหมาย→reports-appointment</td></tr>
+      <tr><td>รายงานสต็อคสินค้า</td><td>สต็อคสินค้า→reports-stock · <b>รายการเคลื่อนไหวสต็อค→reports-stock-movements</b> (new) · <b>ล็อตใกล้หมดอายุ→reports-stock-alert</b> (new) · <b>ล็อตหมดอายุ→reports-stock-alert</b> (new) · <b>สินค้าใกล้หมดสต็อค→reports-stock-alert</b> (new)</td></tr>
+    </tbody>
+  </table>
+  <p><em>Removed entirely:</em> ยอดขายลูกค้า/รายลูกค้า · โปรฯ/คอร์ส/สินค้า · กำไรต่อการรักษา · รายจ่ายพนักงาน/อื่นๆ · คูปอง/Voucher · ประวัติรักษา · การใช้คอร์ส · แคตตาล็อก×3 · สรุปใช้ยา×4 · นำเข้าสินค้า · ตัดสต็อคล่วงหน้า · Smart Audience.</p>
+</div>
+<div class="mockup">
+  <div class="mockup-label">New tab example — reports-stock-alert (3 sections, ReportShell scaffold)</div>
+  <pre>🔔 แจ้งเตือนสต็อค — [branch] · Export CSV
+  ┌ ล็อตหมดอายุแล้ว (n) ───────────────────────────┐
+  │ สินค้า | ล็อต | คงเหลือ | หมดอายุ | เกินมา(วัน) │
+  ├ ใกล้หมดอายุ ≤ alertDayBeforeExpire (n) ─────────┤
+  │ สินค้า | ล็อต | คงเหลือ | หมดอายุ | อีก(วัน)     │
+  ├ สินค้าใกล้หมดสต็อค ≤ alertQtyBeforeOutOfStock (n)┤
+  │ สินค้า | คงเหลือรวม | เกณฑ์แจ้งเตือน            │
+  └────────────────────────────────────────────────┘</pre>
+  <p>alt-sales / outstanding / stock-movements = single-table variants of the same shell.</p>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Card click → navigate → registered tab (+ drift guard) &amp; new-tab data pipeline</div>
+  <pre>ReportsHomeTab card (status:'active', real tabId)
+   └ onNavigate(tabId) → BackendDashboard setActiveSubTab  (same path as left menu)
+        ├ existing wired tab → mounts unchanged (pnl/expense/df/remaining/clinic/payment)
+        └ NEW tab → useSelectedBranch() → loader(branchId,{from,to})
+                     → pure aggregator {rows,totals,columns}   (Σfooter === Σrows, exact)
+                     → ReportShell + &lt;table&gt; + DateRangePicker + downloadCSV
+   deep link ?tab=&lt;newId&gt; resolves ⇐ ALL_ITEM_IDS contains the 4 new ids
+   DRIFT GUARD (test): every active card.tabId ∈ navConfig ids  → build fails if a card points nowhere</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/lib/altSalesReportAggregator.js</code> (new)</td><td>online+vendor → rows+totals (pure)</td></tr>
+    <tr><td><code>src/lib/outstandingSalesAggregator.js</code> (new)</td><td>be_sales → unpaid rows + outstanding total (pure)</td></tr>
+    <tr><td><code>src/lib/stockMovementReportAggregator.js</code> (new)</td><td>movements → rows + totalsByType (pure)</td></tr>
+    <tr><td><code>src/lib/stockAlertReportAggregator.js</code> (new)</td><td>batches+products → {expired,nearExpiry,lowStock} (pure)</td></tr>
+    <tr><td><code>src/components/backend/reports/AltSalesTab.jsx</code> (new)</td><td>online/vendor report UI</td></tr>
+    <tr><td><code>src/components/backend/reports/OutstandingTab.jsx</code> (new)</td><td>outstanding report UI</td></tr>
+    <tr><td><code>src/components/backend/reports/StockMovementTab.jsx</code> (new)</td><td>movement report UI</td></tr>
+    <tr><td><code>src/components/backend/reports/StockAlertTab.jsx</code> (new)</td><td>stock-alert report UI</td></tr>
+    <tr><td><code>src/components/backend/reports/ReportsHomeTab.jsx</code> (mod)</td><td>card map rewrite</td></tr>
+    <tr><td><code>src/components/backend/nav/navConfig.js</code> (mod)</td><td>register 4 tab ids</td></tr>
+    <tr><td><code>src/pages/BackendDashboard.jsx</code> (mod)</td><td>lazy import + render case + ALL_ITEM_IDS</td></tr>
+    <tr><td><code>src/lib/tabPermissions.js</code> (mod)</td><td>4 new ids → reports gate</td></tr>
+    <tr><td><code>src/components/backend/shell/subTabEmoji.js</code> (mod)</td><td>emoji for 4 new ids (cosmetic)</td></tr>
+    <tr><td><code>tests/reports-new-tabs-aggregators.test.js</code> (new)</td><td>4 aggregators unit + reconcile + adversarial</td></tr>
+    <tr><td><code>tests/reports-home-wiring-drift-guard.test.js</code> (new)</td><td>every active card.tabId registered; no soon; deep-link ids</td></tr>
+    <tr><td><code>tests/reports-new-tabs-flow-simulate.test.js</code> (new)</td><td>Rule I: home→click→correct tab; tab loads+aggregates</td></tr>
+    <tr><td><code>scripts/diag-reports-new-l2.mjs</code> (new)</td><td>Rule Q L2: aggregators vs real prod</td></tr>
+    <tr><td><code>tests/e2e/reports-home-wire.spec.js</code> (new)</td><td>Rule Q L1: Playwright click each card on prod</td></tr>
+  </tbody>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ─────────── TASK 1 ─────────── -->
+<div class="task">
+  <h3>Task 1: Alt-sales aggregator + AltSalesTab (online + vendor)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/altSalesReportAggregator.js</code>, <code>src/components/backend/reports/AltSalesTab.jsx</code>; Test <code>tests/reports-new-tabs-aggregators.test.js</code> (AS group).</p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing aggregator test</strong></label></div>
+<pre><code>import { describe, it, expect } from 'vitest';
+import { aggregateAltSales } from '../src/lib/altSalesReportAggregator.js';
+
+describe('AS aggregateAltSales', () => {
+  const online = [
+    { id:'O1', transferDate:'2026-07-01', customerName:'ก', amount:1000, status:'completed' },
+    { id:'O2', transferDate:'2026-07-02', customerName:'ข', amount:500,  status:'cancelled' },
+  ];
+  const vendor = [
+    { id:'V1', saleDate:'2026-07-01', vendorName:'ค', totalAmount:2000, status:'completed' },
+    { id:'V2', saleDate:'2026-07-02', vendorName:'ง', totalAmount:300,  status:'draft' },
+  ];
+  it('AS1 rows map the canonical amount fields', () => {
+    const r = aggregateAltSales(online, vendor);
+    expect(r.onlineRows[0].amount).toBe(1000);
+    expect(r.vendorRows[0].amount).toBe(2000);
+  });
+  it('AS2 totals exclude cancelled(online) + draft/cancelled(vendor)', () => {
+    const r = aggregateAltSales(online, vendor);
+    expect(r.totals.online).toBe(1000);   // 500 cancelled excluded
+    expect(r.totals.vendor).toBe(2000);   // 300 draft excluded
+    expect(r.totals.total).toBe(3000);
+  });
+  it('AS3 footer total === Σ realized row amounts (audit-reports-accuracy)', () => {
+    const r = aggregateAltSales(online, vendor);
+    const sum = [...r.onlineRows, ...r.vendorRows]
+      .filter(x => x.status !== 'cancelled' && x.status !== 'draft')
+      .reduce((s,x)=>s+x.amount,0);
+    expect(r.totals.total).toBe(sum);
+  });
+  it('AS4 adversarial: empty/null/NaN amounts → 0, no throw', () => {
+    const r = aggregateAltSales([{id:'x',amount:null},{id:'y',amount:'abc'}], null);
+    expect(r.totals.total).toBe(0);
+    expect(r.onlineRows).toHaveLength(2);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → FAIL (module not found)</strong></label></div>
+  <p>Run: <code>npx vitest run tests/reports-new-tabs-aggregators.test.js -t AS</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement aggregator</strong></label></div>
+<pre><code>// src/lib/altSalesReportAggregator.js
+// Pure. online sale total field = `amount`; vendor = `totalAmount` (validated shapes).
+// Totals exclude non-realized: online 'cancelled'; vendor 'draft'/'cancelled'.
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+export function aggregateAltSales(online = [], vendor = []) {
+  const onlineRows = (online || []).map(o => ({
+    id: o.id, date: o.transferDate || '', customer: o.customerName || '-',
+    amount: num(o.amount), status: o.status || '',
+  }));
+  const vendorRows = (vendor || []).map(v => ({
+    id: v.id, date: v.saleDate || '', vendor: v.vendorName || '-',
+    amount: num(v.totalAmount), status: v.status || '',
+  }));
+  const onlineTotal = onlineRows.filter(r => r.status !== 'cancelled')
+    .reduce((s, r) => s + r.amount, 0);
+  const vendorTotal = vendorRows.filter(r => r.status !== 'cancelled' && r.status !== 'draft')
+    .reduce((s, r) => s + r.amount, 0);
+  return {
+    onlineRows, vendorRows,
+    totals: {
+      online: Math.round(onlineTotal * 100) / 100,
+      vendor: Math.round(vendorTotal * 100) / 100,
+      total: Math.round((onlineTotal + vendorTotal) * 100) / 100,
+      onlineCount: onlineRows.length, vendorCount: vendorRows.length,
+    },
+  };
+}</code></pre>
+  <p><em>Grounding note:</em> confirm online <code>STATUS_OPTIONS</code> includes <code>'cancelled'</code> and vendor includes <code>'draft'</code> (they do per validation read); adjust exclusion list only if the enum differs.</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → PASS</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Build AltSalesTab (mirror PaymentSummaryTab scaffold)</strong></label></div>
+<pre><code>// src/components/backend/reports/AltSalesTab.jsx — reuse ReportShell pattern.
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Globe } from 'lucide-react';
+import ReportShell from './ReportShell.jsx';
+import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
+import { aggregateAltSales } from '../../../lib/altSalesReportAggregator.js';
+import { listOnlineSales, listVendorSales } from '../../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
+import { downloadCSV } from '../../../lib/csvExport.js';
+import { fmtMoney } from '../../../lib/financeUtils.js';
+
+export default function AltSalesTab({ clinicSettings }) {
+  const { branchId: selectedBranchId } = useSelectedBranch();
+  const p0 = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
+  const [from, setFrom] = useState(p0.from);
+  const [to, setTo] = useState(p0.to);
+  const [presetId, setPresetId] = useState(p0.id);
+  const [online, setOnline] = useState([]);
+  const [vendor, setVendor] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let abort = false; setLoading(true); setError('');
+    Promise.all([
+      listOnlineSales({ startDate: from, endDate: to, branchId: selectedBranchId }),
+      listVendorSales({ startDate: from, endDate: to, branchId: selectedBranchId }),
+    ]).then(([o, v]) => { if (!abort) { setOnline(o || []); setVendor(v || []); } })
+      .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
+      .finally(() => { if (!abort) setLoading(false); });
+    return () => { abort = true; };
+  }, [from, to, selectedBranchId, reloadKey]);
+
+  const out = useMemo(() => aggregateAltSales(online, vendor), [online, vendor]);
+  const rowsForCsv = useMemo(() => [
+    ...out.onlineRows.map(r => ({ channel: 'ออนไลน์', ...r })),
+    ...out.vendorRows.map(r => ({ channel: 'คู่ค้า', ...r })),
+  ], [out]);
+  const csvCols = [
+    { key: 'channel', label: 'ช่องทาง' }, { key: 'date', label: 'วันที่' },
+    { key: 'customer', label: 'ลูกค้า/คู่ค้า', get: r => r.customer || r.vendor || '-' },
+    { key: 'amount', label: 'ยอด', get: r => fmtMoney(r.amount) },
+    { key: 'status', label: 'สถานะ' },
+  ];
+  const handleExport = useCallback(() => downloadCSV(`alt-sales_${from}_to_${to}`, rowsForCsv, csvCols), [rowsForCsv, from, to]);
+
+  return (
+    &lt;ReportShell icon={Globe} title="ยอดขายช่องทางอื่น" clinicSettings={clinicSettings}
+      subtitle={`${from} → ${to} · ออนไลน์ ${fmtMoney(out.totals.online)} + คู่ค้า ${fmtMoney(out.totals.vendor)} = ${fmtMoney(out.totals.total)}`}
+      totalCount={out.onlineRows.length + out.vendorRows.length}
+      filteredCount={out.onlineRows.length + out.vendorRows.length}
+      onExport={handleExport} exportDisabled={rowsForCsv.length === 0}
+      onRefresh={() => setReloadKey(k => k + 1)} loading={loading} error={error}
+      emptyText="ยังไม่มีการขายช่องทางอื่นในช่วงนี้"
+      dateRangeSlot={&lt;DateRangePicker from={from} to={to} presetId={presetId}
+        onChange={({from:f,to:t,presetId:id}) => { setFrom(f); setTo(t); setPresetId(id); }} /&gt;}&gt;
+      {/* two &lt;table&gt; sections: ออนไลน์ (customer/date/amount/status) + คู่ค้า (vendor/date/amount/status),
+          each with a tfoot total; red allowed on names (not patient). data-testid="alt-sales-*". */}
+    &lt;/ReportShell&gt;
+  );
+}</code></pre>
+  <p>Section headers "การขายออนไลน์" / "ยอดขายคู่ค้า"; each table: วันที่ · ลูกค้า/คู่ค้า · ยอด (tabular-nums) · สถานะ; tfoot = section total. Copy exact table/tfoot markup from <code>PaymentSummaryTab.jsx:90-137</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code>git add src/lib/altSalesReportAggregator.js src/components/backend/reports/AltSalesTab.jsx tests/reports-new-tabs-aggregators.test.js
+git commit -m "feat(reports): alt-sales (online+vendor) aggregator + tab"</code></pre>
+</div>
+
+<!-- ─────────── TASK 2 ─────────── -->
+<div class="task">
+  <h3>Task 2: Outstanding-sales aggregator + OutstandingTab</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/outstandingSalesAggregator.js</code>, <code>reports/OutstandingTab.jsx</code>; extend the aggregators test (OS group).</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write failing test</strong></label></div>
+<pre><code>import { aggregateOutstanding } from '../src/lib/outstandingSalesAggregator.js';
+describe('OS aggregateOutstanding', () => {
+  const sales = [
+    { id:'S1', saleId:'INV-1', saleDate:'2026-07-01', customerName:'ก', billing:{netTotal:1000}, totalPaidAmount:400, status:'draft' },
+    { id:'S2', saleId:'INV-2', saleDate:'2026-07-02', customerName:'ข', billing:{netTotal:500},  totalPaidAmount:500, status:'draft' }, // paid → excluded
+    { id:'S3', saleId:'INV-3', saleDate:'2026-07-03', customerName:'ค', billing:{netTotal:800},  totalPaidAmount:0,   status:'cancelled' }, // cancelled → excluded
+    { id:'S4', saleId:'INV-4', saleDate:'2026-07-04', customerName:'ง', billing:{netTotal:200},  totalPaidAmount:0,   source:'reduceRemaining' }, // audit-source → excluded
+  ];
+  it('OS1 only unpaid, non-cancelled, non-audit rows', () => {
+    const r = aggregateOutstanding(sales);
+    expect(r.rows.map(x => x.ref)).toEqual(['INV-1']);
+    expect(r.rows[0].outstanding).toBe(600);
+  });
+  it('OS2 outstanding total === Σ row outstanding', () => {
+    const r = aggregateOutstanding(sales);
+    expect(r.totals.outstanding).toBe(r.rows.reduce((s,x)=>s+x.outstanding,0));
+  });
+  it('OS3 float precision → 2dp, epsilon skips ~0', () => {
+    const r = aggregateOutstanding([{ id:'z', billing:{netTotal:100.001}, totalPaidAmount:100 }]);
+    expect(r.rows).toHaveLength(0); // 0.001 &lt; 0.005 epsilon
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code>// src/lib/outstandingSalesAggregator.js
+// Sale total = billing.netTotal (recon canonical, verified on live sales 2026-07-07).
+// Paid = totalPaidAmount. Exclude cancelled/refunded + AUDIT_SALE_SOURCES
+// (course-mutation records, not money — the recon false-positive lesson, 2026-07-07).
+const AUDIT_SALE_SOURCES = ['reduceRemaining', 'addRemaining', 'exchange', 'share'];
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const saleTotal = (s) => num(s?.billing?.netTotal ?? s?.billing?.grandTotal ?? s?.billing?.total ?? s?.total);
+const salePaid = (s) => num(s?.totalPaidAmount ?? s?.total_paid_amount ?? s?.payment?.totalPaid ?? s?.paidAmount);
+
+export function aggregateOutstanding(sales = []) {
+  const rows = [];
+  let outstandingTotal = 0, grossTotal = 0, paidTotal = 0;
+  for (const s of (sales || [])) {
+    if (s?.status === 'cancelled' || s?.status === 'refunded' || s?.refunded) continue;
+    if (AUDIT_SALE_SOURCES.includes(s?.source)) continue;
+    const total = saleTotal(s), paid = salePaid(s);
+    const outstanding = Math.round((total - paid) * 100) / 100;
+    if (outstanding &lt;= 0.005) continue;
+    rows.push({ id: s.id, ref: s.saleId || s.id, date: s.saleDate || '', customer: s.customerName || '-', total, paid, outstanding, status: s.status || '' });
+    outstandingTotal += outstanding; grossTotal += total; paidTotal += paid;
+  }
+  rows.sort((a, b) => b.outstanding - a.outstanding);
+  return { rows, totals: { count: rows.length, gross: Math.round(grossTotal*100)/100, paid: Math.round(paidTotal*100)/100, outstanding: Math.round(outstandingTotal*100)/100 } };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run → PASS</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Build OutstandingTab</strong></label></div>
+  <p>Same scaffold as AltSalesTab. Loader: <code>loadSalesByDateRange({ from, to, includeCancelled: true, branchId })</code> (aggregator does the cancelled/audit filtering — pass includeCancelled:true so nothing is pre-dropped, then the pure fn owns the rule). Icon <code>AlertCircle</code>, title "รายการขายค้างชำระ". Table cols: ใบเสร็จ (clickable → SaleDetailModal, copy from PaymentSummaryTab drill-down) · วันที่ · ลูกค้า · ยอดรวม · ชำระแล้ว · <b>ค้างชำระ</b> (rose, emphasised) · สถานะ. tfoot: ยอดค้างรวม. Subtitle: <code>ค้างชำระ {fmtMoney(out.totals.outstanding)} ({out.totals.count} ใบ)</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code>git add src/lib/outstandingSalesAggregator.js src/components/backend/reports/OutstandingTab.jsx tests/reports-new-tabs-aggregators.test.js
+git commit -m "feat(reports): outstanding-sales (ค้างชำระ) aggregator + tab"</code></pre>
+</div>
+
+<!-- ─────────── TASK 3 ─────────── -->
+<div class="task">
+  <h3>Task 3: Stock-movement aggregator + StockMovementTab</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/stockMovementReportAggregator.js</code>, <code>reports/StockMovementTab.jsx</code>; extend aggregators test (MV group).</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Confirm movement shape, then write failing test</strong></label></div>
+  <p>Grounding: <code>grep -n "type\|productName\|qty\|reason\|createdAt" src/lib/backendClient.js | grep -i movement</code> — confirm the movement doc fields (<code>type</code>, <code>productName</code>, <code>qty</code>, <code>createdAt</code>, <code>reason</code>). Then:</p>
+<pre><code>import { aggregateStockMovements } from '../src/lib/stockMovementReportAggregator.js';
+describe('MV aggregateStockMovements', () => {
+  const mv = [
+    { id:'M1', createdAt:'2026-07-01T03:00:00Z', type:'RECEIVE', productName:'A', qty:10, reason:'รับเข้า' },
+    { id:'M2', createdAt:'2026-07-02T03:00:00Z', type:'EXPORT_TRANSFER', productName:'A', qty:-3, reason:'โอน' },
+    { id:'M3', createdAt:'2026-07-03T03:00:00Z', type:'RECEIVE', productName:'B', qty:5 },
+  ];
+  it('MV1 maps rows + totalsByType counts', () => {
+    const r = aggregateStockMovements(mv);
+    expect(r.count).toBe(3);
+    expect(r.totalsByType.RECEIVE).toBe(2);
+    expect(r.totalsByType.EXPORT_TRANSFER).toBe(1);
+  });
+  it('MV2 typeFilter narrows rows', () => {
+    expect(aggregateStockMovements(mv, { typeFilter:'RECEIVE' }).rows).toHaveLength(2);
+  });
+  it('MV3 types list is unique+sorted; empty input → no throw', () => {
+    expect(aggregateStockMovements(mv).types).toEqual(['EXPORT_TRANSFER','RECEIVE']);
+    expect(aggregateStockMovements(null).count).toBe(0);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → FAIL</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code>// src/lib/stockMovementReportAggregator.js — pure.
+export function aggregateStockMovements(movements = [], { typeFilter = '' } = {}) {
+  const src = movements || [];
+  const rows = src
+    .filter(m => !typeFilter || m.type === typeFilter)
+    .map(m => ({
+      id: m.id, date: m.createdAt || '', type: m.type || '',
+      product: m.productName || m.productId || '-',
+      qty: Number(m.qty) || 0, reason: m.reason || m.note || '', branchId: m.branchId || '',
+    }));
+  const totalsByType = {};
+  for (const r of rows) totalsByType[r.type] = (totalsByType[r.type] || 0) + 1;
+  const types = [...new Set(src.map(m => m.type).filter(Boolean))].sort();
+  return { rows, totalsByType, types, count: rows.length };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run → PASS</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Build StockMovementTab</strong></label></div>
+  <p>Scaffold as above. Loader: <code>loadStockMovementsByDateRange({ from, to, branchId })</code> (from reportsLoaders). Icon <code>ArrowLeftRight</code>, title "รายการเคลื่อนไหวสต็อค". <code>filtersSlot</code>: a <code>&lt;select&gt;</code> of <code>out.types</code> (ทั้งหมด + each type, Thai label map) → local <code>typeFilter</code> state passed to the aggregator. Table cols: วันที่-เวลา · ประเภท · สินค้า · จำนวน (± , green/rose by sign — product context, red allowed) · เหตุผล. Header chips = totalsByType counts.</p>
+
+  <div class="step"><input type="checkbox" id="t3s6"> <label for="t3s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code>git commit -am "feat(reports): stock-movement report aggregator + tab"</code></pre>
+</div>
+
+<!-- ─────────── TASK 4 ─────────── -->
+<div class="task">
+  <h3>Task 4: Stock-alert aggregator + StockAlertTab (3 sections)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/stockAlertReportAggregator.js</code>, <code>reports/StockAlertTab.jsx</code>; extend aggregators test (SA group).</p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write failing test</strong></label></div>
+<pre><code>import { aggregateStockAlert } from '../src/lib/stockAlertReportAggregator.js';
+describe('SA aggregateStockAlert', () => {
+  const NOW = new Date('2026-07-07T00:00:00Z');
+  const batches = [
+    { id:'B1', productId:'P1', productName:'A', qty:{remaining:3}, expiresAt:'2026-06-01', status:'available' }, // expired
+    { id:'B2', productId:'P1', productName:'A', qty:{remaining:2}, expiresAt:'2026-08-01', status:'available' }, // near (25d, thr 90)
+    { id:'B3', productId:'P2', productName:'B', qty:{remaining:4}, expiresAt:'2027-06-01', status:'available' }, // ok, low-stock (thr 10)
+  ];
+  const products = [
+    { id:'P1', productName:'A', alertDayBeforeExpire:90, alertQtyBeforeOutOfStock:0 },
+    { id:'P2', productName:'B', alertQtyBeforeOutOfStock:10 },
+  ];
+  it('SA1 expired lot detected', () => {
+    const r = aggregateStockAlert(batches, products, NOW);
+    expect(r.expired.map(x=>x.batch)).toEqual(['B1']);
+  });
+  it('SA2 near-expiry uses per-product alertDayBeforeExpire', () => {
+    const r = aggregateStockAlert(batches, products, NOW);
+    expect(r.nearExpiry.map(x=>x.batch)).toEqual(['B2']);
+  });
+  it('SA3 low-stock sums non-expired remaining vs threshold', () => {
+    const r = aggregateStockAlert(batches, products, NOW);
+    // P2 remaining 4 &lt;= 10 → low; P1 threshold 0 → skipped
+    expect(r.lowStock.map(x=>x.productId)).toEqual(['P2']);
+    expect(r.lowStock[0].remaining).toBe(4);
+  });
+  it('SA4 empty/no-expiry/no-threshold → no throw, empty buckets', () => {
+    const r = aggregateStockAlert([{id:'x',productId:'z',qty:{remaining:1}}], [], NOW);
+    expect(r.counts).toEqual({ expired:0, nearExpiry:0, lowStock:0 });
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run → FAIL</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code>// src/lib/stockAlertReportAggregator.js
+import { hasExpired, daysUntilExpiry } from './stockUtils.js';
+const DEFAULT_NEAR_EXPIRY_DAYS = 90;
+const remainingOf = (b) => { const r = Number(b?.qty?.remaining); return Number.isFinite(r) ? r : (Number(b?.qty) || 0); };
+
+export function aggregateStockAlert(batches = [], products = [], now = new Date()) {
+  const prodById = new Map((products || []).map(p => [String(p.id ?? p.productId), p]));
+  const expired = [], nearExpiry = [];
+  const lowByProduct = new Map();
+  for (const b of (batches || [])) {
+    const rem = remainingOf(b);
+    if (rem &lt;= 0) continue;
+    const p = prodById.get(String(b.productId));
+    const name = b.productName || p?.productName || p?.name || '-';
+    if (hasExpired(b, now)) {
+      const d = daysUntilExpiry(b, now);
+      expired.push({ id: b.id, product: name, batch: b.id, remaining: rem, expiresAt: b.expiresAt || '', overdueDays: d == null ? 0 : -d });
+      continue; // expired stock is not "available", not counted in low-stock
+    }
+    const d = daysUntilExpiry(b, now);
+    const thrDays = Number(p?.alertDayBeforeExpire) || DEFAULT_NEAR_EXPIRY_DAYS;
+    if (d != null && d &gt;= 0 && d &lt;= thrDays) {
+      nearExpiry.push({ id: b.id, product: name, batch: b.id, remaining: rem, expiresAt: b.expiresAt || '', daysLeft: d });
+    }
+    const key = String(b.productId);
+    const cur = lowByProduct.get(key) || { product: name, remaining: 0, threshold: Number(p?.alertQtyBeforeOutOfStock) };
+    cur.remaining += rem;
+    lowByProduct.set(key, cur);
+  }
+  const lowStock = [...lowByProduct.entries()]
+    .map(([productId, v]) => ({ productId, ...v }))
+    .filter(v => Number.isFinite(v.threshold) && v.threshold &gt; 0 && v.remaining &lt;= v.threshold)
+    .sort((a, b) => a.remaining - b.remaining);
+  expired.sort((a, b) => b.overdueDays - a.overdueDays);
+  nearExpiry.sort((a, b) => a.daysLeft - b.daysLeft);
+  return { expired, nearExpiry, lowStock, counts: { expired: expired.length, nearExpiry: nearExpiry.length, lowStock: lowStock.length } };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Run → PASS</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Build StockAlertTab (3 sections, NO date range)</strong></label></div>
+  <p>Loaders: <code>loadAllStockBatchesForReport({ branchId })</code> + <code>listProductsForPicker({ branchId })</code> (from scopedDataLayer). This is a <em>snapshot</em> report — NO DateRangePicker (omit <code>dateRangeSlot</code>); refresh button + Export CSV only. Icon <code>BellRing</code>, title "แจ้งเตือนสต็อค". Render 3 sections (expired = rose header, nearExpiry = amber, lowStock = emerald), each its own <code>&lt;table&gt;</code> with a count in the section header; when all 3 empty → ReportShell empty state ("สต็อคปกติ ไม่มีรายการแจ้งเตือน"). Compute <code>totalCount</code>/<code>filteredCount</code> = sum of the 3 counts so the shell's empty-state fires correctly. CSV = flattened rows with a <code>section</code> column.</p>
+
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code>git commit -am "feat(reports): stock-alert (expiry+low-stock) aggregator + tab"</code></pre>
+</div>
+
+<!-- ─────────── TASK 5 ─────────── -->
+<div class="task">
+  <h3>Task 5: Register the 4 new tabs (nav + dashboard + deep-link + permissions)</h3>
+  <p><strong>Files:</strong> Modify <code>nav/navConfig.js</code>, <code>BackendDashboard.jsx</code>, <code>lib/tabPermissions.js</code>, <code>shell/subTabEmoji.js</code>; Test <code>tests/reports-home-wiring-drift-guard.test.js</code> (REG group).</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: navConfig — add 4 entries to the reports section</strong></label></div>
+<pre><code>// after the reports-remaining-course line in the 'reports' section items[]:
+{ id:'reports-alt-sales',       label:'ยอดขายช่องทางอื่น', icon:Globe,        color:'sky',     palette:'online vendor sale ออนไลน์ คู่ค้า ช่องทาง alt sales' },
+{ id:'reports-outstanding',     label:'ขายค้างชำระ',       icon:AlertCircle,  color:'rose',    palette:'outstanding unpaid ค้างชำระ ค้าง หนี้ receivable' },
+{ id:'reports-stock-movements', label:'เคลื่อนไหวสต็อค',    icon:ArrowLeftRight, color:'sky',   palette:'stock movement เคลื่อนไหว สต็อค receive transfer withdraw' },
+{ id:'reports-stock-alert',     label:'แจ้งเตือนสต็อค',      icon:BellRing,     color:'amber',   palette:'stock alert expiry expired low หมดอายุ ใกล้หมด แจ้งเตือน ล็อต' },</code></pre>
+  <p>Add the 4 icon imports (<code>Globe, AlertCircle, ArrowLeftRight, BellRing</code>) to the lucide import at the top of navConfig.js if not already present.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: BackendDashboard — lazy import + render case + ALL_ITEM_IDS</strong></label></div>
+<pre><code>const AltSalesTab      = lazy(() => import('../components/backend/reports/AltSalesTab.jsx'));
+const OutstandingTab   = lazy(() => import('../components/backend/reports/OutstandingTab.jsx'));
+const StockMovementTab = lazy(() => import('../components/backend/reports/StockMovementTab.jsx'));
+const StockAlertTab    = lazy(() => import('../components/backend/reports/StockAlertTab.jsx'));
+// in the sub-tab switch (mirror the reports-payment / reports-reconciliation case):
+case 'reports-alt-sales':       return &lt;AltSalesTab      clinicSettings={clinicSettings} theme={theme} /&gt;;
+case 'reports-outstanding':     return &lt;OutstandingTab   clinicSettings={clinicSettings} theme={theme} /&gt;;
+case 'reports-stock-movements': return &lt;StockMovementTab clinicSettings={clinicSettings} theme={theme} /&gt;;
+case 'reports-stock-alert':     return &lt;StockAlertTab    clinicSettings={clinicSettings} theme={theme} /&gt;;
+// add all 4 ids to ALL_ITEM_IDS (deep-link whitelist — the recon-tab L1 lesson, count 61 → 65)</code></pre>
+  <p>Grep first: <code>grep -n "ALL_ITEM_IDS\|reports-reconciliation" src/pages/BackendDashboard.jsx</code> to place the case + array entry exactly beside the existing reports cases. Match the real prop signature of sibling reports cases.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: tabPermissions — 4 new ids inherit reports gate</strong></label></div>
+  <p>Grep <code>grep -n "reports-reconciliation\|reports-payment" src/lib/tabPermissions.js</code>; add the 4 ids the same way sibling report tabs are gated (report-view permission / same section).</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: subTabEmoji — cosmetic emoji</strong></label></div>
+<pre><code>'reports-alt-sales':'🌐', 'reports-outstanding':'⏳', 'reports-stock-movements':'🔄', 'reports-stock-alert':'🔔',</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Registration + deep-link test</strong></label></div>
+<pre><code>// tests/reports-home-wiring-drift-guard.test.js — REG group
+import { readFileSync } from 'node:fs';
+const nav = readFileSync('src/components/backend/nav/navConfig.js','utf8');
+const dash = readFileSync('src/pages/BackendDashboard.jsx','utf8');
+const NEW = ['reports-alt-sales','reports-outstanding','reports-stock-movements','reports-stock-alert'];
+describe('REG registration', () => {
+  it.each(NEW)('REG1 %s registered in navConfig', id => expect(nav).toContain(`id: '${id}'`) || expect(nav).toContain(`id:'${id}'`));
+  it.each(NEW)('REG2 %s has a render case', id => expect(dash).toContain(`case '${id}'`));
+  it.each(NEW)('REG3 %s in ALL_ITEM_IDS (deep-link)', id => {
+    const m = dash.match(/ALL_ITEM_IDS\s*=\s*\[([\s\S]*?)\]/);
+    expect(m && m[1]).toContain(id);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s6"> <label for="t5s6"><strong>Step 6: Run REG green, then commit</strong></label></div>
+<pre><code>npx vitest run tests/reports-home-wiring-drift-guard.test.js -t REG
+git add -A && git commit -m "feat(reports): register 4 new report tabs (nav+dashboard+deep-link+perms)"</code></pre>
+</div>
+
+<!-- ─────────── TASK 6 ─────────── -->
+<div class="task">
+  <h3>Task 6: Rewrite ReportsHomeTab card map + drift-guard test</h3>
+  <p><strong>Files:</strong> Modify <code>reports/ReportsHomeTab.jsx</code>; extend <code>tests/reports-home-wiring-drift-guard.test.js</code> (HOME group).</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write the drift-guard test FIRST (fails on current file)</strong></label></div>
+<pre><code>// HOME group — the institutional guard against this exact bug recurring.
+import ReportsHomeTabSrc from '../src/components/backend/reports/ReportsHomeTab.jsx?raw'; // if ?raw unsupported, read via fs
+// Simpler: read the two source files and assert structurally.
+import { readFileSync } from 'node:fs';
+const home = readFileSync('src/components/backend/reports/ReportsHomeTab.jsx','utf8');
+const nav  = readFileSync('src/components/backend/nav/navConfig.js','utf8');
+const navIds = [...nav.matchAll(/id:\s*'([\w-]+)'/g)].map(m=>m[1]);
+describe('HOME drift guard', () => {
+  it('HOME1 no card left with status soon', () => {
+    expect(home).not.toMatch(/status:\s*'soon'/);
+  });
+  it('HOME2 every tabId referenced is a registered nav id', () => {
+    const tabIds = [...home.matchAll(/tabId:\s*'([\w-]+)'/g)].map(m=>m[1]);
+    const orphan = tabIds.filter(id => !navIds.includes(id));
+    expect(orphan).toEqual([]);
+  });
+  it('HOME3 the 6 wired + 4 new ids are present', () => {
+    ['reports-pnl','expense-report','reports-df-payout','reports-remaining-course','clinic-report','reports-payment',
+     'reports-alt-sales','reports-outstanding','reports-stock-movements','reports-stock-alert']
+      .forEach(id => expect(home).toContain(id));
+  });
+  it('HOME4 removed cards are gone (no Smart Audience / catalog stubs)', () => {
+    expect(home).not.toContain('Smart Audience');
+    expect(home).not.toContain('กำไรต่อการรักษา');
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → FAIL (current file has soon + Smart Audience)</strong></label></div>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Rewrite CATEGORIES + ANALYTICS</strong></label></div>
+  <p>Edit <code>ReportsHomeTab.jsx</code>: (a) <code>ANALYTICS</code> — add <code>{ label:'รายงานคลินิก (ภาพรวม)', icon:BarChart3, tabId:'clinic-report', hint:'ภาพรวม executive dashboard' }</code>; remove the Smart Audience entry. (b) <code>CATEGORIES</code> — set the final card map from the plan Mockup table: flip the 6 soon→active with their tabIds, add the 7 new cards (alt-sales ×2, outstanding, stock-movements, stock-alert ×3) + payment card, delete every removed card + the whole marketing category + the general catalog cards. (c) Subtitle: drop the <code>ส่วน "เร็วๆนี้" ...</code> sentence → <code>เลือกรายงานที่ต้องการดู</code>. Keep the <code>ReportCard</code>/<code>AnalyticsCard</code> components + legend styling unchanged (cosmetic shell — no handler/state changes beyond the data arrays). Import <code>BarChart3</code> is already present.</p>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Run HOME green + build</strong></label></div>
+<pre><code>npx vitest run tests/reports-home-wiring-drift-guard.test.js
+npm run build   # catch any import/JSX error</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code>git commit -am "feat(reports): home card map — wire 6 existing + 7 new, remove dead cards, drift-guard test"</code></pre>
+</div>
+
+<!-- ─────────── TASK 7 ─────────── -->
+<div class="task">
+  <h3>Task 7: Rule I flow-simulate (home → click → correct tab loads)</h3>
+  <p><strong>Files:</strong> Create <code>tests/reports-new-tabs-flow-simulate.test.js</code>.</p>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write RTL flow test</strong></label></div>
+  <p>Render <code>ReportsHomeTab</code> with a spy <code>onNavigate</code>; assert clicking each new/wired card fires <code>onNavigate</code> with the exact tabId (F1). Then mount each new Tab with mocked loaders returning a small fixture (vi.mock scopedDataLayer + reportsLoaders) and assert the aggregated total renders in the shell footer (F2) — this proves the loader→aggregator→shell chain, not just the pure fn (Rule I: chain the whole flow).</p>
+<pre><code>// F1 — every card routes
+import { render, screen, fireEvent } from '@testing-library/react';
+import ReportsHomeTab from '../src/components/backend/reports/ReportsHomeTab.jsx';
+it('F1 stock-alert card navigates', () => {
+  const onNavigate = vi.fn();
+  render(&lt;ReportsHomeTab onNavigate={onNavigate} clinicSettings={{}} /&gt;);
+  fireEvent.click(screen.getByText('ล็อตหมดอายุ'));
+  expect(onNavigate).toHaveBeenCalledWith('reports-stock-alert');
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run → green; fix any wiring gap</strong></label></div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add tests/reports-new-tabs-flow-simulate.test.js && git commit -m "test(reports): Rule I flow-simulate home→tab + loader→aggregator chain"</code></pre>
+</div>
+
+<!-- ─────────── TASK 8 ─────────── -->
+<div class="task">
+  <h3>Task 8: Rule Q L2 — aggregators vs real prod data</h3>
+  <p><strong>Files:</strong> Create <code>scripts/diag-reports-new-l2.mjs</code> (Rule R env-pull, read-only, admin SDK, canonical path).</p>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write the diag</strong></label></div>
+  <p>Mirror an existing <code>diag-*.mjs</code> (env-load + admin SDK + <code>artifacts/loverclinic-opd-4c39b/public/data/*</code> + invocation guard). For นครราชสีมา branch: read be_online_sales + be_vendor_sales + be_sales + be_stock_batches + be_products; run the 4 pure aggregators; print the totals + row counts + a few sample rows; ASSERT the outstanding rows genuinely have <code>netTotal − paid &gt; 0</code> and none are AUDIT_SALE_SOURCES; assert stock-alert expired rows really are past <code>expiresAt</code>. This is the "could-fail" real test (Rule Q-honest) — it will surface a wrong field-name or a false-positive before ship.</p>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run vs prod → adjudicate every flagged row</strong></label></div>
+<pre><code>vercel env pull .env.local.prod --environment=production   # if not pulled this session
+node scripts/diag-reports-new-l2.mjs</code></pre>
+  <p>If any aggregator flags something surprising (e.g. an outstanding sale that's actually a course-mutation), treat it as the recon false-positive lesson — fix the guard, re-run, do NOT ship until clean.</p>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit the diag</strong></label></div>
+<pre><code>git add scripts/diag-reports-new-l2.mjs && git commit -m "test(reports): Rule Q L2 diag — new aggregators vs real prod"</code></pre>
+</div>
+
+<!-- ─────────── TASK 9 ─────────── -->
+<div class="task">
+  <h3>Task 9: Rule Q L1 — Playwright on real prod (click each card → correct tab + real data)</h3>
+  <p><strong>Files:</strong> Create <code>tests/e2e/reports-home-wire.spec.js</code> (mirror this session's <code>session-final-review.spec.js</code>: dev server → real prod Firestore, staff token injected).</p>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Write the spec</strong></label></div>
+  <p>Nav to backend → reports home → for each of {stock-alert, alt-sales, outstanding, stock-movements, reports-pnl, expense-report, clinic-report, reports-payment, reports-df-payout, reports-remaining-course}: click the card, assert the correct tab heading renders + a table (or empty-state) appears with no console error. Screenshot each (Q-vis — eyeball). Use <code>force:true</code> + a <code>visible=true</code> filter for the ArcBloom floating cards (the L1 lesson from this session). Note the known "tab= deep-links land on bloom home in new-menu mode" pre-existing gap — drive via clicks, not deep-link.</p>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Run + eyeball screenshots</strong></label></div>
+<pre><code>npx playwright test tests/e2e/reports-home-wire.spec.js</code></pre>
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Fix anything L1 surfaces; commit spec</strong></label></div>
+</div>
+
+<!-- ─────────── TASK 10 ─────────── -->
+<div class="task">
+  <h3>Task 10: Full suite + build + V21 repoints + state update</h3>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: Full vitest</strong></label></div>
+<pre><code>npx vitest run   # expect prior green baseline + new tests; fix any V21 source-grep repoint
+                 # (nav count tests, ALL_ITEM_IDS count 61→65, backend-nav-config section counts,
+                 #  tabPermissions count, phase11-master-data-scaffold, subTabEmoji count)</code></pre>
+  <p>Known count tests to bump: <code>backend-nav-config.test.js</code> (reports section item count +4), <code>tabPermissions.test.js</code>, any <code>ALL_ITEM_IDS</code> count assertion (D.1-style, +4). Update each with a marker comment; behavior unchanged.</p>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Build clean</strong></label></div>
+<pre><code>npm run build</code></pre>
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: audit-reports-accuracy quick check</strong></label></div>
+  <p>Confirm each new tab's footer total equals the sum of its visible rows (covered by AS3/OS2 + a rendered-total assertion). No off-by-status double counts.</p>
+  <div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4: Commit + push + update state files</strong></label></div>
+<pre><code>git add -A && git commit -m "feat(reports): make reports-home fully functional — 6 wired + 4 new tabs, dead cards removed"
+git push origin master
+# update .agents/active.md + SESSION_HANDOFF.md (session-end skill); NO deploy without explicit "deploy"</code></pre>
+</div>
+
+<h2>Self-Review (done)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> wiring (Task 6), 4 new reports (Tasks 1-4), registration+deep-link (Task 5), drift-guard (Task 6), audit-reports-accuracy (Tasks 1-4 tests + Task 10), Rule I (Task 7), Rule Q L2/L1 (Tasks 8-9), remove-dead (Task 6). All spec acceptance criteria mapped.</li>
+  <li><strong>Placeholders:</strong> aggregator code + test code concrete; tab components reference the exact PaymentSummaryTab scaffold with concrete loader/aggregator/columns; two grounding-greps flagged (movement fields, ALL_ITEM_IDS/perm placement) where the exact sibling location must be matched.</li>
+  <li><strong>Type consistency:</strong> aggregator names (<code>aggregateAltSales/aggregateOutstanding/aggregateStockMovements/aggregateStockAlert</code>) + return shapes are consistent between their test task and their tab task; tab ids identical across navConfig/dashboard/perms/home/tests.</li>
+  <li><strong>Deploy:</strong> no rules/collections → vercel-only; not auto (V18).</li>
+</ul>
+
+</body>
+</html>
