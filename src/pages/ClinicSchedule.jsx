@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
+import { onSnapshotFresh } from '../lib/freshGate.js';
 import { db, appId, auth } from '../firebase.js';
 import { CalendarDays, ChevronLeft, ChevronRight, X, Clock, Stethoscope, Phone, MessageCircle, Globe, CheckCircle2, XCircle } from 'lucide-react';
 import ClinicLogo from '../components/ClinicLogo.jsx';
@@ -94,7 +95,9 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
     if (!authReady) return;
-    const unsub = onSnapshot(
+    // A2 (2026-07-07): onSnapshotFresh — customer page renders server-confirmed
+    // data only (drops the persistentLocalCache fromCache snapshot; see freshGate.js).
+    const unsub = onSnapshotFresh(
       doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token),
       (snap) => {
         markReady(); // snapshot fired = load OK (notfound/expired/done all count)

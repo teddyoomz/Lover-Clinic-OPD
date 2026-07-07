@@ -16,13 +16,22 @@ describe('firebase.js — connection layer (Task 4)', () => {
     expect(src).toMatch(/import\s*\{[^}]*initializeFirestore[^}]*\}\s*from\s*'firebase\/firestore'/);
   });
   it('enables experimentalAutoDetectLongPolling', () => {
-    expect(src).toMatch(/initializeFirestore\(\s*app\s*,\s*\{\s*experimentalAutoDetectLongPolling:\s*true\s*\}\s*\)/);
+    // A1 repoint (2026-07-07 instant cold-start): the init object grew a
+    // localCache key — lock the FLAG, not the literal single-key object shape.
+    expect(src).toMatch(/initializeFirestore\(app,\s*\{\s*experimentalAutoDetectLongPolling:\s*true/);
   });
   it('no longer calls bare getFirestore(app)', () => {
     expect(src).not.toMatch(/getFirestore\(app\)/);
   });
-  it('does NOT enable offline persistence (Q1 = fresh-always)', () => {
-    expect(src).not.toMatch(/enableIndexedDbPersistence|persistentLocalCache|persistentMultipleTabManager/);
+  it('A1 (2026-07-07): persistent cache ON for staff SWR; customers stay fresh via freshGate', () => {
+    // CONTRACT FLIP — user decision 2026-07-07 (spec Q1=A) REVERSED the
+    // 2026-06-16 fresh-always for STAFF surfaces. Fresh-always is preserved for
+    // customer pages by src/lib/freshGate.js (see instant-coldstart-fresh-gate
+    // tests). This test used to assert NO persistence; it now locks persistence
+    // present + IDB feature-detect fallback (node/private-mode = memory =
+    // pre-A1 behavior).
+    expect(src).toMatch(/persistentLocalCache\(\{\s*tabManager:\s*persistentMultipleTabManager\(\)\s*\}\)/);
+    expect(src).toMatch(/typeof indexedDB !== 'undefined'/);
   });
 });
 

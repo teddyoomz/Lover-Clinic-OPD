@@ -8,8 +8,17 @@ let errCb = null;
 const unsub = vi.fn();
 vi.mock('firebase/firestore', () => ({
   doc: (...a) => ({ __doc: a }),
-  onSnapshot: (_ref, cb, err) => { snapCb = cb; errCb = err; return unsub; },
+  // A2 repoint (2026-07-07 instant cold-start): ClinicSchedule now subscribes via
+  // freshGate's onSnapshotFresh → onSnapshot(ref, { includeMetadataChanges }, cb, err).
+  // Normalize both arg shapes so this harness keeps driving the REAL wrapped callback.
+  onSnapshot: (_ref, optsOrCb, cbOrErr, maybeErr) => {
+    if (typeof optsOrCb === 'function') { snapCb = optsOrCb; errCb = cbOrErr; }
+    else { snapCb = cbOrErr; errCb = maybeErr; }
+    return unsub;
+  },
 }));
+// A2 — snapshots fed through the freshGate wrapper need metadata; server = fromCache:false.
+const serverSnap = (o) => ({ metadata: { fromCache: false }, ...o });
 vi.mock('../src/firebase.js', () => ({
   db: {}, appId: 'app',
   auth: { currentUser: { uid: 'u' }, onAuthStateChanged: () => () => {} },
@@ -43,7 +52,7 @@ describe('ClinicSchedule resilient load (mounted flow)', () => {
   it('a snapshot that fires (doc found) → schedule loads, error card never appears', () => {
     render(<ClinicSchedule {...props} />);
     act(() => {
-      snapCb({ exists: () => true, data: () => ({ months: ['2026-01'], doctorDays: [], closedDays: [], noDoctorRequired: true, bookedSlots: [] }) });
+      snapCb(serverSnap({ exists: () => true, data: () => ({ months: ['2026-01'], doctorDays: [], closedDays: [], noDoctorRequired: true, bookedSlots: [] }) }));
     });
     act(() => { vi.advanceTimersByTime(30000); });
     expect(screen.queryByTestId('load-error-retry')).toBeNull();
@@ -51,10 +60,24 @@ describe('ClinicSchedule resilient load (mounted flow)', () => {
 
   it('a doc-NOT-FOUND snapshot counts as loaded (markReady) → notfound shown, NO error card (contract 1)', () => {
     render(<ClinicSchedule {...props} />);
-    act(() => { snapCb({ exists: () => false, data: () => ({}) }); }); // doc absent / disabled
+    act(() => { snapCb(serverSnap({ exists: () => false, data: () => ({}) })); }); // doc absent / disabled
     act(() => { vi.advanceTimersByTime(30000); });
     expect(screen.getByText('ไม่พบตารางนัดหมาย')).toBeInTheDocument();
     expect(screen.queryByTestId('load-error-retry')).toBeNull(); // not-found is a RESOLVED load, never the error card
+  });
+
+  it('A2 (2026-07-07): a fromCache snapshot does NOT resolve the page — customers render server truth only', () => {
+    render(<ClinicSchedule {...props} />);
+    act(() => {
+      snapCb({ metadata: { fromCache: true }, exists: () => true, data: () => ({ months: ['2026-01'], doctorDays: [], closedDays: [], noDoctorRequired: true, bookedSlots: [] }) });
+    });
+    // still on the loading spinner — persistentLocalCache data is dropped by freshGate
+    expect(document.querySelector('.animate-spin')).not.toBeNull();
+    // server snapshot then resolves it
+    act(() => {
+      snapCb(serverSnap({ exists: () => true, data: () => ({ months: ['2026-01'], doctorDays: [], closedDays: [], noDoctorRequired: true, bookedSlots: [] }) }));
+    });
+    expect(screen.queryByTestId('load-error-retry')).toBeNull();
   });
 
   it('a transient onError does NOT instantly flash notfound — it routes through retry', () => {

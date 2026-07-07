@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { onSnapshotFresh } from '../lib/freshGate.js';
 import {
   ArrowLeft, Activity, AlertCircle, CheckCircle2, Clock, Edit3,
   TimerOff, User, Phone, MapPin, HeartPulse, Pill, CheckSquare, Flame, Globe, Lock
@@ -79,7 +80,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     // listener uses Firestore rules `isSignedIn()` so a null user → empty
     // result → false-positive "Invalid Link". Wait for auth.
     if (!user) return;
-    const unsubscribe = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), (snapshot) => {
+    // A2 (2026-07-07): onSnapshotFresh — customer page renders server-confirmed
+    // data only (drops the persistentLocalCache fromCache snapshot; see freshGate.js).
+    const unsubscribe = onSnapshotFresh(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), (snapshot) => {
       markReady(); // snapshot fired = load OK (doc-found AND doc-not-found both count)
       if (!snapshot.exists()) { setSessionExists(false); return; }
       // Set to true on first server-confirmed exists() === true
