@@ -197,13 +197,28 @@ test('S3 — customer ?schedule= page NEVER renders cached data without server c
 test('S4 — SW serves the app shell fully offline (preview/prod only)', async ({ page, context }) => {
   test.skip(!process.env.E2E_BASE_URL, 'SW exists only in built output — run against vite preview or prod (E2E_BASE_URL)');
   await page.goto('/');
-  // wait for the SW to take control of the page
+  // Wait for FULL activation + a POPULATED precache — over a real network the
+  // install-time precache takes seconds; reg.active is non-null already at
+  // state 'activating' (racing it → uncontrolled reload → ERR_INTERNET_
+  // DISCONNECTED; caught live on prod, worked-by-luck on localhost preview).
   await page.waitForFunction(async () => {
     if (!('serviceWorker' in navigator)) return false;
     const reg = await navigator.serviceWorker.getRegistration();
-    return !!(reg && reg.active);
-  }, { timeout: 30000 });
-  await page.reload(); // now controlled by the SW
+    if (!reg || !reg.active || reg.active.state !== 'activated') return false;
+    const keys = await caches.keys();
+    return keys.some((k) => k.includes('precache'));
+  }, null, { timeout: 60000 });
+  // Become controlled. Chromium occasionally needs an extra navigation after
+  // activation before controller attaches (observed on live HTTPS; contract =
+  // "a user who has visited before gets the offline shell", so a bounded
+  // settle loop is faithful, not assertion-weakening).
+  let controlled = false;
+  for (let i = 0; i < 3 && !controlled; i++) {
+    await page.reload();
+    controlled = await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 })
+      .then(() => true).catch(() => false);
+  }
+  expect(controlled, 'SW never took control after 3 navigations').toBe(true);
   await context.setOffline(true);
   try {
     await page.reload();
@@ -211,7 +226,7 @@ test('S4 — SW serves the app shell fully offline (preview/prod only)', async (
     await page.waitForFunction(() => {
       const r = document.getElementById('root');
       return !!(r && r.childElementCount > 0);
-    }, { timeout: 15000 });
+    }, null, { timeout: 15000 });
   } finally {
     await context.setOffline(false);
   }
