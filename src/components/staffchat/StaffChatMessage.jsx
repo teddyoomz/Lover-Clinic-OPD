@@ -22,6 +22,7 @@ import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
 import { gridLayoutFor, attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
 import { bundledStickerSrc } from '../../lib/staffChatStickers.js';
 import { StaffChatSystemCard } from './StaffChatSystemCard.jsx';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // (2026-05-22) Adaptive thumbnail grid for message.attachments[] (LINE-style).
 function AttachmentGrid({ attachments, onOpen }) {
@@ -281,9 +282,10 @@ export function StaffChatMessage({ message, isOwn, onReply, onDelete, onQuoteCli
           does NOT close; only ยกเลิก / ลบเลย. */}
       {confirmDelete && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain"
           data-testid={`staff-chat-delete-confirm-${message.id}`}
         >
+          <ModalScrollLock />
           <div
             className="bg-[var(--bg-card)] text-[var(--tx-primary)] rounded-xl p-4 w-[260px] shadow-2xl"
             onClick={(e) => e.stopPropagation()}

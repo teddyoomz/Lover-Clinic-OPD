@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, FileImage, Upload, Plus, Pencil, Check, ArrowUp, ArrowDown, Trash2, Lock, Unlock } from 'lucide-react';
 import { defaultChartTemplates, chartCategories } from '../data/chartTemplates.js';
 import { debugLog } from '../lib/debugLog.js';
+import { useModalScrollLock } from '../lib/useModalScrollLock.js';
 
 // (2026-05-22 EOD+1) — Chart templates persistence rewrite.
 //   User report: "อัพรูปผ่าน Modal เพิ่ม chart แล้วอยู่ไม่ถาวร — เปิด TFP
@@ -78,6 +79,8 @@ function mintTemplateId() {
 export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDark, db: dbProp, appId }) {
   // Prefer prop (existing call site) but fall back to imported singleton.
   const db = dbProp || firebaseDb;
+  // AV205 — gate on isOpen (early return at :270 runs after hooks)
+  useModalScrollLock(!!isOpen);
   const [source, setSource] = useState('local');
   const [category, setCategory] = useState('all');
   const [templates, setTemplates] = useState([]); // raw list from Firestore
@@ -284,7 +287,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
   // instead of the viewport. Portal → always viewport-centered, no flash.
   return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / ESC).
-    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60">
+    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain">
       <div className="w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col bg-[var(--bg-elevated)] border border-[var(--bd)]"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--bd)]">

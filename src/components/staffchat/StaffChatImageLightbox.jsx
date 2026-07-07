@@ -48,6 +48,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // V117 (2026-05-23 EOD+1 LATE+3) — createPortal to document.body is the
 // canonical fullscreen-overlay pattern. User reported V115 mobile fix STILL
@@ -68,6 +69,7 @@ function extFromUrl(u) {
 }
 
 export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const images = useMemo(() => {
     if (Array.isArray(imagesProp) && imagesProp.length) return imagesProp;
     if (src) return [{ fullUrl: src, thumbUrl: src }];
@@ -287,7 +289,7 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onClick={onClose}
-      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] overflow-hidden"
+      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] overflow-hidden overscroll-contain"
     >
       {/* top bar: counter + download + close
           V115 — paddingTop env(safe-area-inset-top) keeps close button

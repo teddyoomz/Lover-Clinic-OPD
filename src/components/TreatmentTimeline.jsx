@@ -8,6 +8,7 @@ import { Stethoscope, Loader2, RefreshCw, ChevronLeft, ChevronRight, FileText,
 // directly — no broker `{success, treatment}` wrapper.
 import { getCustomerTreatments, getTreatment, deleteBackendTreatment, rebuildTreatmentSummary } from '../lib/scopedDataLayer.js';
 import { aaAccent } from '../lib/themeAccent.js';
+import { ModalScrollLock } from '../lib/useModalScrollLock.js';
 
 // V50 — adapter: be_treatments doc shape → Timeline row shape.
 function mapBeTreatmentToTimelineRow(t) {
@@ -367,8 +368,9 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
     {/* ── Cancel Treatment Modal ── */}
     {cancelModalOpen && (
       // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50">
-        <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#222]' : 'bg-white'}`}
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain">
+        <ModalScrollLock />
+        <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#222]' : 'bg-white'}`}
           onClick={e => e.stopPropagation()}>
           <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
             <h3 className="text-sm font-black" style={{ color: aaAccent('#14b8a6', isDark) }}>ยกเลิกการรักษา</h3>

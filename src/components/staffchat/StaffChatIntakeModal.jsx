@@ -13,8 +13,10 @@ import { createPortal } from 'react-dom';
 import { X, Loader2, FileText } from 'lucide-react';
 import { OpdIntakeDetailBody } from '../OpdIntakeDetailBody.jsx';
 import { useEscToClose } from '../../lib/useEscToClose.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 export function StaffChatIntakeModal({ sessionId, customerId, name, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
 
@@ -62,7 +64,7 @@ export function StaffChatIntakeModal({ sessionId, customerId, name, onClose }) {
     // launched FROM it must stack above (NamePicker 9500 / lightbox 9700 tier);
     // the original low z rendered BENEATH the near-full-screen mobile panel.
     <div
-      className="fixed inset-0 z-[9600] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[9600] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain"
       data-testid="staffchat-intake-modal"
     >
       <div

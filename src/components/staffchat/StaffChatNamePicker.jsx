@@ -13,10 +13,12 @@
 import React, { useState } from 'react';
 import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
 import { ROLE_KEYS, ROLE_LABELS_TH, getRole } from '../../lib/staffChatIdentity.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const DEFAULT_COLOR = '#E11D48';  // rose-600
 
 export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initialColor, title, description }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [name, setName] = useState(typeof initialValue === 'string' ? initialValue : '');
   const [color, setColorState] = useState(
     typeof initialColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(initialColor)
@@ -40,7 +42,7 @@ export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initial
     <div
       data-testid="staff-chat-name-picker"
       data-mode={isEdit ? 'edit' : 'first-send'}
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9500] p-4"
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9500] p-4 overflow-y-auto overscroll-contain"
     >
       <div className="bg-[var(--bg-card)] border border-[var(--bd-strong)] rounded-xl shadow-2xl w-full max-w-[320px] p-5">
         <h3 className="text-lg font-bold text-[var(--tx-primary)] mb-1">

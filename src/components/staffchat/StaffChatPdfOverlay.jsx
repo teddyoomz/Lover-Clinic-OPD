@@ -11,6 +11,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download } from 'lucide-react';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // V117 (2026-05-23 EOD+1 LATE+3) — createPortal to document.body. Same
 // architectural reasoning as StaffChatImageLightbox: this overlay is rendered
@@ -18,6 +19,8 @@ import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
 // nested position:fixed gets bounded by the panel on iOS Safari. Portal
 // bypasses ALL ancestor CSS. AV117.
 export function StaffChatPdfOverlay({ fileUrl, name, size, onClose }) {
+  // AV205 — gate on fileUrl: hooks run before the early return below
+  useModalScrollLock(!!fileUrl);
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', handler);
@@ -29,7 +32,7 @@ export function StaffChatPdfOverlay({ fileUrl, name, size, onClose }) {
   return createPortal(
     <div
       data-testid="staff-chat-pdf-overlay"
-      className="fixed inset-0 bg-black/90 flex flex-col z-[9700]"
+      className="fixed inset-0 bg-black/90 flex flex-col z-[9700] overscroll-contain"
     >
       <div className="flex items-center justify-between px-4 py-3 text-white bg-gradient-to-b from-black/70 to-transparent">
         <span className="text-sm truncate pr-3" title={name}>{name || 'ไฟล์'}</span>

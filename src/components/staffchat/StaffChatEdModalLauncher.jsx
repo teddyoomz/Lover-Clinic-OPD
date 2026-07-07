@@ -15,6 +15,7 @@ import { pickKioskAssessmentFields } from '../../lib/kioskAssessmentFields.js';
 import { getCustomer, listenToAssessments } from '../../lib/scopedDataLayer.js';
 import { useResolvedTheme } from '../../hooks/useTheme.js';
 import { useEscToClose } from '../../lib/useEscToClose.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 import EDDetailModal from '../backend/EDDetailModal.jsx';
 
 const ED_ORDER = ['adam', 'iief', 'mrs', 'pe']; // EDScoreBox display order
@@ -35,6 +36,9 @@ export function StaffChatEdModalLauncher({ customerId, onClose }) {
   // ESC also closes the loading/empty portals (stack-disciplined; the real
   // EDDetailModal registers its own token once mounted).
   useEscToClose(onClose);
+  // AV205 — every branch of this launcher renders a full-screen blocking
+  // overlay (loading / empty / EDDetailModal) → lock for the whole lifetime.
+  useModalScrollLock(true);
 
   useEffect(() => {
     let alive = true;
@@ -72,7 +76,7 @@ export function StaffChatEdModalLauncher({ customerId, onClose }) {
     return createPortal(
       // z-[9600] (bug-hunt R1 #1): chat panel is z-[9000] — chat-launched
       // overlays sit ABOVE it (NamePicker 9500 / lightbox+pdf 9700 tier).
-      <div className="fixed inset-0 z-[9600] flex items-center justify-center bg-black/50" data-testid="staffchat-ed-loading">
+      <div className="fixed inset-0 z-[9600] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain" data-testid="staffchat-ed-loading">
         <div className="flex items-center gap-2 text-sm text-white/80"><Loader2 size={16} className="animate-spin" /> กำลังโหลดแบบประเมิน…</div>
       </div>,
       document.body,
@@ -81,7 +85,7 @@ export function StaffChatEdModalLauncher({ customerId, onClose }) {
 
   if (!hero) {
     return createPortal(
-      <div className="fixed inset-0 z-[9600] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" data-testid="staffchat-ed-empty">
+      <div className="fixed inset-0 z-[9600] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" data-testid="staffchat-ed-empty">
         <div className="bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl shadow-2xl p-5 max-w-sm w-full text-center" onClick={(e) => e.stopPropagation()}>
           <p className="text-sm font-bold text-[var(--tx-primary)] mb-1">ยังไม่มีแบบประเมิน</p>
           <p className="text-xs text-[var(--tx-muted)] mb-4">{customer ? 'ลูกค้าคนนี้ยังไม่มีผลการประเมินในระบบ' : 'ไม่พบข้อมูลลูกค้า'}</p>

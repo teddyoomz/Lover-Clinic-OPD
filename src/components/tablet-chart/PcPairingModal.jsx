@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import TabletReadyList from './TabletReadyList.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // props: branchId, phase ('choose'|'waiting'|'failed'), error, onEditHere,
 // onSendToTablet(deviceObj), onCancel, onRetry, onClose.
 // AV78: the backdrop does NOT close — only the explicit ปิด / ยกเลิก buttons do.
 export default function PcPairingModal({ branchId, phase, error, onEditHere, onSendToTablet, onCancel, onRetry, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [picked, setPicked] = useState(null);
   // V123 (2026-05-27) — createPortal to document.body (AV143). Same trap class
   // as AV117: rendered inside ChartSection → TFP `fixed inset-0`; portal keeps
   // the choice modal viewport-centered regardless of ancestor transforms.
   return createPortal(
-    <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center overflow-y-auto overscroll-contain">
       <div className="bg-neutral-900 text-neutral-100 rounded-xl p-5 w-[360px] max-w-[92vw]" onClick={e => e.stopPropagation()}>
         {phase === 'choose' && (<>
           <h3 className="text-base mb-3">แก้ไข Chart ที่ไหน?</h3>

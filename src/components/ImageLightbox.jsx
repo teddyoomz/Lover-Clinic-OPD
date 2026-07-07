@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useModalScrollLock } from '../lib/useModalScrollLock.js';
 
 // ── Canonical fullscreen image lightbox (shared) ───────────────────────────
 // Extracted 2026-05-27 (V123) from ChartSection.ChartLightbox so the chart
@@ -23,12 +24,14 @@ export default function ImageLightbox({ src, label, onClose }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+  // AV205 — gate on src: hooks run before the early return below
+  useModalScrollLock(!!src);
   if (!src) return null;
   return createPortal(
     // audit-anti-vibe-code: AV78 lightbox-explicit-exception — click-anywhere-closes
     // IS expected UX for a fullscreen image viewer (the backdrop onClick below).
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 overflow-y-auto overscroll-contain"
       onClick={onClose}
       role="dialog"
       aria-label={label || 'ดูรูปใหญ่'}
