@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Instant Staff App Cold-Start Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    .fbox { border:1.5px solid #94a3b8; border-radius:8px; padding:6px 12px; background:#f8fafc; margin:4px auto; max-width:640px; text-align:center; font-size:0.9em; }
+    .fbox.hot { border-color:#dc2626; background:#fef2f2; }
+    .fbox.ok { border-color:#16a34a; background:#f0fdf4; }
+    .farrow { text-align:center; color:#64748b; font-size:0.85em; }
+    .phone { width: 290px; background: #0a0a0a; border-radius: 14px; padding: 10px; color: #e5e5e5; font-size: 11px; display:inline-block; vertical-align:top; margin-right:10px; }
+    .pill { background:#1c1c1e; border-radius:9px; padding:3px 8px; color:#ddd; display:inline-block; margin:2px; }
+    .pill b { color:#f97316; }
+    .chip { display:inline-block; background:#27272a; border-radius:6px; padding:1px 6px; margin-right:4px; font-size:10px; color:#d4d4d8; }
+    .chip.skel { color:transparent; background:linear-gradient(90deg,#27272a,#3a3a3d,#27272a); min-width:48px; }
+    .syncdot { color:#fbbf24; font-size:10px; }
+    .syncdot::before { content:'● '; }
+  </style>
+</head>
+<body>
+
+<h1>Instant Staff App Cold-Start Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (INLINE execution — subagents thrash on this baseline per V81/V86; memory lock <code>feedback_no_large_agent_fanout</code>). Steps use HTML checkboxes for tracking.<br>
+  <strong>Spec:</strong> <a href="../specs/2026-07-07-instant-staff-app-cold-start-design.html">2026-07-07-instant-staff-app-cold-start-design.html</a> (Q1=A SWR staff + customer fresh-gate · Q2=A hub 2 จังหวะ · Q3=B ทั้ง staff app · Q4=B Service Worker)<br>
+  <strong>Deploy:</strong> user PRE-AUTHORIZED this batch ("ถ้าผ่านหมด ไร้บั๊ค 100% แล้ว deploy ได้เลย") — vercel-only (firestore.rules UNCHANGED → NO Probe-Deploy-Probe). Deploy ships the 12 pending commits (AV205 ฯลฯ) ด้วย — flag in final report.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Staff cold-start after long absence: หน้า นัด paint พร้อมข้อมูล &lt;1 วิ (จาก IndexedDB cache) + server sync ≤3 วิ; customer-facing ยัง fresh-always 100%; app shell instant ผ่าน Service Worker.</p>
+  <p><strong>Architecture:</strong> Layer 0 = persistentLocalCache (ทุก listener ได้ SWR ฟรี) · Layer 1 = freshGate ลูกค้า · Layer 2 = {source} opt + swrRun/useSwrLoad สำหรับ one-shot getters · Layer 3 = hub 2 จังหวะ + SyncIndicator · Layer 5 = vite-plugin-pwa (precache shell, ห้ามแตะ /api + googleapis).</p>
+  <p><strong>Tech Stack:</strong> firebase 12.11 (persistentLocalCache + persistentMultipleTabManager + getDocsFromCache) · vite-plugin-pwa/Workbox · Playwright · vitest.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Target UI delta (grounded in real hub design — มีแค่ 2 ของใหม่: sync indicator + chip skeleton)</div>
+  <div class="phone">
+    <div><b style="color:#fff">รายการนัดหมาย</b> <b style="color:#f97316">2 คน</b> <span class="syncdot">กำลังซิงค์…</span></div>
+    <div class="pill">วันนี้ <b>2</b></div><div class="pill">พรุ่งนี้ <b>6</b></div><div class="pill">ย้อนหลัง 30 วัน <b>269</b></div>
+    <div style="background:#161618;border:1px solid #2c2c2e;border-radius:10px;padding:8px;margin:6px 0;">
+      <b>คุณสมชาย ใจดี</b> · 10:30 <span class="chip">ปรึกษา</span><br>
+      <span class="chip skel">····</span><span class="chip skel">····</span>
+    </div>
+    <div style="color:#8a8a8e;">↑ จังหวะ 1 (cache) paint แล้ว · chip เสริม = skeleton จนจังหวะ 2 มา · syncdot หายเมื่อ server ยืนยัน</div>
+  </div>
+  <div style="display:inline-block; vertical-align:top; max-width:400px; font-size:0.9em;">
+    <b>SyncIndicator</b>: จุด amber pulse + "กำลังซิงค์…" text-xs — แสดงเมื่อ <code>syncing===true</code> (ข้อมูลบนจอยังมาจาก cache) · ห้ามแดง (rule 04) · ตำแหน่ง: ข้างหัวข้อ "รายการนัดหมาย" (แทนที่ช่องที่ "ไม่มีแพทย์เข้า" เคยอยู่? — ไม่ใช่: ต่อท้าย ไม่เบียด doctor chips)<br><br>
+    <b>Update toast (SW)</b>: แถบล่าง "มีเวอร์ชันใหม่ — แตะเพื่อรีเฟรช" ปุ่มเดียว + auto-reload เมื่อแท็บ hidden (ไม่ขัดจังหวะงาน)
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Read-strategy + hub 2 จังหวะ (runtime หลังแก้)</div>
+  <div class="fbox">Cold start → SW serve shell (0 net) → auth จาก IndexedDB → mount hub</div>
+  <div class="farrow">↓ loadAll()</div>
+  <div class="fbox ok"><b>จังหวะ 1 loadCore</b> — swrRun: ① getAppointmentsByDateRange+listStaffSchedules ({source:'cache'}) → ถ้ามีข้อมูล: setAppts+setScheduleEntries+setLoading(false)+setSyncing(true) → ② ตัวเดิม ({source:'server'}) → re-set + setSyncing(false)</div>
+  <div class="farrow">↓ ไม่ await (non-blocking)</div>
+  <div class="fbox"><b>จังหวะ 2 loadEnrichment</b> — swrRun เดียวกันกับ 5 dataset (customers/deposits/sales/memberships/treatments) + wallets → buildCustomerSummaryMap → setSummaryMap + setSummaryLoading(false) → chip เติมแทน skeleton</div>
+  <div class="farrow">↓ กติกากลาง</div>
+  <div class="fbox hot">customer pages (?session= ?schedule=) = onSnapshotFresh (ข้าม fromCache) · ?patient= = /api/patient-view (fresh อยู่แล้ว ไม่แตะ) · ⛔ ห้าม decision-write จากข้อมูล fromCache (AV206)</div>
+  <div class="farrow">— SW update —</div>
+  <div class="fbox">deploy ใหม่ → visibilitychange → reg.update() → onNeedRefresh → toast + auto updateSW(true) เมื่อแท็บ hidden · kill-switch: deploy sw.js ที่ self.registration.unregister()</div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>Action</th><th>หน้าที่</th></tr>
+  <tr><td><code>src/firebase.js</code></td><td>Modify</td><td>persistentLocalCache + multi-tab + IDB feature-detect fallback</td></tr>
+  <tr><td><code>src/lib/freshGate.js</code></td><td>Create</td><td>onSnapshotFresh (ข้าม fromCache) สำหรับ customer surfaces</td></tr>
+  <tr><td><code>src/pages/PatientForm.jsx</code> :82 · <code>src/pages/ClinicSchedule.jsx</code> :97</td><td>Modify</td><td>swap onSnapshot → onSnapshotFresh</td></tr>
+  <tr><td><code>src/lib/swrRead.js</code></td><td>Create</td><td>swrRun orchestrator (cache leg + server leg)</td></tr>
+  <tr><td><code>src/hooks/useSwrLoad.js</code></td><td>Create</td><td>hook สำหรับ tab ทั่วไป (Phase C)</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>Modify</td><td><code>_getDocsBySource</code> + {source} opt บน hub getters (7 ตัว)</td></tr>
+  <tr><td><code>src/lib/reportsLoaders.js</code></td><td>Modify</td><td>loadTreatmentsByDateRange รับ {source}</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>Modify</td><td>loadAll → loadCore + loadEnrichment + syncing/summaryLoading state</td></tr>
+  <tr><td><code>src/components/SyncIndicator.jsx</code></td><td>Create</td><td>amber pulse dot + กำลังซิงค์…</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubRowCard.jsx</code></td><td>Modify</td><td>chip skeleton เมื่อ summaryLoading</td></tr>
+  <tr><td>staff tabs (inventory จาก Task C1)</td><td>Modify</td><td>useSwrLoad adoption หรือ AV206 sanctioned marker</td></tr>
+  <tr><td><code>vite.config.js</code> + <code>src/main.jsx</code> + <code>src/components/SwUpdateToast.jsx</code></td><td>Modify/Create</td><td>vite-plugin-pwa + manual register + update toast</td></tr>
+  <tr><td><code>src/pages/AdminDashboard.jsx</code> :2277 :2331</td><td>Modify</td><td>FCM SW → dedicated scope (ปลด scope '/' ให้ Workbox)</td></tr>
+  <tr><td><code>vercel.json</code></td><td>Modify</td><td>/sw.js no-cache header</td></tr>
+  <tr><td><code>tests/*</code> + <code>tests/e2e/*</code> + SKILL.md ×2</td><td>Create/Modify</td><td>unit + classifier AV206/AV207 + Playwright L1</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1 (A1): Firestore persistence + storage.persist</h3>
+  <p><strong>Files:</strong> Modify <code>src/firebase.js</code> · Modify <code>src/App.jsx</code> (staff-auth effect) · Create <code>tests/instant-coldstart-persistence.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: เขียน source-grep test ก่อน (fail)</strong></div>
+<pre><code>// tests/instant-coldstart-persistence.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+const src = readFileSync('src/firebase.js', 'utf8');
+describe('A1 — persistentLocalCache (spec Q1=A)', () => {
+  it('A1.1 imports persistentLocalCache + persistentMultipleTabManager', () => {
+    expect(src).toMatch(/persistentLocalCache/);
+    expect(src).toMatch(/persistentMultipleTabManager/);
+  });
+  it('A1.2 feature-detects IndexedDB (vitest/node fallback = memory)', () => {
+    expect(src).toMatch(/typeof indexedDB !== 'undefined'/);
+  });
+  it('A1.3 keeps experimentalAutoDetectLongPolling (Mobile-Load 2026-06-16)', () => {
+    expect(src).toMatch(/experimentalAutoDetectLongPolling: true/);
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: run → FAIL → implement firebase.js</strong></div>
+<pre><code>import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+// 2026-07-07 (instant cold-start, spec Q1=A) — persistent IndexedDB cache:
+// every onSnapshot fires a cache snapshot ~instantly, server snapshot follows
+// (stale-while-revalidate). Customer-facing pages OPT OUT via freshGate.js.
+// Feature-detect: node/vitest + private-mode → no localCache key = memory
+// cache = pre-2026-07-07 behavior. Multi-tab manager: staff opens frontend +
+// backend tabs simultaneously.
+const canPersist = typeof indexedDB !== 'undefined';
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  ...(canPersist ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) } : {}),
+});</code></pre>
+  <p>src/App.jsx — ใน effect ที่รันเมื่อ staff (non-anonymous) user resolve แล้ว (หา <code>user</code> + <code>isAnonymous</code> gate ที่มีอยู่) เพิ่ม fire-and-forget หนึ่งบรรทัด:</p>
+<pre><code>// instant cold-start (2026-07-07): ask browser to protect IndexedDB from eviction
+// (Safari 17+ grants for home-screen PWAs). Best-effort — failure is harmless.
+if (!u.isAnonymous) navigator.storage?.persist?.().catch(() => {});</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3: verify</strong> — <code>npx vitest run tests/instant-coldstart-persistence.test.js</code> PASS · <code>npm run build</code> clean · targeted: รัน test ที่ import firebase จริง (ถ้ามี) — <code>rg -l "from '.*firebase.js'" tests/ | head</code> spot-check ว่า mock ครอบ</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: Commit</strong> <code>feat(perf): persistent Firestore cache — layer 0 of instant cold-start (spec Q1=A)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 2 (A2): freshGate + customer sweep</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/freshGate.js</code> · Modify <code>src/pages/PatientForm.jsx:82</code> + <code>src/pages/ClinicSchedule.jsx:97</code> · Create <code>tests/instant-coldstart-fresh-gate.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: failing unit test</strong></div>
+<pre><code>// tests/instant-coldstart-fresh-gate.test.js — unit: mock onSnapshot, feed
+// fromCache:true snapshot → callback NOT called; fromCache:false → called.
+import { describe, it, expect, vi } from 'vitest';
+vi.mock('firebase/firestore', () => ({
+  onSnapshot: vi.fn((ref, opts, cb) => { global.__fire = (snap) => cb(snap); return () => {}; }),
+}));
+import { onSnapshotFresh } from '../src/lib/freshGate.js';
+describe('A2 — freshGate', () => {
+  it('A2.1 skips fromCache snapshots, passes server snapshots', () => {
+    const seen = [];
+    onSnapshotFresh({}, (s) => seen.push(s));
+    global.__fire({ metadata: { fromCache: true }, data: () => ({ v: 'stale' }) });
+    expect(seen).toHaveLength(0);
+    global.__fire({ metadata: { fromCache: false }, data: () => ({ v: 'fresh' }) });
+    expect(seen).toHaveLength(1);
+  });
+});
+// + source-grep: PatientForm + ClinicSchedule import onSnapshotFresh; no bare
+// onSnapshot( left on their customer-data listeners (anti-regression).</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: implement freshGate.js</strong></div>
+<pre><code>// src/lib/freshGate.js — customer-facing surfaces render SERVER-CONFIRMED data
+// ONLY (fresh-always contract from Mobile-Load 2026-06-16 Q1, preserved after
+// the 2026-07-07 staff-SWR reversal). Persistence makes every onSnapshot fire
+// a cache snapshot first; this wrapper drops those so a customer never sees a
+// stale course balance / appointment time. AV206 classifier locks consumers.
+import { onSnapshot } from 'firebase/firestore';
+export function onSnapshotFresh(refOrQuery, onData, onError) {
+  return onSnapshot(refOrQuery, { includeMetadataChanges: true }, (snap) => {
+    if (snap.metadata.fromCache) return; // stale-while-revalidate NOT for customers
+    onData(snap);
+  }, onError);
+}</code></pre>
+  <p>PatientForm.jsx:82 + ClinicSchedule.jsx:97: เปลี่ยน <code>onSnapshot(doc(...), cb, err)</code> → <code>onSnapshotFresh(doc(...), cb, err)</code> (import จาก freshGate) — timing เดิมเป๊ะ (วันนี้ first snapshot ก็คือ server อยู่แล้ว) · useResilientLoad ของทั้งสองหน้าไม่แตะ. <b>หมายเหตุ:</b> PatientDashboard ใช้ /api/patient-view (server API) = fresh โดยสถาปัตย์ ไม่ต้องแก้; clinicSettings listener ใน App.jsx ปล่อย SWR ได้ (theme/logo — ไม่ใช่ patient data; เร่งทุก route).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 3: verify</strong> — new tests PASS + targeted: <code>npx vitest run tests/public-link-auth-race.test.js tests/mobile-*.test.js</code> (V16/V17 locks) — ถ้า lock เดิม assert `onSnapshot(` ตรงๆ ให้ repoint เป็น onSnapshotFresh พร้อม comment V-marker</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: Commit</strong> <code>feat(perf): freshGate — customer pages render server-truth only (layer 1)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 3 (B1): swrRead + {source} opt on data layer</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/swrRead.js</code> · Modify <code>src/lib/backendClient.js</code> (getAppointmentsByDateRange, getAllCustomers, getAllDeposits, getAllSales, getAllMemberships, getWalletsForCustomerIds, listStaffSchedules) · Modify <code>src/lib/reportsLoaders.js</code> (loadTreatmentsByDateRange) · Create <code>tests/instant-coldstart-swr-read.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: failing unit tests (swrRun contract)</strong></div>
+<pre><code>// tests/instant-coldstart-swr-read.test.js
+import { describe, it, expect } from 'vitest';
+import { swrRun } from '../src/lib/swrRead.js';
+describe('B1 — swrRun', () => {
+  it('B1.1 cache-with-data paints BEFORE server, server overrides after', async () => {
+    const paints = [];
+    await swrRun({
+      cacheLoad: async () => ({ hasData: true, data: 'CACHED' }),
+      serverLoad: async () => 'FRESH',
+      apply: (d, { fromCache }) => paints.push([d, fromCache]),
+    });
+    expect(paints).toEqual([['CACHED', true], ['FRESH', false]]);
+  });
+  it('B1.2 empty cache = NO cached paint (no empty-state flash) — server only', async () => {
+    const paints = [];
+    await swrRun({
+      cacheLoad: async () => ({ hasData: false, data: null }),
+      serverLoad: async () => 'FRESH',
+      apply: (d, m) => paints.push([d, m.fromCache]),
+    });
+    expect(paints).toEqual([['FRESH', false]]);
+  });
+  it('B1.3 cache leg THROW is silent — server still delivers', async () => {
+    const paints = [];
+    await swrRun({
+      cacheLoad: async () => { throw new Error('no cache'); },
+      serverLoad: async () => 'FRESH',
+      apply: (d, m) => paints.push(d),
+    });
+    expect(paints).toEqual(['FRESH']);
+  });
+  it('B1.4 server leg failure AFTER cached paint → rethrows (caller resilient-path) but cached paint stays', async () => {
+    const paints = [];
+    await expect(swrRun({
+      cacheLoad: async () => ({ hasData: true, data: 'CACHED' }),
+      serverLoad: async () => { throw new Error('net'); },
+      apply: (d) => paints.push(d),
+    })).rejects.toThrow('net');
+    expect(paints).toEqual(['CACHED']);
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: implement swrRead.js</strong></div>
+<pre><code>// src/lib/swrRead.js — stale-while-revalidate orchestrator for one-shot loads
+// (staff surfaces only — customers use freshGate.js). Cache leg is best-effort
+// and NEVER paints an empty result (avoids "ไม่มีรายการ" flash from a cold
+// cache); the server leg is the source of truth and its errors propagate to
+// the caller's existing resilient/error path.
+export async function swrRun({ cacheLoad, serverLoad, apply }) {
+  let paintedFromCache = false;
+  try {
+    const c = await cacheLoad();
+    if (c && c.hasData) { apply(c.data, { fromCache: true }); paintedFromCache = true; }
+  } catch { /* cold cache — silent */ }
+  const fresh = await serverLoad();          // throws → caller's error path
+  apply(fresh, { fromCache: false });
+  return { paintedFromCache };
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3: backendClient — <code>_getDocsBySource</code> + thread {source}</strong></div>
+<pre><code>// backendClient.js (top, near other imports) — add getDocsFromCache to the
+// firebase/firestore import list, then:
+async function _getDocsBySource(q, source) {
+  // 'cache' = IndexedDB only (throws/empty on cold cache — swrRun handles);
+  // anything else = default server behavior (unchanged for ALL existing callers)
+  if (source === 'cache') return await getDocsFromCache(q);
+  return await getDocs(q);
+}</code></pre>
+  <p>ใน 7 getters: เพิ่ม <code>source</code> เข้า opts destructure (default undefined) แล้วแทน <code>getDocs(q)</code> ตรง call site หลักด้วย <code>_getDocsBySource(q, source)</code>. Additive + backward-compat (ไม่ส่ง source = พฤติกรรมเดิม 100%). scopedDataLayer ส่ง opts ผ่านอยู่แล้ว (auto-inject merge) — ตรวจว่า getter ไหนผ่าน wrapper แบบ positional ต้อง thread ให้ครบ. reportsLoaders.loadTreatmentsByDateRange: เพิ่ม {source} เหมือนกัน (มันสร้าง query เอง → ใช้ getDocsFromCache ตรงๆ ตาม pattern เดียวกัน).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 4: verify</strong> — B1 tests PASS + targeted <code>npx vitest run tests/v52-reports-loaders-branch-id.test.js</code> (loader contract เดิมไม่แตก) + <code>npm run build</code></div>
+  <div class="step"><input type="checkbox"> <strong>Step 5: Commit</strong> <code>feat(perf): swrRun + {source:'cache'} read opt on hub getters (layer 2)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 4 (B2): Hub 2 จังหวะ + SyncIndicator + chip skeleton</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/admin/AppointmentHubView.jsx</code> (loadAll:171-230 → loadCore/loadEnrichment) · Create <code>src/components/SyncIndicator.jsx</code> · Modify <code>src/components/admin/AppointmentHubRowCard.jsx</code> (chip site) · Create <code>tests/instant-coldstart-hub-two-stage.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: failing tests</strong> — RTL: mock scopedDataLayer + reportsLoaders ด้วย controllable promises; assert ① paint (แถวนัด render) เกิดหลัง stage-1 resolve โดย stage-2 ยังไม่ resolve ② chip skeleton แสดงระหว่าง summaryLoading ③ SyncIndicator แสดงเมื่อ syncing แล้วหายเมื่อ server leg จบ ④ silent reload (change-signal) ไม่ flash loading + ไม่รัน cache leg (server-only)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: implement</strong></div>
+<pre><code>// SyncIndicator.jsx
+export default function SyncIndicator({ show }) {
+  if (!show) return null;
+  return (
+    &lt;span className="inline-flex items-center gap-1 text-[10px] text-amber-400/90" data-testid="sync-indicator"&gt;
+      &lt;span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" /&gt;
+      กำลังซิงค์…
+    &lt;/span&gt;
+  );
+}</code></pre>
+<pre><code>// AppointmentHubView — โครง loadAll ใหม่ (คง useCallback + deps เดิมทั้งหมด):
+const [syncing, setSyncing] = useState(false);
+const [summaryLoading, setSummaryLoading] = useState(true);
+
+const loadCore = useCallback(async ({ silent = false } = {}) => {
+  if (!silent) setLoading(true);
+  const fetchCore = (source) => Promise.all([
+    getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId, source }),
+    listStaffSchedules({ branchId: selectedBranchId, source }),
+  ]);
+  const applyCore = ([apptList, schedules], { fromCache }) => {
+    setAppts(apptList); setScheduleEntries(schedules);
+    setLoading(false); setSyncing(fromCache);
+  };
+  if (silent) { applyCore(await fetchCore(undefined), { fromCache: false }); return; }
+  await swrRun({
+    cacheLoad: async () => { const r = await fetchCore('cache'); return { hasData: r[0].length > 0, data: r }; },
+    serverLoad: () => fetchCore(undefined),
+    apply: applyCore,
+  });
+}, [wideRange, selectedBranchId]);
+
+const loadEnrichment = useCallback(async ({ silent = false } = {}) => {
+  if (!silent) setSummaryLoading(true);
+  const fetchEnrich = async (source) => {
+    const [customers, deposits, sales, memberships, treatments] = await Promise.all([
+      getAllCustomers({ source }), getAllDeposits({ branchId: selectedBranchId, source }),
+      getAllSales({ branchId: selectedBranchId, source }), getAllMemberships({ source }),
+      loadTreatmentsByDateRange({ from: wideRange.from, to: wideRange.to, allBranches: true, source }),
+    ]);
+    // wallets keyed off CURRENT appts state via ref (apptsRef) — ids identical
+    // to the pre-split behavior because loadCore has already set appts.
+    const ids = [...new Set(apptsRef.current.map(a => String(a.customerId)).filter(Boolean))];
+    const wallets = ids.length > 0 ? await getWalletsForCustomerIds(ids, { source }) : [];
+    return { customers, deposits, sales, memberships, treatments, wallets };
+  };
+  const applyEnrich = (d) => {
+    setSummaryMap(buildCustomerSummaryMap({ customers: d.customers, deposits: d.deposits, sales: d.sales, memberships: d.memberships, wallets: d.wallets, now: new Date() }));
+    setAllDeposits(d.deposits); setAllCustomersState(d.customers); setAllTreatments(d.treatments);
+    setSummaryLoading(false);
+  };
+  if (silent) { applyEnrich(await fetchEnrich(undefined)); return; }
+  await swrRun({
+    cacheLoad: async () => { const r = await fetchEnrich('cache'); return { hasData: r.customers.length > 0, data: r }; },
+    serverLoad: () => fetchEnrich(undefined),
+    apply: applyEnrich,
+  });
+}, [wideRange, selectedBranchId]);
+
+const loadAll = useCallback(async ({ silent = false } = {}) => {
+  try {
+    const core = loadCore({ silent });
+    const enrich = core.then(() => loadEnrichment({ silent })); // stage 2 ตามหลัง ไม่ block paint
+    await core;                       // errors จาก stage 1 → catch เดิม
+    enrich.catch(e => console.warn('[hub] enrichment failed:', e?.message)); // chips ค้าง skeleton → server leg รอบหน้า/ silent reload แก้
+  } catch (e) { /* คง error handling เดิมของ loadAll */ }
+  finally { if (!silent) setLoading(false); }
+}, [loadCore, loadEnrichment]);</code></pre>
+  <p>รายละเอียดบังคับ: ① <code>apptsRef = useRef([])</code> sync ใน applyCore (wallets ต้องเห็น appts ล่าสุด) ② ทุก callsite เดิมของ loadAll (mount effect, branch switch, liveRefreshTick, handleModalSaved/Delete) ไม่เปลี่ยน signature ③ header: วาง <code>&lt;SyncIndicator show={syncing} /&gt;</code> ต่อจากหัวข้อ "รายการนัดหมาย" ④ RowCard: prop <code>summaryLoading</code> — ตรงช่อง chip (หา summaryMap consumer ใน RowCard) render 2 <code>&lt;span className="inline-block w-14 h-4 rounded bg-[var(--bd)]/40 animate-pulse" /&gt;</code> เมื่อ summaryLoading && ไม่มี summary entry — ความสูงช่อง chip จองไว้แล้ว (V64-fix13) → zero layout shift ⑤ enrichment failure ห้ามล้ม stage 1 (แค่ chips ไม่มา + console.warn).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 3: verify</strong> — new tests PASS + targeted hub locks: <code>npx vitest run tests/v64*.test.* tests/v71*.test.* tests/v118*.test.* tests/v121*.test.*</code> (repoint V21 lock ที่ assert โครง loadAll เดิม พร้อม marker) + build</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: Commit</strong> <code>feat(perf): hub 2-stage load + SyncIndicator + chip skeleton (layer 3, spec Q2=A)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 5 (C1): staff-wide inventory + useSwrLoad hook</h3>
+  <p><strong>Files:</strong> Create <code>src/hooks/useSwrLoad.js</code> · Create <code>docs/perf/swr-inventory.md</code> (classification table) · Create <code>tests/instant-coldstart-use-swr-load.test.jsx</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: inventory</strong> — grep mount-time one-shot loads ทุก staff surface:</div>
+<pre><code>rg -n "useEffect|useCallback" -A3 src/components/backend src/components/admin src/pages/AdminDashboard.jsx src/pages/BackendDashboard.jsx | rg "await (list|getAll|load)[A-Z]" </code></pre>
+  <p>จัด 3 กลุ่มลง docs/perf/swr-inventory.md: <b>LISTENER</b> (ฟรีจาก layer 0 — ไม่แตะ) · <b>ADOPT</b> (mount-blocking one-shot ที่ user เห็นช้า — ใส่ useSwrLoad) · <b>SANCTIONED</b> (server-first โดยเจตนา + เหตุผล: report tabs = ตัวเลขเงินต้องอ่านค่าจริงเท่านั้น, audit/backup panels, modal-open loads ขนาดเล็ก, data-op flows). กติกา: กลุ่ม ADOPT คาดว่า ~10-20 จุด; ถ้าเจอเกิน 25 ให้ adopt เฉพาะ tab หลักที่เข้าบ่อย (คิว/ลูกค้า/ขาย/นัด/สต็อก balance) + sanction ที่เหลือพร้อมเหตุผล — บันทึกทุกแถวในตาราง (no silent skip).</p>
+  <div class="step"><input type="checkbox"> <strong>Step 2: useSwrLoad (TDD — test ก่อน)</strong></div>
+<pre><code>// src/hooks/useSwrLoad.js — generic SWR for a staff tab's mount load.
+// loader(opts) MUST forward opts.source into the data-layer getters.
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { swrRun } from '../lib/swrRead.js';
+export function useSwrLoad(loader, deps) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true); setError(null);
+    swrRun({
+      cacheLoad: async () => { const d = await loader({ source: 'cache' }); return { hasData: hasAny(d), data: d }; },
+      serverLoad: () => loader({}),
+      apply: (d, { fromCache }) => { if (cancelled || !alive.current) return; setData(d); setLoading(false); setSyncing(fromCache); },
+    }).catch((e) => { if (!cancelled && alive.current) { setError(e); setLoading(false); setSyncing(false); } })
+      .finally(() => { if (!cancelled && alive.current) setSyncing(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, reloadKey]);
+  const reload = useCallback(() => setReloadKey(k => k + 1), []);
+  return { data, loading, syncing, error, reload };
+}
+function hasAny(d) {
+  if (Array.isArray(d)) return d.length > 0;
+  if (d && typeof d === 'object') return Object.values(d).some(v => Array.isArray(v) ? v.length > 0 : !!v);
+  return !!d;
+}</code></pre>
+  <p>Hook tests: cache→server order · empty-cache no-flash · unmount ระหว่าง server leg ไม่ setState · deps change re-runs · error path.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 3: Commit</strong> <code>feat(perf): useSwrLoad hook + staff-wide SWR inventory (layer 2)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 6 (C2): adoption sweep ตาม inventory</h3>
+  <p><strong>Files:</strong> ทุกไฟล์กลุ่ม ADOPT จาก Task 5 · sanctioned marker <code>// AV206: server-first — &lt;เหตุผล&gt;</code> บนกลุ่ม SANCTIONED</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> per-tab: mount load → useSwrLoad(loader, deps) + <code>&lt;SyncIndicator show={syncing} /&gt;</code> ใกล้หัวข้อ tab; loader forward <code>{source}</code> เข้า getter ที่ต้องเพิ่ม {source} opt เพิ่มเติมใน backendClient (pattern Task 3 เป๊ะ — additive). Batch commits ทีละกลุ่ม (แบบ AV205 sweep, Rule K).</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: verify per batch</strong> — targeted vitest ของ tab ที่แตะ (grep test files importing the tab) + build; batch สุดท้าย: <code>npm test -- --run</code></div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: Commits</strong> <code>feat(perf): SWR adoption batch N — &lt;tabs&gt;</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 7 (C3): AV206 classifier + SKILL.md ×2</h3>
+  <p><strong>Files:</strong> Create <code>tests/instant-coldstart-av206-classifier.test.js</code> · Modify <code>.claude/skills/audit-anti-vibe-code/SKILL.md</code> + <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (byte-identical, SY1)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: classifier (dynamic — แบบ AV205)</strong> — 3 invariants:</div>
+<pre><code>// AV206.a — customer fresh-gate: PatientForm.jsx + ClinicSchedule.jsx MUST import
+//   freshGate; bare onSnapshot( on customer data = FAIL. Closed list ± sanctioned.
+// AV206.b — staff one-shot mount loads: every file in the ADOPT list imports
+//   useSwrLoad; every file in SANCTIONED list carries "// AV206: server-first".
+//   NEW staff tab with a mount-time await list*/getAll*/load* and NEITHER = FAIL.
+// AV206.c — no decision-write from cache: rg "source: 'cache'" src/ must appear
+//   ONLY inside swrRead.js / useSwrLoad.js / loadCore / loadEnrichment / loaders
+//   passed to useSwrLoad — never in a function that also calls setDoc/updateDoc/
+//   runTransaction (grep window check).</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> AV206 (SWR/fresh-gate discipline) + AV207 (SW: precache static-only, no /api|googleapis interception, sw.js no-cache header, FCM dedicated scope) ลงทั้ง 2 SKILL.md — <code>npx vitest run tests/skill-av-sync.test.js</code> (SY1) เขียว</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: Commit</strong> <code>test(audit): AV206 SWR/fresh-gate classifier + AV207 SW invariants</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 8 (D1): Service Worker</h3>
+  <p><strong>Files:</strong> Modify <code>vite.config.js</code> · Modify <code>src/main.jsx</code> · Create <code>src/components/SwUpdateToast.jsx</code> · Modify <code>src/App.jsx</code> (mount toast) · Modify <code>src/pages/AdminDashboard.jsx:2277,2331</code> (FCM scope) · Modify <code>vercel.json</code> · Create <code>tests/instant-coldstart-sw-config.test.js</code> · <code>npm i -D vite-plugin-pwa</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: config-lock tests ก่อน (fail)</strong> — grep vite.config.js: VitePWA present · <code>manifest: false</code> (คง public/manifest.json — iOS identity) · <code>navigateFallbackDenylist</code> มี <code>/^\/api\//</code> · ไม่มี runtimeCaching ของ googleapis · <code>injectRegister: false</code> · vite.filler.config.js ไม่มี VitePWA · vercel.json มี /sw.js no-cache header · AdminDashboard ทั้ง 2 จุด register ด้วย <code>{ scope: '/firebase-cloud-messaging-push-scope' }</code></div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: implement</strong></div>
+<pre><code>// vite.config.js
+import { VitePWA } from 'vite-plugin-pwa';
+// plugins: [..., VitePWA({
+//   registerType: 'prompt', injectRegister: false, manifest: false,
+//   workbox: {
+//     inlineWorkboxRuntime: true,               // single sw.js → one no-cache header
+//     globPatterns: ['index.html', 'assets/index-*.js', 'assets/*.css', 'icon-192.png', 'favicon.svg'],
+//     navigateFallback: '/index.html',
+//     navigateFallbackDenylist: [/^\/api\//],
+//     runtimeCaching: [{
+//       urlPattern: /^\/assets\/.*\.(js|css|woff2)$/,   // hashed = immutable; offline lazy chunks
+//       handler: 'CacheFirst',
+//       options: { cacheName: 'assets-v1', expiration: { maxEntries: 200, maxAgeSeconds: 60*60*24*30 } },
+//     }],
+//   },
+// })]
+// เจตนา: precache = shell เล็ก (ไม่ precache backend chunk 900KB ตอน install);
+// lazy chunks เข้า CacheFirst ตอนถูกใช้จริง. Cross-origin (googleapis) — Workbox
+// ไม่ intercept default → Firestore/API สดเสมอ (AV207).</code></pre>
+<pre><code>// src/main.jsx (ต่อท้าย — bundled module, CSP 'self' ✓)
+import { registerSW } from 'virtual:pwa-register';
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+  const updateSW = registerSW({
+    onNeedRefresh() { window.dispatchEvent(new CustomEvent('sw-need-refresh')); window.__swUpdate = updateSW; },
+    onRegisteredSW(_url, reg) {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg?.update().catch(() => {});
+      });
+    },
+  });
+}</code></pre>
+<pre><code>// SwUpdateToast.jsx — listens 'sw-need-refresh' → fixed bottom toast
+// "มีเวอร์ชันใหม่ — แตะเพื่อรีเฟรช" onClick → window.__swUpdate?.(true)
+// + auto: เมื่อ need-refresh ค้าง และ document.hidden → __swUpdate(true) (reload
+// ตอน user ไม่ได้ใช้งาน — ไม่ขัดจังหวะ). Mount ครั้งเดียวใน App.jsx root.</code></pre>
+  <p>FCM: ทั้ง 2 register call → <code>navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/firebase-cloud-messaging-push-scope' })</code> + comment (Workbox owns '/'; push self-heal effect re-mints token ทุก load → เครื่องเดิม heal เอง). vercel.json headers เพิ่ม: <code>{"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]}</code>.</p>
+  <div class="step"><input type="checkbox"> <strong>Step 3: verify</strong> — config tests PASS · <code>npm run build</code> → dist/sw.js exists · <code>npm run verify:filler</code> ✅ (filler build ไม่มี SW) · <code>npx vite preview</code> + Chrome MCP/preview: SW installs, reload offline → shell ขึ้น, Network tab: /api + googleapis ไม่ผ่าน SW cache</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: Commit</strong> <code>feat(pwa): app-shell service worker + update toast + FCM scope isolation (spec Q4=B)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 9 (E1): Playwright L1 (Rule Q)</h3>
+  <p><strong>Files:</strong> Create <code>tests/e2e/instant-coldstart-swr.spec.js</code> · reuse <code>tests/e2e/helpers.js</code> (staff auth) · fixtures = TEST-APPT-* prefix (V33.13) + cleanup</p>
+  <div class="step"><input type="checkbox"> <strong>Spec S1 — staff SWR cold-start:</strong> seed TEST-APPT วันนี้ (admin SDK) → login+load hub (warm cache, เห็นแถว) → <code>context.setOffline(true)</code> → reload → assert: แถว TEST-APPT ปรากฏ &lt; 3s (จาก IndexedDB, ไม่มี network!) + <code>[data-testid=sync-indicator]</code> visible → setOffline(false) → assert indicator หายภายใน 15s (server confirm) → cleanup fixture</div>
+  <div class="step"><input type="checkbox"> <strong>Spec S2 — server correction:</strong> warm cache → เปลี่ยน field ของ TEST-APPT ผ่าน admin SDK → reload (online) → assert ค่"ใหม่" ปรากฏ (cache paint แล้วโดน server แก้ — จับ end-state)</div>
+  <div class="step"><input type="checkbox"> <strong>Spec S3 — customer fresh-gate:</strong> seed TEST opd_session → เปิด ?session= (warm cache) → แก้ค่าบน server → <code>setOffline(true)</code> → reload ?session= → assert หน้"ไม่ render ข้อมูล" (ยัง loading/มี retry UI — ห้ามเห็นค่าเก่า) → online → reload → เห็นค่าใหม่เท่านั้น</div>
+  <div class="step"><input type="checkbox"> <strong>Spec S4 — SW shell:</strong> รันกับ <code>npm run build && npx vite preview --port 4183</code> → visit / (SW installs, รอ activated) → setOffline(true) → reload → assert #root มี content (shell จาก precache) + ไม่มี /api request ตอบจาก SW cache</div>
+  <div class="step"><input type="checkbox"> <strong>Run:</strong> <code>npx playwright test tests/e2e/instant-coldstart-swr.spec.js</code> → ALL PASS (แก้จนกว่าจะเขียว — ห้าม weaken assertion)</div>
+  <div class="step"><input type="checkbox"> <strong>Commit</strong> <code>test(e2e): instant cold-start L1 — SWR paint / fresh-gate / SW shell</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 10 (E2): full regression + perf วัดจริง</h3>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>npm test -- --run</code> full vitest → 0 fail (repoint V21 locks ที่แตกจากโครงใหม่ พร้อม marker; log ทุก fixup) · <code>npm run build</code> clean</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2:</strong> pixel-parity (perf harness เดิม <code>npm run perf:*</code>) ทุก surface × 2 themes — diff ที่ยอมรับ: SyncIndicator/skeleton เท่านั้น (transient — วัด steady-state หลัง sync จบ = 0 diff)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> perf before/after: cold-start hub route local-preview + บันทึกเข้า docs/perf/ (ตัวเลข: warm-cache paint ms / first-ever paint ms / เทียบ baseline)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: Commit</strong> <code>test: instant cold-start full-suite green + perf report</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 11: Deploy (PRE-AUTHORIZED on all-green) + post-deploy verify + wrap</h3>
+  <div class="step"><input type="checkbox"> <strong>Gate:</strong> ทุก task 1-10 เขียว 100% (full vitest 0 fail + Playwright ALL PASS + build + parity) — ถ้าข้อใดแดง STOP ห้าม deploy, กลับไปแก้</div>
+  <div class="step"><input type="checkbox"> <strong>Deploy:</strong> <code>vercel --prod --yes</code> + alias check (lover-clinic-app.vercel.app HTTP 200). firestore.rules UNCHANGED → NO Probe-Deploy-Probe. หมายเหตุ: ships 12 pending commits (AV205 modal scroll-lock ฯลฯ) ด้วย — แจ้งใน report</div>
+  <div class="step"><input type="checkbox"> <strong>Post-deploy L1 บน prod จริง:</strong> Playwright ชี้ prod URL — S1 (SWR paint) + S4 (SW active + offline shell) + customer link fresh + spot-check: sw.js served no-cache, /api ไม่ถูก cache, push scope ใหม่ลงทะเบียนได้</div>
+  <div class="step"><input type="checkbox"> <strong>Wrap:</strong> V-entry + AV206/207 final + session-end (active.md + SESSION_HANDOFF + checkpoint) + <code>graphify update .</code></div>
+</div>
+
+<h2>Self-Review Notes</h2>
+<ul>
+  <li>Spec coverage: Layer 0→T1 · Layer 1→T2 · Layer 2→T3+T5+T6 · Layer 3→T4 · indicator→T4 · SW→T8 · classifier→T7 · acceptance 1-7→T9/T10/T11 ✓</li>
+  <li>Type consistency: swrRun({cacheLoad,serverLoad,apply}) ใช้ตรงกันใน T3/T4/T5 · {source} opt ชื่อเดียวทุกชั้น ✓</li>
+  <li>Known judgment call (บันทึกไว้): report tabs = SANCTIONED server-first (ตัวเลขเงินอ่านแล้วตัดสินใจ — ไม่ SWR) แม้ Q3=B บอกทั้ง staff app; inventory table คือ audit trail</li>
+</ul>
+
+</body>
+</html>
