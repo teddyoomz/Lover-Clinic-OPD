@@ -29,10 +29,13 @@ firestore_rules_version: "UNCHANGED entire campaign → frontend-only deploy, NO
   /assets immutable cache header ✓ · CSP hashes intact ✓ · cron fix live (scanned 500 on first forced run) ✓.
 
 ## Next action
-- idle — await user L1 hands-on: (1) เปิดเว็บ/สลับ backend tabs ควรไวขึ้นชัด (2) พิมพ์ค้นหาลูกค้าลื่นขึ้น
-  (3) ทุกหน้าตาเหมือนเดิม 100% (4) chat/นัดหมาย realtime ปกติ.
-- Deferred perf items (มี rationale ใน punchlist): TFP keystroke isolation · link-patient LCP 4.3s data-chain ·
-  movement-log pagination (>5k) · opd_sessions archive retention decision.
+- **NEXT SESSION (user-approved 2026-07-07): link-patient LCP 4.3s data-chain fix** — the customer-facing
+  ?patient= link waits SERIALLY (anon-auth → clinicSettings → patientLinkToken query → render) even on
+  localhost. `/systematic-debugging` trace the real chain in PatientDashboard.jsx + App.jsx auth gate →
+  parallelize/early-start → measure LCP before/after (`node scripts/perf-baseline.mjs --surface link-patient`)
+  → Rule Q L1/L2 (V16/V23 history on this page: auth-gates + anon whitelist — strict). Target ~1.5-2s.
+- Also pending: user L1 hands-on of the perf campaign (speed feel + visual identical + realtime ปกติ).
+- Other deferred perf items stay parked (rationale in docs/perf/punchlist.md).
 
 ## Outstanding user-triggered actions
 - (none — deployed + drained; L1 feedback only)
