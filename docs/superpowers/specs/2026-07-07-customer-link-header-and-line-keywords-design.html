@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer-link header + configurable LINE link keywords — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .flowbox { display: inline-block; background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: 0.4em 0.9em; font-size: 0.85em; margin: 0.2em 0; }
+    .arrow { color: #94a3b8; font-weight: bold; padding: 0 0.4em; }
+  </style>
+</head>
+<body>
+
+<h1>Customer-link header + configurable LINE link keywords — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-07 · <strong>Status:</strong> Approved by user (Q1=B, Q2=Customer Info, Q3=strip hn, Q4=global list) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-07-07-customer-link-header-and-line-keywords.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><strong>ส่วน 1:</strong> หน้า customer link (<code>?patient=</code>) ยังใช้ภาษา "ผู้ป่วย" + โชว์ avatar ตัวย่อชื่อ ("ไฉ") + HN badge ซึ่ง user ไม่ต้องการให้ลูกค้าเห็น → ตัด avatar + HN ออก, เปลี่ยนเป็น "ข้อมูลลูกค้า" / "Customer Info".</p>
+<p><strong>ส่วน 2:</strong> คำนำหน้าที่ลูกค้าพิมพ์ใน LINE OA เพื่อขอผูกบัญชี (<code>ผูก / ผูกบัญชี / link</code> + เลขบัตร/พาสปอร์ต) เป็น hardcoded regex ใน <code>lineBotResponder.js</code> — user ต้องการตั้งค่าชุดคำได้เอง (&gt;1 คำ, เผื่อเปลี่ยนในอนาคต) จากเมนู "คำขอผูก LINE" ใน backend. หมายเหตุ: <code>link &lt;เลข&gt;</code> ใช้ได้อยู่แล้ววันนี้ — งานนี้คือทำให้ชุดคำ configurable.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile · dark · BEFORE (ดีไซน์จริงปัจจุบัน)</div>
+  <div style="background:#050505;border-radius:10px;padding:18px 16px;max-width:420px">
+    <p style="text-align:center;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#8a8a8a;margin:0 0 14px">ข้อมูลผู้ป่วย</p>
+    <div style="border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#200000 0%,#0a0a0a 40%,#2a0000 100%);border:1.5px solid #5a1010;box-shadow:inset 0 -8px 20px -6px rgba(220,38,38,0.15)">
+      <div style="height:2px;width:100%;background:linear-gradient(90deg,transparent,rgba(220,38,38,0.9),rgba(180,0,0,0.8),transparent)"></div>
+      <div style="padding:20px 20px 16px;display:flex;gap:16px;align-items:flex-start">
+        <div style="width:64px;height:64px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;background:radial-gradient(135deg,rgba(249,115,22,0.12) 0%,#0a0a0a 100%);border:2px solid rgba(249,115,22,0.5);color:#fff;box-shadow:0 0 18px rgba(249,115,22,0.30)">ไฉ</div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:2px">
+          <p style="font-size:20px;font-weight:900;color:#d4d4d4;margin:0">นาย ไพบูลย์ ฉิมอ่ำ</p>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+            <span style="font-size:12px;font-family:monospace;font-weight:700;padding:4px 10px;border-radius:8px;color:#fdba74;background:#1a0a00;border:1px solid #4a1a0a">HN LC-26000106</span>
+            <span style="font-size:12px;color:rgba(252,165,165,0.5)">☎ 0948281991</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile · dark · AFTER (Q1=B — จัดกึ่งกลาง, ไม่มี avatar, ไม่มี HN)</div>
+  <div style="background:#050505;border-radius:10px;padding:18px 16px;max-width:420px">
+    <p style="text-align:center;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#8a8a8a;margin:0 0 14px">ข้อมูลลูกค้า</p>
+    <div style="border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#200000 0%,#0a0a0a 40%,#2a0000 100%);border:1.5px solid #5a1010;box-shadow:inset 0 -8px 20px -6px rgba(220,38,38,0.15)">
+      <div style="height:2px;width:100%;background:linear-gradient(90deg,transparent,rgba(220,38,38,0.9),rgba(180,0,0,0.8),transparent)"></div>
+      <div style="padding:20px 20px 16px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center">
+        <p style="font-size:20px;font-weight:900;color:#d4d4d4;margin:0">นาย ไพบูลย์ ฉิมอ่ำ</p>
+        <span style="font-size:12px;color:rgba(252,165,165,0.5)">☎ 0948281991</span>
+      </div>
+    </div>
+    <p style="font-size:11px;color:#666;margin:10px 0 0;text-align:center">EN toggle → หัวเพจ "CUSTOMER INFO" · สไตล์การ์ด (gradient/border/accent bar/สีชื่อ) เดิมทุกเส้น · เบอร์ยังกดโทรได้ (PhoneLink)</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Backend · การ์ดตั้งค่าใหม่บนหัวเมนู "คำขอผูก LINE" (LinkRequestsTab)</div>
+  <div style="border:1px solid var(--bd);border-radius:10px;padding:14px;max-width:560px">
+    <p style="font-size:14px;font-weight:700;margin:0 0 4px">คำที่ใช้ผูกบัญชี</p>
+    <p style="font-size:12px;color:var(--tx-muted);margin:0 0 10px">ลูกค้าพิมพ์ &lt;คำ&gt; ตามด้วยเลขบัตรประชาชน 13 หลัก หรือเลขพาสปอร์ต เช่น <code>link 1234567890123</code></p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      <span style="font-size:13px;padding:3px 10px;border-radius:12px;background:#dcfce7;color:#166534">ผูก ✕</span>
+      <span style="font-size:13px;padding:3px 10px;border-radius:12px;background:#dcfce7;color:#166534">ผูกบัญชี ✕</span>
+      <span style="font-size:13px;padding:3px 10px;border-radius:12px;background:#dcfce7;color:#166534">link ✕</span>
+      <input placeholder="เพิ่มคำใหม่..." style="font-size:13px;padding:3px 10px;border:1px dashed #94a3b8;border-radius:12px;width:110px">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button style="font-size:13px;padding:6px 16px;border-radius:8px;border:none;background:#16a34a;color:#fff">บันทึก</button>
+      <span style="font-size:11px;color:var(--tx-muted)">ขั้นต่ำ 1 คำ · สูงสุด 10 คำ · คำละ 1-30 ตัวอักษร · ห้ามมีช่องว่าง · ห้ามตัวเลขล้วน · กันคำซ้ำ</span>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">ส่วน 1 — โหลดหน้า ?patient= (ตัด hn ตลอดสาย)</div>
+  <p>
+    <span class="flowbox">ลูกค้าเปิดลิงก์ ?patient=</span><span class="arrow">→</span>
+    <span class="flowbox">/api/patient-view resolve token</span><span class="arrow">→</span>
+    <span class="flowbox">payload: name · phone · courses · appointments (<strong>ไม่มี hn แล้ว</strong>)</span><span class="arrow">→</span>
+    <span class="flowbox">การ์ดกึ่งกลาง: ชื่อ + เบอร์ (ไม่มี avatar/HN)</span>
+  </p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">ส่วน 2 — ตั้งค่าคำผูก → bot ใช้คำใหม่ (data-flow)</div>
+  <p>
+    <span class="flowbox">แอดมินแก้ chips ใน "คำขอผูก LINE"</span><span class="arrow">→</span>
+    <span class="flowbox">validate (validateIdLinkKeywords)</span><span class="arrow">→</span>
+    <span class="flowbox">เขียน clinic_settings/chat_config.idLinkKeywords</span>
+  </p>
+  <p>
+    <span class="flowbox">ลูกค้าพิมพ์ "&lt;คำ&gt; 1234567890123" ใน LINE</span><span class="arrow">→</span>
+    <span class="flowbox">webhook อ่าน chat_config (อ่านอยู่แล้ว — 0 read เพิ่ม)</span><span class="arrow">→</span>
+    <span class="flowbox">interpretCustomerMessage(text, {idLinkKeywords})</span><span class="arrow">→</span>
+    <span class="flowbox">intent id-link-request</span><span class="arrow">→</span>
+    <span class="flowbox">rate-limit → คิวแอดมิน → same-reply ack (เดิมทุกอย่าง)</span>
+  </p>
+  <p style="font-size:0.85em;color:var(--tx-muted)">ไม่มี field → default <code>['ผูก','ผูกบัญชี','link']</code> = พฤติกรรมเดิมเป๊ะ (zero migration) · เลขเปล่าไม่มีคำนำหน้า → ยังทำงานเหมือนเดิม (คนละ branch, ไม่แตะ) · hint ตอบกลับ (เลขผิด format) render จากคำแรกในชุด</p>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>ไฟล์</th><th>การเปลี่ยนแปลง</th></tr>
+  <tr><td><code>src/pages/PatientDashboard.jsx</code></td><td>TX.th.headerSub → "ข้อมูลลูกค้า" · TX.en.headerSub → "Customer Info" · การ์ด: ลบ avatar + HN badge → flex-col กึ่งกลาง (ชื่อ + PhoneLink) · ลบ <code>getInitials</code> (ไม่มีผู้ใช้แล้ว) + ตัวแปร <code>hn</code>/<code>brokerProClinicHN</code> mapping ที่ตายแล้ว</td></tr>
+  <tr><td><code>api/patient-view.js</code></td><td>ตัด <code>hn</code> ออกจาก response + อัพเดท field-minimized comment (AV anon-safety แข็งขึ้น)</td></tr>
+  <tr><td><code>src/lib/lineBotResponder.js</code></td><td>NEW export <code>DEFAULT_ID_LINK_KEYWORDS</code> + <code>validateIdLinkKeywords(list)</code> (pure) · <code>interpretCustomerMessage(text, opts)</code> รับ <code>opts.idLinkKeywords</code> — regex สร้างจากชุดคำ (escape พิเศษ, เรียงยาว→สั้น, case-insensitive) · hint constant → ฟังก์ชันรับคำแรก</td></tr>
+  <tr><td><code>api/webhook/line.js</code></td><td>ส่ง <code>chatConfig.idLinkKeywords</code> เข้า interpretCustomerMessage + hint call site (config ถูก fetch อยู่แล้วใน handler)</td></tr>
+  <tr><td><code>src/components/backend/LinkRequestsTab.jsx</code></td><td>การ์ดตั้งค่า chips CRUD + save ลง chat_config (client SDK — pattern เดียวกับ LineSettingsTab)</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = B:</strong> การ์ดชื่อจัดกึ่งกลาง (ชื่อ + เบอร์)</li>
+  <li><strong>Q2 = Customer Info:</strong> หัวเพจ EN</li>
+  <li><strong>Q3 = ตัด:</strong> <code>hn</code> ออกจาก API response ด้วย (data minimization)</li>
+  <li><strong>Q4 = Global:</strong> ชุดคำเดียวทั้งคลินิกใน <code>chat_config.idLinkKeywords</code>, แก้ได้ทุกคำ, seed defaults; ไม่ per-branch</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>หน้า <code>?patient=</code> (TH): หัวเพจ "ข้อมูลลูกค้า", การ์ดมีเฉพาะชื่อ + เบอร์ จัดกึ่งกลาง — ไม่มี avatar, ไม่มี HN; EN: "Customer Info"; สไตล์การ์ดอื่นเดิมทุกเส้น (pixel-level)</li>
+  <li><code>/api/patient-view</code> response ไม่มี field <code>hn</code>; courses/appointments/ชื่อ/เบอร์ เหมือนเดิม (L2 diag)</li>
+  <li>ไม่ตั้งค่าอะไรเลย → bot ตอบ <code>ผูก/ผูกบัญชี/link &lt;เลข&gt;</code> + เลขเปล่า เหมือนเดิมทุกกรณี (default fallback)</li>
+  <li>แอดมินเพิ่มคำ (เช่น "เชื่อม") ใน "คำขอผูก LINE" → ลูกค้าพิมพ์ <code>เชื่อม 1234567890123</code> → เข้าคิวคำขอผูก; ลบคำ "ผูก" → <code>ผูก &lt;เลข&gt;</code> ไม่ trigger อีก</li>
+  <li>Validation ครบ: ≥1 คำ, ≤10, 1-30 ตัว, ไม่มีช่องว่าง, ไม่ใช่ตัวเลขล้วน, ไม่ซ้ำ; regex-special chars ในคำ (เช่น ".", "*") ไม่ทำ regex พัง</li>
+  <li>Rate-limit + anti-enumeration + bare-ID + คิวแอดมิน ไม่เปลี่ยนพฤติกรรม</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>คำชนกับ trigger อื่น:</strong> id-link check รันก่อน exact-match triggers และ fire เฉพาะเมื่อมีข้อความตามหลังคำ → คำอย่าง "คอร์ส" เป็นคำผูกได้โดยไม่ชน "คอร์ส" เดี่ยวๆ (ยังไปที่เมนูคอร์ส) — บันทึกไว้ ไม่บล็อค</li>
+  <li><strong>Legacy session-mode:</strong> การ์ดเดียวกันใช้กับ session-mode เก่า → avatar/HN หายด้วย (intended — user สั่งเอาออก)</li>
+  <li><strong>chat_config เป็น global doc:</strong> ทุกสาขา (ทุก LINE OA) ใช้ชุดคำเดียวกัน — ตรง Q4</li>
+  <li><strong>Rule Q ฝั่ง bot:</strong> interpret layer เป็น pure (unit-เทสแน่น) + wiring source-grep; พฤติกรรมบน LINE จริง = user L1 หลัง deploy (พิมพ์คำ custom จริง)</li>
+</ul>
+
+</body>
+</html>
