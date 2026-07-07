@@ -1,40 +1,30 @@
 ---
-updated_at: "2026-07-07 EOD — link-patient LCP fix + customer-link header strip + configurable LINE link keywords — ALL DEPLOYED LIVE."
-status: "DEPLOYED. master 92b9ba15 = prod (lover-clinic-app.vercel.app). Awaiting user L1 hands-on only."
+updated_at: "2026-07-07 EOD+1 — universal modal scroll-lock (AV205) SHIPPED local, NOT deployed."
+status: "AV205 complete on master (9 commits ahead of prod 92b9ba15). Awaiting user L1 (นิ้วจริง) + explicit \"deploy\"."
 branch: "master"
-last_commit: "92b9ba15 perf(measure): live prod link-patient after-lcpfix"
-tests: "full vitest 17336/17336 · 0 fail (definitive json run this session; a 1-fail was a parallel flake). Build clean. Do NOT re-run at boot."
+last_commit: "dc8c232a test(e2e)+fix(css): AV205 L1 trusted-wheel spec 4/4 + layer-3 anti-confinement"
+tests: "full vitest 17,427/17,428 (1 fail = phase15.5b flake เดิม, 51/0 isolated; 0 V21 fixups) + hook 9/0 + classifier 83/0 + Playwright L1 4/4. Build clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "92b9ba15 (vercel lover-clinic-y5fpano5s, HTTP 200, live-verified)"
-firestore_rules_version: "UNCHANGED all session → frontend+api deploy only, NO Probe-Deploy-Probe"
+production_commit: "92b9ba15 (prod ยังไม่มี AV205 — รอ user สั่ง deploy)"
+firestore_rules_version: "UNCHANGED — frontend-only change → deploy = vercel only, NO Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-07 EOD — 3 ships deployed + live-verified
+# Active — 2026-07-07 EOD+1 — AV205 universal modal scroll-lock
 
 ## State
-- master = prod, everything live-verified (L1 real browser on the deployed URL + L2 payload-identical).
-- link-patient LCP: local 3780→2040ms (−46%) · **LIVE prod 3472→2212ms (−36%)** — AV204, entry-time early fetch.
-- Customer-link page: "ข้อมูลลูกค้า"/"Customer Info", no avatar, no HN (UI + API payload) — LIVE.
-
-## What this session shipped
-- **link-patient LCP (AV204)**: early fetch in main.jsx (consume-once, retry loop untouched) + endpoint
-  branch-gets Promise.all + NARROW /api/patient-view vite proxy (measurable/devable locally) — 2-agent
-  adversarial review: warm-import module-map poisoning REMOVED · B6 lock made structural. Probe 24/24 ·
-  parity 0.000% · DISABLED-branch live-tested 11/11 (TEST fixture, pristine cleanup).
-- **Customer-link header strip** (Q1=B): centered name+phone card · TX th/en · hn stripped from
-  /api/patient-view payload (field-minimization) · L1 live 5/5 + screenshots eyeballed.
-- **Configurable LINE id-link keywords**: interpretCustomerMessage(text,{idLinkKeywords}) pure layer
-  (escape + longest-first; defaults = legacy byte-equivalent) + validate (1-10 คำ, no-space, not-all-digit,
-  unique) + webhook 60s-TTL read of NEW doc clinic_settings/link_id_keywords (chat_config is secret-locked)
-  + KeywordSettingsCard in LinkRequestsTab + hint follows first keyword. LIVE round-trip 22/22 on real prod.
-- 34+17 new tests · 3 V21 repoints (F3 mirror, V33.9 C6, B2/B6) · checkpoint
-  `.agents/sessions/2026-07-07-lcpfix-header-keywords.md` · spec/plan docs/superpowers/{specs,plans}/2026-07-07-*.
+- User report: เปิด modal แล้ว scroll นิ้ว/ล้อเมาส์ไปเลื่อน background — แก้ครบทุกที่แล้ว (77 overlay files).
+- 3 ชั้น: useModalScrollLock (ref-counted html[data-modal-open]) · backdrop `overflow-y-auto
+  overscroll-contain` sweep ~68 ไฟล์ + panel max-h audit · layer-3 anti-confinement
+  (`html[data-modal-open] card:has(.fixed){transform:none}` — V86 hover-lift confine ที่จับได้จาก Q-vis).
+- Sanctioned (classifier closed list): print views, full-screen editors, dropdowns,
+  BackendMobileDrawer (Radix), StaffChatPanel (V82-fix7-bis เดิม).
+- Rule Q: Playwright trusted-wheel 4/4 (background frozen / modal scrolls / unlock) + screenshots eyeballed.
+- e2e helpers.js goToBackend รองรับ ArcBloom new menu แล้ว (text เดิมหายไป).
 
 ## Next action
-- **User L1 hands-on**: (1) เปิดลิงก์ ?patient= จากมือถือจริง — เร็วขึ้น + หัว "ข้อมูลลูกค้า" ไม่มี HN/avatar;
-  (2) LINE จริง: พิมพ์ `link <เลขบัตร>` → เข้าคิวคำขอผูก; เพิ่มคำใหม่ในการ์ด "คำที่ใช้ผูกบัญชี" → พิมพ์คำนั้น → เข้าคิว
-  (bot ใช้คำใหม่ภายใน ~1 นาที after save).
-- Deferred perf items stay parked in docs/perf/punchlist.md (cold-start ~3.5s option noted).
+- **User L1 hands-on**: เปิด modal ตามจุดที่เคยเจอ (backend tabs / TFP / หน้า frontend / มือถือ+iPad นิ้วจริง)
+  → scroll บน modal = เลื่อนเนื้อหา modal, background นิ่ง 100%, ปิดแล้วหน้าเลื่อนต่อได้ตำแหน่งเดิม.
+- ถ้าโอเค → user พิมพ์ "deploy" (vercel only — rules ไม่เปลี่ยน).
 
 ## Outstanding user-triggered actions
-- (none — deployed; L1 feedback only)
+- deploy AV205 (9 commits ahead of prod).
