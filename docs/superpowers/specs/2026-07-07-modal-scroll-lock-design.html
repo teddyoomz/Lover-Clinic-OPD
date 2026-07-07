@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Modal Scroll Lock (universal) — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .box { border: 2px solid #94a3b8; border-radius: 8px; padding: .6em .9em; margin: .4em 0; font-size: .9em; }
+    .box.red { border-color: #dc2626; background: #fef2f2; }
+    .box.green { border-color: #16a34a; background: #f0fdf4; }
+    .arrow { text-align: center; color: #94a3b8; font-size: 1.1em; margin: .1em 0; }
+    .flow2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; }
+    .kbd { background:#eee; border:1px solid #ccc; border-radius:4px; padding:0 .35em; font-size:.85em; }
+  </style>
+</head>
+<body>
+
+<h1>Modal Scroll Lock (universal sweep) — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-07 · <strong>Status:</strong> Approved by user (Approach A) ·
+  <strong>Implementation plan:</strong> docs/superpowers/plans/2026-07-07-modal-scroll-lock.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+User report (verbatim): <em>"เปิด modal pop-up ขึ้นมา แล้วการเลื่อนนิ้ว หรือเลื่อน scroll ของ mouse
+มันไปเลื่อนหน้าที่ background page แทน มันไม่ไปเลื่อนหน้าใน modal ที่ pop-up ขึ้นมา ในหลายๆจุดของโปรแกรม
+อยากให้ไล่ตรวจสอบแล้วแก้ให้สมบูรณ์ทั้งหมด ทุกที่"</em>
+</p>
+<p>
+Inventory: <strong>77 ไฟล์ / 133 จุด</strong> มี <code>fixed inset-0</code> overlay. มี scroll containment
+อยู่แค่ StaffChatPanel (V82-fix7-bis) + 1 modal ใน PatientForm. จุดชี้ขาด: หน้า backend/admin เลื่อนด้วย
+<strong>inner scroller</strong> (<code>AdminDashboard.jsx:5065</code> <code>overflow-y-auto flex-1</code>)
+ไม่ใช่ body → ล็อค body อย่างเดียวไม่พอ, ต้องตัด scroll chain ที่ตัว overlay ด้วย.
+</p>
+
+<h2>Mockup Design</h2>
+<p>Behavior fix — mockup = กลไก 2 ชั้น (data-shape ของ DOM/CSS) ไม่มี visual change ใดๆ เมื่อ modal ปิด/เปิด.</p>
+
+<div class="mockup">
+  <div class="mockup-label">ชั้นที่ 1 — html-level lock (hook ตัวเดียว, ref-counted)</div>
+  <pre>// NEW src/lib/useModalScrollLock.js  (วางข้าง useEscToClose.js — precedent V82-fix7-bis)
+useModalScrollLock(active = true)
+  mount/active   → lockCount++ ; ครั้งแรก: วัด scrollbar gutter →
+                   html.dataset.modalOpen = '1' + --scroll-lock-gutter
+  unmount/!active→ lockCount-- ; ครั้งสุดท้าย: ลบ attr + ลบ gutter var
+
+// index.css (เพิ่ม ~4 บรรทัด)
+html[data-modal-open] { overflow: hidden; }
+html[data-modal-open] body { touch-action: none; padding-right: var(--scroll-lock-gutter, 0px); }</pre>
+  <div class="box">กัน: body-scroll pages (PatientForm, PatientDashboard, public links) — ทั้ง wheel + นิ้ว.
+  <code>touch-action:none</code> บน html <strong>ไม่</strong> บล็อค scroller ภายใน modal
+  (pan ที่ implement โดย scroller ของ modal เอง เช็ค touch-action แค่ target→scroller — พิสูจน์แล้วใน StaffChat V82-fix7-bis)</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">ชั้นที่ 2 — backdrop containment (sweep ต่อไฟล์, ~2-3 class)</div>
+  <pre>&lt;!-- BEFORE (โครงจริงของ modal ส่วนใหญ่) --&gt;
+&lt;div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"&gt;
+  &lt;div class="bg-[var(--bg-elevated)] rounded-xl max-w-lg max-h-[85vh] overflow-y-auto"&gt;...&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- AFTER (เติม 2 class ที่ชั้นนอกสุด + hook ใน component) --&gt;
+&lt;div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4
+            overflow-y-auto overscroll-contain"&gt;   ← scroll chain ตายที่นี่
+  &lt;div class="... max-h-[85vh] overflow-y-auto"&gt;...&lt;/div&gt;  ← ต้องมี max-h+overflow (audit ทุกตัว)
+&lt;/div&gt;</pre>
+  <div class="box">กัน: wheel/นิ้วบน backdrop หรือส่วนไม่-scroll ของ panel → nearest scrollable ancestor =
+  backdrop (เป็น scroll container ที่ content พอดี = no-op) + <code>overscroll-contain</code> ตัด chain
+  → ไม่ทะลุเข้า inner scroller ของหน้าหลังอีก (ปิดเคส AdminDashboard/Backend)</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">การจัดกลุ่ม 77 ไฟล์ (classifier — ล็อคด้วย test)</div>
+  <table>
+    <tr><th>กลุ่ม</th><th>ตัวอย่าง</th><th>ปฏิบัติ</th></tr>
+    <tr><td><strong>1. Modal มี backdrop (~55)</strong></td><td>form/confirm/detail modals ทั้ง backend + TFP + AdminDashboard inline modals</td><td>hook + ชั้น 2 + audit panel max-h/overflow</td></tr>
+    <tr><td><strong>2. Lightbox / Drawer / Palette (~6)</strong></td><td>ImageLightbox, StaffChatImageLightbox, StaffChatPdfOverlay, BackendMobileDrawer, BackendCmdPalette</td><td>hook + ชั้น 2 (เหมือนกลุ่ม 1)</td></tr>
+    <tr><td><strong>3. Dropdown/anchored (excluded — Q1)</strong></td><td>OpdNoteTemplateMenu, RecallSnoozeMenu, AppointmentDetailPopover (hover peek)</td><td>ไม่ล็อค — sanctioned list พร้อมเหตุผล</td></tr>
+    <tr><td><strong>4. Non-modal fixed overlays (excluded)</strong></td><td>SalePrintView/QuotationPrintView (print view), TabletChartEditorPage/ChartCanvas (full-screen editor เป็น "หน้า" ไม่ใช่ modal), decoration layers</td><td>ไม่แตะ — sanctioned list</td></tr>
+    <tr><td><strong>5. Sanctioned พิเศษ</strong></td><td>StaffChatPanel (docked panel — มี V82-fix7-bis mobile-only lock ของตัวเองที่ semantics ต่าง: desktop ต้องเลื่อนหน้าได้)</td><td>คงกลไกเดิม ห้าม migrate</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Event flow — wheel/touch ขณะ modal เปิด (BEFORE → AFTER)</div>
+  <div class="flow2col">
+    <div>
+      <div class="box red"><strong>BEFORE (บั๊ค)</strong></div>
+      <div class="box">🖱️/👆 scroll บน backdrop / ส่วนว่างของ panel</div>
+      <div class="arrow">↓ hit-test target ไม่ scroll ได้</div>
+      <div class="box">chain ขึ้น DOM ancestor</div>
+      <div class="arrow">↓ modal render inline ใน content div</div>
+      <div class="box red">เจอ inner scroller ของหน้าหลัง (AdminDashboard:5065)<br>หรือ body → <strong>background เลื่อน</strong> 🐛</div>
+    </div>
+    <div>
+      <div class="box green"><strong>AFTER (2 ชั้น)</strong></div>
+      <div class="box">🖱️/👆 scroll บน backdrop / ส่วนว่างของ panel</div>
+      <div class="arrow">↓</div>
+      <div class="box green">ชั้น 2: backdrop = scroll container + <code>overscroll-contain</code><br>→ chain <strong>ตายที่ backdrop</strong> (no-op ตาม Q2)</div>
+      <div class="arrow">↓ (กรณี portal/body-scroll pages)</div>
+      <div class="box green">ชั้น 1: <code>html[data-modal-open]</code> overflow:hidden + touch-action:none<br>→ body <strong>นิ่ง</strong></div>
+      <div class="box">scroll บนเนื้อหา modal ที่ยาว → panel <code>overflow-y-auto</code> เลื่อนปกติ ✓</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Lifecycle flow — lock/unlock (ref-count, modal ซ้อน modal)</div>
+  <table>
+    <tr><th>#</th><th>เหตุการณ์</th><th>ผล</th></tr>
+    <tr><td>1</td><td>เปิด Modal A → <code>useModalScrollLock</code> mount</td><td>count 0→1 · วัด gutter · ติด <code>data-modal-open</code> → หน้าหลังล็อค (ไม่มี layout shift — padding-right ชดเชย)</td></tr>
+    <tr><td>2</td><td>Modal A เปิด Modal B ซ้อน</td><td>count 1→2 · attr คงอยู่</td></tr>
+    <tr><td>3</td><td>ปิด B</td><td>count 2→1 · <strong>ยังล็อค</strong> (A ยังเปิด)</td></tr>
+    <tr><td>4</td><td>ปิด A</td><td>count 1→0 · ลบ attr + gutter → scroll position เดิมคงอยู่ เลื่อนได้ปกติ</td></tr>
+    <tr><td>5</td><td>unmount กลางคัน (route เปลี่ยน/error)</td><td>useEffect cleanup decrement เสมอ → ไม่มี lock ค้าง</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<ul>
+  <li><strong>NEW <code>src/lib/useModalScrollLock.js</code></strong> — hook เดียว, module-level <code>lockCount</code>, side-effect เฉพาะ <code>document.documentElement</code> attr + CSS var. ไม่มี dependency ใหม่. SSR-safe guard (<code>typeof document</code>).</li>
+  <li><strong><code>src/index.css</code></strong> — เพิ่ม rule <code>html[data-modal-open]</code> ~4 บรรทัด (แยกจาก <code>html[data-staff-chat-open]</code> เดิม — คนละ semantics).</li>
+  <li><strong>Sweep ต่อไฟล์ (กลุ่ม 1+2, ~60 ไฟล์)</strong>: (a) เรียก hook ใน component root ของ modal (ตัวที่ render ตอน open เท่านั้น → <code>useModalScrollLock(true)</code>; ตัวที่ mount ค้างรับ prop open → <code>useModalScrollLock(open)</code>) (b) ชั้น fixed inset-0 นอกสุดที่รับ event เติม <code>overflow-y-auto overscroll-contain</code> (c) audit panel: ต้องมี <code>max-h-[≤90vh]</code> + <code>overflow-y-auto</code> — ตัวไหนขาดให้เติม ไม่งั้นเนื้อหายาวจะเข้าถึงไม่ได้หลังล็อค (d) โครง sibling-backdrop (backdrop แยกจาก wrapper) → ใส่ที่ layer เต็มจอที่รับ event.</li>
+  <li><strong>ห้ามแตะ</strong>: handler/state/props ของ modal ทุกตัว (cosmetic-shell rule), StaffChatPanel lock เดิม, dropdown กลุ่ม 3, print/full-screen กลุ่ม 4.</li>
+  <li><strong>Sweep แบบ inline</strong> (ไม่ fan-out agent — memory lock <code>feedback_no_large_agent_fanout</code>), batch commit ตาม Rule K work-first-test-last.</li>
+</ul>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = กลุ่ม 1+2:</strong> modal + lightbox/drawer/palette ล็อคหมด; dropdown/anchored เล็ก (กลุ่ม 3) ไม่ล็อค.</li>
+  <li><strong>Q2 = backdrop no-op:</strong> scroll บน backdrop ไม่ขยับอะไรเลย (มาตรฐาน Stripe/Linear); scroll บนเนื้อหา modal เลื่อนเนื้อหา modal.</li>
+  <li><strong>Approach = A:</strong> shared hook (ชั้น 1) + backdrop containment sweep (ชั้น 2). ไม่ทำ ModalShell refactor (C) และไม่ใช่ hook-only (B — ไม่ครอบ inner-scroller pages).</li>
+  <li><strong>StaffChatPanel:</strong> คงกลไก V82-fix7-bis เดิม (docked panel, mobile-only lock — semantics ต่างจาก modal).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>เปิด modal ตัวแทนจากทุก surface (backend tab modal / TFP modal / AdminDashboard inline modal / customer-facing) → wheel + touch บน backdrop และส่วนว่างของ panel → <strong>background นิ่ง 100%</strong> ทั้งหน้า body-scroll และหน้า inner-scroller.</li>
+  <li>เนื้อหา modal ที่ยาวกว่า panel → scroll ภายในเลื่อนได้ปกติ ทั้ง wheel และนิ้ว.</li>
+  <li>ปิด modal → scroll position ของหน้าเดิมไม่กระโดด + เลื่อนหน้าได้ปกติทันที (ref-count ถึง 0).</li>
+  <li>Modal ซ้อน modal → ปิดตัวบนแล้วยังล็อค, ปิดหมดแล้วปลด.</li>
+  <li>ทุก modal ในกลุ่ม 1+2 เนื้อหายาวเกิน viewport ยังเข้าถึงได้ครบ (panel max-h + overflow audit — ไม่มีตัวไหนโดนล็อคขัง).</li>
+  <li>ไม่มี visual change: pixel parity ตอน modal ปิด = 0 diff; ตอนเปิดไม่มี layout shift (gutter compensation).</li>
+  <li>Dropdown กลุ่ม 3 + print/full-screen กลุ่ม 4 + StaffChatPanel = พฤติกรรมเดิมทุกประการ.</li>
+  <li>Classifier test ครอบทั้ง 77 ไฟล์ — ทุกไฟล์ที่มี <code>fixed inset-0</code> ต้องอยู่กลุ่มใดกลุ่มหนึ่ง (hook+contain หรือ sanctioned พร้อมเหตุผล); ไฟล์ modal ใหม่ในอนาคตไม่ผ่าน test ถ้าไม่ใส่ hook → AV205.</li>
+  <li>Rule Q L1: real browser ยิง wheel + touch จริงบน modal ตัวแทนแต่ละกลุ่ม + วัด scrollTop ของ background ก่อน/หลัง = ต้องเท่าเดิม.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>iOS &lt; 16</strong>: <code>overscroll-behavior</code> ไม่รองรับ → touch บน backdrop ในหน้า inner-scroller อาจ chain ทะลุได้ (ชั้น 1 ยังกัน body-scroll pages ให้). iPad คลินิกเป็นรุ่นใหม่ → residual ยอมรับ + จดใน AV205.</li>
+  <li><strong>flex-center + overflow clip</strong>: เติม <code>overflow-y-auto</code> บน backdrop ที่ <code>items-center</code> — ถ้า child สูงกว่า viewport หัว modal จะโดน clip. Mitigation: audit ข้อ (c) บังคับ child มี max-h ≤ 90vh เสมอ → ไม่เกิด.</li>
+  <li><strong>Sweep 60 ไฟล์ = mechanical risk</strong>: แก้ทีละไฟล์ inline + eyeball โครงจริงต่อไฟล์ (โครง backdrop ไม่เหมือนกัน) + parity screenshot ตัวแทน; V21 fixups คาดว่ามี (source-grep tests เดิมล็อค class string ของ backdrop บางตัว).</li>
+  <li><strong>Modal ที่ mount ค้าง</strong> (render เสมอ + ซ่อนด้วย state): ต้องส่ง <code>open</code> เข้า hook ไม่ใช่ hard-true — ตรวจต่อไฟล์ตอน sweep.</li>
+</ul>
+
+</body>
+</html>
