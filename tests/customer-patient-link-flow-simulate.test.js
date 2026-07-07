@@ -68,21 +68,28 @@ describe('Rule I — customer patient-link full flow', () => {
     expect(all.filter(c => c.expiryDate && c.expiryDate < today).map(c => c.name)).toEqual(['B']);
   });
 
-  it('F3: customer-mode sessionData shape feeds the EXISTING render keys', () => {
-    // endpoint response → PatientDashboard customer-mode map
-    const data = { ok: true, patientName: 'อุดม', hn: 'LC-1', patientData: { firstName: 'อุดม', lastName: 'ศ' },
+  it('F3: customer-mode sessionData shape feeds the EXISTING render keys (2026-07-07: hn/brokerProClinicHN STRIPPED end-to-end — endpoint no longer returns hn, page no longer maps or renders it)', () => {
+    // endpoint response → PatientDashboard customer-mode map (post header-strip)
+    const data = { ok: true, patientName: 'อุดม', patientData: { firstName: 'อุดม', lastName: 'ศ' },
       courses: [{ name: 'X' }], expiredCourses: [], appointments: [{ date: '28 พฤษภาคม 2569', branch: 'นครราชสีมา', time: '10:00 น.' }] };
     const sessionData = {
       __customerMode: true, patientLinkEnabled: true,
-      patientData: data.patientData, brokerProClinicHN: data.hn,
+      patientData: data.patientData,
       latestCourses: { courses: data.courses, expiredCourses: data.expiredCourses, appointments: data.appointments, patientName: data.patientName, success: true },
     };
-    // render reads: sessionData.latestCourses.{appointments,courses} / sessionData.patientData / .brokerProClinicHN
+    // render reads: sessionData.latestCourses.{appointments,courses} / sessionData.patientData
     expect(sessionData.latestCourses.appointments[0].branch).toBe('นครราชสีมา');
     expect(sessionData.latestCourses.appointments[0].date).toBe('28 พฤษภาคม 2569');
     expect(sessionData.latestCourses.courses).toHaveLength(1);
-    expect(sessionData.brokerProClinicHN).toBe('LC-1');
     expect(sessionData.__customerMode).toBe(true);
+    // lock the strip: neither the endpoint nor the page carries hn anymore
+    const EP = readFileSync('api/patient-view.js', 'utf8');
+    expect(EP).not.toMatch(/^\s*hn,\s*$/m);
+    expect(EP).not.toMatch(/proClinicHN \|\| customerData\.hn_no/);
+    const PD = readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
+    expect(PD).not.toMatch(/brokerProClinicHN/);
+    expect(PD).not.toMatch(/getInitials/);
+    expect(PD).not.toMatch(/HN \{hn\}/);
   });
 
   it('F4: AppointmentCard already renders branch (📍) — source-grep, no UI change needed', () => {

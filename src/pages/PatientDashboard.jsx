@@ -23,7 +23,7 @@ import { takeEarlyPatientViewFetch } from '../lib/patientViewEarlyFetch.js';
 // ── i18n ──────────────────────────────────────────────────────────────────────
 const TX = {
   th: {
-    loading: 'กำลังโหลด', headerSub: 'ข้อมูลผู้ป่วย',
+    loading: 'กำลังโหลด', headerSub: 'ข้อมูลลูกค้า',
     disabled: 'ลิงก์ถูกปิดชั่วคราว', disabledSub: 'กรุณาติดต่อคลินิกเพื่อขอลิงก์ใหม่',
     notfound: 'ไม่พบข้อมูล', notfoundSub: 'URL นี้ไม่ถูกต้องหรือหมดอายุแล้ว',
     unknown: 'ไม่ระบุชื่อ',
@@ -38,7 +38,7 @@ const TX = {
     noneYet: 'ยังไม่มีนัดหมายหรือคอร์สในขณะนี้',
   },
   en: {
-    loading: 'Loading', headerSub: 'Patient Dashboard',
+    loading: 'Loading', headerSub: 'Customer Info',
     disabled: 'Link Disabled', disabledSub: 'Please contact the clinic for a new link.',
     notfound: 'Not Found', notfoundSub: 'This URL is invalid or has expired.',
     unknown: 'Unknown',
@@ -105,13 +105,6 @@ function translateThaiDate(str) {
 function translateThaiUnit(str, lang) {
   if (lang !== 'en' || !str) return str;
   return str.replace(/ครั้ง/g, 'times').replace(/ซีซี/g, 'cc').replace(/หน่วย/g, 'units');
-}
-
-function getInitials(firstName = '', lastName = '') {
-  const f = firstName.trim()[0] || '';
-  const l = lastName.trim()[0] || '';
-  if (f || l) return (f + l).toUpperCase();
-  return '?';
 }
 
 // ── CourseCard ────────────────────────────────────────────────────────────────
@@ -543,7 +536,6 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                 __customerMode: true,
                 patientLinkEnabled: true,
                 patientData: data.patientData || {},
-                brokerProClinicHN: data.hn || '',
                 latestCourses: {
                   courses: data.courses || [], expiredCourses: data.expiredCourses || [],
                   appointments: data.appointments || [], patientName: data.patientName || '',
@@ -650,7 +642,6 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const expiredCourses = sessionData.latestCourses?.expiredCourses || [];
   const appointments  = sessionData.latestCourses?.appointments  || [];
   const plName        = sessionData.latestCourses?.patientName;
-  const hn            = sessionData.brokerProClinicHN || '';
   const fetchedAt     = sessionData.latestCourses?.fetchedAt || null;
   const syncTimeStr   = formatSyncTime(fetchedAt, language);
   const formName      = `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
@@ -729,38 +720,18 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             : 'linear-gradient(90deg, transparent, rgba(236,72,153,0.5), rgba(244,114,182,0.6), transparent)'
           }} />
 
-          <div className="px-5 pt-5 pb-4 flex gap-4 items-start">
-            {/* Avatar */}
-            <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none"
-              style={isDark
-                ? { background: 'radial-gradient(135deg, rgba(249,115,22,0.12) 0%, #0a0a0a 100%)', border: '2px solid rgba(249,115,22,0.5)', color: '#ffffff', boxShadow: '0 0 18px rgba(249,115,22,0.30), 0 0 40px rgba(249,115,22,0.10), inset 0 0 12px rgba(249,115,22,0.06)' }
-                : { background: 'radial-gradient(135deg, rgba(244,114,182,0.15) 0%, #ffffff 100%)', border: '2px solid rgba(236,72,153,0.35)', color: '#9d174d', boxShadow: '0 0 18px rgba(236,72,153,0.20), 0 0 40px rgba(236,72,153,0.06)' }
-              }>
-              {getInitials(d.firstName || patientName, d.lastName)}
-            </div>
-
-            {/* Info */}
-            <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
-              {/* UC1: no red on patient names (Thai cultural rule — สีแดง = คนตาย). */}
-              <p className="text-xl font-black leading-snug text-[var(--tx-secondary)]">{patientName || tx.unknown}</p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                {hn && (
-                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
-                    style={isDark
-                      ? { color: '#fdba74', background: '#1a0a00', border: '1px solid #4a1a0a' }
-                      : { color: '#9d174d', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }
-                    }>
-                    HN {hn}
-                  </span>
-                )}
-                {d.phone && (
-                  <span className={`text-xs flex items-center gap-1.5 ${isDark ? 'text-red-300/50' : 'text-pink-400/70'}`}>
-                    <Phone size={11} className={isDark ? 'text-red-400/40' : 'text-pink-300'} />
-                    <PhoneLink value={d.phone}>{d.phone}</PhoneLink>
-                  </span>
-                )}
-              </div>
-            </div>
+          {/* 2026-07-07 (customer-link header strip, Q1=B): avatar initials circle +
+              HN badge REMOVED per user directive — card shows name + phone only,
+              centered. Card shell (gradient/border/accent bar) untouched. */}
+          <div className="px-5 pt-5 pb-4 flex flex-col gap-2 items-center text-center">
+            {/* UC1: no red on patient names (Thai cultural rule — สีแดง = คนตาย). */}
+            <p className="text-xl font-black leading-snug text-[var(--tx-secondary)]">{patientName || tx.unknown}</p>
+            {d.phone && (
+              <span className={`text-xs flex items-center gap-1.5 ${isDark ? 'text-red-300/50' : 'text-pink-400/70'}`}>
+                <Phone size={11} className={isDark ? 'text-red-400/40' : 'text-pink-300'} />
+                <PhoneLink value={d.phone}>{d.phone}</PhoneLink>
+              </span>
+            )}
           </div>
 
           {/* Sync button strip — hidden in customer-mode (data is server-fresh via endpoint;

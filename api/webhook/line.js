@@ -94,6 +94,26 @@ function verifySignature(body, signature, channelSecret) {
   return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(signature));
 }
 
+// ─── Configurable id-link keywords (2026-07-07) ──────────────────────────────
+// Admin-editable prefix words for "<คำ> <เลขบัตร/พาสปอร์ต>" link requests, stored
+// in clinic_settings/link_id_keywords (settings card in LinkRequestsTab).
+// Module-level 60s TTL cache: serverless instances amortize the extra Firestore
+// read to ~0 per message; a keyword edit propagates within a minute. null →
+// interpretCustomerMessage falls back to DEFAULT_ID_LINK_KEYWORDS (legacy set).
+let _kwCache = { at: 0, list: null };
+async function getIdLinkKeywordsCached() {
+  if (Date.now() - _kwCache.at < 60000) return _kwCache.list;
+  try {
+    const snap = await getAdminFirestore()
+      .doc(`artifacts/${APP_ID}/public/data/clinic_settings/link_id_keywords`).get();
+    const raw = snap.exists ? snap.data()?.keywords : null;
+    _kwCache = { at: Date.now(), list: Array.isArray(raw) && raw.length ? raw : null };
+  } catch {
+    _kwCache = { at: Date.now(), list: null }; // read failure → defaults, never a dead bot
+  }
+  return _kwCache.list;
+}
+
 async function getChatConfig() {
   // Phase BS V3 (2026-05-04) — used as a fallback for top-of-handler signature
   // verification only. Per-event branch routing happens later via
@@ -603,7 +623,9 @@ async function maybeEmitBotReply(event, config, branchId) {
     return true;
   }
 
-  const intent = interpretCustomerMessage(text);
+  // 2026-07-07 — keyword set is admin-configurable (cached 60s); null → defaults.
+  const idLinkKeywords = await getIdLinkKeywordsCached();
+  const intent = interpretCustomerMessage(text, { idLinkKeywords });
 
   // V33.9 — intent === 'link' branch REMOVED (pre-V33.4 QR-token flow
   // stripped). LINK-<token> messages now hit 'unknown' → no reply.
@@ -625,7 +647,7 @@ async function maybeEmitBotReply(event, config, branchId) {
     const wasBarePrefix = !!intent.payload?.wasBarePrefix;
     if (intent.payload?.idType === 'invalid') {
       // 'invalid' only emitted from the legacy "ผูก" path → keep replying.
-      await replyLineMessage(event.replyToken, formatIdRequestInvalidFormat(), config.channelAccessToken);
+      await replyLineMessage(event.replyToken, formatIdRequestInvalidFormat('th', idLinkKeywords), config.channelAccessToken);
       return true;
     }
     const rate = await checkRateLimit(userId).catch(() => ({ allowed: true }));

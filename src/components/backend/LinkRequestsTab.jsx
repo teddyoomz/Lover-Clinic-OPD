@@ -26,9 +26,108 @@ import {
   getLineLinkState, formatLineLinkStatusBadge, maskLineUserId, LINK_STATES,
 } from '../../lib/customerLineLinkState.js';
 import { getLanguageForCustomer } from '../../lib/lineBotResponder.js';
+import { getIdLinkKeywords, saveIdLinkKeywords } from '../../lib/idLinkKeywordsClient.js';
+import { auth } from '../../firebase.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import LangPillToggle from './LangPillToggle.jsx';
 import { VipName } from '../VipBadge.jsx';
+
+// ─── Keyword settings card (2026-07-07) ──────────────────────────────────────
+// Admin-configurable prefix words for "<คำ> <เลขบัตร/พาสปอร์ต>" link requests.
+// Stored in clinic_settings/link_id_keywords; the LINE webhook picks changes
+// up within its 60s cache TTL. Validation lives in lineBotResponder
+// (validateIdLinkKeywords) — shared with the webhook's pure interpret layer.
+function KeywordSettingsCard() {
+  const [keywords, setKeywords] = useState(null); // null = loading
+  const [input, setInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null); // { ok, text }
+
+  useEffect(() => {
+    let on = true;
+    getIdLinkKeywords().then((k) => { if (on) setKeywords(k); }).catch(() => { if (on) setKeywords([]); });
+    return () => { on = false; };
+  }, []);
+
+  const addWord = () => {
+    const k = input.trim();
+    if (!k) return;
+    setKeywords((prev) => [...(prev || []), k]);
+    setInput('');
+    setMsg(null);
+  };
+  const removeWord = (idx) => {
+    setKeywords((prev) => (prev || []).filter((_, i) => i !== idx));
+    setMsg(null);
+  };
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const r = await saveIdLinkKeywords(keywords || [], auth?.currentUser?.uid || '');
+      if (r.ok) {
+        setKeywords(r.keywords);
+        setMsg({ ok: true, text: 'บันทึกแล้ว — bot จะใช้คำชุดใหม่ภายใน ~1 นาที' });
+      } else {
+        setMsg({ ok: false, text: r.error });
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: `บันทึกไม่สำเร็จ: ${e?.message || e}` });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]" data-testid="link-keywords-card">
+      <p className="text-sm font-bold text-[var(--tx-heading)] mb-0.5">คำที่ใช้ผูกบัญชี</p>
+      <p className="text-xs text-[var(--tx-muted)] mb-2">
+        ลูกค้าพิมพ์ &lt;คำ&gt; ตามด้วยเลขบัตรประชาชน 13 หลัก หรือเลขพาสปอร์ต เช่น "link 1234567890123" ·
+        ส่งเลขเปล่าๆ ไม่ต้องมีคำนำหน้าก็ได้เช่นเดิม
+      </p>
+      {keywords === null ? (
+        <div className="flex items-center gap-2 text-xs text-[var(--tx-muted)]"><Loader2 size={12} className="animate-spin" /> กำลังโหลด...</div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {keywords.map((k, i) => (
+              <span key={`${k}-${i}`} data-testid={`link-keyword-chip-${i}`}
+                className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-900/30 border border-emerald-700/40 text-emerald-200">
+                {k}
+                <button onClick={() => removeWord(i)} data-testid={`link-keyword-remove-${i}`}
+                  aria-label={`ลบคำ ${k}`} className="hover:text-red-300 leading-none">×</button>
+              </span>
+            ))}
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addWord(); } }}
+              placeholder="เพิ่มคำ..."
+              data-testid="link-keyword-input"
+              className="text-xs px-2.5 py-1 rounded-full bg-transparent border border-dashed border-[var(--bd)] text-[var(--tx-primary)] w-28 focus:outline-none focus:border-emerald-600"
+            />
+            <button onClick={addWord} data-testid="link-keyword-add"
+              className="text-xs px-2.5 py-1 rounded-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-secondary)] hover:text-[var(--tx-primary)]">
+              + เพิ่ม
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={save} disabled={saving} data-testid="link-keyword-save"
+              className="text-xs font-bold px-4 py-1.5 rounded-lg bg-emerald-700/40 border border-emerald-600/50 text-emerald-100 hover:bg-emerald-700/60 disabled:opacity-50 flex items-center gap-1.5">
+              {saving && <Loader2 size={12} className="animate-spin" />}
+              บันทึก
+            </button>
+            <span className="text-[10px] text-[var(--tx-muted)]">ขั้นต่ำ 1 คำ · สูงสุด 10 คำ · คำละ 1-30 ตัว · ห้ามมีช่องว่าง · ห้ามตัวเลขล้วน</span>
+          </div>
+          {msg && (
+            <p data-testid="link-keywords-msg" className={`text-xs mt-2 ${msg.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+              {msg.ok ? '✓ ' : '⚠ '}{msg.text}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 const STATUS_TABS = [
   { id: 'pending',  label: 'รอตรวจสอบ', cls: 'bg-amber-700/30 border-amber-700/50 text-amber-200' },
@@ -154,9 +253,11 @@ export default function LinkRequestsTab() {
       </div>
 
       <div className="px-3 py-2 rounded-lg bg-violet-900/20 border border-violet-700/40 text-violet-200 text-xs">
-        ลูกค้าที่ส่งข้อความ "ผูก [เลขบัตรประชาชน/พาสปอร์ต]" ใน LINE OA จะปรากฏที่นี่.
-        เมื่อกด "อนุมัติ" → ระบบจะผูก LINE userId กับ be_customers + ส่งข้อความยืนยันให้ลูกค้าทราบ.
+        ลูกค้าที่ส่งข้อความ "&lt;คำผูกบัญชี&gt; [เลขบัตรประชาชน/พาสปอร์ต]" ใน LINE OA จะปรากฏที่นี่
+        (ตั้งค่าคำได้ในการ์ดด้านล่าง). เมื่อกด "อนุมัติ" → ระบบจะผูก LINE userId กับ be_customers + ส่งข้อความยืนยันให้ลูกค้าทราบ.
       </div>
+
+      <KeywordSettingsCard />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">

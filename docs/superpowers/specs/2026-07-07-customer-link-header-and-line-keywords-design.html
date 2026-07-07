@@ -105,7 +105,7 @@
   <p>
     <span class="flowbox">แอดมินแก้ chips ใน "คำขอผูก LINE"</span><span class="arrow">→</span>
     <span class="flowbox">validate (validateIdLinkKeywords)</span><span class="arrow">→</span>
-    <span class="flowbox">เขียน clinic_settings/chat_config.idLinkKeywords</span>
+    <span class="flowbox">เขียน clinic_settings/link_id_keywords (AMENDED — ดู Decisions)</span>
   </p>
   <p>
     <span class="flowbox">ลูกค้าพิมพ์ "&lt;คำ&gt; 1234567890123" ใน LINE</span><span class="arrow">→</span>
@@ -132,7 +132,7 @@
   <li><strong>Q1 = B:</strong> การ์ดชื่อจัดกึ่งกลาง (ชื่อ + เบอร์)</li>
   <li><strong>Q2 = Customer Info:</strong> หัวเพจ EN</li>
   <li><strong>Q3 = ตัด:</strong> <code>hn</code> ออกจาก API response ด้วย (data minimization)</li>
-  <li><strong>Q4 = Global:</strong> ชุดคำเดียวทั้งคลินิกใน <code>chat_config.idLinkKeywords</code>, แก้ได้ทุกคำ, seed defaults; ไม่ per-branch</li>
+  <li><strong>Q4 = Global:</strong> ชุดคำเดียวทั้งคลินิก, แก้ได้ทุกคำ, seed defaults; ไม่ per-branch. <strong>AMENDED (implementation-forced):</strong> เก็บใน doc ใหม่ <code>clinic_settings/link_id_keywords</code> แทน chat_config — chat_config เป็น secret-store ที่ client SDK ถูก deny (WS1-C2-bis); doc ใหม่อยู่ใต้ wildcard rule เดิม (read public — คำไม่ใช่ secret, bot hint บอกลูกค้าอยู่แล้ว / write staff) → ไม่แตะ firestore.rules</li>
 </ul>
 
 <h2>Acceptance Criteria</h2>

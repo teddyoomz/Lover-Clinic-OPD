@@ -82,12 +82,14 @@ const MESSAGES = {
       'หากต้องการความช่วยเหลือ โปรดติดต่อคลินิกโดยตรง.',
     ].join('\n'),
     ID_REQUEST_RATE_LIMITED: 'คำขอผูกบัญชีในช่วงนี้เกินจำนวนที่กำหนด — โปรดติดต่อคลินิกโดยตรง.',
-    ID_REQUEST_INVALID: [
+    // 2026-07-07 — hint renders the CONFIGURED first keyword (default 'ผูก'
+    // = byte-identical legacy text).
+    ID_REQUEST_INVALID: (kw = 'ผูก') => [
       'รูปแบบเลขที่ระบุไม่ถูกต้อง',
       '',
       'โปรดส่งข้อความรูปแบบ:',
-      '  ผูก 1234567890123  (เลขบัตรประชาชน 13 หลัก)',
-      '  ผูก AA1234567      (เลขพาสปอร์ต)',
+      `  ${kw} 1234567890123  (เลขบัตรประชาชน 13 หลัก)`,
+      `  ${kw} AA1234567      (เลขพาสปอร์ต)`,
     ].join('\n'),
     LINK_REQUEST_APPROVED: (name) => [
       `🎉 อนุมัติการผูกบัญชี LINE สำเร็จ${name ? ` คุณ${name}` : ''}`,
@@ -146,12 +148,14 @@ const MESSAGES = {
       'For help, please contact the clinic directly.',
     ].join('\n'),
     ID_REQUEST_RATE_LIMITED: 'Too many link requests recently — please contact the clinic directly.',
-    ID_REQUEST_INVALID: [
+    // 2026-07-07 — hint renders the CONFIGURED keyword (default 'link'
+    // = byte-identical legacy text).
+    ID_REQUEST_INVALID: (kw = 'link') => [
       'Invalid ID format',
       '',
       'Please send a message in this format:',
-      '  link 1234567890123  (national ID, 13 digits)',
-      '  link AA1234567      (passport number)',
+      `  ${kw} 1234567890123  (national ID, 13 digits)`,
+      `  ${kw} AA1234567      (passport number)`,
     ].join('\n'),
     LINK_REQUEST_APPROVED: (name) => [
       `🎉 LINE account link approved${name ? `, ${name}` : ''}`,
@@ -282,7 +286,58 @@ export const HELP_TRIGGERS = Object.freeze([
   'help', 'menu', 'เมนู', 'ช่วยเหลือ', 'วิธีใช้', '?', '??',
 ]);
 
-export function interpretCustomerMessage(text) {
+// ─── Configurable id-link keywords (2026-07-07) ──────────────────────────────
+// The prefix words that trigger an id-link-request ("<คำ> <เลขบัตร/พาสปอร์ต>")
+// are admin-configurable via clinic_settings/link_id_keywords (settings card in
+// LinkRequestsTab). Absent/empty config → this DEFAULT set = the exact legacy
+// behavior (ผูก / ผูกบัญชี / link). Bare-ID detection is independent of this.
+export const DEFAULT_ID_LINK_KEYWORDS = Object.freeze(['ผูก', 'ผูกบัญชี', 'link']);
+
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Build the id-link prefix regex from a keyword list. Keywords are trimmed,
+ * regex-escaped (a "." or "*" in a keyword matches LITERALLY), and sorted
+ * longest-first so a keyword never shadows its own longer sibling
+ * (ผูกบัญชี must win over ผูก). Falls back to DEFAULT_ID_LINK_KEYWORDS when
+ * the list is missing/empty so the bot can never go keyword-dead.
+ */
+export function buildIdLinkPrefixRegex(keywords) {
+  const cleaned = (Array.isArray(keywords) ? keywords : [])
+    .map((k) => String(k ?? '').trim())
+    .filter(Boolean);
+  const list = cleaned.length ? cleaned : [...DEFAULT_ID_LINK_KEYWORDS];
+  const alts = [...list].sort((a, b) => b.length - a.length).map(escapeRegex).join('|');
+  return new RegExp(`^\\s*(?:${alts})\\s+(.+)$`, 'i');
+}
+
+/**
+ * Validate an admin-edited keyword list (settings card gate). Returns
+ * { ok: true, keywords: trimmed[] } or { ok: false, error: <Thai copy> }.
+ * Rules: 1-10 keywords · each 1-30 chars · no whitespace inside a keyword
+ * (message format is "<คำ> <เลข>") · not all-digits (collides with the
+ * bare-ID path) · unique case-insensitively.
+ */
+export function validateIdLinkKeywords(list) {
+  if (!Array.isArray(list) || list.length === 0) return { ok: false, error: 'ต้องมีอย่างน้อย 1 คำ' };
+  if (list.length > 10) return { ok: false, error: 'ตั้งได้สูงสุด 10 คำ' };
+  const keywords = [];
+  const seen = new Set();
+  for (const raw of list) {
+    const k = String(raw ?? '').trim();
+    if (!k) return { ok: false, error: 'มีคำว่างเปล่าในรายการ' };
+    if (k.length > 30) return { ok: false, error: 'แต่ละคำยาวได้ไม่เกิน 30 ตัวอักษร' };
+    if (/\s/.test(k)) return { ok: false, error: 'คำต้องไม่มีช่องว่าง (รูปแบบข้อความคือ "<คำ> <เลข>")' };
+    if (/^\d+$/.test(k)) return { ok: false, error: 'คำต้องไม่เป็นตัวเลขล้วน (ชนกับการส่งเลขบัตรเปล่าๆ)' };
+    const key = k.toLowerCase();
+    if (seen.has(key)) return { ok: false, error: `คำซ้ำ: "${k}"` };
+    seen.add(key);
+    keywords.push(k);
+  }
+  return { ok: true, keywords };
+}
+
+export function interpretCustomerMessage(text, opts = {}) {
   const raw = String(text || '').trim();
   if (!raw) return { intent: 'help' };
 
@@ -306,7 +361,10 @@ export function interpretCustomerMessage(text) {
   //     instead of creating an invalid admin queue entry. Per user choice
   //     ("Ignore เงียบ"); minor info leak accepted vs. less queue spam.
 
-  const idPrefixMatch = raw.match(/^\s*(?:ผูก(?:บัญชี)?|link)\s+(.+)$/i);
+  // 2026-07-07 — the prefix keyword set is configurable (opts.idLinkKeywords
+  // from clinic_settings/link_id_keywords); no opts → DEFAULT_ID_LINK_KEYWORDS
+  // reproduces the legacy /^\s*(?:ผูก(?:บัญชี)?|link)\s+(.+)$/i exactly.
+  const idPrefixMatch = raw.match(buildIdLinkPrefixRegex(opts.idLinkKeywords));
   if (idPrefixMatch) {
     const candidate = idPrefixMatch[1].replace(/[\s\-.()]/g, '');
     if (/^\d{13}$/.test(candidate)) {
@@ -484,11 +542,21 @@ export function formatIdRequestRateLimitedReply(language = 'th') {
 }
 
 /**
- * Format hint when customer typed "ผูก" but the ID didn't match the
+ * Format hint when customer typed a link keyword but the ID didn't match the
  * national-id (13 digits) or passport (alphanumeric 6-12) pattern.
+ * 2026-07-07 — the example keyword in the hint follows the CONFIGURED set:
+ * TH uses the first keyword; EN prefers the first ASCII keyword (falls back
+ * to the first keyword). Defaults reproduce the legacy text byte-identically.
  */
-export function formatIdRequestInvalidFormat(language = 'th') {
-  return MESSAGES[normLang(language)].ID_REQUEST_INVALID;
+export function formatIdRequestInvalidFormat(language = 'th', keywords) {
+  const lang = normLang(language);
+  const cleaned = (Array.isArray(keywords) ? keywords : [])
+    .map((k) => String(k ?? '').trim()).filter(Boolean);
+  const list = cleaned.length ? cleaned : [...DEFAULT_ID_LINK_KEYWORDS];
+  const kw = lang === 'en'
+    ? (list.find((k) => /^[\x21-\x7E]+$/.test(k)) || list[0])
+    : list[0];
+  return MESSAGES[lang].ID_REQUEST_INVALID(kw);
 }
 
 /**

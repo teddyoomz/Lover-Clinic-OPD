@@ -4,7 +4,8 @@
 // are clinic-staff-only (firestore.rules) → anon CANNOT read them client-side, so
 // THIS endpoint is the secure data path. Returns the latestCourses-shaped payload
 // that PatientDashboard already renders (reuse the existing patient view 100%).
-// Field-minimized: name · HN · courses · appointments(+branch). No sensitive PII.
+// Field-minimized: name · courses · appointments(+branch). No sensitive PII.
+// (hn stripped 2026-07-07 — the customer-link page no longer displays it.)
 //
 // AV (anon-safety): NEVER add sensitive PII identifiers (ID number etc.) to the
 // response. be_* rules MUST stay isClinicStaff (no anon-read rule).
@@ -118,15 +119,15 @@ export default async function handler(req, res) {
     });
 
     // 4. Patient identity (minimal — no national ID / sensitive PII).
+    //    2026-07-07: hn STRIPPED from the payload too (customer-link header
+    //    no longer displays it — field-minimization on this anon endpoint).
     const pd = customerData.patientData || {};
     const patientName = `${pd.prefix || ''} ${pd.firstName || pd.firstNameTh || ''} ${pd.lastName || pd.lastNameTh || ''}`.trim()
       || `${customerData.prefix || ''} ${customerData.firstname || ''} ${customerData.lastname || ''}`.trim();
-    const hn = customerData.proClinicHN || customerData.hn_no || customerData.hn || '';
 
     return res.status(200).json({
       ok: true,
       patientName,
-      hn,
       patientData: {
         prefix: pd.prefix || '',
         firstName: pd.firstName || pd.firstNameTh || '',

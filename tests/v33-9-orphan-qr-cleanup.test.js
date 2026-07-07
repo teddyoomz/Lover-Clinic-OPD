@@ -92,11 +92,18 @@ describe('V33.9.C — LINK-<token> messages no longer match intent="link"', () =
     expect(r.payload?.idType).toBe('national-id');
     expect(r.payload?.wasBarePrefix).toBe(true);
   });
-  it('C6 — interpretCustomerMessage return type comment no longer lists "link"', () => {
-    // Source-grep — the JSDoc @returns enumerates intent values.
-    const fn = RESPONDER_SRC.match(/\* @returns [\s\S]*?\*\/[\s\S]*?export function interpretCustomerMessage/m)?.[0] || '';
-    expect(fn).not.toMatch(/'link'/);
-    expect(fn).toMatch(/'id-link-request'/);
+  it('C6 — the QR-token intent \'link\' is never RETURNED by the responder (V33.9 strip stays stripped)', () => {
+    // 2026-07-07 repoint: the old window-grep (`@returns ... export function
+    // interpretCustomerMessage` NOT containing 'link') broke when the
+    // configurable id-link keyword layer landed between them —
+    // DEFAULT_ID_LINK_KEYWORDS legitimately contains the WORD 'link'
+    // (a prefix keyword, unrelated to the removed QR-token INTENT).
+    // Assert the actual V33.9 contract instead: no code path returns
+    // intent 'link'; the admin-mediated 'id-link-request' intent remains.
+    expect(RESPONDER_SRC).not.toMatch(/intent:\s*'link'/);
+    expect(RESPONDER_SRC).toMatch(/intent: 'id-link-request'/);
+    // and behaviorally: a LINK-<token> style message still falls to unknown
+    expect(interpretCustomerMessage('LINK-ABC123XYZ7').intent).toBe('unknown');
   });
 });
 
