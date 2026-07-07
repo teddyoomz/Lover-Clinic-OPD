@@ -21,6 +21,7 @@ import { printDocument, buildPrintContext, renderTemplate, safeImgTag, exportDoc
 import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
 import { sendDocumentLine } from '../../lib/sendDocumentClient.js';
 import { useEffectiveClinicSettings, useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import SignatureCanvasField from './SignatureCanvasField.jsx';
@@ -75,6 +76,8 @@ export default function DocumentPrintModal({
   // "เปลี่ยนให้ระบบ Gen PDF ของเราทั้งหมดดึงข้อมูลคลินิกจาก ข้อมูลของสาขา".
   const clinicSettings = useEffectiveClinicSettings(rawClinicSettings);
   const { branchId: selectedBranchId } = useSelectedBranch();
+  // AV205 — gate on open (early return at the bottom runs after hooks)
+  useModalScrollLock(!!open);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -544,7 +547,7 @@ export default function DocumentPrintModal({
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain"
       data-testid="document-print-modal">
       <div className="w-full max-w-4xl mx-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}>

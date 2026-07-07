@@ -16,6 +16,7 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
 import { resolveBranchName } from '../../lib/BranchContext.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const TYPE_INFO = {
   add: { label: 'เพิ่มสต็อก', color: 'emerald', Icon: Plus },
@@ -32,6 +33,7 @@ function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFrac
 const fmtDateTime = fmtSlashDateTime;
 
 export default function AdjustDetailModal({ adjustmentId, onClose, branches = [] }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [data, setData] = useState(null);
   const [batch, setBatch] = useState(null);
   const [locations, setLocations] = useState([]);
@@ -69,7 +71,7 @@ export default function AdjustDetailModal({ adjustmentId, onClose, branches = []
 
   // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
       <div
         className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}

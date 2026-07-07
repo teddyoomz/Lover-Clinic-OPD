@@ -8,11 +8,13 @@
 import { useState } from 'react';
 import { Link, Loader2, X, ClipboardList, ExternalLink, Unlink, Check } from 'lucide-react';
 import { generateCustomerPatientLink, setCustomerPatientLinkEnabled, revokeCustomerPatientLink } from '../../lib/scopedDataLayer.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const linkUrl = (token) => `${window.location.origin}${window.location.pathname}?patient=${token}`;
 const qrUrl = (token) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(linkUrl(token))}&margin=10&color=000000&ecc=Q`;
 
 export default function CustomerPatientLinkModal({ customer, onClose, onUpdated, isDark }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const token = customer?.patientLinkToken;
@@ -28,7 +30,7 @@ export default function CustomerPatientLinkModal({ customer, onClose, onUpdated,
   const copy = (t) => { try { navigator.clipboard?.writeText(t); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard unavailable */ } };
 
   return (
-    <div data-testid="cust-link-backdrop" className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+    <div data-testid="cust-link-backdrop" className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain">
       {/* AV78: backdrop click does NOT close — explicit close only (X) */}
       <div className="w-full max-w-sm rounded-2xl border border-[var(--bd)] bg-[var(--bg-card)] overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Header */}

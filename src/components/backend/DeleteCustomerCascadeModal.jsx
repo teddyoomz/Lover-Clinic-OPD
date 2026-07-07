@@ -18,11 +18,13 @@ import { deleteCustomerViaApi, previewCustomerDeleteViaApi } from '../../lib/cus
 // Calls /api/admin/customer-backup-export via admin token; result.backupRef
 // stored in audit doc for forensic recovery trail.
 import { auth } from '../../firebase.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const labelCls = 'text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1';
 const selectCls = 'w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none disabled:opacity-50';
 
 export default function DeleteCustomerCascadeModal({ customer, onClose, onDeleted }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [staffOptions, setStaffOptions] = useState([]);
   const [doctorOptions, setDoctorOptions] = useState([]);
   // Phase 24.0-bis — single authorizer ID. Resolved against staffOptions OR
@@ -188,10 +190,10 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
   return (
     <div
       onClick={handleBackdrop}
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[80]"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[80] overflow-y-auto overscroll-contain"
       data-testid="delete-customer-modal"
     >
-      <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-md p-6 border border-red-900/50 shadow-2xl">
+      <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 border border-red-900/50 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-black text-red-400 flex items-center gap-2">
             <AlertTriangle size={18} /> ยืนยันลบลูกค้า

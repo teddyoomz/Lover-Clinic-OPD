@@ -21,6 +21,7 @@
 import { useState } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * @param {object} props
@@ -57,6 +58,8 @@ export default function ActorConfirmModal({
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // AV205 — gate on open: hooks run before the early return below
+  useModalScrollLock(!!open);
 
   if (!open) return null;
 
@@ -97,7 +100,7 @@ export default function ActorConfirmModal({
   // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       data-testid={testId}

@@ -33,12 +33,14 @@ import {
 import StaffSelectField from './StaffSelectField.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const STEP_PICK = 'pick';
 const STEP_FILL = 'fill';
 const STEP_RUN  = 'run';
 
 export default function BulkPrintModal({ customers = [], clinicSettings, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [step, setStep] = useState(STEP_PICK);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +163,7 @@ export default function BulkPrintModal({ customers = [], clinicSettings, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" data-testid="bulk-print-modal">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto overscroll-contain" data-testid="bulk-print-modal">
       <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 p-4 border-b border-[var(--bd)]">

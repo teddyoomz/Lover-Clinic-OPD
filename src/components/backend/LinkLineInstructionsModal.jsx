@@ -26,6 +26,7 @@ import {
 } from '../../lib/customerLineLinkState.js';
 import { getLanguageForCustomer } from '../../lib/lineBotResponder.js';
 import LangPillToggle from './LangPillToggle.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 function CopyButton({ value, label = 'คัดลอก', testId }) {
   const [copied, setCopied] = useState(false);
@@ -69,6 +70,7 @@ function fmtThaiBE(iso) {
 }
 
 export default function LinkLineInstructionsModal({ customer, onClose, onActionSuccess }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -146,7 +148,7 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
     const l = labels[confirmAction];
     return (
       // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-      <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" data-testid="line-link-confirm-dialog">
+      <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4 overflow-y-auto overscroll-contain" data-testid="line-link-confirm-dialog">
         <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-sm p-4">
           <h4 className="text-base font-bold text-[var(--tx-heading)] mb-2">{l.title}</h4>
           <p className="text-sm text-[var(--tx-muted)] mb-4">{l.body}</p>
@@ -169,7 +171,7 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 overflow-y-auto" data-testid="link-line-instructions-modal">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 overflow-y-auto overscroll-contain" data-testid="link-line-instructions-modal">
       <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-md my-4 flex flex-col">
         <div className="flex items-center justify-between gap-2 p-4 border-b border-[var(--bd)]">
           <div className="flex items-center gap-2 min-w-0">

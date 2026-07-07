@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { listStaff, listDoctors, listBranches, updateBackendTreatment } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * Phase 26.1 (V26.1, 2026-05-13) — Editor Attribution Modal.
@@ -29,6 +30,8 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
  * - isDark: boolean — theme flag
  */
 export default function EditAttributionModal({ isOpen, onConfirm, onCancel, isDark }) {
+  // AV205 — gate on isOpen (early return below runs after hooks)
+  useModalScrollLock(!!isOpen);
   const { branchId: selectedBranchId } = useSelectedBranch();
   const [allStaff, setAllStaff] = useState([]);
   const [allDoctors, setAllDoctors] = useState([]);
@@ -109,7 +112,7 @@ export default function EditAttributionModal({ isOpen, onConfirm, onCancel, isDa
   return (
     <div
       data-testid="edit-attribution-modal"
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 overflow-y-auto overscroll-contain"
       onClick={onCancel}
     >
       <div
@@ -181,6 +184,7 @@ export default function EditAttributionModal({ isOpen, onConfirm, onCancel, isDa
  * Props: treatment {id, detail}, onClose, onSaved
  */
 export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [editedBranchId, setEditedBranchId] = useState(treatment?.detail?.branchId || '');
   const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -225,7 +229,7 @@ export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
     // styling consistent with other backend modals).
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain"
       data-testid="edit-treatment-branch-modal-overlay"
     >
       <div

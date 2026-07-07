@@ -10,6 +10,7 @@ import { X, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import * as scopedDataLayer from '../../lib/scopedDataLayer.js';
 import { auth } from '../../firebase.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const LISTER_NAME_BY_COLLECTION = {
   'be_products': 'listProducts',
@@ -35,6 +36,7 @@ function listForCollection(collection, opts) {
 }
 
 export default function CrossBranchImportModal({ adapter, isDark, onClose, onImported }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const { branchId: targetBranchId } = useSelectedBranch();
 
   const [branches, setBranches] = useState([]);
@@ -214,7 +216,7 @@ export default function CrossBranchImportModal({ adapter, isDark, onClose, onImp
     }
   };
 
-  const overlayCls = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm';
+  const overlayCls = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain';
   const panelCls = `w-[90vw] max-w-3xl max-h-[85vh] flex flex-col rounded-xl shadow-xl ${
     isDark ? 'bg-[#111] border border-[#333] text-gray-200' : 'bg-white border border-gray-200 text-gray-800'
   }`;

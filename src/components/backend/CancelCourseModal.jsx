@@ -15,6 +15,7 @@ import { cancelCustomerCourse, listStaffByBranch } from '../../lib/scopedDataLay
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { auth } from '../../firebase.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * @param {object} props
@@ -24,6 +25,8 @@ import { auth } from '../../firebase.js';
  *   - onCancel: () => void
  */
 export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   const { branchId } = useSelectedBranch();
   const [staff, setStaff] = useState([]);
   const [staffLoading, setStaffLoading] = useState(false);
@@ -78,7 +81,7 @@ export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       data-testid="cancel-course-modal"

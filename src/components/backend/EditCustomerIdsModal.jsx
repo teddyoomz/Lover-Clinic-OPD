@@ -25,6 +25,7 @@
 import { useState, useEffect } from 'react';
 import { Save, X, Loader2, AlertCircle, CheckCircle2, IdCard } from 'lucide-react';
 import { updateCustomer } from '../../lib/scopedDataLayer.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 function validateNationalId(v) {
   const cleaned = String(v || '').replace(/[\s\-.()]/g, '');
@@ -42,6 +43,7 @@ function validatePassport(v) {
 }
 
 export default function EditCustomerIdsModal({ customer, onClose, onSaved }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const initial = customer?.patientData || {};
   const [nationalId, setNationalId] = useState(initial.nationalId || '');
   const [passport, setPassport] = useState(initial.passport || '');
@@ -93,8 +95,8 @@ export default function EditCustomerIdsModal({ customer, onClose, onSaved }) {
   const inputCls = 'w-full px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-sm font-mono';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" data-testid="edit-customer-ids-modal">
-      <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-md flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto overscroll-contain" data-testid="edit-customer-ids-modal">
+      <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between gap-2 p-4 border-b border-[var(--bd)]">
           <div className="flex items-center gap-2">
             <IdCard size={20} className="text-violet-400" />

@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { X, Loader2, CheckCircle2, AlertCircle, Download } from 'lucide-react';
 import { auth } from '../../firebase.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 async function authedFetch(url, body) {
   const token = await auth.currentUser?.getIdToken();
@@ -15,6 +16,7 @@ async function authedFetch(url, body) {
 }
 
 export default function CustomerBackupModal({ customer, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [userNote, setUserNote] = useState('');
   const [phase, setPhase] = useState('idle'); // idle | running | done | error
   const [result, setResult] = useState(null);
@@ -49,7 +51,7 @@ export default function CustomerBackupModal({ customer, onClose }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="customer-backup-modal">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" data-testid="customer-backup-modal">
       <div className="w-[95vw] max-w-xl rounded-xl bg-[var(--bg-card)] border border-amber-700/40 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-amber-200">💾 สำรองข้อมูลลูกค้า</h2>

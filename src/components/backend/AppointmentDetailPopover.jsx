@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Pencil } from 'lucide-react';
 import AppointmentDetailBody from './AppointmentDetailBody.jsx';
 import { openCustomerInNewTab } from '../../lib/customerNavigation.js'; // V131 — clickable name → customer detail tab
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * AppointmentDetailPopover — read-only quick-view for one appointment (click).
@@ -22,6 +23,8 @@ import { openCustomerInNewTab } from '../../lib/customerNavigation.js'; // V131 
  * (X / ปิด / ESC). Thai-culture: name + HN never red.
  */
 export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, onClose, resolvedPhone = '' }) {
+  // AV205 — gate on appt: hooks run before the early return below
+  useModalScrollLock(!!appt);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
@@ -32,12 +35,12 @@ export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, on
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-3 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-3 bg-black/50 backdrop-blur-sm overflow-y-auto overscroll-contain"
       data-testid="appt-detail-popover"
     >
       {/* AV78: no onClick on the backdrop — explicit close only. */}
       <div
-        className="relative w-full max-w-sm rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl p-4"
+        className="relative w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <button

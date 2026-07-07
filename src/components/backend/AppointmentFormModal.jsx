@@ -84,6 +84,7 @@ import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
 import VisitPurposePicker from '../VisitPurposePicker.jsx'; // V-appt-deposit (2026-05-25) — chip นัดมาเพื่อ
 import { useSelectedBranch, resolveBranchName, useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 // V53 (2026-05-08, BS-12) — per-branch openHours filter the time-picker dropdowns
 // + warn admin when editing a legacy appt whose time falls outside current open hours.
@@ -245,6 +246,7 @@ export default function AppointmentFormModal({
   // appointment metadata).
   existingDepositId = '',
 }) {
+  useModalScrollLock(true); // AV205 — parents render this only while open ({formMode && ...})
   const isDark = theme !== 'light';
   // Phase 14.7.H follow-up A — branch-aware appointment writes.
   // Phase 15.7-octies (2026-04-29) — also pull `branches` so we can render
@@ -1084,7 +1086,7 @@ export default function AppointmentFormModal({
 
   // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-form-modal-title" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="appt-form-modal-title" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()} data-testid="appointment-form-modal">
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
           <h3 id="appt-form-modal-title" className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">
@@ -1725,7 +1727,7 @@ export default function AppointmentFormModal({
       {/* V-appt-deposit (2026-05-25) — flip-away confirm (edit: deposit → non-deposit
           while a linked deposit exists). Modal never deletes a money record silently. */}
       {flipAwayOpen && (
-        <div data-testid="appt-flipaway-confirm" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+        <div data-testid="appt-flipaway-confirm" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 overflow-y-auto overscroll-contain">
           <div className="bg-[var(--bg-card)] border border-amber-700/40 rounded-xl p-5 max-w-sm w-full">
             <p className="text-amber-700 dark:text-amber-300 font-bold text-sm">⚠ นัดนี้มีใบมัดจำผูกอยู่</p>
             <p className="text-xs text-[var(--tx-secondary)] my-2">คุณกำลังเปลี่ยนประเภทออกจาก "จองมัดจำ" — จัดการใบมัดจำเดิมยังไง?</p>

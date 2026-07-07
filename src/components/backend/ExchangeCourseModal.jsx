@@ -16,6 +16,7 @@ import { AlertCircle, Loader2, X } from 'lucide-react';
 import { exchangeCourseProduct, listCoursesForPicker, listStaffByBranch } from '../../lib/scopedDataLayer.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * @param {object} props
@@ -25,6 +26,8 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
  *   - onCancel: () => void
  */
 export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   const { branchId } = useSelectedBranch();
   const [courses, setCourses] = useState([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
@@ -104,7 +107,7 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       data-testid="exchange-course-modal"

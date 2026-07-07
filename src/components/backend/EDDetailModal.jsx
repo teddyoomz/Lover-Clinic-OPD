@@ -13,6 +13,7 @@ import { buildEdAnswerRows } from '../../lib/edQuestions.js';
 import { autoPickCompareRound, markChangedRows } from '../../lib/edCompare.js';
 import { useLayoutPreference } from '../../hooks/useLayoutPreference.js';
 import { useEscToClose } from '../../lib/useEscToClose.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 import { thaiTodayISO } from '../../utils.js';
 
 // accent per test — matches the box chips + AdminDashboard reference (no red on patient names; rule 04).
@@ -140,6 +141,8 @@ export default function EDDetailModal({ type, round, rounds = [], hero, isDark, 
   // leave the picker showing a value with no matching option) → fall to the clicked round,
   // else the latest, else the (stale) prop.
   const primary = find(primaryId) || find(round?.id) || rounds[rounds.length - 1] || round;
+  // AV205 — gate on the same condition as the early return below (unconditional call)
+  useModalScrollLock(!!(primary && ED_TYPE_META[activeType]));
   if (!primary || !ED_TYPE_META[activeType]) return null;
 
   // compare = a valid manual pick (still has the active type, not the primary), else auto-derived.
@@ -173,7 +176,7 @@ export default function EDDetailModal({ type, round, rounds = [], hero, isDark, 
     // containing block for this fixed overlay → confines it to the box. Portaling
     // escapes the transformed ancestor. (User chose "keep V86 lift" → portal modals.)
     // AV78: backdrop has NO onClick → clicking outside does NOT close (✕ / ESC only).
-    <div className={`fixed inset-0 ${zClassName} bg-black/55 flex items-start justify-center p-4 overflow-y-auto`}
+    <div className={`fixed inset-0 ${zClassName} bg-black/55 flex items-start justify-center p-4 overflow-y-auto overscroll-contain`}
       data-testid="ed-detail-backdrop" role="dialog" aria-modal="true" aria-labelledby="ed-detail-title">
       <div className={`w-full ${canCompare ? 'max-w-3xl' : 'max-w-xl'} my-8 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl overflow-hidden shadow-2xl`}
         data-testid="ed-detail-modal">

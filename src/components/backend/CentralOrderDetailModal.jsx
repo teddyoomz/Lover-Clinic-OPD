@@ -12,6 +12,7 @@ import { X, Loader2, AlertCircle, Package, ShoppingBag } from 'lucide-react';
 import { getCentralStockOrder } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const STATUS_INFO = {
   pending: { label: 'รอรับ', color: 'amber' },
@@ -32,6 +33,7 @@ const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
 const fmtDateTime = fmtSlashDateTime;
 
 export default function CentralOrderDetailModal({ orderId, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,7 +63,7 @@ export default function CentralOrderDetailModal({ orderId, onClose }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
       <div
         className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}

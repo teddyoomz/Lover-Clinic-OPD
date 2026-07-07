@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getDeposit } from '../../lib/scopedDataLayer.js';
 import { resolveDepositCancelState } from '../../lib/depositCancelDecision.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // Shared deposit-aware cancel dialog (Part 2 — 2026-05-26).
 // Wired into every deposit-booking cancel surface (Frontend นัดหมาย,
@@ -18,6 +19,8 @@ import { fmtMoney } from '../../lib/financeUtils.js';
 //
 // Explicit-close only (AV78) — no backdrop dismiss; ✕/ย้อนกลับ close it.
 export default function DepositAwareCancelDialog({ open, orientation = 'appt', depositId, title, subtitle, onChoice, onClose }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   const [deposit, setDeposit] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -42,8 +45,8 @@ export default function DepositAwareCancelDialog({ open, orientation = 'appt', d
   const keepBlocked = !isAppt && st.blocked;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" data-testid="deposit-cancel-dialog">
-      <div className="w-full max-w-md rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] p-5 shadow-2xl">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4 overflow-y-auto overscroll-contain" data-testid="deposit-cancel-dialog">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] p-5 shadow-2xl">
         <h3 className="text-base font-bold text-[var(--tx-heading)] mb-1">
           {title || (isAppt ? 'ยกเลิกการนัดหมาย' : 'ยกเลิกมัดจำ')}
         </h3>

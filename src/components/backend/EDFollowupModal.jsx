@@ -9,11 +9,13 @@ import { QrCode, X, Copy, Maximize2 } from 'lucide-react';
 import { ED_TYPE_META } from '../../lib/edScoreDisplay.js';
 import { createAssessmentRound, createAssessmentSession, supersedePendingFollowups } from '../../lib/scopedDataLayer.js';
 import { generateQrDataUrl } from '../../lib/documentPrintEngine.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const TYPE_ORDER = ['adam', 'iief', 'mrs', 'pe'];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, branchId, confirmInfo, isDark, onClose, onCreated }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const defaults = intakeTypes && intakeTypes.length ? intakeTypes : ['adam', 'iief'];
   const [picked, setPicked] = useState(() => new Set(defaults));
   const [busy, setBusy] = useState(false);
@@ -71,7 +73,7 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
   // can't confine this fixed overlay.
   if (fullscreen && result) {
     return createPortal(
-      <div className="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center p-4" data-testid="ed-qr-fullscreen" role="dialog" aria-modal="true" aria-label="QR แบบประเมินติดตาม">
+      <div className="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center p-4 overflow-y-auto overscroll-contain" data-testid="ed-qr-fullscreen" role="dialog" aria-modal="true" aria-label="QR แบบประเมินติดตาม">
         <div className="flex items-center justify-between w-full max-w-md mb-4">
           <span className="text-white font-bold">แบบประเมิน ครั้งที่ {roundNumber}</span>
           <button type="button" onClick={closeFullscreen} aria-label="ปิด" className="text-gray-400 hover:text-white p-2 -m-2" data-testid="ed-qr-fullscreen-close"><X size={24} /></button>
@@ -86,8 +88,8 @@ export default function EDFollowupModal({ customerId, roundNumber, intakeTypes, 
 
   return createPortal(
     // AV98: portal to document.body so a glow-card ancestor can't confine this fixed overlay.
-    <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" data-testid="ed-followup-modal" role="dialog" aria-modal="true" aria-labelledby="ed-followup-title">
-      <div className={`w-full max-w-md rounded-xl border overflow-hidden ${panel}`}>
+    <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4 overflow-y-auto overscroll-contain" data-testid="ed-followup-modal" role="dialog" aria-modal="true" aria-labelledby="ed-followup-title">
+      <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border ${panel}`}>
         <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center justify-between">
           <span id="ed-followup-title" className="font-bold">ส่งแบบประเมินติดตาม — <span className="text-orange-500">ครั้งที่ {roundNumber}</span></span>
           <button type="button" onClick={closeModal} aria-label="ปิด" className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)] p-2 -m-2" data-testid="ed-modal-close"><X size={18} /></button>

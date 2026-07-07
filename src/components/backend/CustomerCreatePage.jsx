@@ -36,6 +36,7 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DateField from '../DateField.jsx';
 import ThaiAddressSelect from './customer-form/ThaiAddressSelect.jsx';
 import { thaiTodayISO } from '../../utils.js';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const COUNTRIES = [
   '', 'ไทย', 'ลาว', 'กัมพูชา', 'พม่า', 'มาเลเซีย', 'สิงคโปร์', 'เวียดนาม', 'อินโดนีเซีย', 'ฟิลิปปินส์',
@@ -325,8 +326,9 @@ export default function CustomerCreatePage({
       )}
       {/* 2026-06-16 Part A — national-id duplicate warn modal (Q1: warn + choose). */}
       {dupWarn && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" data-testid="customer-dup-warn">
-          <div className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 overflow-y-auto overscroll-contain" data-testid="customer-dup-warn">
+          <ModalScrollLock />
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl">
             <div className="bg-red-500/10 border-b border-red-500/30 px-4 py-3 font-bold text-red-600 dark:text-red-300 flex items-center gap-2">
               <AlertCircle size={16} /> {dupWarn.isEdit ? 'แก้เป็นเลขบัตรนี้ไม่ได้ — มีลูกค้าอื่นใช้อยู่' : 'ลูกค้านี้มีอยู่แล้วในระบบ'}
             </div>

@@ -19,6 +19,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { collection, onSnapshot, query, where, limit } from 'firebase/firestore';
 import { db, appId } from '../../firebase.js';
 import { Loader2, AlertCircle, Clock, History, X } from 'lucide-react';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const PAGE_FETCH = 200;          // pull last 200; client-side filter for last-7d
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -217,9 +218,10 @@ export function LineReminderHistoryPanel({ branchId }) {
       {detail && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto overscroll-contain"
           data-testid="history-detail-modal"
         >
+          <ModalScrollLock />
           <div
             className="rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] p-4 max-w-2xl w-full max-h-[80vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
