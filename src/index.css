@@ -4563,3 +4563,12 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 [data-theme="light"] .text-green-500, [data-theme="auto"] .text-green-500,
 [data-theme="light"] .text-green-600, [data-theme="auto"] .text-green-600 { color: #15803d !important; }
 /* ───────────── END Light-Theme Audit 2026-05-27 central sweep ───────────── */
+
+/* ───────────── AV205 (2026-07-07) — universal modal scroll lock (layer 1) ─────────────
+   useModalScrollLock (src/lib/useModalScrollLock.js) toggles html[data-modal-open]
+   (ref-counted). touch-action:none on body does NOT block scrollers inside the modal —
+   a pan implemented by the modal's own scroller only consults touch-action from the
+   target up to that scroller (proven live by V82-fix7-bis html[data-staff-chat-open]).
+   padding-right compensates the disappearing scrollbar (no layout shift). */
+html[data-modal-open] { overflow: hidden; }
+html[data-modal-open] body { touch-action: none; padding-right: var(--scroll-lock-gutter, 0px); }
