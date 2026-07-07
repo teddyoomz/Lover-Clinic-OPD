@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Instant Staff App — Cold-Start &lt;1s Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    /* ===== faithful hub replica (grounded in user's screen-recording frames, dark theme) ===== */
+    .phone { width: 320px; background: #0a0a0a; border-radius: 18px; padding: 12px 10px; color: #e5e5e5; font-size: 11px; display: inline-block; vertical-align: top; margin-right: 14px; }
+    .ph-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #7f1d1d; padding-bottom:6px; margin-bottom:8px; }
+    .ph-logo { font-weight: 800; letter-spacing: 1px; color:#fff; } .ph-logo b{color:#dc2626;}
+    .ph-tabs { display:flex; gap:6px; margin:6px 0; }
+    .ph-tab { background:#1c1c1e; border-radius:8px; padding:4px 8px; color:#aaa; }
+    .ph-tab.active { background:#2563eb; color:#fff; }
+    .pillrow { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+    .pill { background:#1c1c1e; border-radius:9px; padding:4px 9px; color:#ddd; }
+    .pill b { color:#f97316; margin-left:4px; }
+    .pill.hot { background:#7c2d12; color:#fff; }
+    .ph-h { font-weight:700; color:#fff; margin:8px 0 4px; }
+    .ph-muted { color:#8a8a8e; }
+    .apptcard { background:#161618; border:1px solid #2c2c2e; border-radius:10px; padding:8px; margin:6px 0; }
+    .chip { display:inline-block; background:#27272a; border-radius:6px; padding:1px 6px; margin-right:4px; font-size:10px; color:#d4d4d8; }
+    .chip.skel { color:transparent; background:linear-gradient(90deg,#27272a,#3a3a3d,#27272a); background-size:200% 100%; animation:sh 1.2s infinite; min-width:52px; }
+    @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .syncdot { display:inline-flex; align-items:center; gap:4px; color:#fbbf24; font-size:10px; }
+    .syncdot::before { content:''; width:6px; height:6px; border-radius:50%; background:#fbbf24; animation:pu 1s infinite alternate; }
+    @keyframes pu { from{opacity:.3} to{opacity:1} }
+    .spin { display:inline-block; width:10px; height:10px; border:2px solid #7c2d12; border-top-color:#f97316; border-radius:50%; animation:ro 1s linear infinite; vertical-align:-1px; }
+    @keyframes ro { to{transform:rotate(360deg)} }
+    /* flow boxes */
+    .flow { display:flex; flex-direction:column; gap:0; }
+    .fbox { border:1.5px solid #94a3b8; border-radius:8px; padding:6px 12px; background:#f8fafc; margin:0 auto; min-width:420px; text-align:center; font-size:0.9em; }
+    .fbox.hot { border-color:#dc2626; background:#fef2f2; }
+    .fbox.ok { border-color:#16a34a; background:#f0fdf4; }
+    .farrow { text-align:center; color:#64748b; font-size:0.85em; padding:1px 0; }
+    .lane { display:flex; gap:12px; align-items:flex-start; }
+    .lane > div { flex:1; }
+    .lanehead { font-weight:700; text-align:center; font-size:0.85em; color:#334155; margin-bottom:4px; }
+    .timeline { position:relative; border-left:3px solid #cbd5e1; margin-left:70px; padding-left:14px; }
+    .tl { position:relative; margin:10px 0; font-size:0.9em; }
+    .tl .t { position:absolute; left:-86px; width:60px; text-align:right; color:#64748b; font-size:0.85em; }
+  </style>
+</head>
+<body>
+
+<h1>Instant Staff App — Cold-Start &lt;1s Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-07 EOD+2 · <strong>Status:</strong> Design approved by user ("ok") ·
+  <strong>Implementation plan:</strong> <a href="../plans/2026-07-07-instant-staff-app-cold-start.html">2026-07-07-instant-staff-app-cold-start.html</a>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+User report (screen recording, iPhone PWA บน 5G): เปิดแอปครั้งแรกหลังเว้นไปนาน → จอดำ ~2 วิ → shell ของหน้า
+<strong>นัด (AppointmentHubView)</strong> ขึ้นแต่ทุก count = 0 + "กำลังโหลด…" ค้าง <strong>~7-10+ วิ</strong> กว่าข้อมูลจะมา
+(บางครั้งนานกว่านั้นมาก). Root cause ที่พิสูจน์จากโค้ด:
+</p>
+<ul>
+  <li><code>firebase.js:27</code> — <strong>NO offline persistence</strong> (การตัดสินใจ Q1 fresh-always จาก Mobile-Load Reliability 2026-06-16) → ทุก cold start คือ network round-trip ล้วนๆ บน connection ที่ต้อง handshake + auth-token refresh ใหม่</li>
+  <li><code>AppointmentHubView.jsx:174</code> — <code>loadAll</code> รอ <strong>7 dataset ใน Promise.all + 1 sequential</strong> (รวม <code>getAllCustomers()</code> ทั้ง collection + <code>getAllSales()</code>) ก่อน paint อะไรเลย ทั้งที่ list นัด + counts ใช้แค่ 2 dataset — อีก 5 ก้อนใช้ทำ chip เสริมบนการ์ดเท่านั้น</li>
+  <li>ทุก getter เป็น one-shot <code>getDocs</code> = server-first เสมอ แม้เปิด cache ก็ไม่ auto-ได้ประโยชน์ (ต้องเปลี่ยน read strategy คู่กัน)</li>
+</ul>
+<p><strong>Goal:</strong> เปิดแอปซ้ำ (เว้นนานแค่ไหนก็ตาม ตราบที่ cache ยังอยู่) → เห็นหน้า นัด พร้อมข้อมูลล่าสุดที่เคยเห็น <strong>&lt; 1 วิ</strong> → ระบบ sync สดตามมาแก้ให้เองใน ≤ 3 วิ (เน็ตปกติ) พร้อม indicator "กำลังซิงค์…" · เครื่องใหม่/ไม่มี cache → เร็วขึ้นจาก staged load + Service Worker · หน้าลูกค้าคง fresh-always 100% เหมือนเดิม.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">BEFORE (จากวีดีโอจริงของ user) → AFTER (SWR) · Mobile PWA · dark theme · หน้า นัด</div>
+  <div style="display:flex; flex-wrap:wrap; gap:10px;">
+    <div class="phone">
+      <div style="text-align:center; color:#f87171; font-weight:700; margin-bottom:6px;">BEFORE — วินาทีที่ 2-9 ⏳</div>
+      <div class="ph-header"><span class="ph-logo">LO<b>V</b>ER</span><span>🔔</span></div>
+      <div class="ph-tabs"><span class="ph-tab active">📋 รายการ</span><span class="ph-tab">🔔 Recall วันนี้</span><span class="ph-tab">📅 ปฏิทิน</span></div>
+      <div class="pillrow">
+        <span class="pill hot">วันนี้ <b>0</b></span><span class="pill">พรุ่งนี้ <b>0</b></span><span class="pill">ล่วงหน้า 30 วัน <b>0</b></span>
+        <span class="pill">ย้อนหลัง 30 วัน <b>0</b></span><span class="pill">รอ/ยังไม่ลง OPD <b>0</b></span>
+      </div>
+      <div class="ph-h">รายการนัดหมาย <b style="color:#f97316">0 คน</b> <span class="ph-muted">ไม่มีแพทย์เข้า</span></div>
+      <div style="text-align:center; padding:26px 0;" class="ph-muted"><span class="spin"></span> กำลังโหลด…</div>
+      <div style="text-align:center;" class="ph-muted">↑ ค้างแบบนี้ 7-10+ วิ ทุกอย่างเป็น 0</div>
+    </div>
+    <div class="phone">
+      <div style="text-align:center; color:#4ade80; font-weight:700; margin-bottom:6px;">AFTER — วินาทีที่ ~0.5 ⚡ (จาก cache)</div>
+      <div class="ph-header"><span class="ph-logo">LO<b>V</b>ER</span><span>นครราชสีมา ▾</span></div>
+      <div class="ph-tabs"><span class="ph-tab active">📋 รายการ</span><span class="ph-tab">🔔 Recall วันนี้</span><span class="ph-tab">📅 ปฏิทิน</span></div>
+      <div class="pillrow">
+        <span class="pill hot">วันนี้ <b>2</b></span><span class="pill">พรุ่งนี้ <b>6</b></span><span class="pill">ล่วงหน้า 30 วัน <b>56</b></span>
+        <span class="pill">ย้อนหลัง 30 วัน <b>269</b></span><span class="pill">รอ/ยังไม่ลง OPD <b>3</b></span>
+      </div>
+      <div class="ph-h">รายการนัดหมาย <b style="color:#f97316">2 คน</b> <span class="syncdot">กำลังซิงค์…</span></div>
+      <div class="apptcard">
+        <b>คุณสมชาย ใจดี</b> · 10:30 <span class="chip">ปรึกษา</span><br>
+        <span class="chip skel">····</span><span class="chip skel">····</span> <span class="ph-muted" style="font-size:9px">← chip กระเป๋าเงิน/มัดจำ กำลังโหลด (จังหวะ 2)</span>
+      </div>
+      <div class="apptcard">
+        <b>คุณสายฝน มั่นคง</b> · 14:00 <span class="chip">Shock Wave</span><br>
+        <span class="chip skel">····</span><span class="chip skel">····</span>
+      </div>
+      <div style="text-align:center;" class="ph-muted">ข้อมูลล่าสุดที่เคยเห็น ขึ้นทันที · sync สดตามใน ≤3 วิ</div>
+    </div>
+    <div class="phone">
+      <div style="text-align:center; color:#60a5fa; font-weight:700; margin-bottom:6px;">AFTER — วินาทีที่ ~2-3 ✓ (server ยืนยัน)</div>
+      <div class="ph-header"><span class="ph-logo">LO<b>V</b>ER</span><span>นครราชสีมา ▾</span></div>
+      <div class="ph-tabs"><span class="ph-tab active">📋 รายการ</span><span class="ph-tab">🔔 Recall วันนี้</span><span class="ph-tab">📅 ปฏิทิน</span></div>
+      <div class="pillrow">
+        <span class="pill hot">วันนี้ <b>3</b></span><span class="pill">พรุ่งนี้ <b>6</b></span><span class="pill">ล่วงหน้า 30 วัน <b>56</b></span>
+        <span class="pill">ย้อนหลัง 30 วัน <b>269</b></span><span class="pill">รอ/ยังไม่ลง OPD <b>3</b></span>
+      </div>
+      <div class="ph-h">รายการนัดหมาย <b style="color:#f97316">3 คน</b></div>
+      <div class="apptcard">
+        <b>คุณสมชาย ใจดี</b> · 10:30 <span class="chip">ปรึกษา</span><br>
+        <span class="chip">💰 1,200฿</span><span class="chip">มัดจำ 500฿</span>
+      </div>
+      <div class="apptcard">
+        <b>คุณนภา แสงทอง</b> · 11:15 <span class="chip">ติดตามผล</span> <span style="color:#4ade80;font-size:9px">← นัดใหม่ที่เพิ่งเข้า มาจาก server</span><br>
+        <span class="chip">💰 0฿</span><span class="chip">VIP</span>
+      </div>
+      <div style="text-align:center;" class="ph-muted">indicator หาย · counts แก้เป็นค่าจริง (2→3) · chip ครบ</div>
+    </div>
+  </div>
+  <p style="font-size:0.85em; color:var(--tx-muted); margin-top:0.6em;">
+    Grounded in ดีไซน์จริงจาก screen-recording ของ user (LOVER header + tab bar รายการ/Recall/ปฏิทิน + pill counts ส้ม + การ์ดนัด dark) —
+    ของใหม่มีแค่ 2 อย่าง: ① <span class="syncdot" style="display:inline-flex">กำลังซิงค์…</span> จุด pulse เหลืองเล็กๆ ข้างหัวข้อ ระหว่างข้อมูลยังมาจาก cache
+    ② chip skeleton shimmer ระหว่างจังหวะ 2 ยังไม่มา. นอกนั้น pixel-parity 100% กับปัจจุบัน.
+  </p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">สถานะพิเศษ · เครื่องใหม่/ไม่มี cache (first-ever) และ customer-facing (fresh-gate เหมือนเดิม)</div>
+  <div style="display:flex; flex-wrap:wrap; gap:10px;">
+    <div class="phone" style="width:300px;">
+      <div style="text-align:center; color:#a78bfa; font-weight:700; margin-bottom:6px;">เครื่องใหม่ (ไม่มี cache)</div>
+      <div class="ph-header"><span class="ph-logo">LO<b>V</b>ER</span><span>🔔</span></div>
+      <div class="pillrow"><span class="pill hot">วันนี้ <b>2</b></span><span class="pill">พรุ่งนี้ <b>6</b></span><span class="pill">…</span></div>
+      <div class="ph-h">รายการนัดหมาย <b style="color:#f97316">2 คน</b></div>
+      <div class="apptcard"><b>คุณสมชาย ใจดี</b> · 10:30<br><span class="chip skel">····</span><span class="chip skel">····</span></div>
+      <div class="ph-muted" style="text-align:center;">จังหวะ 1 (นัด+counts+แพทย์) paint ก่อน ~1-2 วิ<br>ไม่ต้องรอ getAllCustomers/getAllSales อีกต่อไป</div>
+    </div>
+    <div class="phone" style="width:300px; border:1px solid #14532d;">
+      <div style="text-align:center; color:#4ade80; font-weight:700; margin-bottom:6px;">หน้าลูกค้า (?patient= ฯลฯ) — ไม่เปลี่ยน</div>
+      <div style="text-align:center; padding:40px 0;" class="ph-muted"><span class="spin"></span> กำลังโหลด…</div>
+      <div class="ph-muted" style="text-align:center;">รอข้อมูล <b style="color:#4ade80">server-fresh เท่านั้น</b> ก่อน render<br>(fresh-gate: ข้าม snapshot ที่ fromCache=true)<br>ลูกค้าไม่มีวันเห็นยอดคอร์ส/เวลานัดเก่า</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 · Cold-start timeline (staff, มี cache) — BEFORE vs AFTER</div>
+  <div class="lane">
+    <div>
+      <div class="lanehead" style="color:#dc2626">BEFORE (วีดีโอจริง)</div>
+      <div class="timeline">
+        <div class="tl"><span class="t">0s</span>แตะไอคอน PWA → จอดำ (โหลด HTML+chunks บน 5G)</div>
+        <div class="tl"><span class="t">~2s</span>shell ขึ้น · auth resolve · Firestore handshake + token refresh</div>
+        <div class="tl"><span class="t">2-9s</span>รอ 7 dataset server-first ครบทุกก้อน (getAllCustomers+getAllSales+…) → ทุกอย่าง 0 + "กำลังโหลด…"</div>
+        <div class="tl"><span class="t">~9s+</span>ข้อมูลขึ้นพร้อมกันทีเดียว</div>
+      </div>
+    </div>
+    <div>
+      <div class="lanehead" style="color:#16a34a">AFTER (spec นี้)</div>
+      <div class="timeline">
+        <div class="tl"><span class="t">0s</span>แตะไอคอน → SW serve shell จาก precache (0 network)</div>
+        <div class="tl"><span class="t">~0.3s</span>auth จาก IndexedDB · listeners + SWR reads fire <b>cache snapshot ทันที</b></div>
+        <div class="tl"><span class="t">~0.5s</span><b>PAINT</b>: นัด+counts+แพทย์ (ข้อมูลล่าสุดที่เคยเห็น) + จุด "กำลังซิงค์…" · chip = skeleton</div>
+        <div class="tl"><span class="t">1-3s</span>token refresh + server snapshots ทยอยมา → ข้อมูลแก้เป็นค่าสด · จังหวะ 2 (chip เสริม) เติม</div>
+        <div class="tl"><span class="t">≤3s</span>server ยืนยันครบ → indicator หาย · เหมือน BEFORE วินาทีที่ 9 แต่จบใน 3</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 · Read-strategy ต่อ surface (กติกากลางทั้งแอป)</div>
+  <div class="flow">
+    <div class="fbox">Component ต้องอ่านข้อมูล Firestore</div>
+    <div class="farrow">↓ surface ประเภทไหน?</div>
+    <div class="lane">
+      <div>
+        <div class="lanehead">STAFF (Admin/Backend ทุก tab)</div>
+        <div class="flow">
+          <div class="fbox ok">listener (onSnapshot) → ได้ SWR ฟรีจาก persistence:<br>cache snapshot ก่อน → server snapshot ตาม (SDK จัดการเอง)</div>
+          <div class="farrow">↓ one-shot getter?</div>
+          <div class="fbox ok"><code>useSwrLoad(loader, deps)</code>:<br>① <code>loader({source:'cache'})</code> → paint + <code>syncing=true</code><br>② <code>loader({source:'server'})</code> → re-paint + <code>syncing=false</code><br>(server leg อยู่ใต้ useResilientLoad timeout/retry เดิม)</div>
+        </div>
+      </div>
+      <div>
+        <div class="lanehead">CUSTOMER-FACING (?patient= ?session= ?schedule= ED)</div>
+        <div class="flow">
+          <div class="fbox hot">fresh-gate: <code>includeMetadataChanges</code> + ข้าม snapshot ที่ <code>fromCache===true</code> — render เมื่อ server ยืนยันเท่านั้น<br>(สัญญา fresh-always เดิมคงอยู่ 100%)</div>
+          <div class="farrow">↓</div>
+          <div class="fbox">useResilientLoad 8s timeout → retry → error UI (เดิม, ไม่แตะ)</div>
+        </div>
+      </div>
+    </div>
+    <div class="farrow">↓ ทั้งสองฝั่ง</div>
+    <div class="fbox hot">⛔ กติกาเหล็ก: ห้าม logic ใด "ตัดสินใจเขียน" จากข้อมูล fromCache — ทุก read→decide→write ต้องเป็น runTransaction (server) ตาม Rule T เดิม</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 3 · Hub 2 จังหวะ (loadAll แยกร่าง) + Service Worker update flow</div>
+  <div class="flow">
+    <div class="fbox">AppointmentHubView mount / branch switch / change-signal bump</div>
+    <div class="farrow">↓ จังหวะ 1 (blocking paint — เล็กและเร็ว)</div>
+    <div class="fbox ok">Promise.all: <code>getAppointmentsByDateRange</code>(wide, branch) + <code>listStaffSchedules</code> → setAppts + counts + doctorShifts → <b>PAINT</b> (cache-first ผ่าน useSwrLoad)</div>
+    <div class="farrow">↓ จังหวะ 2 (non-blocking enrichment — chip skeleton ระหว่างรอ)</div>
+    <div class="fbox">Promise.all: customers + deposits + sales + memberships + treatments → wallets(ids) → buildCustomerSummaryMap → chip เติม (ไม่มี layout shift — ช่อง chip จองความสูงไว้แล้ว)</div>
+    <div class="farrow">— แยกเรื่อง —</div>
+    <div class="fbox">SW update: deploy ใหม่ → sw.js (no-cache header) ตรวจพบตอน visibilitychange → precache เวอร์ชันใหม่เบื้องหลัง → toast "มีเวอร์ชันใหม่ แตะเพื่อรีเฟรช" + auto-reload เมื่อ idle &gt;30s · kill-switch: deploy SW self-unregister ได้เสมอ</div>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+
+<table>
+  <tr><th>ชั้น</th><th>ไฟล์/ของใหม่</th><th>สาระ</th></tr>
+  <tr>
+    <td><b>0 · Persistence</b></td>
+    <td><code>src/firebase.js</code></td>
+    <td><code>initializeFirestore(app, { experimentalAutoDetectLongPolling: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) })</code> — multi-tab (staff เปิด frontend+backend คู่กันได้) · <code>navigator.storage.persist()</code> best-effort หลัง staff login · IndexedDB ใช้ไม่ได้ (private mode ฯลฯ) → SDK fallback memory = พฤติกรรมเดิม · write semantics ไม่เปลี่ยน (await = server ack; transaction = server เท่านั้น)</td>
+  </tr>
+  <tr>
+    <td><b>1 · Fresh-gate ลูกค้า</b></td>
+    <td>NEW <code>src/lib/freshGate.js</code> + sweep หน้าลูกค้า (closed list: PatientForm, PatientDashboard, ClinicSchedule, ED link)</td>
+    <td>helper <code>onSnapshotFresh(q, cb)</code> (ข้าม fromCache) + <code>getDocsFresh</code> (= getDocsFromServer) — classifier test ล็อค closed list; หน้าลูกค้า render จาก server-confirmed data เท่านั้น</td>
+  </tr>
+  <tr>
+    <td><b>2 · SWR read layer</b></td>
+    <td><code>backendClient.js</code> internal <code>_getDocsBySource(q, source)</code> + getters รับ opt <code>{source}</code> (additive, backward-compat) · NEW <code>src/hooks/useSwrLoad.js</code></td>
+    <td>hook contract: <code>const { data, syncing, error, reload } = useSwrLoad(loader, deps)</code> — cache leg (เร็ว, พลาดได้เงียบๆ) → server leg (ผ่าน useResilientLoad-equivalent timeout/retry/auto-heal เดิม) · sweep staff tabs ทั้งหมด (batch แบบ AV205) — tab ที่เป็น listener อยู่แล้วได้ฟรี ไม่ต้องแตะ</td>
+  </tr>
+  <tr>
+    <td><b>3 · Hub 2 จังหวะ</b></td>
+    <td><code>AppointmentHubView.jsx</code> loadAll → loadCore (จังหวะ 1) + loadEnrichment (จังหวะ 2)</td>
+    <td>จังหวะ 1 = appointments + schedules (paint) · จังหวะ 2 = 5 dataset chip เสริม + wallets (non-blocking, skeleton) · silent-reload path (change-signal/modal-save) refresh ทั้งสอง แบบ silent เหมือนเดิม</td>
+  </tr>
+  <tr>
+    <td><b>4 · Sync indicator</b></td>
+    <td>NEW <code>SyncIndicator</code> (จุด pulse + "กำลังซิงค์…")</td>
+    <td>แสดงเมื่อ surface ยังอยู่บน cache data (<code>syncing=true</code> หรือ snapshot.fromCache) · หายเมื่อ server ยืนยัน · ห้ามใช้สีแดงกับชื่อ/HN (rule 04 เดิม)</td>
+  </tr>
+  <tr>
+    <td><b>5 · Service Worker</b></td>
+    <td><code>vite-plugin-pwa</code> (Workbox) + <code>vercel.json</code> header + update toast component</td>
+    <td>precache: shell + JS/CSS chunks + logo/fonts เท่านั้น · <b>ห้ามแตะ /api/* + googleapis ทุกโดเมน</b> (NetworkOnly ไม่ intercept) · sw.js = no-cache header · update: ตรวจตอน visibilitychange + toast + auto-reload เมื่อ idle · kill-switch = self-unregister SW พร้อม deploy ได้เสมอ · ระวัง CSP hash เดิม (perf campaign) — ต้อง verify CSP ไม่แตก</td>
+  </tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user, 2026-07-07)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> เปิด persistentLocalCache ทั้งแอป → staff surfaces = stale-while-revalidate (paint จาก cache ทันที + sync สดตาม + indicator); customer-facing = fresh-gate รอ server ก่อน render เหมือนเดิม. <em>REVERSES</em> Q1 fresh-always (2026-06-16) เฉพาะฝั่ง staff — เหตุผลเดิม ("ลูกค้าห้ามเห็นยอดคอร์ส/เวลานัดเก่า") ยังถูก honor ด้วย fresh-gate.</li>
+  <li><strong>Q2 = A:</strong> Hub แยก 2 จังหวะ — นัด+counts+แพทย์ paint ก่อน; chip เสริม (กระเป๋าเงิน/มัดจำ/membership) โหลดตามแบบ skeleton.</li>
+  <li><strong>Q3 = B:</strong> ขอบเขต = ทั้ง staff app (AdminDashboard + BackendDashboard ทุก tab) — listener tabs ได้ฟรีจากชั้น 0; one-shot tabs sweep ด้วย useSwrLoad + classifier.</li>
+  <li><strong>Q4 = B:</strong> Service Worker precache app shell เอาด้วย — พร้อม update flow + kill-switch.</li>
+</ul>
+
+<h2>Phasing (ship ได้อิสระเป็นชั้น — revert ได้ทีละชั้นตาม Rule A)</h2>
+<table>
+  <tr><th>Phase</th><th>เนื้อ</th><th>ผลที่วัดได้</th></tr>
+  <tr><td><b>A</b></td><td>persistence + fresh-gate ลูกค้า + storage.persist()</td><td>listener surfaces ทุกจุด (แชท/คิว/ปฏิทิน/badge) paint จาก cache ทันที · หน้าลูกค้า behavior เดิม 100%</td></tr>
+  <tr><td><b>B</b></td><td>hub 2 จังหวะ + useSwrLoad + SyncIndicator</td><td>หน้า นัด (จุดที่รายงาน) &lt;1 วิ เมื่อมี cache; เครื่องใหม่เร็วขึ้นจาก staged</td></tr>
+  <tr><td><b>C</b></td><td>staff-wide one-shot sweep + classifier</td><td>ทุก tab staff เข้ากติกา SWR-adopted-or-sanctioned</td></tr>
+  <tr><td><b>D</b></td><td>Service Worker + update flow + vercel headers</td><td>จอดำ 2 วิแรก → shell &lt;0.5 วิ</td></tr>
+  <tr><td><b>E</b></td><td>test bank + perf วัดจริง before/after</td><td>ตัวเลข cold-start report (perf harness เดิม)</td></tr>
+</table>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><b>Repeat cold-start (มี cache):</b> เปิดแอป → หน้า นัด แสดงรายการนัด + counts (ข้อมูล cache) ภายใน &lt; 1 วิ หลัง shell ขึ้น (Playwright วัดจริง, CDP network throttle Fast 3G ก็ยังผ่าน)</li>
+  <li><b>Server sync:</b> เน็ตปกติ — ข้อมูลสดแทนที่ cache ≤ 3 วิ; indicator "กำลังซิงค์…" แสดงระหว่าง fromCache และหายเมื่อ server ยืนยัน; ข้อมูลที่เปลี่ยนบน server ระหว่างที่แอปปิด ปรากฏถูกต้องหลัง sync</li>
+  <li><b>First-ever (ไม่มี cache):</b> จังหวะ 1 paint โดยไม่รอ 5 dataset เสริม (เร็วขึ้นกว่า baseline ที่วัดไว้); chip skeleton → เติมเมื่อจังหวะ 2 มา; ไม่มี layout shift</li>
+  <li><b>Customer fresh-always:</b> ?patient= / ?session= / ?schedule= / ED — ไม่ render ข้อมูล fromCache เลย (Playwright: seed cache → เปลี่ยนข้อมูลบน server → เปิดหน้าลูกค้า → เห็นค่าใหม่เท่านั้น ไม่มี flash ค่าเก่า)</li>
+  <li><b>Write semantics ไม่เปลี่ยน:</b> การขาย/ตัดคอร์ส/ตัดสต็อคยัง await server ack; ปิดเน็ตแล้วกดบันทึก → พฤติกรรม error/รอ เหมือนเดิม (ไม่ silent-queue เงิน)</li>
+  <li><b>SW:</b> เปิดแอปแบบ offline/เน็ตช้ามาก → shell ขึ้นจาก precache; deploy ใหม่ → client ได้เวอร์ชันใหม่ภายใน 1 รอบ visibilitychange + ไม่มี white-screen จาก chunk เก่าหาย; /api/* + Firestore ไม่ถูก SW แตะ (network log พิสูจน์)</li>
+  <li><b>Regression:</b> full vitest 0 fail · build clean · pixel-parity ทุก surface (นอกจาก indicator/skeleton ใหม่) · V17 reconnect + useResilientLoad + Mobile-Load L1 specs ยังเขียว · multi-tab (2 แท็บพร้อมกัน) ไม่พัง persistence</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><b>Cache query ไม่ครบ:</b> counts จาก cache อาจต่ำกว่าจริงชั่วครู่แล้วเด้งขึ้น — mitigated ด้วย indicator; ห้าม decision-write จาก fromCache (audit invariant ใหม่ AV206)</li>
+  <li><b>iOS eviction:</b> ไม่ใช้แอปนานมาก → IndexedDB อาจโดนล้าง → degrade เป็น first-ever path (ไม่แย่กว่าปัจจุบัน); storage.persist() ลดโอกาส</li>
+  <li><b>persistentLocalCache perf:</b> ecosystem เคยมีรายงานช้าใน SDK เก่า (2023) — เราอยู่ firebase 12.11; Phase E วัดจริง ถ้า cache leg ช้าผิดปกติ → escalate</li>
+  <li><b>SW stale-deploy:</b> update flow + no-cache sw.js + kill-switch (ตาม §5); Playwright update-flow spec บังคับ</li>
+  <li><b>Firestore listener โหลดถี่:</b> persistence ไม่เพิ่ม read cost (cache hits ไม่คิดเงิน; server sync = delta) — ค่า Firestore ไม่ขึ้น</li>
+  <li><b>Classifier ครอบไม่หมด:</b> tab ใหม่ในอนาคตลืม SWR → classifier test บังคับ SWR-adopted-or-sanctioned (แบบ AV205)</li>
+</ul>
+
+</body>
+</html>
