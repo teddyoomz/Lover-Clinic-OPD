@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer-link header + configurable LINE link keywords — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .flowbox { display: inline-block; background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: 0.4em 0.9em; font-size: 0.85em; margin: 0.2em 0; }
+    .arrow { color: #94a3b8; font-weight: bold; padding: 0 0.4em; }
+  </style>
+</head>
+<body>
+
+<h1>Customer-link header + configurable LINE link keywords — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Inline execution this session (subagents thrash on this baseline — V81/V86 lesson). Spec: <code>docs/superpowers/specs/2026-07-07-customer-link-header-and-line-keywords-design.html</code>.
+  <br><strong>⚠ Spec amendment (post-approval, implementation-forced):</strong> keywords are stored in NEW doc <code>clinic_settings/link_id_keywords</code> — NOT <code>chat_config.idLinkKeywords</code> as the spec first said, because chat_config is secret-locked (WS1-C2-bis: client SDK denied). The new doc is covered by the EXISTING <code>clinic_settings/{settingId}</code> wildcard (read public — keywords are non-secret, the bot hint tells them to customers; write isClinicStaff) → <strong>zero firestore.rules change, no Probe-Deploy-Probe</strong>. Q4 intent (global single editable list) unchanged.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (1) การ์ดชื่อหน้า ?patient= ไม่มี avatar/HN + "ข้อมูลลูกค้า"/"Customer Info"; (2) ชุดคำผูกบัญชี LINE ตั้งค่าได้ (>1 คำ) จากเมนูคำขอผูก LINE.</p>
+  <p><strong>Architecture:</strong> Part 1 = UI strip + API field-minimization. Part 2 = pure keyword-regex layer in lineBotResponder (opts param, default = พฤติกรรมเดิม) + webhook cached read of the keywords doc + settings card in LinkRequestsTab via a small client lib.</p>
+  <p><strong>Tech Stack:</strong> React 19 · Firestore (client SDK for UI, admin SDK in webhook) · Vitest.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">AFTER — การ์ดชื่อ (Q1=B กึ่งกลาง) · หัวเพจ TH/EN</div>
+  <div style="background:#050505;border-radius:10px;padding:18px 16px;max-width:420px">
+    <p style="text-align:center;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#8a8a8a;margin:0 0 14px">ข้อมูลลูกค้า <span style="color:#555">· EN: CUSTOMER INFO</span></p>
+    <div style="border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#200000 0%,#0a0a0a 40%,#2a0000 100%);border:1.5px solid #5a1010">
+      <div style="height:2px;width:100%;background:linear-gradient(90deg,transparent,rgba(220,38,38,0.9),rgba(180,0,0,0.8),transparent)"></div>
+      <div style="padding:20px 20px 16px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center">
+        <p style="font-size:20px;font-weight:900;color:#d4d4d4;margin:0">นาย ไพบูลย์ ฉิมอ่ำ</p>
+        <span style="font-size:12px;color:rgba(252,165,165,0.5)">☎ 0948281991 (PhoneLink เดิม)</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Data shape — clinic_settings/link_id_keywords (doc ใหม่, ไม่มี secret)</div>
+  <pre>{ keywords: ['ผูก', 'ผูกบัญชี', 'link'],   // 1-10 คำ, คำละ 1-30 ตัว, ไม่มีช่องว่าง, ไม่ใช่ตัวเลขล้วน, unique (case-insensitive)
+  updatedAt: serverTimestamp(), updatedBy: &lt;uid&gt; }
+// doc ไม่มีอยู่ → ทุก reader ใช้ DEFAULT_ID_LINK_KEYWORDS = ['ผูก', 'ผูกบัญชี', 'link'] (zero migration)</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Settings card ใน LinkRequestsTab (บนสุดของแท็บ)</div>
+  <div style="border:1px solid var(--bd);border-radius:10px;padding:12px;max-width:520px">
+    <p style="font-size:13px;font-weight:700;margin:0 0 6px">คำที่ใช้ผูกบัญชี</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+      <span style="font-size:12px;padding:2px 10px;border-radius:12px;background:#dcfce7;color:#166534">ผูก ✕</span>
+      <span style="font-size:12px;padding:2px 10px;border-radius:12px;background:#dcfce7;color:#166534">ผูกบัญชี ✕</span>
+      <span style="font-size:12px;padding:2px 10px;border-radius:12px;background:#dcfce7;color:#166534">link ✕</span>
+      <input placeholder="เพิ่มคำ..." style="font-size:12px;padding:2px 8px;border:1px dashed #999;border-radius:12px;width:90px">
+      <button style="font-size:12px;padding:2px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff">บันทึก</button>
+    </div>
+    <p style="font-size:11px;color:var(--tx-muted);margin:0">ลูกค้าพิมพ์ &lt;คำ&gt; + เลขบัตร 13 หลัก / พาสปอร์ต · เลขเปล่าไม่ต้องมีคำนำหน้าก็ได้ (เหมือนเดิม)</p>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Part 1 — โหลดหน้า + Part 2 — keyword round-trip</div>
+  <p><span class="flowbox">?patient=</span><span class="arrow">→</span><span class="flowbox">/api/patient-view (payload ไม่มี hn แล้ว)</span><span class="arrow">→</span><span class="flowbox">การ์ดกึ่งกลาง ชื่อ+เบอร์</span></p>
+  <p><span class="flowbox">แอดมิน save chips</span><span class="arrow">→</span><span class="flowbox">validateIdLinkKeywords</span><span class="arrow">→</span><span class="flowbox">setDoc clinic_settings/link_id_keywords</span></p>
+  <p><span class="flowbox">ลูกค้าพิมพ์ "&lt;คำ&gt; 1234567890123"</span><span class="arrow">→</span><span class="flowbox">webhook: getIdLinkKeywordsCached (TTL 60s)</span><span class="arrow">→</span><span class="flowbox">interpretCustomerMessage(text, {idLinkKeywords})</span><span class="arrow">→</span><span class="flowbox">id-link-request → rate-limit → คิว → ack (เดิม)</span></p>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li>Modify <code>src/pages/PatientDashboard.jsx</code> — TX + card + dead code removal</li>
+  <li>Modify <code>api/patient-view.js</code> — strip hn</li>
+  <li>Modify <code>src/lib/lineBotResponder.js</code> — keyword layer (pure) + hint</li>
+  <li>Modify <code>api/webhook/line.js</code> — cached keywords read + wiring</li>
+  <li>Create <code>src/lib/idLinkKeywordsClient.js</code> — client get/save (lineConfigClient pattern)</li>
+  <li>Modify <code>src/components/backend/LinkRequestsTab.jsx</code> — settings card</li>
+  <li>Create <code>tests/customer-link-header-strip.test.jsx</code> + <code>tests/line-link-keywords-configurable.test.js</code></li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Part 1 — PatientDashboard header/card strip</h3>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>S1:</strong> TX.th.headerSub → 'ข้อมูลลูกค้า'; TX.en.headerSub → 'Customer Info'</label></div>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>S2:</strong> การ์ด (~line 732-764): ลบ avatar div + HN badge; wrapper → <code>flex flex-col gap-2 items-center text-center</code>; เก็บชื่อ (สี --tx-secondary เดิม — UC1 no-red) + PhoneLink</label></div>
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>S3:</strong> ลบ dead code: <code>getInitials</code> fn + <code>const hn</code> (~653) + <code>brokerProClinicHN</code> mapping (~546) — grep ก่อนลบว่าไม่มีผู้ใช้อื่น (line 363 refresh effect ใช้ brokerProClinicId ไม่ใช่ HN)</label></div>
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>S4:</strong> V21 sweep: grep tests สำหรับ 'ข้อมูลผู้ป่วย' / 'Patient Dashboard' / getInitials / brokerProClinicHN / 'HN ' → fix locks</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: Part 1 — api/patient-view strip hn</h3>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>S1:</strong> ลบ <code>hn</code> จาก response + <code>const hn = ...</code> + comment "Field-minimized: name · courses · appointments (hn stripped 2026-07-07)"</label></div>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>S2:</strong> จอ: ลบ <code>brokerProClinicHN: data.hn</code> (ทำใน T1S3 แล้ว — ยืนยัน grep <code>data.hn</code> = 0)</label></div>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>S3:</strong> V21 sweep: grep tests อ้าง <code>hn</code> ใน patient-view locks (customer-patient-link-*)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 3: Part 2 — lineBotResponder keyword layer (TDD)</h3>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>S1 (RED):</strong> เขียน <code>tests/line-link-keywords-configurable.test.js</code>: DEFAULT list = ['ผูก','ผูกบัญชี','link'] · custom keyword 'เชื่อม 1234567890123' → id-link-request · ลบ 'ผูก' → 'ผูก 123..' ไม่ trigger · regex-special char keyword ('c.link', 'a*b') ไม่พัง + match literal · ยาว-ก่อน-สั้น · case-insensitive ASCII · default fallback เมื่อ opts ว่าง/undefined/[] · bare-ID ไม่กระทบ · validateIdLinkKeywords ครบทุกกฎ (≥1, ≤10, 1-30 ตัว, no space, not all-digit, dedupe case-insensitive, trim)</label></div>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>S2 (GREEN):</strong> implement ใน lineBotResponder.js:</label></div>
+<pre><code>export const DEFAULT_ID_LINK_KEYWORDS = Object.freeze(['ผูก', 'ผูกบัญชี', 'link']);
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export function buildIdLinkPrefixRegex(keywords) {
+  const list = (Array.isArray(keywords) && keywords.length ? keywords : DEFAULT_ID_LINK_KEYWORDS)
+    .map((k) => String(k).trim()).filter(Boolean);
+  const alts = [...list].sort((a, b) => b.length - a.length).map(escapeRegex).join('|');
+  return new RegExp(`^\\s*(?:${alts})\\s+(.+)$`, 'i');
+}
+export function validateIdLinkKeywords(list) { /* returns {ok, error?, keywords?} — กฎตาม S1 */ }
+export function interpretCustomerMessage(text, opts = {}) {
+  ...const idPrefixMatch = raw.match(buildIdLinkPrefixRegex(opts.idLinkKeywords));...
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>S3:</strong> hint: <code>MESSAGES.{th,en}.ID_REQUEST_INVALID</code> constant → <code>(kw) => [...]</code> + <code>formatIdRequestInvalidFormat(language, keywords)</code> ใช้คำแรก (default 'ผูก') — output default ต้อง byte-identical ของเดิม</label></div>
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>S4:</strong> รันเทสใหม่ + เทสเดิมทุกไฟล์ที่ import lineBotResponder (grep -l) → GREEN, backward-compat (ไม่มี opts = เดิมเป๊ะ)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 4: Part 2 — webhook wiring (+ FB sweep)</h3>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>S1:</strong> api/webhook/line.js: module-cache helper (60s TTL) + wire:</label></div>
+<pre><code>let _kwCache = { at: 0, list: null };
+async function getIdLinkKeywordsCached() {
+  if (_kwCache.list && Date.now() - _kwCache.at < 60000) return _kwCache.list;
+  try {
+    const snap = await getAdminFirestore().doc(`artifacts/${APP_ID}/public/data/clinic_settings/link_id_keywords`).get();
+    const raw = snap.exists ? snap.data()?.keywords : null;
+    _kwCache = { at: Date.now(), list: Array.isArray(raw) && raw.length ? raw : null };
+  } catch { _kwCache = { at: Date.now(), list: null }; }
+  return _kwCache.list; // null → interpret ใช้ DEFAULT
+}
+// call site (~606): const intent = interpretCustomerMessage(text, { idLinkKeywords: await getIdLinkKeywordsCached() });
+// hint (~628): formatIdRequestInvalidFormat(lang, idLinkKeywords)</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>S2 (Rule P sweep):</strong> grep <code>interpretCustomerMessage</code> ทุกไฟล์ (facebook.js? scripts? tests?) — ทุก call site อื่นต้องยังถูกต้อง (opts optional → no-op)</label></div>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>S3:</strong> source-grep locks ใน test file: webhook ส่ง idLinkKeywords + hint call + TTL cache มีอยู่</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 5: Part 2 — client lib + LinkRequestsTab settings card</h3>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>S1:</strong> Create <code>src/lib/idLinkKeywordsClient.js</code>: <code>getIdLinkKeywords()</code> (getDoc → keywords[] หรือ DEFAULT) + <code>saveIdLinkKeywords(list, uid)</code> (validate → setDoc merge {keywords, updatedAt: serverTimestamp(), updatedBy}) — import validator/DEFAULT จาก lineBotResponder</label></div>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>S2:</strong> LinkRequestsTab: การ์ด "คำที่ใช้ผูกบัญชี" เหนือรายการคิว — chips + ✕ ลบ + input เพิ่ม (Enter/ปุ่ม) + บันทึก + error copy ไทย + loading/saved state; โหลดครั้งเดียวตอน mount</label></div>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>S3:</strong> RTL tests: render chips จาก doc / เพิ่ม-ลบ / validation error (ตัวเลขล้วน, ซ้ำ, ว่าง) / save เรียก setDoc payload ถูก</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 6: Exhaustive verification (Rule Q)</h3>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>S1:</strong> targeted vitest (ไฟล์ใหม่ + ทุกไฟล์ที่ import touched modules) → full vitest → build clean</label></div>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>S2 (L1 real browser):</strong> preview + proxy: ?patient= จริง → TH "ข้อมูลลูกค้า" + การ์ดกึ่งกลาง ไม่มี avatar/HN + เบอร์กดได้ · EN → "Customer Info" · mobile 375px · disabled/notfound screens ยังถูก · screenshot eyeball ทั้ง dark/light (intended change — ไม่ใช่ parity)</label></div>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>S3 (L2):</strong> local handler จริง (diag pattern) → payload ไม่มี <code>hn</code> + fields อื่นครบ · หลัง deploy รัน <code>diag-patient-view-l2.mjs</code> เทียบ live = identical</label></div>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>S4 (L1 keywords):</strong> settings card ใน real browser (authed backend) — เพิ่มคำ/ลบ/save → doc จริง → ลบทิ้งคืนค่า (fixture discipline) · bot บน LINE จริง = user L1 หลัง deploy (บันทึกใน handoff)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 7: Ship — spec amendment + deploy + session-end</h3>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>S1:</strong> แก้ spec HTML: chat_config → link_id_keywords doc (บันทึก amendment)</label></div>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>S2:</strong> commit + push ทั้งหมด</label></div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>S3:</strong> deploy (user-authorized this turn): <code>vercel --prod</code> — rules UNCHANGED → no Probe-Deploy-Probe · post-deploy: live payload no-hn (curl) + live page L1 + diag L2 rerun</label></div>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>S4:</strong> Skill(session-end)</label></div>
+</div>
+
+</body>
+</html>
