@@ -98,9 +98,22 @@
 - DEFERRED (documented): #22 opd_sessions narrowing (155 docs now = no present cost; where()-excludes-
   missing-field V23-class risk needs its own design; growth bounded by archive... which retains forever —
   recommend a retention decision later) · #25 appointment date-bounds (453 docs total) ·
-  #26 movement-log pagination (1,498 grows forever — recommend when >5k) · link-patient LCP 4.3s =
-  serial anon-auth→settings→token-query chain — needs its own focused session (data-path redesign,
-  Rule Q L2 per change).
+  #26 movement-log pagination (1,498 grows forever — recommend when >5k).
+- **DONE (2026-07-07 follow-up session): link-patient LCP fix (AV204)** — the /api/patient-view
+  fetch needed NO Firebase auth / settings but started only after anon-auth gate → lazy chunk →
+  clinicSettingsLoaded (~1.2-1.8s dead serial in front of a 1.3-3.5s serverless call). Fix:
+  entry-time early fetch (src/lib/patientViewEarlyFetch.js via main.jsx, consume-once in
+  PatientDashboard, retry loop unchanged) + endpoint branch-gets parallelized (Promise.all).
+  NO warm chunk import — a failed entry-time module fetch poisons the module map (iOS Safari)
+  → React.lazy black screen; dropped per adversarial review, LCP unaffected (API-bound).
+  Measured (median-of-3, REAL prod API via new NARROW /api/patient-view vite preview proxy):
+  **LCP 3780 → 2004ms (−47%)**, remaining floor = the serverless call itself (warm ~1.3-1.7s,
+  cold ~3.5s). Parity 0.000% both themes (loaded-vs-loaded) · real-browser probe 7/7 (single
+  request · failure→resilient retry UI · bad-token 404) · L2 `scripts/diag-patient-view-l2.mjs`
+  payload-identical. NOTE: pre-fix local baselines (4.3-4.4s) were partly a harness artifact —
+  vite preview had no /api → retry-loop error screen was the LCP; the proxy makes link-patient
+  measurable for real. Residual option (user call): endpoint cold-start ~3.5s — warmup ping or
+  admin-SDK preferRest could trim it; not done (blast radius vs rare-cold gain).
 
 ## Ordering inside phases
 P1: 1 → 2 → 3 → 4 → 5+6 → 9+8 → 10-12 → 7. P2: 13 → 14 → 16 → 17 → 15 → 19 → 18 → 20 (21 = evidence loop).

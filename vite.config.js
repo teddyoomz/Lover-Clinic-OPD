@@ -52,6 +52,13 @@ export default defineConfig(({ command }) => ({
     ...(analyze ? [visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true, open: false })] : []),
   ],
   server: {
+    // link-patient dev/preview: vite has no /api runtime, so proxy ONLY the
+    // read-only public patient-view GET to prod (real endpoint, real latency —
+    // used by scripts/perf-baseline.mjs link-patient measurement). Deliberately
+    // NARROW: never proxy all of /api (admin endpoints + webhooks would hit prod).
+    proxy: {
+      '/api/patient-view': { target: 'https://lover-clinic-app.vercel.app', changeOrigin: true },
+    },
     // Pre-compile common entry points at dev server start so the first
     // navigation to these routes/tabs doesn't pay the ESM-transform cost.
     // Cuts cold-start "click tab → see content" time from ~10s to ~1s in
@@ -78,6 +85,12 @@ export default defineConfig(({ command }) => ({
         './src/components/backend/FinanceTab.jsx',
         './src/components/backend/CustomerListTab.jsx',
       ],
+    },
+  },
+  preview: {
+    // Same narrow proxy for `vite preview` (perf-baseline local-preview target).
+    proxy: {
+      '/api/patient-view': { target: 'https://lover-clinic-app.vercel.app', changeOrigin: true },
     },
   },
   optimizeDeps: {

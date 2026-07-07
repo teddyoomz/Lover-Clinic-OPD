@@ -18,6 +18,7 @@ import { Package, PackageX, CalendarClock, Phone, PhoneCall, AlertCircle, Loader
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
 import { useResilientLoad } from '../hooks/useResilientLoad.js';
+import { takeEarlyPatientViewFetch } from '../lib/patientViewEarlyFetch.js';
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 const TX = {
@@ -527,7 +528,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     (async () => {
       for (let attempt = 0; attempt < 3 && !cancelled; attempt += 1) {
         try {
-          const r = await fetch(`/api/patient-view?token=${encodeURIComponent(token)}`);
+          // perf link-patient LCP (2026-07-07): main.jsx started this exact
+          // fetch at entry time — consume it once here (token-guarded). Any
+          // failure or retry falls back to a fresh fetch; loop semantics,
+          // markReady/markError and the 3×600ms budget are UNCHANGED.
+          const early = takeEarlyPatientViewFetch(token);
+          const r = early ? await early : await fetch(`/api/patient-view?token=${encodeURIComponent(token)}`);
           if (cancelled) return;
           if (r.ok) {
             const data = await r.json();

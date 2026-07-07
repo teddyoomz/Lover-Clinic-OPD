@@ -92,30 +92,30 @@ export default async function handler(req, res) {
       .filter(a => isAppointmentUpcoming(a, today));
     appts.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.startTime || '').localeCompare(b.startTime || ''));
 
+    // perf link-patient LCP (2026-07-07): branch names were fetched one-by-one
+    // inside the mapping loop (serial Firestore RTT per unique branch). Prefetch
+    // ALL unique branchIds in parallel — output identical, ~1 RTT total.
     const branchCache = {};
-    const branchName = async (bid) => {
-      if (!bid) return '';
-      if (branchCache[bid] !== undefined) return branchCache[bid];
-      const b = await dataCol(db, 'be_branches').doc(String(bid)).get();
-      const n = b.exists ? (b.data().name || '') : '';
-      branchCache[bid] = n;
-      return n;
-    };
+    const uniqueBranchIds = [...new Set(appts.map((a) => a.branchId).filter(Boolean).map(String))];
+    await Promise.all(uniqueBranchIds.map(async (bid) => {
+      const b = await dataCol(db, 'be_branches').doc(bid).get();
+      branchCache[bid] = b.exists ? (b.data().name || '') : '';
+    }));
+    const branchName = (bid) => (bid ? (branchCache[String(bid)] ?? '') : '');
 
-    const appointments = [];
-    for (const a of appts) {
+    const appointments = appts.map((a) => {
       const start = a.startTime || a.time || '';
       const end = a.endTime || '';
       const timeStr = start ? (end ? `${start} - ${end} น.` : `${start} น.`) : '';
-      appointments.push({
+      return {
         date: a.date ? fmtThaiDate(a.date, { monthStyle: 'full', yearStyle: 'full' }) : '',
         time: timeStr,
         doctor: a.doctorName || '',
-        branch: await branchName(a.branchId),
+        branch: branchName(a.branchId),
         room: a.roomName || '',
         status: a.status || '',
-      });
-    }
+      };
+    });
 
     // 4. Patient identity (minimal — no national ID / sensitive PII).
     const pd = customerData.patientData || {};
