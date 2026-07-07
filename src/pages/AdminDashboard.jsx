@@ -2274,7 +2274,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         setPushLoading(false); return;
       }
       const msg = getMessaging(app);
-      const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      // D1/AV207 (2026-07-07): FCM SW on its OWN scope — the Workbox app-shell
+      // SW owns '/'; two registrations on one scope REPLACE each other (push
+      // would die every app-shell deploy). Scope string mirrors Firebase's own
+      // default push scope. Existing devices heal via the self-heal effect below.
+      const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/firebase-cloud-messaging-push-scope' });
       const token = await getToken(msg, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
       if (!token) { alert('ไม่สามารถรับ Push Token ได้ กรุณาลองใหม่'); setPushLoading(false); return; }
 
@@ -2328,7 +2332,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const supported = await isSupported();
         if (!supported || cancelled) return;
         const msg = getMessaging(app);
-        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        // D1/AV207 (2026-07-07): dedicated push scope — see enablePushNotifications.
+        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/firebase-cloud-messaging-push-scope' });
         const token = await getToken(msg, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
         if (!token || cancelled) return;
         const tokensRef = doc(db, 'artifacts', appId, 'public', 'data', 'push_config', 'tokens');

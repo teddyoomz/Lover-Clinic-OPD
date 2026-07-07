@@ -3,6 +3,27 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { startEarlyPatientViewFetch } from './lib/patientViewEarlyFetch.js'
+import SwUpdateToast from './components/SwUpdateToast.jsx'
+import { registerSW } from 'virtual:pwa-register'
+
+// D1 (2026-07-07 instant cold-start, spec Q4=B / AV207) — app-shell SW.
+// Registered from the BUNDLE (CSP script-src 'self'-safe; the pinned inline
+// hashes in vercel.json stay untouched). Prod-only: dev server has no sw.js
+// and a dev SW would poison HMR. Update flow: check on every visibilitychange
+// → onNeedRefresh → SwUpdateToast (tap-to-refresh + auto-apply when hidden).
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+  const updateSW = registerSW({
+    onNeedRefresh() {
+      window.__swUpdate = updateSW
+      window.dispatchEvent(new CustomEvent('sw-need-refresh'))
+    },
+    onRegisteredSW(_url, reg) {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg?.update().catch(() => {})
+      })
+    },
+  })
+}
 
 // perf link-patient LCP (2026-07-07): the ?patient= page's data comes from
 // /api/patient-view (no Firebase auth / settings needed) but its consumer only
@@ -22,5 +43,6 @@ if (earlyPatientToken) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
+    <SwUpdateToast />
   </React.StrictMode>,
 )

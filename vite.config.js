@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { writeFileSync } from 'fs'
 import { visualizer } from 'rollup-plugin-visualizer'
 import obfuscator from 'vite-plugin-javascript-obfuscator'
+import { VitePWA } from 'vite-plugin-pwa'
 
 function versionPlugin() {
   return {
@@ -50,6 +51,39 @@ export default defineConfig(({ command }) => ({
       },
     })] : []),
     ...(analyze ? [visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true, open: false })] : []),
+    // D1 (2026-07-07 instant cold-start, spec Q4=B) — app-shell Service Worker.
+    // AV207 contract: precache the SMALL static shell only (entry + css + icons —
+    // NOT the 900KB lazy backend chunks, they runtime-cache on first use);
+    // NEVER intercept /api/* (navigateFallbackDenylist) and NEVER any
+    // *.googleapis.com traffic (no cross-origin runtimeCaching → Firestore/auth
+    // stay network-only, data-freshness + rules semantics untouched).
+    // manifest:false — public/manifest.json stays canonical (iOS install identity).
+    // injectRegister:false — registration lives in src/main.jsx (bundled module;
+    // the inline-script CSP hashes in vercel.json stay untouched).
+    // Kill-switch (AV207): to disable in the field, deploy a sw.js that calls
+    // self.registration.unregister() — vercel serves /sw.js no-cache so it lands
+    // on every client within one visibilitychange update check.
+    VitePWA({
+      registerType: 'prompt',
+      injectRegister: false,
+      manifest: false,
+      workbox: {
+        inlineWorkboxRuntime: true, // single sw.js file → one no-cache header covers it
+        globPatterns: ['index.html', 'assets/index-*.js', 'assets/*.css', 'icon-192.png', 'favicon.svg', 'manifest.json'],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [{
+          // hashed immutable build assets (lazy chunks / fonts) — CacheFirst on
+          // FIRST USE keeps install light while enabling offline shell + fast repeats
+          urlPattern: /^https?:\/\/[^/]+\/assets\/.+\.(?:js|css|woff2|png|svg)$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'assets-v1',
+            expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+          },
+        }],
+      },
+    }),
   ],
   server: {
     // link-patient dev/preview: vite has no /api runtime, so proxy ONLY the
