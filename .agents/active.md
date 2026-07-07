@@ -1,41 +1,45 @@
 ---
-updated_at: "2026-07-07 — whole-app PERF CAMPAIGN (4 phases) SHIPPED + DEPLOYED LIVE + dead-cron fix drained on prod."
-status: "DEPLOYED. master = prod. Final full vitest 17287/17287 · 0 fail. Awaiting user L1 hands-on (perceived speed)."
+updated_at: "2026-07-07 (cont.) — link-patient LCP fix (AV204) SHIPPED local, committed+pushed. NOT deployed."
+status: "COMMITTED+PUSHED. full vitest 17302/17302 · 0 fail. Awaiting explicit 'deploy' (V18) + user L1."
 branch: "master"
-last_commit: "perf(T13) after-phase3 final metrics + report.html (see git log)"
-tests: "full vitest 17287/17287 · 0 fail (final clean run post-P3). Build clean. Reuse these counts — do NOT re-run at boot."
+last_commit: "perf(link-patient): LCP 3780->2040ms (-46%) — entry-time early fetch (AV204)"
+tests: "full vitest 17302/17302 · 0 fail (final clean run). Build clean. Reuse these counts — do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "perf campaign head (2026-07-07) — vercel lover-clinic-lh9waq3po aliased, HTTP 200, live-verified markers"
-firestore_rules_version: "UNCHANGED entire campaign → frontend-only deploy, NO Probe-Deploy-Probe"
+production_commit: "perf campaign head (2026-07-07) — the link-patient fix is 1 commit AHEAD of prod"
+firestore_rules_version: "UNCHANGED → next deploy is frontend+api only, NO Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-07 — perf campaign shipped (P0 harness → P1 bundle → P2 render → P3 data)
+# Active — 2026-07-07 (cont.) — link-patient LCP 4.3s deferred item DONE
 
-## Measured results (median-of-3, local-preview; full table docs/perf/report.html)
-- Backend tabs JS/หน้า 852-889 → **449-561KB (−44%)** · entry chunk 365 → **31KB** · FCP −25% ·
-  backend LCP 1016-1236 → 924-976ms · frontend heap 69 → 48MB · customer links JS −4..−22%.
-- P2: chat/presence re-render storms killed (equality guards + renderHook locks) · CustomerCard/RecallRow memo.
-- P3: hub refetch debounced (3 bursts → 1) · chat_history client-delete → cron-owned.
-- **BONUS BUG**: chat-history retention cron DEAD (Timestamp-vs-ISO-string type mismatch, 46 runs × scanned:0)
-  → fixed (dual-type query) + verified LIVE on deployed code + drained 4,265 → 137 docs.
+## What shipped (1 commit ahead of prod)
+- **LCP 3780 → 2040ms (−46%)** measured median-of-3 vs REAL prod API (new NARROW `/api/patient-view`
+  vite dev/preview proxy makes the surface measurable/devable locally for the first time).
+- Root cause: /api/patient-view (plain token GET, no auth/settings needed) waited behind
+  anon-auth gate → lazy chunk → clinicSettingsLoaded (~1.2-1.8s dead serial before a 1.3-3.5s call).
+- Fix: NEW `src/lib/patientViewEarlyFetch.js` consume-once slot started in main.jsx; PatientDashboard
+  consumes it once (token-guarded) inside the UNCHANGED 3×600ms retry loop; endpoint branch-gets
+  parallelized (Promise.all — payload byte-identical, `scripts/diag-patient-view-l2.mjs`).
+- **NO warm chunk import** — adversarial review: failed entry-time module fetch poisons the module
+  map (iOS Safari) → React.lazy black screen. Dropped; LCP unaffected (API-bound).
 
-## Key artifacts
-- Harness (reusable): scripts/perf-{lib,baseline,bundle-manifest,compare,visual-parity,find-links}.mjs + npm run perf:*
-- docs/perf/punchlist.md (verdicts + P1/P2/P3 results + deferred items w/ rationale) · docs/perf/report.html
-- Locks: tests/perf-p1-lazy-locks + perf-p2-render-guards + perf-p3-locks + perf-p3-chat-history-sweep-type-fix + perf-harness-lib
-
-## Deploy state
-- DEPLOYED + live-verified (Rule Q): preconnect ×4 ✓ · recall-chunk preload GONE ✓ · FOUC hack gone ✓ ·
-  /assets immutable cache header ✓ · CSP hashes intact ✓ · cron fix live (scanned 500 on first forced run) ✓.
+## Verification (exhaustive pass per user directive)
+- 17 new locks `tests/perf-link-patient-early-fetch.test.js` + full vitest 17302/0 + build clean.
+- Rule Q L1 real-browser matrix **24/24**: single request · total-failure→retry-UI→manual-retry
+  recovers · 12s-slow-first soft-timeout auto-retry recovers · late stale response harmless ·
+  bad-token 404 · empty-token zero requests · admin=1/EN/theme/mobile-375 · root+filler+session-link
+  regression clean · entry 29.8KB, PatientDashboard stays lazy un-preloaded.
+- Pixel parity loaded-vs-loaded 0.010%/0.011% both themes. L2 payload-identical vs live.
+- 2-agent adversarial review (ultracode, ≤4-agent cap honored): 2 findings, BOTH fixed
+  (warm-import poisoning removed · B6 proxy lock made structural).
 
 ## Next action
-- **NEXT SESSION (user-approved 2026-07-07): link-patient LCP 4.3s data-chain fix** — the customer-facing
-  ?patient= link waits SERIALLY (anon-auth → clinicSettings → patientLinkToken query → render) even on
-  localhost. `/systematic-debugging` trace the real chain in PatientDashboard.jsx + App.jsx auth gate →
-  parallelize/early-start → measure LCP before/after (`node scripts/perf-baseline.mjs --surface link-patient`)
-  → Rule Q L1/L2 (V16/V23 history on this page: auth-gates + anon whitelist — strict). Target ~1.5-2s.
-- Also pending: user L1 hands-on of the perf campaign (speed feel + visual identical + realtime ปกติ).
-- Other deferred perf items stay parked (rationale in docs/perf/punchlist.md).
+- **Awaiting explicit "deploy"** — ships the client fix + the endpoint branch-parallel to prod
+  (frontend+api only, rules unchanged → no Probe-Deploy-Probe). Post-deploy: re-run
+  `node scripts/diag-patient-view-l2.mjs` (payload check) + optional
+  `node scripts/perf-baseline.mjs --run after-lcpfix --target prod --surface link-patient`.
+- User L1: เปิดลิงก์ ?patient= จริงจากมือถือ — เร็วขึ้นชัดเจน + หน้าตาเหมือนเดิม.
+- Residual (user call, documented in punchlist): endpoint COLD start ~3.5s — warmup ping or
+  admin-SDK preferRest could trim; deliberately not done (blast radius vs rare-cold gain).
 
 ## Outstanding user-triggered actions
-- (none — deployed + drained; L1 feedback only)
+- "deploy" (V18) — 1 commit ahead of prod.
