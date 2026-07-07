@@ -124,7 +124,10 @@ describe('BS-F.7 — UI consumers pass branchId for branch-scoped fetch', () => 
       resolve(__dirname, '../src/components/backend/SaleTab.jsx'),
       'utf-8',
     );
-    expect(src).toMatch(/getAllSales\(\{\s*branchId:\s*BRANCH_ID\s*\}\)/);
+    // C2 repoint (2026-07-07 instant cold-start): the call gained a `source`
+    // opt (SWR cache leg) — lock the branchId contract, not the literal
+    // single-key object shape.
+    expect(src).toMatch(/getAllSales\(\{\s*branchId:\s*BRANCH_ID[,\s}]/);
   });
 
   it('AppointmentTab passes branchId:selectedBranchId to the month listener', () => {

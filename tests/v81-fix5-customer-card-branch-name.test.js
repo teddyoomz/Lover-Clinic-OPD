@@ -50,7 +50,10 @@ describe('V81-fix5 AV71 — CustomerCard resolves branchId → name via branches
   });
 
   it('AV71.7 — listBranches called with allBranches:true (universal — not branch-scoped per BSA)', () => {
-    expect(list).toMatch(/listBranches\(\s*\{\s*allBranches:\s*true\s*\}/);
+    // C2 repoint (2026-07-07 instant cold-start): the call gained a `source`
+    // opt (SWR cache leg) — lock the allBranches:true contract, not the
+    // literal single-key object shape.
+    expect(list).toMatch(/listBranches\(\s*\{\s*allBranches:\s*true[,\s}]/);
   });
 
   it('AV71.8 — CustomerListTab passes branchesMap prop to every CustomerCard render', () => {
