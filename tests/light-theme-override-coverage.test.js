@@ -203,13 +203,21 @@ describe('V125 — theme-aware accent helper (light-theme AA for inline accents)
   });
 
   it('TreatmentFormPage: SectionHeader + ActionBtn deepen accent via aaAccent', () => {
-    expect(tfp).toMatch(/import \{ aaAccent \} from '\.\.\/lib\/themeAccent\.js'/);
-    expect(tfp).toMatch(/const a = aaAccent\(accent, isDark\)/); // SectionHeader icon + h4
-    expect(tfp).toMatch(/const c = aaAccent\(color, isDark\)/);  // ActionBtn color/border/bg
+    // TFP extraction step 1 (2026-07-07): SectionHeader + ActionBtn moved verbatim
+    // to TfpFormPrimitives.jsx — the V125 aaAccent contract holds at their new home.
+    const primitives = readFileSync('src/components/treatment-form/TfpFormPrimitives.jsx', 'utf8');
+    expect(tfp).toMatch(/import \{ aaAccent \} from '\.\.\/lib\/themeAccent\.js'/); // 12+ inline spans still in TFP
+    expect(primitives).toMatch(/import \{ aaAccent \} from '\.\.\/\.\.\/lib\/themeAccent\.js'/);
+    expect(primitives).toMatch(/const a = aaAccent\(accent, isDark\)/); // SectionHeader icon + h4
+    expect(primitives).toMatch(/const c = aaAccent\(color, isDark\)/);  // ActionBtn color/border/bg
   });
 
   it('TreatmentFormPage: NO raw inline accent style remains — all inline colors are theme-aware', () => {
+    // Step-1 extension: the extracted primitives file must obey the same
+    // no-raw-inline-accent rule (guards both homes of the V125 contract).
+    const primitives = readFileSync('src/components/treatment-form/TfpFormPrimitives.jsx', 'utf8');
     expect(tfp).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/); // regression guard
+    expect(primitives).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/);
     const wraps = (tfp.match(/aaAccent\('#[0-9a-fA-F]{6}', isDark\)/g) || []).length;
     expect(wraps).toBeGreaterThanOrEqual(12); // the 12 inline callsites we converted
   });

@@ -25,8 +25,14 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TFP_PATH = resolve(__dirname, '..', 'src', 'components', 'TreatmentFormPage.jsx');
 const RESOLVER_PATH = resolve(__dirname, '..', 'src', 'lib', 'scrollToFieldError.js');
+// TFP extraction step 1 (2026-07-07): VitalsGrid (with its data-field="vitals.*"
+// anchors) moved verbatim to TfpFormPrimitives.jsx. Validators (scrollToError
+// calls) stay in TFP; anchors may live in either file — anchor checks scan BOTH.
+const PRIMITIVES_PATH = resolve(__dirname, '..', 'src', 'components', 'treatment-form', 'TfpFormPrimitives.jsx');
 
 const tfpSrc = readFileSync(TFP_PATH, 'utf8');
+const primitivesSrc = readFileSync(PRIMITIVES_PATH, 'utf8');
+const anchorSrc = tfpSrc + '\n' + primitivesSrc; // union of anchor homes
 const resolverSrc = readFileSync(RESOLVER_PATH, 'utf8');
 
 // Extract every `scrollToError('<key>', ...)` literal-key call from TFP. The
@@ -48,7 +54,7 @@ function extractScrollToErrorLiteralKeys(src) {
 function assertHasDataField(literal) {
   const escaped = literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`data-field=(?:"${escaped}|\\{\`?[^}]*${escaped})`);
-  expect(tfpSrc).toMatch(re);
+  expect(anchorSrc).toMatch(re);
 }
 
 describe('TF2 — scrollToError data-field coverage', () => {
@@ -67,7 +73,7 @@ describe('TF2 — scrollToError data-field coverage', () => {
       for (const key of activeKeys) {
         const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const re = new RegExp(`data-field=(?:"${escaped}"|\\{\`?${escaped})`);
-        if (!re.test(tfpSrc)) missing.push(key);
+        if (!re.test(anchorSrc)) missing.push(key);
       }
       expect(missing).toEqual([]);
     });
@@ -94,12 +100,14 @@ describe('TF2 — scrollToError data-field coverage', () => {
   });
 
   describe('Vital-sign per-field anchors', () => {
+    // TFP extraction step 1 (2026-07-07): the vitals.* anchors render inside
+    // VitalsGrid, which moved verbatim to TfpFormPrimitives.jsx → assert there.
     it('TF2.D.1 vitals.<key> template anchor exists', () => {
       // Two vitals grids both use `data-field={`vitals.${key}`}`.
-      expect(tfpSrc).toMatch(/data-field=\{`vitals\.\$\{key\}`\}/);
+      expect(primitivesSrc).toMatch(/data-field=\{`vitals\.\$\{key\}`\}/);
     });
     it('TF2.D.2 vitals.oxygenSaturation literal anchor exists', () => {
-      expect(tfpSrc).toMatch(/data-field="vitals\.oxygenSaturation"/);
+      expect(primitivesSrc).toMatch(/data-field="vitals\.oxygenSaturation"/);
     });
   });
 
