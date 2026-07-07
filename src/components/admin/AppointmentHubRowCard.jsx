@@ -76,6 +76,10 @@ export default function AppointmentHubRowCard({
   appt,
   doctorMap = null,
   summary,
+  // B2 (2026-07-07 instant cold-start) — stage-2 enrichment (finance chips)
+  // still loading → shimmer placeholders in the finance strip instead of the
+  // false-empty "no chips" state. Reserved strip height → zero layout shift.
+  summaryLoading = false,
   apptDeposit,
   apptDateTreatments = [],
   isTodayTab = false,                   // V71 NEW
@@ -280,6 +284,13 @@ export default function AppointmentHubRowCard({
 
       {/* ② FINANCE STRIP — wallet / มัดจำ / ค่างชำระ / ยอดสั่งซื้อ (same 4 conditionals) */}
       <div className="flex flex-wrap gap-1.5 px-4 py-2 pl-5 border-b border-[var(--bd)]" data-testid="row-finance-chips">
+        {/* B2 — skeleton chips while stage-2 enrichment loads (only when no summary yet) */}
+        {summaryLoading && !summary && (
+          <>
+            <span data-testid="row-chip-skeleton" className="inline-block w-16 h-6 rounded bg-[var(--bd)]/40 animate-pulse" aria-hidden="true" />
+            <span data-testid="row-chip-skeleton" className="inline-block w-20 h-6 rounded bg-[var(--bd)]/40 animate-pulse" aria-hidden="true" />
+          </>
+        )}
         {summary?.walletBalance > 0 && (
           <span
             data-testid="row-chip-wallet"

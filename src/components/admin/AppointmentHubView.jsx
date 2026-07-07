@@ -32,6 +32,10 @@ import {
   sortApptsConfirmedFirst,   // ① (2026-05-31)
 } from '../../lib/appointmentHubFilters.js';
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
+// B2 (2026-07-07 instant cold-start) — stale-while-revalidate one-shot orchestrator
+// + the "กำลังซิงค์…" indicator shown while on-screen data is still the cache leg.
+import { swrRun } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 import {
   buildPrintRows,
   buildPrintHeader,
@@ -106,6 +110,10 @@ export default function AppointmentHubView({
   const [todaySubPill, setTodaySubPill] = useState('waiting');
 
   const [appts, setAppts] = useState([]);
+  // B2 — apptsRef mirrors appts SYNCHRONOUSLY inside applyCore so stage-2
+  // (loadEnrichment → wallets by customerId) always reads the freshest list
+  // without a state-race (same sync-ref lesson as useResilientLoad settledRef).
+  const apptsRef = useRef([]);
   const [summaryMap, setSummaryMap] = useState(new Map());
   const [allDeposits, setAllDeposits] = useState([]);  // V64-fix4: full deposits list for per-appt linkage
   // V118 (2026-05-23) — full customer list saved as state so the per-row
@@ -115,6 +123,11 @@ export default function AppointmentHubView({
   const [allTreatments, setAllTreatments] = useState([]);  // V64-fix6: per-customer-date treatment lookup for auto-confirm + edit-button
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  // B2 (2026-07-07) — syncing: on-screen core data is the SWR cache leg (server
+  // not yet confirmed) → SyncIndicator. summaryLoading: stage-2 enrichment
+  // (finance chips) not yet applied → RowCard skeleton chips.
+  const [syncing, setSyncing] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   // V64-fix3 (Issue 1, 2026-05-09): edit-modal state — true full modal
   // (mirrors backend tab=appointment-all UX). Replaces V64-fix2's
   // calendar-mode redirect.
@@ -168,16 +181,47 @@ export default function AppointmentHubView({
   // can refetch WITHOUT setLoading(true) flash. Initial mount + branch switch
   // still call setLoading(true) for the first paint; subsequent silent refreshes
   // skip it.
-  const loadAll = useCallback(async ({ silent = false } = {}) => {
+  // B2 (2026-07-07 instant cold-start, spec Q2=A) — loadAll split into TWO stages:
+  //   Stage 1 loadCore       = appointments + schedules → the LIST + counts +
+  //                            doctor header paint FIRST (SWR: cache leg paints
+  //                            ~instantly, server leg corrects).
+  //   Stage 2 loadEnrichment = customers/deposits/sales/memberships/treatments +
+  //                            wallets → buildCustomerSummaryMap (finance chips).
+  //                            NON-BLOCKING — chips show skeletons until it lands.
+  // Silent reloads (change-signal / modal-save) skip the cache leg entirely
+  // (data already on screen; server-only refresh, no loading flash) — the
+  // pre-B2 silent semantics are preserved.
+  const loadCore = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
-    try {
-      const [apptList, customers, deposits, sales, memberships, schedules, treatments] = await Promise.all([
-        getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
-        getAllCustomers(),
-        getAllDeposits({ branchId: selectedBranchId }),
-        getAllSales({ branchId: selectedBranchId }),
-        getAllMemberships(),
-        listStaffSchedules({ branchId: selectedBranchId }),
+    const fetchCore = (source) => Promise.all([
+      getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId, source }),
+      listStaffSchedules({ branchId: selectedBranchId, source }),
+    ]);
+    const applyCore = ([apptList, schedules], { fromCache }) => {
+      apptsRef.current = apptList;               // sync BEFORE React commits (stage-2 reads it)
+      setAppts(apptList);
+      setScheduleEntries(schedules);
+      setLoading(false);
+      // syncing stays ON when the "server" leg actually served from cache —
+      // true-offline getDocs falls back to cache (navigator.onLine === false).
+      setSyncing(fromCache || (typeof navigator !== 'undefined' && navigator.onLine === false));
+    };
+    if (silent) { applyCore(await fetchCore(undefined), { fromCache: false }); return; }
+    await swrRun({
+      cacheLoad: async () => { const r = await fetchCore('cache'); return { hasData: r[0].length > 0, data: r }; },
+      serverLoad: () => fetchCore(undefined),
+      apply: applyCore,
+    });
+  }, [wideRange.from, wideRange.to, selectedBranchId]);
+
+  const loadEnrichment = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setSummaryLoading(true);
+    const fetchEnrich = async (source) => {
+      const [customers, deposits, sales, memberships, treatments] = await Promise.all([
+        getAllCustomers({ source }),
+        getAllDeposits({ branchId: selectedBranchId, source }),
+        getAllSales({ branchId: selectedBranchId, source }),
+        getAllMemberships({ source }),
         // V64-fix6 evolved (2026-05-09): load ALL branches' treatments
         // (allBranches:true) so auto-confirm is branch-blind. Reasons:
         //   1. Legacy treatments may lack branchId field → strict filter
@@ -186,29 +230,51 @@ export default function AppointmentHubView({
         //      ANYWHERE, the appointment for them on date X is auto-confirmed
         //      (they came in real life regardless of which branch recorded it).
         // Lookup is keyed by customerId|date; cross-branch overlap is correct.
-        loadTreatmentsByDateRange({ from: wideRange.from, to: wideRange.to, allBranches: true }),
+        loadTreatmentsByDateRange({ from: wideRange.from, to: wideRange.to, allBranches: true, source }),
       ]);
-      const customerIds = [...new Set(apptList.map(a => String(a.customerId)).filter(Boolean))];
-      const wallets = customerIds.length > 0 ? await getWalletsForCustomerIds(customerIds) : [];
-      const map = buildCustomerSummaryMap({
-        customers, deposits, sales, memberships, wallets, now: new Date(),
+      const customerIds = [...new Set(apptsRef.current.map(a => String(a.customerId)).filter(Boolean))];
+      const wallets = customerIds.length > 0 ? await getWalletsForCustomerIds(customerIds, { source }) : [];
+      return { customers, deposits, sales, memberships, treatments, wallets };
+    };
+    const applyEnrich = (d) => {
+      setSummaryMap(buildCustomerSummaryMap({
+        customers: d.customers, deposits: d.deposits, sales: d.sales,
+        memberships: d.memberships, wallets: d.wallets, now: new Date(),
+      }));
+      setAllDeposits(d.deposits);
+      setAllTreatments(d.treatments);
+      setAllCustomersState(d.customers);  // V118 — keep for synth-session fallback
+      setSummaryLoading(false);
+    };
+    if (silent) { applyEnrich(await fetchEnrich(undefined)); return; }
+    await swrRun({
+      cacheLoad: async () => { const r = await fetchEnrich('cache'); return { hasData: r.customers.length > 0, data: r }; },
+      serverLoad: () => fetchEnrich(undefined),
+      apply: applyEnrich,
+    });
+  }, [wideRange.from, wideRange.to, selectedBranchId]);
+
+  const loadAll = useCallback(async ({ silent = false } = {}) => {
+    try {
+      await loadCore({ silent });
+      // Stage 2 chains AFTER core but is NOT awaited by callers' paint path.
+      // Its failure must never take down the already-painted list — chips fall
+      // back to the no-summary rendering (pre-B2 behavior for a missing entry).
+      loadEnrichment({ silent }).catch((e) => {
+        // eslint-disable-next-line no-console
+        console.warn('AppointmentHubView enrichment load failed:', e?.message);
+        setSummaryLoading(false);
       });
-      setAppts(apptList);
-      setAllDeposits(deposits);
-      setAllTreatments(treatments);
-      setSummaryMap(map);
-      setScheduleEntries(schedules);
-      setAllCustomersState(customers);  // V118 — keep for synth-session fallback
-      if (!silent) setLoading(false);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('AppointmentHubView load failed:', e);
       if (!silent) {
         setAppts([]);
+        apptsRef.current = [];
         setLoading(false);
       }
     }
-  }, [wideRange.from, wideRange.to, selectedBranchId]);
+  }, [loadCore, loadEnrichment]);
 
   useEffect(() => {
     let cancelled = false;
@@ -692,6 +758,14 @@ export default function AppointmentHubView({
           />
         }
       />
+      {/* B2 (2026-07-07) — SWR sync indicator: on-screen data is the cache leg;
+          disappears when the server snapshot confirms. Renders only while
+          syncing so steady-state layout is byte-identical to pre-B2. */}
+      {!loading && syncing && (
+        <div className="flex justify-end pr-1 -mt-1">
+          <SyncIndicator show />
+        </div>
+      )}
       {/* V64-fix11 (2026-05-09): loading + empty states upgraded with editorial weight. */}
       {loading && (
         <div className="flex items-center justify-center gap-2 py-6 text-xs text-[var(--tx-muted)]">
@@ -764,6 +838,7 @@ export default function AppointmentHubView({
             appt={a}
             doctorMap={doctorMap}
             summary={summaryMap.get(String(a.customerId))}
+            summaryLoading={summaryLoading}                                 /* B2 — stage-2 chips pending */
             apptDeposit={depositByApptId.get(String(a.id))}
             apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
             linkedTreatment={a.linkedTreatmentId ? treatmentsById.get(String(a.linkedTreatmentId)) : null}  /* R10 — FK validation */
