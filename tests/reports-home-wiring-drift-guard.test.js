@@ -26,3 +26,29 @@ describe('REG new report tabs registered', () => {
     expect(dash).toContain("import('../components/backend/MovementLogPanel.jsx')");
   });
 });
+
+describe('HOME reports-home drift guard', () => {
+  const home = readFileSync('src/components/backend/reports/ReportsHomeTab.jsx', 'utf8');
+  const homeTabIds = [...home.matchAll(/tabId:\s*'([\w-]+)'/g)].map(m => m[1]);
+
+  it('HOME1 no card left with status: soon (wiring complete)', () => {
+    expect(home).not.toMatch(/status:\s*'soon'/);
+  });
+  it('HOME2 every tabId referenced is a registered navConfig id (deep-link resolves)', () => {
+    const orphan = homeTabIds.filter(id => !ALL_ITEM_IDS.includes(id));
+    expect(orphan).toEqual([]);
+  });
+  it('HOME3 the 6 wired + 4 new report ids are present', () => {
+    ['reports-pnl', 'expense-report', 'reports-df-payout', 'reports-remaining-course',
+     'clinic-report', 'reports-payment', 'smart-audience',
+     'reports-alt-sales', 'reports-outstanding', 'reports-stock-movements', 'reports-stock-alert']
+      .forEach(id => expect(homeTabIds).toContain(id));
+  });
+  it('HOME4 removed dead cards are gone', () => {
+    ['กำไรต่อการรักษา', 'ตัดสต็อคสินค้าล่วงหน้า', 'คูปองส่วนลด', 'สรุปใช้ยาประจำวัน', 'รายงานการใช้คอร์ส']
+      .forEach(label => expect(home).not.toContain(label));
+  });
+  it('HOME5 Smart Audience is wired (no tabId: null placeholder anywhere)', () => {
+    expect(home).not.toMatch(/tabId:\s*null/);
+  });
+});

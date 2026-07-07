@@ -1,7 +1,10 @@
 // audit-branch-scope: BS-11 navigation-only — no data load (V52, 2026-05-08)
 // ─── ReportsHomeTab — landing card grid replicating ProClinic /admin/report ─
-// 6 categories × ~36 cards (matches captured screenshot 2026-04-19).
-// Cards link to active Phase 10 tabs OR show "เร็วๆนี้" badge for deferred items.
+// 2026-07-08 wire-up: every card opens a working report (no "เร็วๆนี้"/disabled).
+// Card map wires the 6 previously-mislabeled/hidden tabs + 4 data-ready new tabs.
+// Drift guard: reports-home-wiring-drift-guard.test.js asserts every tabId is a
+// registered navConfig id (ReportCard still supports a 'soon' status defensively,
+// but no card uses it — a future soon card without a real tab fails the guard).
 
 import { useMemo } from 'react';
 import {
@@ -16,78 +19,59 @@ import { hexToRgb } from '../../../utils.js';
  *   soon      → renders disabled with "เร็วๆนี้" badge
  *   external  → not in this app; never set in v1
  */
+// 2026-07-08 — reports-home wire-up: every card opens a working report (no
+// "เร็วๆนี้"/disabled). 6 previously-mislabeled tabs wired to their real tabIds,
+// 4 data-ready new report tabs added, dead cards removed. The drift-guard test
+// (reports-home-wiring-drift-guard.test.js) asserts every tabId here is a
+// registered navConfig id → this wiring-gap bug class (V52-family) can't recur.
 const CATEGORIES = [
   {
     id: 'sales',
     title: 'รายงานการขาย',
     items: [
       { label: 'รายรับประจำวัน',                              status: 'active', tabId: 'reports-daily-revenue' },
-      { label: 'ยอดขายลูกค้า',                                status: 'soon' },
-      { label: 'ยอดขายคู่ค้า',                                status: 'soon' },
-      { label: 'ยอดขายรายโปรโมชัน/คอร์ส/สินค้าหน้าร้าน',     status: 'soon' },
+      { label: 'การขาย (ใบเสร็จ)',                            status: 'active', tabId: 'reports-sale' },
       { label: 'ยอดขายรายแพทย์/พนักงาน',                    status: 'active', tabId: 'reports-staff-sales' },
       { label: 'ยอดขายรายแพทย์/พนักงานตามยอดเงินที่ชำระ',     status: 'active', tabId: 'reports-staff-sales' },
-      { label: 'ยอดขายรายลูกค้า',                             status: 'soon' },
-      { label: 'การขาย',                                      status: 'active', tabId: 'reports-sale' },
-      { label: 'กำไร/ขาดทุน',                                 status: 'soon' },
-      { label: 'กำไรต่อการรักษา',                              status: 'soon' },
-      { label: 'การขายออนไลน์',                                status: 'soon' },
-    ],
-  },
-  {
-    id: 'marketing',
-    title: 'รายงานการตลาด',
-    items: [
-      { label: 'คูปองส่วนลด',                                  status: 'soon' },
-      { label: 'Voucher',                                       status: 'soon' },
+      { label: 'กำไร/ขาดทุน (P&L)',                          status: 'active', tabId: 'reports-pnl' },
+      { label: 'สรุปบัญชีรับชำระ',                            status: 'active', tabId: 'reports-payment' },
+      { label: 'การขายออนไลน์',                              status: 'active', tabId: 'reports-alt-sales' },
+      { label: 'ยอดขายคู่ค้า',                               status: 'active', tabId: 'reports-alt-sales' },
+      { label: 'รายการขายค้างชำระ',                          status: 'active', tabId: 'reports-outstanding' },
     ],
   },
   {
     id: 'customer',
     title: 'รายงานลูกค้า',
     items: [
-      { label: 'ลูกค้าสาขา',                                   status: 'active', tabId: 'reports-customer' },
-      { label: 'คอร์สคงเหลือ',                                 status: 'soon' },
-      { label: 'รายการขายค้างชำระ',                            status: 'soon' },
-      { label: 'ประวัติการรักษา',                              status: 'soon' },
-      { label: 'รายงานการใช้คอร์ส',                            status: 'soon' },
-    ],
-  },
-  {
-    id: 'general',
-    title: 'รายงานทั่วไป',
-    items: [
-      { label: 'รายงานโปรโมชัน',                                status: 'soon' },
-      { label: 'รายงานคอร์ส',                                   status: 'soon' },
-      { label: 'รายงานสินค้า',                                  status: 'soon' },
-      { label: 'รายงานนัดหมาย',                                status: 'active', tabId: 'reports-appointment' },
+      { label: 'ลูกค้าสาขา',                                  status: 'active', tabId: 'reports-customer' },
+      { label: 'คอร์สคงเหลือ',                                status: 'active', tabId: 'reports-remaining-course' },
     ],
   },
   {
     id: 'expense',
     title: 'รายงานรายจ่าย',
     items: [
-      { label: 'รายจ่ายทั้งหมด',                                status: 'soon' },
-      { label: 'รายจ่ายแพทย์',                                  status: 'soon' },
-      { label: 'รายจ่ายพนักงาน',                               status: 'soon' },
-      { label: 'รายจ่ายอื่นๆ',                                  status: 'soon' },
+      { label: 'รายจ่ายทั้งหมด (แยกหมวดในแท็บ)',              status: 'active', tabId: 'expense-report' },
+      { label: 'ค่ามือแพทย์ (DF)',                            status: 'active', tabId: 'reports-df-payout' },
+    ],
+  },
+  {
+    id: 'appointment',
+    title: 'รายงานนัดหมาย',
+    items: [
+      { label: 'รายงานนัดหมาย',                               status: 'active', tabId: 'reports-appointment' },
     ],
   },
   {
     id: 'stock',
     title: 'รายงานสต็อคสินค้า',
     items: [
-      { label: 'สต็อคสินค้า',                                  status: 'active', tabId: 'reports-stock' },
-      { label: 'รายงานนำเข้าสินค้า',                            status: 'soon' },
-      { label: 'รายการเคลื่อนไหวสต็อค',                        status: 'soon' },
-      { label: 'ล็อตสินค้าใกล้หมดอายุ',                        status: 'soon' },
-      { label: 'ล็อตสินค้าหมดอายุ',                            status: 'soon' },
-      { label: 'สินค้าใกล้หมดสต็อค',                            status: 'soon' },
-      { label: 'สรุปใช้ยาประจำวัน',                              status: 'soon' },
-      { label: 'สรุปใช้ยาตามช่วงเวลา',                           status: 'soon' },
-      { label: 'สรุปใช้ยาตามวันที่รักษา',                         status: 'soon' },
-      { label: 'สรุปใช้ยาตามวันที่ขาย',                          status: 'soon' },
-      { label: 'ตัดสต็อคสินค้าล่วงหน้า',                          status: 'soon' },
+      { label: 'สต็อคสินค้า (คงเหลือ)',                       status: 'active', tabId: 'reports-stock' },
+      { label: 'รายการเคลื่อนไหวสต็อค',                       status: 'active', tabId: 'reports-stock-movements' },
+      { label: 'ล็อตสินค้าใกล้หมดอายุ',                       status: 'active', tabId: 'reports-stock-alert' },
+      { label: 'ล็อตสินค้าหมดอายุ',                           status: 'active', tabId: 'reports-stock-alert' },
+      { label: 'สินค้าใกล้หมดสต็อค',                           status: 'active', tabId: 'reports-stock-alert' },
     ],
   },
 ];
@@ -98,7 +82,9 @@ const ANALYTICS = [
   { label: 'วิเคราะห์นัดหมาย',           icon: Activity,    tabId: 'reports-appt-analysis',  hint: 'KPI per advisor + Performance' },
   // Recon (2026-07-07) — V155/V157 residual: retro side-effect verification
   { label: 'ตรวจความครบธุรกรรม',         icon: ShieldCheck, tabId: 'reports-reconciliation', hint: 'มัดจำ/wallet/แต้ม/คอร์ส ครบทุกใบขาย' },
-  { label: 'Smart Audience',             icon: Users,       tabId: null,                     hint: 'เร็วๆนี้ (Phase 10b)' },
+  { label: 'รายงานคลินิก (ภาพรวม)',      icon: BarChart3,   tabId: 'clinic-report',          hint: 'ภาพรวม executive dashboard' },
+  // 2026-07-08 — Smart Audience is a real Phase-16.1 tab (was stale-labeled "เร็วๆนี้ Phase 10b")
+  { label: 'Smart Audience',             icon: Users,       tabId: 'smart-audience',         hint: 'สร้างกลุ่มลูกค้า (segment) + ส่งออก CSV' },
 ];
 
 /**
@@ -119,7 +105,7 @@ export default function ReportsHomeTab({ onNavigate, clinicSettings }) {
           รายงานสาขา
         </h2>
         <p className="text-xs text-[var(--tx-muted)] mt-0.5">
-          เลือกรายงานที่ต้องการดู — รายการที่พร้อมใช้แสดง <span className="text-cyan-400 font-bold">ฟ้า</span> ส่วน "เร็วๆนี้" คือฟีเจอร์ที่จะทยอยปล่อยใน Phase ถัดไป
+          เลือกรายงานที่ต้องการดู — ทุกรายการพร้อมใช้งาน
         </p>
       </div>
 
