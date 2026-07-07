@@ -4572,3 +4572,17 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
    padding-right compensates the disappearing scrollbar (no layout shift). */
 html[data-modal-open] { overflow: hidden; }
 html[data-modal-open] body { touch-action: none; padding-right: var(--scroll-lock-gutter, 0px); }
+
+/* AV205 layer 3 — anti-confinement (2026-07-07). Any ancestor TRANSFORM creates
+   a CSS containing block that traps a `fixed inset-0` modal inside the card
+   (probe: WholeSystemBackupModal confined to 1214x106 inside the V86 glow
+   section — hover-lift translateY(-3px) / transition frames). While a card
+   contains an OPEN fixed overlay (they render only while open), drop its
+   transform so the modal covers the real viewport. Cosmetic-only loss: the
+   hover-lift pauses under an open modal (invisible behind the backdrop). */
+html[data-modal-open] [class*="rounded-2xl"]:has(.fixed),
+html[data-modal-open] [class*="rounded-xl"]:has(.fixed),
+html[data-modal-open] .v86-glow-card:has(.fixed),
+html[data-modal-open] section:has(.fixed) {
+  transform: none !important;
+}

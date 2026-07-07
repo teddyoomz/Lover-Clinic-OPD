@@ -59,7 +59,13 @@ async function injectAuth(page) {
 export async function goToBackend(page) {
   await injectAuth(page);
   await page.goto('/?backend=1');
-  await page.waitForSelector('text=ระบบหลังบ้าน', { timeout: 20000 });
+  // 2026-07-07 — the ArcBloom "new menu" mode no longer renders "ระบบหลังบ้าน";
+  // accept either menu mode: old sidebar heading OR the new-menu top-bar
+  // "กลับ Frontend" button (icon-only → accessible NAME, not text content).
+  await page.locator('text=ระบบหลังบ้าน')
+    .or(page.getByRole('button', { name: 'กลับ Frontend' }))
+    .first()
+    .waitFor({ state: 'visible', timeout: 20000 });
 }
 
 /**
