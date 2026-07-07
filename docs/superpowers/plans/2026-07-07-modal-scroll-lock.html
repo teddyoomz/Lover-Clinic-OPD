@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Universal Modal Scroll Lock — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .box { border: 2px solid #94a3b8; border-radius: 8px; padding: .5em .8em; margin: .35em 0; font-size: .9em; }
+    .box.green { border-color: #16a34a; background: #f0fdf4; }
+    .box.red { border-color: #dc2626; background: #fef2f2; }
+    .arrow { text-align: center; color: #94a3b8; margin: .1em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Universal Modal Scroll Lock — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute INLINE in this session (memory lock <code>feedback_no_large_agent_fanout</code> — NO subagent fan-out for the sweep). Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-07-07-modal-scroll-lock-design.html</code> (approved).
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> เปิด modal แล้ว scroll (wheel/นิ้ว) ต้องไม่เลื่อน background — ทุก modal ทุก surface; เนื้อหาใน modal เลื่อนได้ลื่นปกติ.</p>
+  <p><strong>Architecture:</strong> 2 ชั้น — (1) NEW shared hook <code>useModalScrollLock</code> (ref-counted) ล็อค <code>&lt;html&gt;</code> ผ่าน CSS attr; (2) sweep เติม <code>overflow-y-auto overscroll-contain</code> ที่ชั้น fixed inset-0 นอกสุดของทุก modal (ตัด scroll chain เข้า inner scroller ของหน้าหลัง). AV205 + dynamic classifier test กัน drift.</p>
+  <p><strong>Tech Stack:</strong> React hook (no deps) · Tailwind classes ที่มีอยู่แล้ว (<code>overscroll-contain</code>) · vitest + RTL · Playwright (trusted wheel = L1).</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">ชั้นที่ 1 — hook + CSS (โค้ดจริงที่จะ ship)</div>
+  <pre>// src/lib/useModalScrollLock.js  (NEW — sibling ของ useEscToClose.js)
+import { useEffect } from 'react';
+
+// AV205 — module-level ref count: modal ซ้อน modal ปลดล็อคเมื่อตัวสุดท้ายปิดเท่านั้น
+let lockCount = 0;
+
+function acquire() {
+  lockCount += 1;
+  if (lockCount !== 1) return;
+  const el = document.documentElement;
+  const gutter = window.innerWidth - el.clientWidth; // กัน layout shift ตอน scrollbar หาย
+  if (gutter > 0) el.style.setProperty('--scroll-lock-gutter', `${gutter}px`);
+  el.setAttribute('data-modal-open', '1');
+}
+
+function release() {
+  lockCount = Math.max(0, lockCount - 1);
+  if (lockCount !== 0) return;
+  const el = document.documentElement;
+  el.removeAttribute('data-modal-open');
+  el.style.removeProperty('--scroll-lock-gutter');
+}
+
+export function useModalScrollLock(active = true) {
+  useEffect(() => {
+    if (!active || typeof document === 'undefined') return undefined;
+    acquire();
+    return release;
+  }, [active]);
+}
+
+// สำหรับ modal ที่เขียน inline ใน host ใหญ่ (AdminDashboard/TFP/SaleTab ฯลฯ) —
+// วางเป็น child แรกของ overlay: mount = lock, unmount = unlock (เลี่ยง hook-in-conditional)
+export function ModalScrollLock({ active = true }) {
+  useModalScrollLock(active);
+  return null;
+}
+
+// test-only
+export function _getLockCount() { return lockCount; }</pre>
+  <pre>/* src/index.css — เพิ่มท้ายไฟล์ (แยกจาก html[data-staff-chat-open] เดิม — คนละ semantics) */
+/* AV205 (2026-07-07) — universal modal scroll lock (layer 1).
+   touch-action:none บน body ไม่บล็อค scroller ภายใน modal (pan เช็ค touch-action
+   แค่ target→scroller ของตัวเอง — พิสูจน์แล้วใน V82-fix7-bis staff chat) */
+html[data-modal-open] { overflow: hidden; }
+html[data-modal-open] body { touch-action: none; padding-right: var(--scroll-lock-gutter, 0px); }</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">ชั้นที่ 2 — sweep recipe ต่อ modal (BEFORE → AFTER)</div>
+  <pre>&lt;!-- แบบ dedicated component (ไฟล์ modal ของตัวเอง) --&gt;
+export default function FooModal({ open, onClose }) {
++ useModalScrollLock(true);            // component render เฉพาะตอนเปิด → true
+                                        // (ถ้า mount ค้างรับ prop open → useModalScrollLock(open))
+  return (
+-   &lt;div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"&gt;
++   &lt;div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto overscroll-contain"&gt;
+      &lt;div className="... max-h-[85vh] overflow-y-auto"&gt;...&lt;/div&gt;  ← audit: ต้องมี max-h+overflow
+    &lt;/div&gt;
+  );
+}
+
+&lt;!-- แบบ inline ใน host ใหญ่ (AdminDashboard / TFP / SaleTab / CDV / panels) --&gt;
+{showFoo && (
+  &lt;div className="fixed inset-0 ... overflow-y-auto overscroll-contain"&gt;
++   &lt;ModalScrollLock /&gt;
+    &lt;div className="... max-h-[85vh] overflow-y-auto"&gt;...&lt;/div&gt;
+  &lt;/div&gt;
+)}
+
+&lt;!-- โครง sibling backdrop (backdrop มืดแยกจาก wrapper) → ใส่ที่ layer เต็มจอที่รับ event --&gt;</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">การจัดกลุ่ม 77 ไฟล์ที่มี fixed inset-0 (provisional — ยืนยันต่อ occurrence ตอน sweep)</div>
+  <table>
+    <tr><th>กลุ่ม</th><th>ไฟล์</th><th>ปฏิบัติ</th></tr>
+    <tr><td><strong>Dedicated modal components — backend</strong> (Task 3-4)</td><td>ActorConfirmModal · AdjustDetailModal · AppointmentDetailPopover · AppointmentFormModal · BulkPrintModal · CancelCourseModal · CentralMakeFreshModal · CentralOrderDetailModal · CrossBranchImportModal · CustomerBackupModal · CustomerCreatePage · CustomerPatientLinkModal · DeleteCustomerCascadeModal · DocumentPrintModal · EDDetailModal · EDFollowupModal · EditAttributionModal · EditCustomerIdsModal · ExchangeCourseModal · LinkLineInstructionsModal · MakeFreshModal · MarketingFormShell · OrderDetailModal · PickProductsModal · RefundCourseModal · SaleInsuranceClaimsTab · SalePaymentModal · ScheduleEntryFormModal · SendCustomerLinkModal · StockActionModal · TransferDetailModal · TreatmentReadOnlyMirror · TreatmentReadOnlyPanel · TreatmentTimelineModal · WholeFleetBackupModal · WholeSystemBackupModal · WholeSystemRestoreModal · WithdrawalDetailModal · recall/{RecallCreateModal, RecallEditModal, RecallCaseFormModal, RecallLineTemplateModal, RecallOutcomeModal} · reports/{PaymentDocsModal, SaleDetailModal} · admin/DepositAwareCancelDialog · nav/BackendCmdPalette · nav/BackendMobileDrawer · LineReminderHistoryPanel</td><td>hook + backdrop classes</td></tr>
+    <tr><td><strong>Dedicated — root/staffchat/tablet</strong> (Task 2)</td><td>ImageLightbox · TreatmentTimeline · ChartTemplateSelector · staffchat/{StaffChatEdModalLauncher, StaffChatIntakeModal, StaffChatImageLightbox, StaffChatPdfOverlay, StaffChatNamePicker, StaffChatMessage} · tablet-chart/PcPairingModal</td><td>hook + backdrop classes</td></tr>
+    <tr><td><strong>Inline-modal hosts</strong> (Task 5)</td><td>pages/AdminDashboard (16 จุด) · TreatmentFormPage (10) · backend/SaleTab (6) · backend/CustomerDetailView (4) · backend/DepositPanel (4) · backend/MembershipPanel (4) · backend/BackupManagerTab (4) · backend/WalletPanel (3) · backend/PointsPanel (2) · pages/PatientForm (1) · ChatPanel (1)</td><td><code>&lt;ModalScrollLock /&gt;</code> ต่อ overlay + backdrop classes (spinner/loading overlay ล้วนๆ = ข้าม)</td></tr>
+    <tr><td><strong>SANCTIONED (ไม่แตะ)</strong></td><td>ChartCanvas + TabletChartEditorPage (full-screen editor "หน้า") · SalePrintView + QuotationPrintView (print view — spec Q1) · OpdNoteTemplateMenu + recall/RecallSnoozeMenu (dropdown กลุ่ม 3) · index.css (CSS rule ไม่ใช่ overlay) · StaffChatPanel (V82-fix7-bis กลไกเดิม docked-panel)</td><td>อยู่ใน SANCTIONED map ของ classifier พร้อมเหตุผล</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Runtime flow — scroll ขณะ modal เปิด</div>
+  <div class="box">🖱️/👆 scroll บน backdrop/ส่วนว่างของ panel</div>
+  <div class="arrow">↓ nearest scrollable ancestor</div>
+  <div class="box green">backdrop (<code>overflow-y-auto overscroll-contain</code>) → no-op + chain ตาย (ชั้น 2)</div>
+  <div class="arrow">↓ กรณี portal / body-scroll page</div>
+  <div class="box green"><code>html[data-modal-open]</code> overflow:hidden + touch-action:none → body นิ่ง (ชั้น 1)</div>
+  <div class="box">scroll บนเนื้อหายาวใน panel (<code>max-h + overflow-y-auto</code>) → เลื่อนปกติ; ขอบบน/ล่างไม่ chain ออก</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Execution pipeline (Rule K: work-first → test bank → full suite → L1)</div>
+  <table>
+    <tr><th>Task</th><th>งาน</th><th>Commit</th></tr>
+    <tr><td>1</td><td>hook + CSS + unit tests (TDD)</td><td>feat(scroll-lock): useModalScrollLock hook + css</td></tr>
+    <tr><td>2</td><td>sweep root/staffchat/tablet (~11 ไฟล์)</td><td>fix(modals): scroll-lock batch 1</td></tr>
+    <tr><td>3</td><td>sweep backend A–L (~25 ไฟล์)</td><td>fix(modals): scroll-lock batch 2</td></tr>
+    <tr><td>4</td><td>sweep backend M–Z + recall/reports/nav/admin (~24 ไฟล์)</td><td>fix(modals): scroll-lock batch 3</td></tr>
+    <tr><td>5</td><td>sweep inline hosts (AdminDashboard/TFP/SaleTab/CDV/panels ~11 ไฟล์)</td><td>fix(modals): scroll-lock batch 4</td></tr>
+    <tr><td>6</td><td>classifier test (dynamic enumeration + sanctioned closed list)</td><td>test(scroll-lock): AV205 classifier</td></tr>
+    <tr><td>7</td><td>AV205 → SKILL.md ทั้ง 2 copies (byte-identical, SY1)</td><td>docs(audit): AV205</td></tr>
+    <tr><td>8</td><td>full vitest + build + V21 fixups</td><td>test: fixups</td></tr>
+    <tr><td>9</td><td>Rule Q L1 — Playwright trusted wheel + Claude Preview mechanism checks</td><td>test(e2e): scroll-lock L1</td></tr>
+    <tr><td>10</td><td>docs (V-entry compact + handoff) + push</td><td>docs: EOD</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li><strong>Create:</strong> <code>src/lib/useModalScrollLock.js</code> — hook + <code>ModalScrollLock</code> null-component + test-only counter (ไฟล์เดียว จบในตัว, ไม่มี JSX)</li>
+  <li><strong>Modify:</strong> <code>src/index.css</code> — +4 บรรทัด rule <code>html[data-modal-open]</code></li>
+  <li><strong>Modify:</strong> ~60 ไฟล์ modal ตามตาราง (แต่ละไฟล์: import 1 บรรทัด + call 1 บรรทัด + class 2 ตัว + panel audit)</li>
+  <li><strong>Create:</strong> <code>tests/use-modal-scroll-lock.test.jsx</code> — hook unit (U1-U7)</li>
+  <li><strong>Create:</strong> <code>tests/modal-scroll-lock-coverage.test.js</code> — classifier (C1-C5)</li>
+  <li><strong>Create:</strong> <code>tests/e2e/modal-scroll-lock.spec.js</code> — Playwright L1 (trusted wheel)</li>
+  <li><strong>Modify:</strong> <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> + <code>.claude/skills/audit-anti-vibe-code/SKILL.md</code> — AV205 (byte-identical)</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: hook + CSS + unit tests (TDD)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/useModalScrollLock.js</code>, <code>tests/use-modal-scroll-lock.test.jsx</code> · Modify <code>src/index.css</code></p>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: เขียน failing test</strong></label></div>
+<pre>// tests/use-modal-scroll-lock.test.jsx
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, cleanup } from '@testing-library/react';
+import fs from 'node:fs';
+import path from 'node:path';
+import { useModalScrollLock, ModalScrollLock, _getLockCount } from '../src/lib/useModalScrollLock.js';
+
+function HookHost({ active = true }) { useModalScrollLock(active); return null; }
+const htmlEl = () => document.documentElement;
+afterEach(() => { cleanup(); });
+
+describe('U1 — mount/unmount toggles html[data-modal-open]', () => {
+  it('sets attr on mount, removes on unmount', () => {
+    const { unmount } = render(<HookHost />);
+    expect(htmlEl().getAttribute('data-modal-open')).toBe('1');
+    unmount();
+    expect(htmlEl().hasAttribute('data-modal-open')).toBe(false);
+    expect(_getLockCount()).toBe(0);
+  });
+});
+
+describe('U2 — ref count (modal ซ้อน modal)', () => {
+  it('stays locked until the LAST modal closes', () => {
+    const a = render(<HookHost />);
+    const b = render(<HookHost />);
+    expect(_getLockCount()).toBe(2);
+    b.unmount();
+    expect(htmlEl().getAttribute('data-modal-open')).toBe('1'); // A ยังเปิด → ยังล็อค
+    a.unmount();
+    expect(htmlEl().hasAttribute('data-modal-open')).toBe(false);
+  });
+});
+
+describe('U3 — active=false is a no-op', () => {
+  it('does not lock', () => {
+    const { unmount } = render(<HookHost active={false} />);
+    expect(htmlEl().hasAttribute('data-modal-open')).toBe(false);
+    unmount();
+    expect(_getLockCount()).toBe(0);
+  });
+});
+
+describe('U4 — active flips lock on/off (always-mounted modal)', () => {
+  it('locks when active becomes true, unlocks when false', () => {
+    const { rerender, unmount } = render(<HookHost active={false} />);
+    rerender(<HookHost active={true} />);
+    expect(htmlEl().getAttribute('data-modal-open')).toBe('1');
+    rerender(<HookHost active={false} />);
+    expect(htmlEl().hasAttribute('data-modal-open')).toBe(false);
+    unmount();
+  });
+});
+
+describe('U5 — ModalScrollLock null component (inline-host recipe)', () => {
+  it('locks while rendered, renders nothing', () => {
+    const { container, unmount } = render(<ModalScrollLock />);
+    expect(container.innerHTML).toBe('');
+    expect(htmlEl().getAttribute('data-modal-open')).toBe('1');
+    unmount();
+    expect(htmlEl().hasAttribute('data-modal-open')).toBe(false);
+  });
+});
+
+describe('U6 — gutter var cleaned up', () => {
+  it('removes --scroll-lock-gutter on last unlock', () => {
+    const { unmount } = render(<HookHost />);
+    unmount();
+    expect(htmlEl().style.getPropertyValue('--scroll-lock-gutter')).toBe('');
+  });
+});
+
+describe('U7 — CSS rules exist in index.css (layer-1 contract)', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '../src/index.css'), 'utf8');
+  it('html[data-modal-open] overflow hidden', () => {
+    expect(css).toMatch(/html\[data-modal-open\]\s*\{[^}]*overflow:\s*hidden/);
+  });
+  it('body touch-action none + gutter compensation', () => {
+    expect(css).toMatch(/html\[data-modal-open\]\s+body\s*\{[^}]*touch-action:\s*none/);
+    expect(css).toMatch(/--scroll-lock-gutter/);
+  });
+});</pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: รันให้ fail</strong></label></div>
+  <p><code>npx vitest run tests/use-modal-scroll-lock.test.jsx</code> → FAIL (module not found)</p>
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: implement hook + CSS</strong></label></div>
+  <p>โค้ดตรงตาม Mockup Design ชั้นที่ 1 ด้านบน (hook เต็ม + CSS 4 บรรทัดท้าย <code>src/index.css</code>).</p>
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: รันให้ผ่าน</strong></label></div>
+  <p><code>npx vitest run tests/use-modal-scroll-lock.test.jsx</code> → PASS ทั้งหมด</p>
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: commit</strong></label></div>
+<pre>git add src/lib/useModalScrollLock.js src/index.css tests/use-modal-scroll-lock.test.jsx
+git commit -m "feat(scroll-lock): useModalScrollLock hook + html[data-modal-open] css (AV205 layer 1)"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Sweep batch 1 — root components + staffchat + tablet-chart (~11 ไฟล์)</h3>
+  <p><strong>Files (Modify):</strong> <code>src/components/ImageLightbox.jsx</code> · <code>TreatmentTimeline.jsx</code> · <code>ChartTemplateSelector.jsx</code> · <code>staffchat/StaffChatEdModalLauncher.jsx</code> · <code>staffchat/StaffChatIntakeModal.jsx</code> · <code>staffchat/StaffChatImageLightbox.jsx</code> · <code>staffchat/StaffChatPdfOverlay.jsx</code> · <code>staffchat/StaffChatNamePicker.jsx</code> · <code>staffchat/StaffChatMessage.jsx</code> · <code>tablet-chart/PcPairingModal.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: ต่อไฟล์ — อ่านโครงจริงก่อนแก้ (โครง backdrop ต่างกัน)</strong></label></div>
+  <p>Recipe ต่อ occurrence:</p>
+  <ol>
+    <li>ยืนยันว่าเป็น modal เต็มจอ (ไม่ใช่ dropdown/spinner) — ถ้าไม่ใช่ → จดเข้า SANCTIONED</li>
+    <li><code>import { useModalScrollLock } from '../lib/useModalScrollLock.js';</code> (path ตามชั้นไฟล์) + เรียกที่ top ของ component (<code>true</code> ถ้า render-on-open, <code>open</code> ถ้า mount ค้าง)</li>
+    <li>ชั้น <code>fixed inset-0</code> นอกสุดที่รับ event: เติม <code>overflow-y-auto overscroll-contain</code> (โครง sibling-backdrop → ใส่ที่ layer เต็มจอที่รับ event)</li>
+    <li>Panel audit: มี <code>max-h-[≤90vh]</code> + <code>overflow-y-auto</code> ครบไหม — ขาดให้เติม <code>max-h-[90vh] overflow-y-auto</code></li>
+    <li>ห้ามแตะ handler/state/props (cosmetic-shell rule)</li>
+  </ol>
+  <p>หมายเหตุ: StaffChatImageLightbox + TreatmentReadOnlyMirror inner lightbox = AV78 sanctioned click-anywhere-close — ใส่ scroll-lock ได้ (คนละเรื่องกับ close behavior).</p>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: targeted test รอบไฟล์ที่แตะ</strong></label></div>
+  <p><code>grep -l "StaffChat\|ImageLightbox\|PcPairing\|TreatmentTimeline\|ChartTemplateSelector" tests/ | xargs npx vitest run</code> → เขียว (Rule N targeted)</p>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: commit</strong></label></div>
+<pre>git commit -am "fix(modals): scroll-lock sweep batch 1 — root/staffchat/tablet (AV205 layer 2)"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Sweep batch 2 — backend dedicated modals A–L (~25 ไฟล์)</h3>
+  <p><strong>Files (Modify):</strong> <code>src/components/backend/</code>: ActorConfirmModal · AdjustDetailModal · AppointmentDetailPopover · AppointmentFormModal · BulkPrintModal · CancelCourseModal · CentralMakeFreshModal · CentralOrderDetailModal · CrossBranchImportModal · CustomerBackupModal · CustomerCreatePage · CustomerPatientLinkModal · DeleteCustomerCascadeModal · DocumentPrintModal · EDDetailModal · EDFollowupModal · EditAttributionModal · EditCustomerIdsModal · ExchangeCourseModal · LineReminderHistoryPanel · LinkLineInstructionsModal · <code>admin/DepositAwareCancelDialog</code></p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: recipe เดียวกับ Task 2 ต่อไฟล์</strong></label></div>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: <code>npm run build</code> (จับ import path ผิด/JSX พัง — V83 batch-3 lesson)</strong></label></div>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: commit</strong></label></div>
+<pre>git commit -am "fix(modals): scroll-lock sweep batch 2 — backend A-L (AV205)"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Sweep batch 3 — backend M–Z + recall + reports + nav (~24 ไฟล์)</h3>
+  <p><strong>Files (Modify):</strong> MakeFreshModal · MarketingFormShell · OrderDetailModal · PickProductsModal · RefundCourseModal · SaleInsuranceClaimsTab · SalePaymentModal · SendCustomerLinkModal · StockActionModal · TransferDetailModal · TreatmentReadOnlyMirror · TreatmentReadOnlyPanel · TreatmentTimelineModal · WholeFleetBackupModal · WholeSystemBackupModal · WholeSystemRestoreModal · WithdrawalDetailModal · <code>scheduling/ScheduleEntryFormModal</code> · <code>recall/</code>{RecallCreateModal, RecallEditModal, RecallCaseFormModal, RecallLineTemplateModal, RecallOutcomeModal} · <code>reports/</code>{PaymentDocsModal, SaleDetailModal} · <code>nav/</code>{BackendCmdPalette, BackendMobileDrawer}</p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: recipe เดิมต่อไฟล์</strong> (CmdPalette/Drawer = กลุ่ม 2 ใช้ recipe เดียวกัน)</label></div>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: <code>npm run build</code> clean</strong></label></div>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: commit</strong></label></div>
+<pre>git commit -am "fix(modals): scroll-lock sweep batch 3 — backend M-Z + recall/reports/nav (AV205)"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Sweep batch 4 — inline-modal hosts (~11 ไฟล์, ใช้ &lt;ModalScrollLock /&gt;)</h3>
+  <p><strong>Files (Modify):</strong> <code>src/pages/AdminDashboard.jsx</code> (16 จุด) · <code>src/components/TreatmentFormPage.jsx</code> (10) · <code>backend/SaleTab.jsx</code> (6) · <code>backend/CustomerDetailView.jsx</code> (4) · <code>backend/DepositPanel.jsx</code> (4) · <code>backend/MembershipPanel.jsx</code> (4) · <code>backend/BackupManagerTab.jsx</code> (4) · <code>backend/WalletPanel.jsx</code> (3) · <code>backend/PointsPanel.jsx</code> (2) · <code>src/pages/PatientForm.jsx</code> (1) · <code>src/components/ChatPanel.jsx</code> (1)</p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: จัดประเภทต่อ occurrence</strong> — modal มี backdrop → <code>&lt;ModalScrollLock /&gt;</code> เป็น child แรกของ overlay + classes; spinner/loading overlay ล้วน → ข้าม; dropdown-in-host → ข้าม (จดเหตุผล)</label></div>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: <code>npm run build</code> + targeted tests ของ host files</strong> (TFP/AdminDashboard test families)</label></div>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: commit</strong></label></div>
+<pre>git commit -am "fix(modals): scroll-lock sweep batch 4 — inline hosts AdminDashboard/TFP/SaleTab/panels (AV205)"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Classifier test (dynamic enumeration — กัน drift ถาวร)</h3>
+  <p><strong>Files:</strong> Create <code>tests/modal-scroll-lock-coverage.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: เขียน classifier</strong></label></div>
+<pre>// tests/modal-scroll-lock-coverage.test.js
+// AV205 — ทุกไฟล์ src ที่มี "fixed inset-0" ต้อง (a) ใช้ useModalScrollLock/&lt;ModalScrollLock&gt;
+// + overscroll-contain หรือ (b) อยู่ใน SANCTIONED closed list พร้อมเหตุผล.
+// Dynamic enumeration (AV142 lesson) — ไฟล์ modal ใหม่ที่ไม่จัดกลุ่ม = test แดง.
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const SRC = path.resolve(__dirname, '../src');
+
+// closed list — เพิ่มได้เฉพาะพร้อมเหตุผล + review
+const SANCTIONED = {
+  'components/ChartCanvas.jsx': 'full-screen chart editor (หน้า ไม่ใช่ modal) — spec group 4',
+  'pages/TabletChartEditorPage.jsx': 'full-screen tablet editor page — spec group 4',
+  'components/backend/SalePrintView.jsx': 'print view — spec group 4',
+  'components/backend/QuotationPrintView.jsx': 'print view — spec group 4',
+  'components/OpdNoteTemplateMenu.jsx': 'anchored dropdown (Q1 กลุ่ม 3 — ไม่ล็อค)',
+  'components/backend/recall/RecallSnoozeMenu.jsx': 'anchored dropdown (Q1 กลุ่ม 3)',
+  // เพิ่มตามที่ sweep พบจริง (spinner overlays ฯลฯ) — ทุกตัวต้องมีเหตุผล
+};
+
+function walk(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else if (/\.(jsx|js)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
+const overlayFiles = walk(SRC)
+  .map(f => ({ abs: f, rel: path.relative(SRC, f).replace(/\\/g, '/'), src: fs.readFileSync(f, 'utf8') }))
+  .filter(f => f.src.includes('fixed inset-0'));
+
+describe('C1 — every fixed-inset-0 file is classified', () => {
+  it('no unclassified overlay files', () => {
+    const unclassified = overlayFiles.filter(f =>
+      !SANCTIONED[f.rel] &&
+      !/useModalScrollLock|&lt;ModalScrollLock/.test(f.src.replace(/&lt;/g, '<')) &&
+      !/useModalScrollLock|<ModalScrollLock/.test(f.src)
+    );
+    expect(unclassified.map(f => f.rel)).toEqual([]);
+  });
+});
+
+describe('C2 — locked files carry BOTH layers', () => {
+  const locked = overlayFiles.filter(f => !SANCTIONED[f.rel]);
+  it('found a substantial locked set (sanity ≥ 50 files)', () => {
+    expect(locked.length).toBeGreaterThanOrEqual(50);
+  });
+  for (const f of locked) {
+    it(`${'$'}{f.rel} uses hook + overscroll-contain`, () => {
+      expect(f.src).toMatch(/useModalScrollLock|<ModalScrollLock/);
+      expect(f.src).toMatch(/overscroll-contain/);
+    });
+  }
+});
+
+describe('C3 — sanctioned closed list stays real', () => {
+  for (const rel of Object.keys(SANCTIONED)) {
+    it(`${'$'}{rel} still exists`, () => {
+      expect(fs.existsSync(path.join(SRC, rel))).toBe(true);
+    });
+  }
+});
+
+describe('C4 — StaffChatPanel keeps its own V82-fix7-bis mechanism (must NOT migrate)', () => {
+  it('staff chat lock untouched', () => {
+    const p = fs.readFileSync(path.join(SRC, 'components/staffchat/StaffChatPanel.jsx'), 'utf8');
+    expect(p).toMatch(/data-staff-chat-open/);
+    expect(p).not.toMatch(/useModalScrollLock/);
+  });
+});</pre>
+  <p>(ปรับ regex ตอน implement ให้ตรง JSX จริง — โค้ดด้านบนคือ contract; C2 ยิงต่อไฟล์เพื่อรายงานชื่อไฟล์ที่หลุดชัดๆ)</p>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: รัน → ไล่ปิด gap ที่ classifier เจอ (ไฟล์ที่ลืม/จัดกลุ่มผิด)</strong></label></div>
+  <p><code>npx vitest run tests/modal-scroll-lock-coverage.test.js</code> → PASS</p>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: commit</strong></label></div>
+<pre>git add tests/modal-scroll-lock-coverage.test.js
+git commit -m "test(scroll-lock): AV205 dynamic classifier — every overlay locked or sanctioned"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: AV205 invariant → audit-anti-vibe-code SKILL.md (2 copies byte-identical)</h3>
+  <p><strong>Files (Modify):</strong> <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> + <code>.claude/skills/audit-anti-vibe-code/SKILL.md</code></p>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: append AV205 (ข้อความเดียวกันทั้ง 2 ไฟล์)</strong></label></div>
+<pre>AV205 (2026-07-07) — Universal modal scroll lock: ทุก overlay `fixed inset-0` ที่เป็น modal/lightbox/
+drawer/palette ต้อง (1) เรียก useModalScrollLock/&lt;ModalScrollLock&gt; (src/lib/useModalScrollLock.js,
+ref-counted html[data-modal-open]) และ (2) ชั้นนอกสุดมี `overflow-y-auto overscroll-contain` +
+panel มี max-h+overflow-y-auto. Dropdown/anchored + print view + full-screen editor + StaffChatPanel
+(V82-fix7-bis เดิม) = sanctioned ใน tests/modal-scroll-lock-coverage.test.js (closed list).
+Grep: `fixed inset-0` โดยไม่มี useModalScrollLock ในไฟล์ = violation. Known limit: iOS&lt;16 ไม่มี
+overscroll-behavior → touch chain ทะลุได้เฉพาะหน้า inner-scroller (ชั้น 1 ยังกัน body-scroll pages).
+Cross-link: tests/use-modal-scroll-lock.test.jsx + tests/modal-scroll-lock-coverage.test.js.</pre>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: รัน SY1 sync guard</strong></label></div>
+  <p><code>npx vitest run tests/skill-av-sync.test.js</code> → PASS (2 copies identical)</p>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: commit</strong></label></div>
+<pre>git commit -am "docs(audit): AV205 universal modal scroll lock invariant (both SKILL.md copies)"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 8: Full suite + build + V21 fixups</h3>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: <code>npm test -- --run</code> (full ~17.3k) + <code>npm run build</code></strong></label></div>
+  <p>คาด V21 fixups: source-grep tests เดิมที่ล็อค className string ของ backdrop (เช่น v83 AV78 tests, RTL snapshot ที่ match class) — แก้ test ให้ล็อค contract ใหม่ พร้อม comment ชี้ AV205; ห้ามถอด behavior จริงเพื่อให้ test ผ่าน.</p>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: รันซ้ำจน 0 fail (flake → รัน isolated พิสูจน์)</strong></label></div>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: commit fixups</strong></label></div>
+<pre>git commit -am "test: V21 repoints for AV205 backdrop class additions"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 9: Rule Q L1 — Playwright trusted-wheel + real-browser mechanism verify</h3>
+  <p><strong>Files:</strong> Create <code>tests/e2e/modal-scroll-lock.spec.js</code></p>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: เขียน spec (page.mouse.wheel = trusted event → เกิด native scroll จริง)</strong></label></div>
+<pre>// tests/e2e/modal-scroll-lock.spec.js — Rule Q L1 (AV205)
+import { test, expect } from '@playwright/test';
+import { goToBackend } from './helpers.js';
+
+// helper: scrollTop ของ background scroller หลัก (AdminDashboard/Backend ใช้ inner scroller)
+async function bgScrollTops(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('div')].filter(d => d.scrollHeight > d.clientHeight + 4 &&
+      /(auto|scroll)/.test(getComputedStyle(d).overflowY) && !d.closest('[data-modal-open], .fixed'))
+      .slice(0, 5).map(d => d.scrollTop)
+  );
+}
+
+test('L1-1 backend: เปิด modal → wheel บน backdrop → background นิ่ง + html locked', async ({ page }) => {
+  await goToBackend(page);
+  // เปิด modal ตัวแทนที่เปิดด้วยปุ่มล้วน (เลือกจริงตอน implement: WholeSystemBackupModal
+  // ใน tab จัดการ Backup หรือ modal อื่นที่ deterministic) — assert ตามกลไกล่าง
+  // ... click path ...
+  await expect(page.locator('html[data-modal-open]')).toHaveCount(1);
+  const before = await bgScrollTops(page);
+  await page.mouse.move(30, 400);           // จุดบน backdrop นอก panel
+  await page.mouse.wheel(0, 600);
+  await page.waitForTimeout(300);
+  const after = await bgScrollTops(page);
+  expect(after).toEqual(before);            // background ไม่ขยับแม้แต่ px เดียว
+});
+
+test('L1-2 modal เนื้อหายาว: wheel บน panel → เนื้อหา modal เลื่อน', async ({ page }) => {
+  // เปิด modal ที่เนื้อหายาว (เช่น TreatmentTimelineModal / DocumentPrintModal)
+  // วาง pointer กลาง panel → wheel → panel.scrollTop เพิ่ม
+});
+
+test('L1-3 ปิด modal → ปลดล็อค + หน้าเลื่อนได้ปกติ', async ({ page }) => {
+  // close → expect html[data-modal-open] count 0 → wheel → background เลื่อนได้
+});</pre>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: รันกับ dev server จริง</strong> — <code>npx playwright test tests/e2e/modal-scroll-lock.spec.js</code> → PASS (0 fail); เก็บ log เป็นหลักฐาน Rule Q</label></div>
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Claude Preview เสริม (Rule S)</strong> — เปิด modal ตัวแทนกลุ่มอื่น (AdminDashboard inline, TFP, lightbox) → assert <code>html[data-modal-open]</code> + computed <code>overscroll-behavior: contain</code> + screenshot eyeball ว่า UI ไม่เปลี่ยน (Q-vis)</label></div>
+  <div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><strong>Step 4: commit</strong></label></div>
+<pre>git add tests/e2e/modal-scroll-lock.spec.js
+git commit -m "test(e2e): AV205 L1 trusted-wheel scroll-lock verification"</pre>
+</div>
+
+<div class="task">
+  <h3>Task 10: Docs + handoff + push</h3>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: V-entry compact (00-session-start § 2) + AV205 cross-links</strong></label></div>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: push ทุก commit; NO deploy (รอ user สั่ง "deploy" — V18)</strong></label></div>
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: /session-end (active.md + SESSION_HANDOFF + checkpoint)</strong></label></div>
+</div>
+
+<h2>Known risks (จาก spec)</h2>
+<ul>
+  <li>iOS&lt;16 residual (overscroll-behavior) — จดใน AV205, iPad คลินิกใหม่กว่า</li>
+  <li>flex-center + overflow clip → กันด้วย panel max-h audit ทุกตัว</li>
+  <li>modal mount-ค้าง ต้องส่ง <code>open</code> เข้า hook — ตรวจต่อไฟล์</li>
+  <li>V21 fixups ที่คาดไว้ใน Task 8</li>
+</ul>
+
+</body>
+</html>
