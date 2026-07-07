@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { aggregateAltSales } from '../src/lib/altSalesReportAggregator.js';
 import { aggregateOutstanding } from '../src/lib/outstandingSalesAggregator.js';
+import { aggregateStockAlert } from '../src/lib/stockAlertReportAggregator.js';
 
 describe('AS aggregateAltSales', () => {
   // Realized revenue = online {paid,completed}, vendor {confirmed}. Others are
@@ -78,5 +79,38 @@ describe('OS aggregateOutstanding', () => {
       { id: 'b', billing: { grandTotal: 150 }, payment: { totalPaid: 50 } }, // grandTotal + payment.totalPaid → 100
     ]);
     expect(r.rows.map(x => x.outstanding).sort((a, b) => a - b)).toEqual([100, 300]);
+  });
+});
+
+describe('SA aggregateStockAlert', () => {
+  const NOW = new Date('2026-07-07T00:00:00Z');
+  const batches = [
+    { id: 'B1', productId: 'P1', productName: 'A', qty: { remaining: 3 }, expiresAt: '2026-06-01', status: 'available' }, // expired
+    { id: 'B2', productId: 'P1', productName: 'A', qty: { remaining: 2 }, expiresAt: '2026-08-01', status: 'available' }, // near (~25d, thr 90)
+    { id: 'B3', productId: 'P2', productName: 'B', qty: { remaining: 4 }, expiresAt: '2027-06-01', status: 'available' }, // ok, low-stock (thr 10)
+    { id: 'B4', productId: 'P3', productName: 'C', qty: { remaining: 0 }, expiresAt: '2025-01-01', status: 'available' }, // depleted → skipped everywhere
+  ];
+  const products = [
+    { id: 'P1', productName: 'A', alertDayBeforeExpire: 90, alertQtyBeforeOutOfStock: 0 },
+    { id: 'P2', productName: 'B', alertQtyBeforeOutOfStock: 10 },
+  ];
+  it('SA1 expired lot detected (non-zero qty only)', () => {
+    const r = aggregateStockAlert(batches, products, NOW);
+    expect(r.expired.map(x => x.batch)).toEqual(['B1']);
+    expect(r.expired[0].overdueDays).toBeGreaterThan(0);
+  });
+  it('SA2 near-expiry uses per-product alertDayBeforeExpire', () => {
+    const r = aggregateStockAlert(batches, products, NOW);
+    expect(r.nearExpiry.map(x => x.batch)).toEqual(['B2']);
+  });
+  it('SA3 low-stock sums non-expired remaining vs threshold', () => {
+    const r = aggregateStockAlert(batches, products, NOW);
+    // P2 remaining 4 <= 10 → low; P1 threshold 0 → skipped; expired B1 not counted
+    expect(r.lowStock.map(x => x.productId)).toEqual(['P2']);
+    expect(r.lowStock[0].remaining).toBe(4);
+  });
+  it('SA4 empty/no-expiry/no-threshold → no throw, empty buckets', () => {
+    const r = aggregateStockAlert([{ id: 'x', productId: 'z', qty: { remaining: 1 } }], [], NOW);
+    expect(r.counts).toEqual({ expired: 0, nearExpiry: 0, lowStock: 0 });
   });
 });
