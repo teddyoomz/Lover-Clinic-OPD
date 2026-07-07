@@ -1,45 +1,40 @@
 ---
-updated_at: "2026-07-07 (cont.) — link-patient LCP fix (AV204) SHIPPED local, committed+pushed. NOT deployed."
-status: "COMMITTED+PUSHED. full vitest 17302/17302 · 0 fail. Awaiting explicit 'deploy' (V18) + user L1."
+updated_at: "2026-07-07 EOD — link-patient LCP fix + customer-link header strip + configurable LINE link keywords — ALL DEPLOYED LIVE."
+status: "DEPLOYED. master 92b9ba15 = prod (lover-clinic-app.vercel.app). Awaiting user L1 hands-on only."
 branch: "master"
-last_commit: "perf(link-patient): LCP 3780->2040ms (-46%) — entry-time early fetch (AV204)"
-tests: "full vitest 17302/17302 · 0 fail (final clean run). Build clean. Reuse these counts — do NOT re-run at boot."
+last_commit: "92b9ba15 perf(measure): live prod link-patient after-lcpfix"
+tests: "full vitest 17336/17336 · 0 fail (definitive json run this session; a 1-fail was a parallel flake). Build clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "perf campaign head (2026-07-07) — the link-patient fix is 1 commit AHEAD of prod"
-firestore_rules_version: "UNCHANGED → next deploy is frontend+api only, NO Probe-Deploy-Probe"
+production_commit: "92b9ba15 (vercel lover-clinic-y5fpano5s, HTTP 200, live-verified)"
+firestore_rules_version: "UNCHANGED all session → frontend+api deploy only, NO Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-07 (cont.) — link-patient LCP 4.3s deferred item DONE
+# Active — 2026-07-07 EOD — 3 ships deployed + live-verified
 
-## What shipped (1 commit ahead of prod)
-- **LCP 3780 → 2040ms (−46%)** measured median-of-3 vs REAL prod API (new NARROW `/api/patient-view`
-  vite dev/preview proxy makes the surface measurable/devable locally for the first time).
-- Root cause: /api/patient-view (plain token GET, no auth/settings needed) waited behind
-  anon-auth gate → lazy chunk → clinicSettingsLoaded (~1.2-1.8s dead serial before a 1.3-3.5s call).
-- Fix: NEW `src/lib/patientViewEarlyFetch.js` consume-once slot started in main.jsx; PatientDashboard
-  consumes it once (token-guarded) inside the UNCHANGED 3×600ms retry loop; endpoint branch-gets
-  parallelized (Promise.all — payload byte-identical, `scripts/diag-patient-view-l2.mjs`).
-- **NO warm chunk import** — adversarial review: failed entry-time module fetch poisons the module
-  map (iOS Safari) → React.lazy black screen. Dropped; LCP unaffected (API-bound).
+## State
+- master = prod, everything live-verified (L1 real browser on the deployed URL + L2 payload-identical).
+- link-patient LCP: local 3780→2040ms (−46%) · **LIVE prod 3472→2212ms (−36%)** — AV204, entry-time early fetch.
+- Customer-link page: "ข้อมูลลูกค้า"/"Customer Info", no avatar, no HN (UI + API payload) — LIVE.
 
-## Verification (exhaustive pass per user directive)
-- 17 new locks `tests/perf-link-patient-early-fetch.test.js` + full vitest 17302/0 + build clean.
-- Rule Q L1 real-browser matrix **24/24**: single request · total-failure→retry-UI→manual-retry
-  recovers · 12s-slow-first soft-timeout auto-retry recovers · late stale response harmless ·
-  bad-token 404 · empty-token zero requests · admin=1/EN/theme/mobile-375 · root+filler+session-link
-  regression clean · entry 29.8KB, PatientDashboard stays lazy un-preloaded.
-- Pixel parity loaded-vs-loaded 0.010%/0.011% both themes. L2 payload-identical vs live.
-- 2-agent adversarial review (ultracode, ≤4-agent cap honored): 2 findings, BOTH fixed
-  (warm-import poisoning removed · B6 proxy lock made structural).
+## What this session shipped
+- **link-patient LCP (AV204)**: early fetch in main.jsx (consume-once, retry loop untouched) + endpoint
+  branch-gets Promise.all + NARROW /api/patient-view vite proxy (measurable/devable locally) — 2-agent
+  adversarial review: warm-import module-map poisoning REMOVED · B6 lock made structural. Probe 24/24 ·
+  parity 0.000% · DISABLED-branch live-tested 11/11 (TEST fixture, pristine cleanup).
+- **Customer-link header strip** (Q1=B): centered name+phone card · TX th/en · hn stripped from
+  /api/patient-view payload (field-minimization) · L1 live 5/5 + screenshots eyeballed.
+- **Configurable LINE id-link keywords**: interpretCustomerMessage(text,{idLinkKeywords}) pure layer
+  (escape + longest-first; defaults = legacy byte-equivalent) + validate (1-10 คำ, no-space, not-all-digit,
+  unique) + webhook 60s-TTL read of NEW doc clinic_settings/link_id_keywords (chat_config is secret-locked)
+  + KeywordSettingsCard in LinkRequestsTab + hint follows first keyword. LIVE round-trip 22/22 on real prod.
+- 34+17 new tests · 3 V21 repoints (F3 mirror, V33.9 C6, B2/B6) · checkpoint
+  `.agents/sessions/2026-07-07-lcpfix-header-keywords.md` · spec/plan docs/superpowers/{specs,plans}/2026-07-07-*.
 
 ## Next action
-- **Awaiting explicit "deploy"** — ships the client fix + the endpoint branch-parallel to prod
-  (frontend+api only, rules unchanged → no Probe-Deploy-Probe). Post-deploy: re-run
-  `node scripts/diag-patient-view-l2.mjs` (payload check) + optional
-  `node scripts/perf-baseline.mjs --run after-lcpfix --target prod --surface link-patient`.
-- User L1: เปิดลิงก์ ?patient= จริงจากมือถือ — เร็วขึ้นชัดเจน + หน้าตาเหมือนเดิม.
-- Residual (user call, documented in punchlist): endpoint COLD start ~3.5s — warmup ping or
-  admin-SDK preferRest could trim; deliberately not done (blast radius vs rare-cold gain).
+- **User L1 hands-on**: (1) เปิดลิงก์ ?patient= จากมือถือจริง — เร็วขึ้น + หัว "ข้อมูลลูกค้า" ไม่มี HN/avatar;
+  (2) LINE จริง: พิมพ์ `link <เลขบัตร>` → เข้าคิวคำขอผูก; เพิ่มคำใหม่ในการ์ด "คำที่ใช้ผูกบัญชี" → พิมพ์คำนั้น → เข้าคิว
+  (bot ใช้คำใหม่ภายใน ~1 นาที after save).
+- Deferred perf items stay parked in docs/perf/punchlist.md (cold-start ~3.5s option noted).
 
 ## Outstanding user-triggered actions
-- "deploy" (V18) — 1 commit ahead of prod.
+- (none — deployed; L1 feedback only)
