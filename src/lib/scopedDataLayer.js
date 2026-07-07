@@ -268,6 +268,8 @@ export const getCustomerMembershipDiscount = (...args) => raw.getCustomerMembers
 export const getCustomerBahtPerPoint = (...args) => raw.getCustomerBahtPerPoint(...args);
 export const getPointBalance = (...args) => raw.getPointBalance(...args);
 export const getPointTransactions = (...args) => raw.getPointTransactions(...args);
+// Recon (2026-07-07) — be_admin_audit single-doc read (universal; staff-readable per Phase 16.3)
+export const getAdminAuditDoc = (...args) => raw.getAdminAuditDoc(...args);
 export const getCustomerTreatments = (...args) => raw.getCustomerTreatments(...args);
 export const getCustomerSales = (...args) => raw.getCustomerSales(...args);
 export const getCustomerAppointments = (...args) => raw.getCustomerAppointments(...args);

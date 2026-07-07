@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Spec — Money Reconciliation Report (tab + cron) — 2026-07-07</title>
+<style>
+  body { font-family: system-ui, 'Segoe UI', sans-serif; background:#0d0d0d; color:#e5e5e5; max-width:1000px; margin:2rem auto; padding:0 1rem; line-height:1.6; }
+  h1 { color:#f43f5e; } h2 { color:#fb923c; border-bottom:1px solid #333; padding-bottom:4px; }
+  code, pre { background:#1a1a1a; border-radius:6px; padding:2px 6px; font-size:13px; }
+  pre { padding:12px; overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { border:1px solid #333; padding:6px 10px; text-align:left; }
+  th { background:#171717; color:#fca5a5; }
+  .mockup { background:#111; border:1.5px solid rgba(244,63,94,.25); border-radius:14px; padding:16px; margin:12px 0; }
+  .chip { display:inline-block; border-radius:999px; padding:1px 10px; font-size:11px; font-weight:700; }
+  .ok { background:rgba(16,185,129,.15); color:#34d399; } .bad { background:rgba(244,63,94,.18); color:#fb7185; }
+  .na { background:rgba(148,163,184,.15); color:#94a3b8; } .warn { background:rgba(245,158,11,.15); color:#fbbf24; }
+  .flow-box { background:#151515; border:1px solid #333; border-radius:10px; padding:8px 14px; display:inline-block; margin:4px; font-size:13px; }
+  .arrow { color:#f43f5e; font-weight:700; margin:0 6px; }
+  .note { color:#9ca3af; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>💰 Money Reconciliation Report — ตรวจความครบธุรกรรม</h1>
+<p><b>Origin:</b> V155/V157 residual — a sale/TFP auto-sale writes ~11 collections non-atomically. V157 SURFACES failures at save-time
+(sideEffectWarnings + alert), but there is no retro verification. This feature closes the last unguarded corner of the money system.</p>
+<p><b>User decisions (AskUserQuestion, 2026-07-07):</b> ทำทั้งคู่ — (a) on-demand tab in หน้ารายงาน Backend + (b) nightly cron + admin notice.
+Read-only; no new Firestore collection (Rule C3 — cron result reuses <code>be_admin_audit</code>).</p>
+
+<h2>Scope — what each sale is checked against</h2>
+<table>
+<tr><th>Channel</th><th>Sale says</th><th>Verified against</th><th>Verdict basis</th></tr>
+<tr><td>มัดจำ (deposit)</td><td><code>depositApplied &gt; 0</code> / <code>selectedDeposits</code></td><td><code>be_deposits.usageHistory[]</code> entries carrying this saleId</td><td>Σ usage for saleId == depositApplied → <span class="chip ok">ครบ</span> else <span class="chip bad">ไม่ครบ</span></td></tr>
+<tr><td>Wallet</td><td><code>walletApplied &gt; 0</code></td><td>wallet doc <code>saleNet[saleId]</code> marker (V158) + wallet transactions (deduct − refund net for referenceId)</td><td>net == walletApplied → ครบ</td></tr>
+<tr><td>แต้ม (points)</td><td>sale total ⇒ expected earn (if loyalty enabled)</td><td><code>finance.pointsSaleNet[saleId]</code> marker (V158) / be_point_transactions earn for saleId</td><td>marker exists &amp; ≥ 0 → ครบ; missing on a non-cancelled sale → ไม่ครบ</td></tr>
+<tr><td>คอร์ส (courses)</td><td>sale items include courses/promotions</td><td><code>be_customers.courses[]</code> entries with <code>linkedSaleId == saleId</code></td><td>every purchased course row has a linked entry → ครบ</td></tr>
+<tr><td>สต็อก (stock)</td><td>sale items may deduct stock</td><td><code>be_stock_movements</code> with <code>linkedSaleId == saleId</code></td><td><span class="chip warn">INFO เท่านั้น (v1)</span> — skip-flags/premium/ยกเว้น ทำให้ "expected" ไม่ deterministic; แสดง พบ/ไม่พบ movement โดยไม่นับเป็น discrepancy (Rule Q-honest: no false alarms in a money report)</td></tr>
+<tr><td>ยกเลิก (cancelled sales)</td><td><code>status = cancelled</code></td><td>reverse ops idempotency markers (V153/V158)</td><td>outstanding net for saleId == 0 → ครบ (เงินคืนครบ)</td></tr>
+</table>
+<p class="note">Verdicts: <span class="chip ok">ครบ</span> = matches · <span class="chip bad">ไม่ครบ</span> = deterministic mismatch (actionable) ·
+<span class="chip na">n/a</span> = channel not used by this sale · <span class="chip warn">info</span> = shown, not counted. A money report must not cry wolf —
+anything non-deterministic is INFO, never a discrepancy.</p>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div style="font-weight:800; color:#fb7185; margin-bottom:8px;">📊 ตรวจความครบธุรกรรม (Reconciliation)</div>
+  <div style="display:flex; gap:8px; margin-bottom:10px;">
+    <span class="flow-box">จาก: [ 01/07/2569 ]</span><span class="flow-box">ถึง: [ 07/07/2569 ]</span>
+    <span class="flow-box" style="background:#7f1d1d; color:#fff;">🔍 ตรวจสอบ</span>
+  </div>
+  <div style="background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.3); border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:10px;">
+    ⏰ ผลตรวจอัตโนมัติล่าสุด (cron คืนวันที่ 6 ก.ค.): ตรวจ 14 ใบ · <span class="chip bad">ไม่ครบ 1</span> — กดตรวจช่วงวันดังกล่าวเพื่อดูรายละเอียด
+  </div>
+  <div style="font-size:13px; margin-bottom:8px;">สรุป: ตรวจ 42 ใบ · <span class="chip ok">ครบ 40</span> · <span class="chip bad">ไม่ครบ 2</span> · ยกเลิก 3 (คืนเงินครบทั้งหมด)</div>
+  <table>
+    <tr><th>ใบขาย</th><th>ลูกค้า</th><th>ยอด</th><th>มัดจำ</th><th>Wallet</th><th>แต้ม</th><th>คอร์ส</th><th>สต็อก</th><th></th></tr>
+    <tr><td>INV-20260707-0012</td><td>สมชาย</td><td>4,500</td><td><span class="chip ok">ครบ</span></td><td><span class="chip na">n/a</span></td><td><span class="chip ok">ครบ</span></td><td><span class="chip ok">ครบ</span></td><td><span class="chip warn">พบ 2</span></td><td>▸</td></tr>
+    <tr style="background:rgba(244,63,94,.06);"><td>INV-20260707-0009</td><td>วิภา</td><td>12,000</td><td><span class="chip bad">ขาด 500</span></td><td><span class="chip ok">ครบ</span></td><td><span class="chip ok">ครบ</span></td><td><span class="chip bad">ไม่พบ 1 คอร์ส</span></td><td><span class="chip warn">ไม่พบ</span></td><td>▸</td></tr>
+  </table>
+  <div style="border:1px dashed #444; border-radius:8px; padding:8px 12px; margin-top:8px; font-size:12.5px;">
+    ▾ INV-20260707-0009 — รายละเอียด:<br>
+    • มัดจำ: ใบขายบันทึกใช้มัดจำ 2,000 แต่ be_deposits มี usage เพียง 1,500 (<b>ขาด 500</b>) — เปิดใบมัดจำ DEP-...<br>
+    • คอร์ส: "คอร์สดริปผิว 5 ครั้ง" ไม่พบใน courses[] ของลูกค้า (linkedSaleId ไม่ตรง) — เปิดหน้าลูกค้า
+  </div>
+</div>
+<p class="note">Empty state: "เลือกช่วงวันที่แล้วกดตรวจสอบ". Loading: spinner + "กำลังตรวจ X/Y ใบ…". All-clear: การ์ดเขียว "✓ ธุรกรรมครบทุกใบในช่วงที่เลือก".
+Mobile: table scrolls horizontally inside the card. Light theme via the usual CSS vars.</p>
+
+<h2>Flow</h2>
+<p><b>Tab (on-demand):</b></p>
+<div>
+<span class="flow-box">เลือกช่วงวันที่</span><span class="arrow">→</span>
+<span class="flow-box">loadSalesByDateRange({branchId})</span><span class="arrow">→</span>
+<span class="flow-box">ต่อใบ: fetch deposit/wallet/points/courses/movements ที่อ้าง saleId</span><span class="arrow">→</span>
+<span class="flow-box">pure checker: reconcileSale(sale, evidence) → {channel: verdict}</span><span class="arrow">→</span>
+<span class="flow-box">ตาราง + drill-down (READ-ONLY)</span>
+</div>
+<p><b>Cron (nightly, หลัง 03:00 backup):</b></p>
+<div>
+<span class="flow-box">api/cron/money-reconciliation-sweep.js (CRON_SECRET)</span><span class="arrow">→</span>
+<span class="flow-box">admin SDK: sales ของเมื่อวาน (ทุกสาขา)</span><span class="arrow">→</span>
+<span class="flow-box">SAME pure checker (shared src/lib/reconcileSaleCore.js)</span><span class="arrow">→</span>
+<span class="flow-box">เขียนสรุปลง be_admin_audit/recon-daily-YYYYMMDD-*</span><span class="arrow">→</span>
+<span class="flow-box">tab แสดง banner ผลล่าสุด (discrepancy &gt; 0 = amber)</span>
+</div>
+<p class="note"><b>SSOT:</b> ONE pure module <code>src/lib/reconcileSaleCore.js</code> (no Firebase imports) consumed by BOTH the tab (client SDK data)
+and the cron (admin SDK data) — no drift between surfaces. Cron writes ONLY the summary + offending saleIds (no new collection; be_admin_audit
+create-prefix pattern ala system-config audit). Zero Firestore rules change expected (be_admin_audit read already isClinicStaff for the audit panel;
+VERIFY at impl — if recon docs aren't readable, surface the banner from the tab's own on-demand re-check of yesterday instead of reading the cron doc).</p>
+
+<h2>Guardrails</h2>
+<ul>
+  <li>READ-ONLY everywhere — no fix-buttons in v1 (พบปัญหา → admin ตามลิงก์ไปแก้ที่หน้าจริง)</li>
+  <li>Deterministic-only discrepancies (deposit/wallet/points/courses + cancelled-reversal); stock = INFO</li>
+  <li>Branch scope: tab follows BranchSelector (BS-11 pattern, registered in the audit); cron = all branches</li>
+  <li>Money numbers via roundTHB comparison tolerance 0.01 (V156)</li>
+  <li>Tests: pure-checker unit bank (per-channel matrix + adversarial) + Rule I flow-simulate + Rule Q L2 against real prod sales</li>
+</ul>
+</body>
+</html>

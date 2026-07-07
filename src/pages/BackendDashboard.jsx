@@ -77,6 +77,8 @@ const RemainingCourseTab     = lazy(() => import('../components/backend/reports/
 const SmartAudienceTab       = lazy(() => import('../components/backend/SmartAudienceTab.jsx'));
 const ClinicReportTab        = lazy(() => import('../components/backend/reports/ClinicReportTab.jsx'));
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
+// Recon (2026-07-07) — money reconciliation report (lazy; V155/V157 residual)
+const ReconciliationReportTab = lazy(() => import('../components/backend/reports/ReconciliationReportTab.jsx'));
 // Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
 const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
 const ScheduledTasksTab      = lazy(() => import('../components/backend/ScheduledTasksTab.jsx'));
@@ -700,6 +702,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <PnLReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-payment' ? (
           <PaymentSummaryTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-reconciliation' ? (
+          <ReconciliationReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-df-payout' ? (
           <DfPayoutReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-remaining-course' ? (
@@ -874,6 +878,7 @@ const REPORT_LABELS = {
   'reports-daily-revenue': 'รายรับประจำวัน',
   'reports-staff-sales':   'ยอดขายรายพนักงาน',
   'reports-remaining-course': 'คอร์สคงเหลือ',
+  'reports-reconciliation': 'ตรวจความครบธุรกรรม',
 };
 
 function ReportComingSoon({ tabId, onBack, clinicSettings }) {

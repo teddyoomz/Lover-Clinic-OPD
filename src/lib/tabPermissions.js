@@ -78,6 +78,8 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // (already in permissionGroupValidation.js as 'รายงานรายจ่าย').
   'expense-report':      { requires: ['report_expense'] },
   'reports-payment':     { requires: ['sale_view', 'deposit'] },
+  // Recon (2026-07-07) — money-integrity report; same any-of gate as reports-payment
+  'reports-reconciliation': { requires: ['sale_view', 'deposit'] },
   'reports-df-payout':   { requires: ['doctor_df_management', 'treatment_df_view', 'treatment_df_management'] },
   // Phase 16.1 (2026-04-30) — Smart Audience tab. Permission key already
   // declared in permissionGroupValidation.js under "analytics" module.

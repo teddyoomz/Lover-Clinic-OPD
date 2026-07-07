@@ -6,7 +6,7 @@
 import { useMemo } from 'react';
 import {
   BarChart3, ChevronRight, Star,
-  Receipt, Users, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity,
+  Receipt, Users, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity, ShieldCheck,
 } from 'lucide-react';
 import { hexToRgb } from '../../../utils.js';
 
@@ -96,6 +96,8 @@ const ANALYTICS = [
   { label: 'CRM Insight (RFM)',         icon: Sparkles,    tabId: 'reports-rfm',           hint: 'จัดกลุ่มลูกค้า 11 segments' },
   { label: 'วิเคราะห์รายได้ตามหัตถการ',  icon: TrendingUp,  tabId: 'reports-revenue',        hint: 'แยกตามประเภท + หมวดหมู่' },
   { label: 'วิเคราะห์นัดหมาย',           icon: Activity,    tabId: 'reports-appt-analysis',  hint: 'KPI per advisor + Performance' },
+  // Recon (2026-07-07) — V155/V157 residual: retro side-effect verification
+  { label: 'ตรวจความครบธุรกรรม',         icon: ShieldCheck, tabId: 'reports-reconciliation', hint: 'มัดจำ/wallet/แต้ม/คอร์ส ครบทุกใบขาย' },
   { label: 'Smart Audience',             icon: Users,       tabId: null,                     hint: 'เร็วๆนี้ (Phase 10b)' },
 ];
 

@@ -6305,6 +6305,17 @@ export async function getPointTransactions(customerId) {
   return list;
 }
 
+/**
+ * Recon (2026-07-07) — read ONE be_admin_audit doc by id. Used by the
+ * ReconciliationReportTab to show the nightly cron result banner
+ * (deterministic id recon-daily-YYYYMMDD → getDoc, no composite index).
+ * be_admin_audit read = isClinicStaff (Phase 16.3). Universal (not branch-scoped).
+ */
+export async function getAdminAuditDoc(auditId) {
+  const snap = await getDoc(doc(db, ...basePath(), 'be_admin_audit', String(auditId)));
+  return snap.exists() ? { ...snap.data(), id: snap.id } : null; // V38 spread order — docId wins
+}
+
 // V50 (2026-05-08) — runMasterDataSync REMOVED. Wrote master_data/{type} +
 // master_data/{type}/items/* via brokerClient (deleted Phase 2.2). Caller
 // was MasterDataTab.jsx (also deleted). Inert post-V50.
