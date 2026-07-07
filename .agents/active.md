@@ -1,35 +1,29 @@
 ---
-updated_at: "2026-07-07 EOD+2 — Instant Cold-Start (AV206+AV207) SHIPPED + DEPLOYED LIVE (ships AV205 too)."
-status: "master = prod. Awaiting user L1 (มือถือ/iPad จริง) for BOTH instant-coldstart + AV205 scroll-lock."
+updated_at: "2026-07-07 EOD+3 — Fable-5 final batch: TFP extraction ×2 + reconciliation (tab+cron) + CentralStock modal + extended-suite revival — SHIPPED + DEPLOYED LIVE."
+status: "master = prod. Awaiting user L1 (มือถือ/iPad + backend จริง) for this batch + the earlier instant-coldstart/AV205 batch."
 branch: "master"
-last_commit: "aff4d496 docs: EOD+2 instant cold-start V-entry + handoff/active/checkpoint"
-tests: "full vitest 17,485/17,486 (1 = phase15.5b flake เดิม, 51/0 isolated) + Playwright L1 4/4 on LIVE prod + AV206 classifier 18/0 + SW config 8/0. Build clean. Do NOT re-run at boot."
+last_commit: "(state-files commit) — code head = feat(recon)+test nav registration + L1 spec"
+tests: "FINAL gate full vitest 17,526/17,526 · 0 fail (flake also passed) + extended 2,668/0 + Playwright L1 FR1 PASSED on live prod data (screenshot) + Rule Q L2 recon 17 sales real prod. Build clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "2cf71bdc (= master code; deploy 2026-07-07 EOD+2 รวม AV205 + instant-coldstart)"
-firestore_rules_version: "UNCHANGED — vercel-only deploy, no Probe-Deploy-Probe"
+production_commit: "= master code (deploy 2026-07-07 EOD+3, vercel-only; firestore.rules UNCHANGED → no Probe-Deploy-Probe)"
+firestore_rules_version: "UNCHANGED"
 ---
 
-# Active — 2026-07-07 EOD+2 — Instant Cold-Start (AV206+AV207)
+# Active — 2026-07-07 EOD+3 — Fable-5 final batch
 
 ## State
-- master `aff4d496` = prod LIVE (alias 200; sw.js no-cache header live). rules UNCHANGED.
-- User pain (วีดีโอ): PWA เปิดหลังเว้นนาน → นัด hub โหลด 7-10+วิ → แก้แล้ว, วัดจริง 1736→566ms (−67%).
-- Q1=A SWR staff + ลูกค้า fresh-gate (REVERSES 2026-06-16 fresh-always เฉพาะฝั่ง staff).
-
-## What this session shipped
-- Layer 0: `persistentLocalCache` + multi-tab + IDB-detect + `storage.persist()` (listener SWR ฟรีทั้งแอป)
-- Layer 1: NEW `freshGate.js` — PatientForm+ClinicSchedule ลูกค้าไม่มีวันเห็น cache
-- Layer 2-3: NEW `swrRead.js` + `{source:'cache'}` 16 getters + `__fromCache` honesty · hub 2 จังหวะ
-  + `SyncIndicator` + chip skeleton · sweep 12 staff tabs (`docs/perf/swr-inventory.md` closed list)
-- SW: vite-plugin-pwa shell precache + /assets CacheFirst, ห้าม /api+googleapis, update toast,
-  kill-switch, FCM → dedicated scope (AV207)
-- L1 จับบั๊คจริง 2: indicator โกหกตอนเน็ตตาย + S4 SW 'activating' race (prod-only)
-- AV206+AV207 both SKILL.md (SY1) · perf report `docs/perf/instant-coldstart-report.md`
-- Detail → checkpoint `.agents/sessions/2026-07-07-instant-coldstart.md`
+- master = prod LIVE (alias 200; live cron L2: recon-daily-20260706 written on the DEPLOYED endpoint — checked 5, discrepancy 0).
+- 4 workstreams shipped this session (detail → checkpoint `.agents/sessions/2026-07-07-fable-final-batch.md`):
+  1. TFP extraction steps 1+2 (5,946→5,330 lines; primitives + 6 item modals → src/components/treatment-form/)
+  2. Money reconciliation — reports-reconciliation tab + nightly cron 04:15 BKK (V155/V157 residual CLOSED)
+  3. CentralStockTab in-place adjust/order modal (V144/AV173 deferred instance CLOSED; CB1 flipped)
+  4. tests/extended revived — config drift fixed (+125 tests) + 49 stale files quarantined w/ ledger → 2,668/0
 
 ## Next action
-- **User L1 มือถือ/iPad จริง**: ① เปิดแอปหลังทิ้งนาน → นัด ขึ้นทันที + "กำลังซิงค์…" แว๊บ
-  ② modal scroll (AV205) ③ ลิงก์ลูกค้าสด/เร็วปกติ ④ push ยังเข้า (FCM re-scope self-heals).
+- **User L1**: ① recon tab (รายงาน → ตรวจความครบธุรกรรม): เลือกช่วง → ตารางขึ้น + banner cron
+  ② TFP เปิดฟอร์ม + modal ยา/แลป/สิ้นเปลือง เปิด-ปิด-บันทึกปกติ ③ คลังกลาง: ปุ่ม ปรับ/+ เปิด modal in-place
+  (ต้องมี stock ในคลังกลางก่อนถึงเห็นปุ่ม) ④ ค้างจาก batch ก่อน: มือถือ cold-start + AV205 scroll + push.
 
 ## Outstanding user-triggered actions
-- (none — prod = master)
+- (none — prod = master). Next-model backlog → memory `project_next_model_backlog.md`
+  (TFP buy-modal extraction · opd_sessions archive-retention 180d · ArcBloom deep-link gap noted).
