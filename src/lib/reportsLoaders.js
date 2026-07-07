@@ -12,7 +12,15 @@
 // Rule E: Firestore-only. Never imports brokerClient or /api/proclinic/*.
 
 import { db, appId } from '../firebase.js';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, getDocsFromCache } from 'firebase/firestore';
+
+// B1 (2026-07-07 instant cold-start) — mirror of backendClient._getDocsBySource:
+// {source:'cache'} = IndexedDB leg for staff SWR surfaces (swrRead.js); any other
+// value = getDocs = pre-B1 server behavior (all existing callers unchanged).
+async function _getDocsBySource(ref, source) {
+  if (source === 'cache') return await getDocsFromCache(ref);
+  return await getDocs(ref);
+}
 
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 const salesCol = () => collection(db, ...basePath(), 'be_sales');
@@ -184,9 +192,9 @@ export async function loadDepositsByDateRange({ from = '', to = '', branchId = '
  * V52: accepts `branchId` for single-branch filter (client-side, since
  * the function already does a full-collection read).
  */
-export async function loadTreatmentsByDateRange({ from = '', to = '', includeCancelled = false, branchId = '', allBranches = false } = {}) {
+export async function loadTreatmentsByDateRange({ from = '', to = '', includeCancelled = false, branchId = '', allBranches = false, source } = {}) {
   const wantBranch = shouldFilterByBranch({ branchId, allBranches });
-  const snap = await getDocs(treatmentsCol());
+  const snap = await _getDocsBySource(treatmentsCol(), source); // B1: SWR cache leg
   let items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   if (from) items = items.filter((t) => (t?.detail?.treatmentDate || '') >= from);
   if (to) items = items.filter((t) => (t?.detail?.treatmentDate || '') <= to);

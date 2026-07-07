@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, auth, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp, documentId } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, getDocsFromCache, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp, documentId } from 'firebase/firestore';
 // (2026-05-26) Feature 3 Unsend — Storage folder sweep for staff-chat message delete.
 import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';
 import { storagePrefixForMessage } from './staffChatRetentionCore.js';
@@ -124,12 +124,22 @@ async function _listWithBranchOrMerge(colRef, { branchId, allBranches = false } 
  *      (forces full-collection read, no filter)
  * This is dormant until a consumer wires {branchId} — no runtime impact today.
  */
-async function _listWithBranch(colRef, { branchId, allBranches = false } = {}) {
+// B1 (2026-07-07 instant cold-start) — one-shot read source router. Staff SWR
+// surfaces pass {source:'cache'} for the instant IndexedDB leg (swrRead.js);
+// EVERY other value (undefined included) = getDocs = the pre-B1 server behavior,
+// so all existing callers are byte-identical. 'cache' on a cold cache resolves
+// with an empty snapshot (or throws) — swrRun treats both as "no cached paint".
+async function _getDocsBySource(ref, source) {
+  if (source === 'cache') return await getDocsFromCache(ref);
+  return await getDocs(ref);
+}
+
+async function _listWithBranch(colRef, { branchId, allBranches = false, source } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(colRef, where('branchId', '==', String(branchId)))
     : colRef;
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source);
   return snap.docs.map(d => ({ ...d.data(), id: d.id }));
 }
 
@@ -196,8 +206,9 @@ export async function revokeCustomerPatientLink(customerId) {
 }
 
 /** Get all customers from be_customers (sorted by clonedAt desc) */
-export async function getAllCustomers() {
-  const snap = await getDocs(customersCol());
+export async function getAllCustomers({ source } = {}) {
+  // B1 (2026-07-07): {source:'cache'} = SWR cache leg (staff surfaces only)
+  const snap = await _getDocsBySource(customersCol(), source);
   const customers = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by clonedAt descending (newest first)
   customers.sort((a, b) => {
@@ -3073,7 +3084,7 @@ export async function getAppointmentsByMonth(yearMonth, opts = {}) {
  * @param {string} [opts.branchId]   — explicit branch override
  * @param {boolean} [opts.allBranches] — opt-out of branch filter (cross-branch read)
  */
-export async function getAppointmentsByDateRange({ from, to, branchId = '', allBranches = false } = {}) {
+export async function getAppointmentsByDateRange({ from, to, branchId = '', allBranches = false, source } = {}) {
   if (!from || !to) {
     throw new Error('getAppointmentsByDateRange: from and to are required (YYYY-MM-DD).');
   }
@@ -3097,7 +3108,7 @@ export async function getAppointmentsByDateRange({ from, to, branchId = '', allB
   const ref = useFilter
     ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
     : appointmentsCol();
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source); // B1: SWR cache leg support
   return snap.docs
     .map(d => ({ ...d.data(), id: d.id }))
     .filter(a => {
@@ -4045,12 +4056,12 @@ export async function markSalePaid(saleId, { method, amount, refNo = '', paidAt 
  *     global rows.
  */
 export async function getAllSales(opts = {}) {
-  const { branchId, allBranches = false } = opts || {};
+  const { branchId, allBranches = false, source } = opts || {};
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(salesCol(), where('branchId', '==', String(branchId)))
     : salesCol();
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source); // B1: SWR cache leg support
   const sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by createdAt (has time) desc — latest first
   sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
@@ -5462,7 +5473,7 @@ export async function getCustomerWallets(customerId) {
  * wallet types yields N docs in the result; the aggregator (V64 Task 4)
  * sums balance per customerId.
  */
-export async function getWalletsForCustomerIds(customerIds = []) {
+export async function getWalletsForCustomerIds(customerIds = [], { source } = {}) {
   const ids = [...new Set((Array.isArray(customerIds) ? customerIds : []).filter(Boolean).map(String))];
   if (ids.length === 0) return [];
   const CHUNK = 30;
@@ -5470,7 +5481,7 @@ export async function getWalletsForCustomerIds(customerIds = []) {
   for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
   const snaps = await Promise.all(
     chunks.map(chunk =>
-      getDocs(query(walletsCol(), where('customerId', 'in', chunk)))
+      _getDocsBySource(query(walletsCol(), where('customerId', 'in', chunk)), source) // B1
     )
   );
   // V77-fix3 (S-4): docId wins spread order (V38 lesson)
@@ -6011,8 +6022,9 @@ export async function getCustomerMembership(customerId) {
 }
 
 /** Get all memberships (sorted desc). */
-export async function getAllMemberships() {
-  const snap = await getDocs(membershipsCol());
+export async function getAllMemberships({ source } = {}) {
+  // B1 (2026-07-07): {source:'cache'} = SWR cache leg (staff surfaces only)
+  const snap = await _getDocsBySource(membershipsCol(), source);
   const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
@@ -12537,12 +12549,12 @@ export async function getStaffSchedule(scheduleId) {
  * filter (legacy compat). When branchId given AND !allBranches, server-side
  * where('branchId', '==', X) prunes payload before client-side staff/date filters. */
 export async function listStaffSchedules(filters = {}) {
-  const { staffId, startDate, endDate, branchId, allBranches = false } = filters || {};
+  const { staffId, startDate, endDate, branchId, allBranches = false, source } = filters || {};
   const useBranchFilter = branchId && !allBranches;
   const ref = useBranchFilter
     ? query(staffSchedulesCol(), where('branchId', '==', String(branchId)))
     : staffSchedulesCol();
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source); // B1: SWR cache leg support
   let items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   if (staffId) items = items.filter((e) => String(e.staffId) === String(staffId));
   if (startDate) items = items.filter((e) => (e.date || '') >= startDate);
