@@ -1,29 +1,36 @@
 ---
-updated_at: "2026-07-07 EOD+3 — Fable-5 final batch: TFP extraction ×2 + reconciliation (tab+cron) + CentralStock modal + extended-suite revival — SHIPPED + DEPLOYED LIVE."
-status: "master = prod. Awaiting user L1 (มือถือ/iPad + backend จริง) for this batch + the earlier instant-coldstart/AV205 batch."
+updated_at: "2026-07-08 — Reports-home wire-up: 7 mislabeled/hidden tabs wired + 4 data-ready new report tabs + dead cards removed. SHIPPED local, NOT deployed."
+status: "master ahead of prod (reports work). Awaiting user L1 on the reports page + explicit 'deploy'. Prior batch (EOD+3 + coldstart/AV205) already prod."
 branch: "master"
-last_commit: "(state-files commit) — code head = feat(recon)+test nav registration + L1 spec"
-tests: "FINAL gate full vitest 17,526/17,526 · 0 fail (flake also passed) + extended 2,668/0 + Playwright L1 FR1 PASSED on live prod data (screenshot) + Rule Q L2 recon 17 sales real prod. Build clean. Do NOT re-run at boot."
+last_commit: "59f2b21f — test(reports): V21 repoint TAB_PERMISSION_MAP 61→65"
+tests: "full vitest 17,573/17,573 · 0 fail + build clean + Rule Q L2 (3 aggregators vs real prod) + Rule Q L1 Playwright PASS (home grid + stock-alert real-data render, screenshots eyeballed). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "= master code (deploy 2026-07-07 EOD+3, vercel-only; firestore.rules UNCHANGED → no Probe-Deploy-Probe)"
-firestore_rules_version: "UNCHANGED"
+production_commit: "83210294 (EOD+3 batch — LIVE). Reports-home work is NOT deployed (no 'deploy' this turn)."
+firestore_rules_version: "UNCHANGED (reports work = frontend-only Firestore reads → no rules change → deploy would be vercel-only)"
 ---
 
-# Active — 2026-07-07 EOD+3 — Fable-5 final batch
+# Active — 2026-07-08 — Reports-home fully functional
 
 ## State
-- master = prod LIVE (alias 200; live cron L2: recon-daily-20260706 written on the DEPLOYED endpoint — checked 5, discrepancy 0).
-- 4 workstreams shipped this session (detail → checkpoint `.agents/sessions/2026-07-07-fable-final-batch.md`):
-  1. TFP extraction steps 1+2 (5,946→5,330 lines; primitives + 6 item modals → src/components/treatment-form/)
-  2. Money reconciliation — reports-reconciliation tab + nightly cron 04:15 BKK (V155/V157 residual CLOSED)
-  3. CentralStockTab in-place adjust/order modal (V144/AV173 deferred instance CLOSED; CB1 flipped)
-  4. tests/extended revived — config drift fixed (+125 tests) + 49 stale files quarantined w/ ledger → 2,668/0
+- User: make the รายงาน landing page's every card work + add recommended reports.
+- Finding = a wiring gap (V52-family): 7 fully-built, registered, working tabs were shown as
+  "เร็วๆนี้"/hidden on the home grid (P&L, expense, DF-payout, remaining-course, clinic-report,
+  payment-summary, **Smart Audience**). Wired them + built 4 data-ready new reports; removed all
+  dead cards → zero "เร็วๆนี้"/disabled cards remain.
+- 4 new report tabs: `reports-alt-sales` (online+vendor) · `reports-outstanding` (ค้างชำระ) ·
+  `reports-stock-alert` (expiry+low-stock) · `reports-stock-movements` → **reuses MovementLogPanel**
+  (ponytail — didn't rebuild a richer existing viewer). SSOT pure aggregators + ReportShell scaffold.
+- **Drift-guard test** (`reports-home-wiring-drift-guard.test.js`): every active card's tabId must be
+  a registered navConfig id → this wiring-gap class can't recur.
+- 🔬 **Rule Q L2 caught a would-ship bug**: outstanding read `totalPaidAmount` (undefined on every live
+  sale) → ฿1.67M FAKE receivables. Real payment = `payment.channels[]`. Fixed → prod outstanding = 0
+  (pay-at-point-of-sale). Same class as the recon false-positive. `scripts/diag-reports-new-l2.mjs`.
 
 ## Next action
-- **User L1**: ① recon tab (รายงาน → ตรวจความครบธุรกรรม): เลือกช่วง → ตารางขึ้น + banner cron
-  ② TFP เปิดฟอร์ม + modal ยา/แลป/สิ้นเปลือง เปิด-ปิด-บันทึกปกติ ③ คลังกลาง: ปุ่ม ปรับ/+ เปิด modal in-place
-  (ต้องมี stock ในคลังกลางก่อนถึงเห็นปุ่ม) ④ ค้างจาก batch ก่อน: มือถือ cold-start + AV205 scroll + push.
+- **User L1**: backend → รายงาน → หน้ารายงาน → กดการ์ดต่างๆ (โดยเฉพาะ ล็อตหมดอายุ/ใกล้หมดสต็อค,
+  ขายค้างชำระ [ควรว่าง = ถูกต้อง], การขายออนไลน์/คู่ค้า, กำไรขาดทุน P&L, Smart Audience) → เปิดถูกแท็บ + ข้อมูลจริง.
+- **Deploy**: awaiting explicit "deploy" (V18) → vercel-only (rules UNCHANGED → no Probe-Deploy-Probe).
 
 ## Outstanding user-triggered actions
-- (none — prod = master). Next-model backlog → memory `project_next_model_backlog.md`
-  (TFP buy-modal extraction · opd_sessions archive-retention 180d · ArcBloom deep-link gap noted).
+- Deploy the reports-home work (vercel-only) when ready.
+- Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
