@@ -21,6 +21,13 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TFP_PATH = resolve(__dirname, '..', 'src', 'components', 'TreatmentFormPage.jsx');
 const TFP = readFileSync(TFP_PATH, 'utf8');
+// TFP extraction steps 1+2 (2026-07-07): leaf components (VitalsGrid with the
+// vitals.* anchors) + item modals (with most static Thai aria-labels) moved
+// verbatim to src/components/treatment-form/. Anchor/label coverage is a
+// contract of the RENDERED FORM, so those checks scan the family union.
+const TFP_FAMILY = TFP
+  + readFileSync(resolve(__dirname, '..', 'src', 'components', 'treatment-form', 'TfpFormPrimitives.jsx'), 'utf8')
+  + readFileSync(resolve(__dirname, '..', 'src', 'components', 'treatment-form', 'TfpItemModals.jsx'), 'utf8');
 
 describe('TF3 — TreatmentFormPage a11y wiring', () => {
 
@@ -168,7 +175,8 @@ describe('TF3 — TreatmentFormPage a11y wiring', () => {
     test('TF3.D.2 — every static aria-label string is Thai (per task constraint)', () => {
       // Pull every aria-label="..." literal (template strings are also Thai but
       // harder to assert in regex form; static labels cover the Thai-only contract).
-      const labels = [...TFP.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
+      // Extraction step 2: most static labels live in the moved modals → scan the family.
+      const labels = [...TFP_FAMILY.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
       expect(labels.length).toBeGreaterThanOrEqual(5);
       const thaiRe = /[฀-๿]/;
       const allThai = labels.every((s) => thaiRe.test(s));
@@ -231,7 +239,8 @@ describe('TF3 — TreatmentFormPage a11y wiring', () => {
     });
 
     test('TF3.E.8 — vitals.<key> per-field template anchor still present (TF2 D.1)', () => {
-      expect(TFP).toMatch(/data-field=\{`vitals\.\$\{key\}`\}/);
+      // Extraction step 1: VitalsGrid (the anchor's home) → TfpFormPrimitives.jsx.
+      expect(TFP_FAMILY).toMatch(/data-field=\{`vitals\.\$\{key\}`\}/);
     });
 
     test('TF3.E.9 — treatment-item rows still use data-field={item.id} (fill-later)', () => {

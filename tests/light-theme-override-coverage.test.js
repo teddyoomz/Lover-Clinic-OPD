@@ -213,12 +213,16 @@ describe('V125 — theme-aware accent helper (light-theme AA for inline accents)
   });
 
   it('TreatmentFormPage: NO raw inline accent style remains — all inline colors are theme-aware', () => {
-    // Step-1 extension: the extracted primitives file must obey the same
-    // no-raw-inline-accent rule (guards both homes of the V125 contract).
-    const primitives = readFileSync('src/components/treatment-form/TfpFormPrimitives.jsx', 'utf8');
-    expect(tfp).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/); // regression guard
-    expect(primitives).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/);
-    const wraps = (tfp.match(/aaAccent\('#[0-9a-fA-F]{6}', isDark\)/g) || []).length;
+    // TFP extraction steps 1+2 (2026-07-07): the V125 contract now spans the
+    // TFP FAMILY (TreatmentFormPage + treatment-form/*.jsx) — the extracted
+    // files must obey the same no-raw-inline-accent rule, and the ≥12
+    // converted-callsite count is a property of the rendered form, so it
+    // counts across the union.
+    const family = tfp
+      + readFileSync('src/components/treatment-form/TfpFormPrimitives.jsx', 'utf8')
+      + readFileSync('src/components/treatment-form/TfpItemModals.jsx', 'utf8');
+    expect(family).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/); // regression guard (all homes)
+    const wraps = (family.match(/aaAccent\('#[0-9a-fA-F]{6}', isDark\)/g) || []).length;
     expect(wraps).toBeGreaterThanOrEqual(12); // the 12 inline callsites we converted
   });
 

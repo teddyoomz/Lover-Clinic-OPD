@@ -38,8 +38,11 @@ describe('TFP save-button row-alignment (2026-05-27)', () => {
 
   it('right column still flex-bottom-pins the purple button (2026-05-25 work intact)', () => {
     expect(SRC).toContain('className="flex-1 flex flex-col"');          // OPD card grows
-    expect(SRC).toContain("grow={key === 'symptoms'}");                  // CC field flex-grows
-    expect(SRC).toContain("resize-none ${grow ? 'flex-1 min-h-0' : ''}"); // CC textarea fills
+    expect(SRC).toContain("grow={key === 'symptoms'}");                  // CC field flex-grows (TFP callsite)
+    // TFP extraction step 1 (2026-07-07): OPDFieldWithPrev (and its grow textarea)
+    // moved verbatim to treatment-form/TfpFormPrimitives.jsx — assert at its new home.
+    const PRIMS = readFileSync('src/components/treatment-form/TfpFormPrimitives.jsx', 'utf8');
+    expect(PRIMS).toContain("resize-none ${grow ? 'flex-1 min-h-0' : ''}"); // CC textarea fills
   });
 
   it('purple doctor-save button still present + bottom-pinned via flex-1 (not mt-auto)', () => {
