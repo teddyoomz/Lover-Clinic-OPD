@@ -37,6 +37,7 @@ import { flattenPromotionsForStockDeduction, buildPromotionSubCourseProducts } f
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 import { VipName } from '../VipBadge.jsx';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 // 2026-05-31 — actual-paid resolvers for the ยอดชำระจริง column + pay-modal DRY.
 import { resolveSalePaidAmount, resolveSalePaidTone, resolveSaleOutstanding } from '../../lib/financeUtils.js';
 // 2026-05-31 — paginate the sales table 30/page (Rule C1 canonical pager).
@@ -1375,7 +1376,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       {/* ═══ DETAIL VIEW MODAL ═══ */}
       {viewingSale && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-view-sale" onKeyDown={e => { if (e.key === 'Escape') setViewingSale(null); }}>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-view-sale" onKeyDown={e => { if (e.key === 'Escape') setViewingSale(null); }}>
+          <ModalScrollLock />
           <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b flex items-center justify-between sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
               <div>
@@ -1471,7 +1473,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       {/* ═══ CANCEL MODAL ═══ */}
       {cancelModal && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-cancel-sale" onKeyDown={e => { if (e.key === 'Escape') setCancelModal(null); }}>
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-cancel-sale" onKeyDown={e => { if (e.key === 'Escape') setCancelModal(null); }}>
+          <ModalScrollLock />
           <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[88vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
               <h3 id="modal-title-cancel-sale" className="text-sm font-bold text-red-400">ยกเลิกใบเสร็จ {cancelModal.saleId}</h3>
@@ -1713,7 +1716,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       {/* ═══ PAYMENT UPDATE MODAL ═══ */}
       {payModal && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-pay-sale" onKeyDown={e => { if (e.key === 'Escape') setPayModal(null); }}>
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-pay-sale" onKeyDown={e => { if (e.key === 'Escape') setPayModal(null); }}>
+          <ModalScrollLock />
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <h3 id="modal-title-pay-sale" className="text-sm font-bold text-emerald-400">รับชำระเงิน {payModal.saleId}</h3>
@@ -1752,7 +1756,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   // ════════════════════ FORM OVERLAY ════════════════════
   function renderForm() {
     return (
-      <div className={`fixed inset-0 z-[80] overflow-y-auto ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
+      <div className={`fixed inset-0 z-[80] overflow-y-auto overscroll-contain ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
+        <ModalScrollLock />
         {/* Header */}
         <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[var(--bg-elevated)]/95 border-[var(--bd)]' : 'bg-white/95 border-gray-200'}`}>
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -2049,7 +2054,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         {/* Buy modal */}
         {buyModalOpen && (
           // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-buy" onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-buy" onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>
+            <ModalScrollLock />
             <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[70vh] flex flex-col ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
               <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
                 <div className="flex gap-2">
@@ -2113,7 +2119,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         {/* Med modal — เพิ่ม/แก้ไขยากลับบ้าน */}
         {medModalOpen && (
           // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-          <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-sale" onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
+          <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-sale" onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
+            <ModalScrollLock />
             <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
               <div className={`px-5 py-4 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
                 <h3 id="modal-title-med-sale" className="text-sm font-bold text-purple-400">{medEditIdx >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>

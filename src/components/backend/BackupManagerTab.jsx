@@ -22,6 +22,7 @@ import { auth } from '../../firebase.js';
 // V81 (2026-05-17) — Whole-system backup (Firestore + Storage + Auth) + restore modals.
 import WholeSystemBackupModal from './WholeSystemBackupModal.jsx';
 import WholeSystemRestoreModal from './WholeSystemRestoreModal.jsx';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 async function authedFetch(url, body) {
   const token = await auth.currentUser?.getIdToken();
@@ -475,7 +476,8 @@ export default function BackupManagerTab() {
         {/* Customer-Only Restore confirm */}
         {coRestoreConfirm && (
           // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="customer-only-restore-confirm">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" data-testid="customer-only-restore-confirm">
+            <ModalScrollLock />
             <div className="w-[95vw] max-w-md rounded-xl bg-[var(--bg-card)] border-2 border-amber-700/60 p-6 space-y-3">
               <h3 className="text-lg font-bold text-amber-300">🔄 Restore Customer Data (Replace mode)?</h3>
               <div className="text-xs text-gray-400"><code>{coRestoreConfirm.name}</code></div>
@@ -681,7 +683,8 @@ function RenameModal({ target, onClose, onSaved }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="rename-modal">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" data-testid="rename-modal">
+      <ModalScrollLock />
       <div className="w-[95vw] max-w-md rounded-xl bg-[var(--bg-card)] border border-amber-700/40 p-6 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-amber-200">✏️ แก้ไขชื่อ backup</h3>
@@ -740,7 +743,8 @@ function DeleteConfirmModal({ target, onClose, onDeleted }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="delete-confirm-modal">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" data-testid="delete-confirm-modal">
+      <ModalScrollLock />
       <div className="w-[95vw] max-w-md rounded-xl bg-[var(--bg-card)] border border-rose-700/40 p-6 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-rose-300">🗑️ ลบ backup file?</h3>
@@ -798,7 +802,8 @@ function BulkDeleteConfirmModal({ backupRefs, onClose, onDeleted }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="bulk-delete-confirm-modal">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" data-testid="bulk-delete-confirm-modal">
+      <ModalScrollLock />
       <div className="w-[95vw] max-w-md rounded-xl bg-[var(--bg-card)] border border-rose-700/40 p-6 space-y-3 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-rose-300">🗑️ ลบ {backupRefs.length} ไฟล์?</h3>

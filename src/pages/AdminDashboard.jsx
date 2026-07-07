@@ -76,6 +76,7 @@ const AppointmentFormModal = lazy(() => import('../components/backend/Appointmen
 import { CustomerOption } from '../components/CustomerOption.jsx';
 import { VipName } from '../components/VipBadge.jsx';
 import { OpdIntakeDetailBody } from '../components/OpdIntakeDetailBody.jsx';
+import { ModalScrollLock } from '../lib/useModalScrollLock.js';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
 // LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
 import { LineNotifyConfirmation } from '../components/LineNotifyConfirmation.jsx';
@@ -4885,7 +4886,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const clinicalSummaryText = generateClinicalSummary(d, formType, viewingSession.customTemplate, summaryLang);
 
     return (
-      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50 overflow-y-auto overscroll-contain">
+        <ModalScrollLock />
         <div className="bg-[var(--bg-elevated)] rounded-xl shadow-2xl border border-[var(--bd)] w-full max-w-5xl max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden relative">
 
           {hasNewUpdate && (
@@ -5216,8 +5218,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const shownRooms = v61EligibleRooms;
 
     return (
-      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
-        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
+        <ModalScrollLock />
+        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
           <div className="p-4 border-b border-[var(--bd)] flex items-center justify-between">
             <h2 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2"><Link size={16} className="text-green-400" /> สร้างลิงก์ตาราง</h2>
             <button onClick={() => !schedGenLoading && setShowScheduleModal(false)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white"><X size={14} /></button>
@@ -5419,7 +5422,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const plToken = plSession.patientLinkToken;
     const plEnabled = plSession.patientLinkEnabled;
     return (
-      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setPatientLinkModal(null)}>
+      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain" onClick={() => setPatientLinkModal(null)}>
+        <ModalScrollLock />
         <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" style={{boxShadow: '0 0 60px rgba(168,85,247,0.15)'}} onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-3 p-5 border-b border-[var(--bd)]">
             <div className="w-9 h-9 rounded-xl bg-purple-950/60 border border-purple-900/50 flex items-center justify-center shrink-0">
@@ -5493,7 +5497,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const borderColor = isComplete ? 'border-blue-900/50' : 'border-red-900/50';
     const boxGlow = isComplete ? '0 0 40px rgba(96,165,250,0.15)' : `0 0 40px rgba(${acRgb},0.15)`;
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto overscroll-contain">
+        <ModalScrollLock />
         <div className={`bg-[var(--bg-elevated)] rounded-xl border ${borderColor} w-full max-w-sm overflow-hidden p-6 text-center`} style={{boxShadow: boxGlow}}>
           <div className={`w-16 h-16 ${iconBg} rounded-full border flex items-center justify-center mx-auto mb-4`} style={{boxShadow: iconGlow}}>{icon}</div>
           <h3 className="text-base sm:text-lg font-black text-white mb-2">{title}</h3>
@@ -5562,7 +5567,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const delSession = sessions.find(s => s.id === sessionToDelete) || noDepositSessions.find(s => s.id === sessionToDelete) || depositSessions.find(s => s.id === sessionToDelete);
     const isServiceDone = delSession?.patientData && delSession?.opdRecordedAt && delSession?.brokerStatus === 'done';
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto overscroll-contain">
+        <ModalScrollLock />
         <div className={`bg-[var(--bg-elevated)] rounded-xl border w-full max-w-sm overflow-hidden p-6 text-center ${isServiceDone ? 'border-emerald-900/50' : 'border-red-900/50'}`} style={{boxShadow: `0 0 40px rgba(${acRgb},0.15)`}}>
           <div className={`w-16 h-16 rounded-full border flex items-center justify-center mx-auto mb-4 ${isServiceDone ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50'}`} style={{boxShadow: isServiceDone ? '0 0 15px rgba(16,185,129,0.4)' : '0 0 15px rgba(220,38,38,0.4)'}}>{isServiceDone ? <CheckCircle2 size={24} /> : <Trash2 size={24} />}</div>
           <h3 className="text-base sm:text-lg font-black text-white mb-2">{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบข้อมูล?'}</h3>
@@ -7788,8 +7794,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Unified Create Session Modal */}
       {showSessionModal && (
-        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center p-4 z-[60]" onClick={() => setShowSessionModal(false)}>
-           <div className="bg-[var(--bg-card)] rounded-2xl shadow-[var(--shadow-modal)] border border-[var(--bd)] w-full max-w-lg overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto overscroll-contain" onClick={() => setShowSessionModal(false)}>
+           <ModalScrollLock />
+           <div className="bg-[var(--bg-card)] rounded-2xl shadow-[var(--shadow-modal)] border border-[var(--bd)] w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div className="p-5 sm:p-6 pb-0">
                 <div className="flex items-center justify-between mb-1">
@@ -7890,7 +7897,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {/* Name Prompt Modal for New Session */}
       {/* ══ Deposit Creation Form Modal ══════════════════════════════════════════ */}
       {showDepositForm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto border border-emerald-900/50 shadow-2xl animate-in zoom-in-95">
             <div className="sticky top-0 bg-[var(--bg-elevated)] border-b border-emerald-900/30 p-4 flex items-center justify-between z-10">
               <h3 className="text-lg font-black text-emerald-400 flex items-center gap-2"><Banknote size={20}/> สร้างคิวลูกค้าจอง</h3>
@@ -8159,7 +8167,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* ══ No-Deposit Appointment Form Modal ══════════════════════════════════ */}
       {showNoDepositForm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <div className={`rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-in zoom-in-95 ${isDark ? 'bg-[var(--bg-elevated)] border border-orange-900/50 shadow-2xl' : 'bg-white border border-pink-200 shadow-xl'}`}>
             <div className={`sticky top-0 border-b p-4 flex items-center justify-between z-10 ${isDark ? 'bg-[var(--bg-elevated)] border-orange-900/30' : 'bg-white border-pink-200'}`}>
               <h3 className={`text-lg font-black flex items-center gap-2 ${isDark ? 'text-orange-400' : 'text-pink-600'}`}><UserPlus size={20}/> {editingAppointment ? 'แก้ไขนัดหมาย' : 'จองไม่มัดจำ + นัดหมาย'}</h3>
@@ -8341,7 +8350,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       )}
 
       {showNamePrompt && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-md p-6 text-center animate-in zoom-in-95" style={{boxShadow: `0 0 40px rgba(${acRgb},0.2)`, border: `1px solid rgba(${acRgb},0.3)`}}>
             <h3 className="text-lg font-black text-white font-semibold mb-2">ตั้งชื่อคิว / Note</h3>
             <p className="text-gray-500 mb-4 text-xs font-semibold leading-relaxed">
@@ -8360,7 +8370,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* ══ Courses Panel Modal ══════════════════════════════════════════════════ */}
       {coursesPanel && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setCoursesPanel(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70] overflow-y-auto overscroll-contain" onClick={() => setCoursesPanel(null)}>
+          <ModalScrollLock />
           <div
             className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             style={{boxShadow: '0 0 80px rgba(0,0,0,0.8)'}}
@@ -8443,7 +8454,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Hard Delete Modal (from History) */}
       {sessionToHardDelete && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <div className="bg-[var(--bg-elevated)] rounded-xl border border-red-900/50 w-full max-w-sm overflow-hidden p-6 text-center" style={{boxShadow: '0 0 40px rgba(220,38,38,0.2)'}}>
             <div className="w-16 h-16 bg-red-950/50 text-red-500 rounded-full border border-red-900/50 flex items-center justify-center mx-auto mb-4"><Trash2 size={24}/></div>
             <h3 className="text-base sm:text-lg font-black text-white mb-2">ลบถาวร?</h3>
@@ -8459,7 +8471,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Restore to Queue Modal */}
       {sessionToRestore && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="px-6 pt-6 pb-4 border-b border-[var(--bd)]">
               <div className="flex items-center gap-3 mb-1">
@@ -8507,7 +8520,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Patient View Modal (iframe popup) */}
       {patientViewUrl && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex flex-col" onClick={() => closePatientViewIframe()}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex flex-col overscroll-contain" onClick={() => closePatientViewIframe()}>
+          <ModalScrollLock />
           <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-elevated)]/90 border-b border-[var(--bd-strong)] shrink-0">
             <span className="text-xs font-bold text-gray-400 font-semibold">ข้อมูลผู้ป่วย — Admin View</span>
             <button onClick={() => closePatientViewIframe()} className="text-gray-500 hover:text-white text-xl font-bold px-2 transition-colors">&times;</button>
@@ -8620,7 +8634,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* ───── Mobile ⋯ เพิ่ม Drawer (ประวัติ/ตั้งค่า/หลังบ้าน/theme/online/signout) ───── */}
       {showMobileMoreDrawer && (
-        <div className="md:hidden fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-end" onClick={() => setShowMobileMoreDrawer(false)} data-testid="menu-more-drawer">
+        <div className="md:hidden fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-end overflow-y-auto overscroll-contain" onClick={() => setShowMobileMoreDrawer(false)} data-testid="menu-more-drawer">
+          <ModalScrollLock />
           <div className="w-full bg-[var(--bg-surface)] rounded-t-3xl p-4 border-t border-[var(--bd-strong)] animate-in slide-in-from-bottom max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-[var(--bd)] rounded-full mx-auto mb-4"></div>
             <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">เพิ่มเติม</h3>

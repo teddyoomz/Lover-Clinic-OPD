@@ -52,6 +52,7 @@ import VisitPurposePicker from '../VisitPurposePicker.jsx';
 import { CustomerOption } from '../CustomerOption.jsx';
 import { VipName } from '../VipBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
 // LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
 import { LineNotifyConfirmation } from '../LineNotifyConfirmation.jsx';
@@ -1015,8 +1016,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       )}
       {cancelModal && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="deposit-cancel-title"
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="deposit-cancel-title"
           onKeyDown={e => { if (e.key === 'Escape') setCancelModal(null); }}>
+          <ModalScrollLock />
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
             onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -1052,8 +1054,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
       {refundModal && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="deposit-refund-title"
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="deposit-refund-title"
           onKeyDown={e => { if (e.key === 'Escape') setRefundModal(null); }}>
+          <ModalScrollLock />
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
             onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -1103,7 +1106,8 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   // ══════════════════ FORM OVERLAY ══════════════════
   function renderForm() {
     return (
-      <div className={`fixed inset-0 z-[80] overflow-y-auto ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
+      <div className={`fixed inset-0 z-[80] overflow-y-auto overscroll-contain ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
+        <ModalScrollLock />
         <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[var(--bg-elevated)]/95 border-[var(--bd)]' : 'bg-white/95 border-gray-200'}`}>
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <button onClick={() => setFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" aria-label="กลับ"><ArrowLeft size={16} /></button>
@@ -1543,8 +1547,9 @@ function DetailModal({ dep, isDark, onClose }) {
     : calcDepositRemaining(dep.amount, dep.usedAmount);
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="deposit-detail-title"
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="deposit-detail-title"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b flex items-center justify-between sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>

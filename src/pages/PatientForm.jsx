@@ -16,6 +16,7 @@ import DateField from '../components/DateField.jsx';
 import thaiAddressDB from '../data/thai-address-db.js';
 import { aaAccent } from '../lib/themeAccent.js';
 import { useResilientLoad } from '../hooks/useResilientLoad.js';
+import { ModalScrollLock } from '../lib/useModalScrollLock.js';
 import LoadErrorRetry from '../components/LoadErrorRetry.jsx';
 
 export default function PatientForm({ db, appId, user, sessionId, isSimulation, suppressNotif, onBack, clinicSettings = {}, theme, setTheme }) {
@@ -927,7 +928,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                           <span className="ml-2 text-xs">▼</span>
                         </button>
                         {countryDropdownOpen && (
-                          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60" onClick={() => setCountryDropdownOpen(false)}>
+                          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" onClick={() => setCountryDropdownOpen(false)}>
+                            <ModalScrollLock />
                             <div className="w-full sm:w-[90%] sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-[var(--bd-strong)] shadow-2xl flex flex-col" style={{ background: 'var(--bg-card, #1a1a1a)', maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
                               <div className="p-3 border-b border-[var(--bd-strong)] flex items-center gap-2">
                                 <input type="text" autoFocus value={countryFilter} onChange={e => setCountryFilter(e.target.value)}

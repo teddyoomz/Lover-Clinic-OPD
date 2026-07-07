@@ -21,6 +21,7 @@ import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import { thaiTodayISO } from '../../utils.js';
 import { VipName } from '../VipBadge.jsx';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 function todayStr() { return thaiTodayISO(); }
@@ -441,7 +442,8 @@ function SellMembershipForm({ initialCustomer, customers, cardTypes, isDark, inp
   };
 
   return (
-    <div className={`fixed inset-0 z-[80] overflow-y-auto ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
+    <div className={`fixed inset-0 z-[80] overflow-y-auto overscroll-contain ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
+      <ModalScrollLock />
       <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[var(--bg-elevated)]/95 border-[var(--bd)]' : 'bg-white/95 border-gray-200'}`}>
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" aria-label="กลับ"><ArrowLeft size={16} /></button>
@@ -621,8 +623,9 @@ function DetailModal({ m, isDark, onClose }) {
   const grad = cardGradient(m.colorName || m.cardTypeName);
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true"
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -702,8 +705,9 @@ function CancelModal({ m, isDark, inputCls, labelCls, onClose, onDone }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true"
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -773,8 +777,9 @@ function RenewModal({ m, isDark, inputCls, labelCls, onClose, onDone }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true"
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>

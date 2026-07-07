@@ -38,6 +38,7 @@ import { isLegacyNakhonBranch, HARDCODED_NAKHON_BR_ID } from '../lib/chatBranchD
 // AV58: ONLY ChatPanel.jsx imports this helper; staff-chat / appt / recall
 // sound triggers stay independent.
 import { isChatTabMuted, toggleChatTabMute } from '../lib/chatNotificationMute.js';
+import { ModalScrollLock } from '../lib/useModalScrollLock.js';
 
 // ─── LINE / FB brand colors ────────────────────────────────────────────────
 const LINE_COLOR = '#06C755';
@@ -835,7 +836,8 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       {/* History detail — read-only message view */}
       {historyDetail && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center gap-3 p-3 border-b border-[var(--bd)]">

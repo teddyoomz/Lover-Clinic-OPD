@@ -66,6 +66,7 @@ import { CustomerLineSection } from './CustomerLineSection.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
 import DateField from '../DateField.jsx';
 import PhoneLink from '../PhoneLink.jsx';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock). Used in the customer
 // header so admin sees per-branch LINE linkage state at a glance.
@@ -1725,7 +1726,8 @@ function AddQtyModal({ course, courseIndex, courseName, product, customerId, cus
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-add-qty" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-add-qty" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
           {/* rule 04: teal heading text — never red on a course/customer name */}
@@ -1855,7 +1857,8 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-exchange" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-exchange" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
           <h3 id="modal-title-exchange" className="text-sm font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h3>
@@ -2080,7 +2083,8 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-share" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-share" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <ModalScrollLock />
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
           <h3 id="modal-title-share" className="text-sm font-bold text-purple-400">แชร์คอร์สให้ลูกค้าอื่น</h3>
@@ -2414,7 +2418,8 @@ function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit,
   }, [appointments, today]);
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-list-title">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="appt-list-title">
+      <ModalScrollLock />
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()} data-testid="customer-appt-list-modal">
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2">
