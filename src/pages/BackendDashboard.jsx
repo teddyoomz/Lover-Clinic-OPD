@@ -79,6 +79,12 @@ const ClinicReportTab        = lazy(() => import('../components/backend/reports/
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 // Recon (2026-07-07) — money reconciliation report (lazy; V155/V157 residual)
 const ReconciliationReportTab = lazy(() => import('../components/backend/reports/ReconciliationReportTab.jsx'));
+// 2026-07-08 — reports-home wire-up: data-ready new report tabs. reports-stock-
+// movements reuses the existing MovementLogPanel (self-contained, richer viewer).
+const AltSalesTab            = lazy(() => import('../components/backend/reports/AltSalesTab.jsx'));
+const OutstandingTab         = lazy(() => import('../components/backend/reports/OutstandingTab.jsx'));
+const StockAlertTab          = lazy(() => import('../components/backend/reports/StockAlertTab.jsx'));
+const MovementLogReportPanel = lazy(() => import('../components/backend/MovementLogPanel.jsx'));
 // Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
 const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
 const ScheduledTasksTab      = lazy(() => import('../components/backend/ScheduledTasksTab.jsx'));
@@ -708,6 +714,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <DfPayoutReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-remaining-course' ? (
           <RemainingCourseTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-alt-sales' ? (
+          <AltSalesTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-outstanding' ? (
+          <OutstandingTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-stock-movements' ? (
+          <MovementLogReportPanel clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-stock-alert' ? (
+          <StockAlertTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'smart-audience' ? (
           <SmartAudienceTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'clinic-report' ? (
@@ -879,6 +893,10 @@ const REPORT_LABELS = {
   'reports-staff-sales':   'ยอดขายรายพนักงาน',
   'reports-remaining-course': 'คอร์สคงเหลือ',
   'reports-reconciliation': 'ตรวจความครบธุรกรรม',
+  'reports-alt-sales':       'ยอดขายช่องทางอื่น',
+  'reports-outstanding':     'ขายค้างชำระ',
+  'reports-stock-movements': 'เคลื่อนไหวสต็อค',
+  'reports-stock-alert':     'แจ้งเตือนสต็อค',
 };
 
 function ReportComingSoon({ tabId, onBack, clinicSettings }) {

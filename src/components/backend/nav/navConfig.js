@@ -60,6 +60,8 @@ import {
   Footprints,
   // Phase 29 (2026-05-14) — recall tab icon (phone-call metaphor for follow-up)
   PhoneCall,
+  // 2026-07-08 — reports-home new tabs (alt-sales / outstanding / movements / stock-alert)
+  Globe, AlertCircle, ArrowLeftRight, BellRing,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -183,6 +185,11 @@ export const NAV_SECTIONS = [
       { id: 'reports-df-payout',     label: 'ค่ามือแพทย์ (DF)',     icon: Percent,         color: 'emerald', palette: 'df doctor fee payout commission report ค่ามือ หมอ แพทย์ จ่าย รายงาน' },
       { id: 'reports-remaining-course', label: 'คอร์สคงเหลือ',       icon: Clock,           color: 'amber',   palette: 'remaining course คอร์ส คงเหลือ remaining unused refund cancel exchange ยกเลิก คืนเงิน เปลี่ยน' },
       { id: 'smart-audience',           label: 'Smart Audience',     icon: Target,          color: 'amber',   palette: 'smart audience segment marketing target group csv export กลุ่มเป้าหมาย ลูกค้า กลุ่ม วิเคราะห์ filter rule builder query' },
+      // 2026-07-08 — reports-home wire-up: data-ready new report tabs
+      { id: 'reports-alt-sales',       label: 'ยอดขายช่องทางอื่น', icon: Globe,          color: 'sky',     palette: 'online vendor sale ออนไลน์ คู่ค้า ช่องทางอื่น alt sales การขายออนไลน์ ยอดขายคู่ค้า' },
+      { id: 'reports-outstanding',     label: 'ขายค้างชำระ',       icon: AlertCircle,    color: 'rose',    palette: 'outstanding unpaid ค้างชำระ ค้าง หนี้ receivable ลูกหนี้' },
+      { id: 'reports-stock-movements', label: 'เคลื่อนไหวสต็อค',    icon: ArrowLeftRight, color: 'sky',     palette: 'stock movement เคลื่อนไหว สต็อค receive transfer withdraw รับเข้า โอน เบิก' },
+      { id: 'reports-stock-alert',     label: 'แจ้งเตือนสต็อค',      icon: BellRing,       color: 'amber',   palette: 'stock alert expiry expired low หมดอายุ ใกล้หมดอายุ ใกล้หมดสต็อค แจ้งเตือน ล็อต' },
     ],
   },
   {

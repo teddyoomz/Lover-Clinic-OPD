@@ -81,6 +81,11 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // Recon (2026-07-07) — money-integrity report; same any-of gate as reports-payment
   'reports-reconciliation': { requires: ['sale_view', 'deposit'] },
   'reports-df-payout':   { requires: ['doctor_df_management', 'treatment_df_view', 'treatment_df_management'] },
+  // 2026-07-08 — reports-home wire-up: data-ready new report tabs.
+  'reports-alt-sales':   { requires: ['sale_view'] },
+  'reports-outstanding': { requires: ['sale_view'] },
+  'reports-stock-movements': { requires: ['stock_movement', 'stock_management'] },
+  'reports-stock-alert': { requires: ['stock_movement', 'stock_management'] },
   // Phase 16.1 (2026-04-30) — Smart Audience tab. Permission key already
   // declared in permissionGroupValidation.js under "analytics" module.
   'smart-audience':      { requires: ['smart_audience'] },

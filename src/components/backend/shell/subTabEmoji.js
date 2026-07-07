@@ -46,6 +46,10 @@ export const SUB_TAB_EMOJI = {
   'reports-df-payout':        '🩺',
   'reports-remaining-course': '⏳',
   'smart-audience':           '🎯',
+  'reports-alt-sales':        '🌐',
+  'reports-outstanding':      '🧾',
+  'reports-stock-movements':  '🔄',
+  'reports-stock-alert':      '🔔',
   // master (21)
   'product-groups':           '📂',
   'product-units':            '⚖️',
