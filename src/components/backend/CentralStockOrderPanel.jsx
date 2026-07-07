@@ -482,7 +482,10 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
   );
 }
 
-function CentralOrderCreateForm({ centralWarehouseId, vendors, products, unitGroups = [], mastersLoading, sellers, sellersLoading, prefillProduct, onClose, onSaved }) {
+// V144-followup (2026-07-07): exported so CentralStockActionModal can host this
+// form IN-PLACE on the central Balance page (no setSubTab bounce) — closes the
+// CentralStockTab same-class deferred instance flagged in V144 (test CB1).
+export function CentralOrderCreateForm({ centralWarehouseId, vendors, products, unitGroups = [], mastersLoading, sellers, sellersLoading, prefillProduct, onClose, onSaved }) {
   // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
   const [actorId, setActorId] = useState('');
   const [form, setForm] = useState(() => {

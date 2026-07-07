@@ -104,17 +104,24 @@ describe('Phase 15.4 S22.A — orderItemsSummary pure helper', () => {
 
 // ============================================================================
 describe('Phase 15.4 S22.B — CentralStockTab wiring', () => {
-  it('S22.B.1 — adjustPrefill + orderPrefill state hooks', () => {
-    expect(centralTabSrc).toMatch(/const\s+\[adjustPrefill,\s*setAdjustPrefill\]\s*=\s*useState\(null\)/);
-    expect(centralTabSrc).toMatch(/const\s+\[orderPrefill,\s*setOrderPrefill\]\s*=\s*useState\(null\)/);
+  // V144-followup (2026-07-07): the s22 prefill-navigation ("bounce") was
+  // replaced by an IN-PLACE CentralStockActionModal — the same UX V144 gave
+  // the branch StockTab (user: "กดแล้วบันทึกเสร็จยังอยู่ที่เดิม"). S22.B.1-B.3 +
+  // B.5-B.6 now lock the NEW contract (modal, no setSubTab, no prefill props);
+  // B.4/B.7 (row-button wiring + warehouse scoping) are unchanged contracts.
+  it('S22.B.1 — centralAction modal state replaces adjustPrefill/orderPrefill (V144-followup)', () => {
+    expect(centralTabSrc).toMatch(/const\s+\[centralAction,\s*setCentralAction\]\s*=\s*useState\(null\)/);
+    expect(centralTabSrc).not.toMatch(/adjustPrefill|orderPrefill/);
   });
 
-  it('S22.B.2 — handleCentralAdjustProduct navigates to "adjust" with prefill', () => {
-    expect(centralTabSrc).toMatch(/handleCentralAdjustProduct[\s\S]{0,200}setAdjustPrefill\(product\)[\s\S]{0,100}setSubTab\(['"]adjust['"]\)/);
+  it('S22.B.2 — handleCentralAdjustProduct opens the in-place modal (no navigation)', () => {
+    expect(centralTabSrc).toMatch(/handleCentralAdjustProduct\s*=\s*\(product\)\s*=>\s*setCentralAction\(\{\s*mode:\s*'adjust',\s*product\s*\}\)/);
+    expect(centralTabSrc).not.toMatch(/setSubTab\(['"]adjust['"]\)/);
   });
 
-  it('S22.B.3 — handleCentralAddStockForProduct navigates to "orders" with prefill', () => {
-    expect(centralTabSrc).toMatch(/handleCentralAddStockForProduct[\s\S]{0,200}setOrderPrefill\(product\)[\s\S]{0,100}setSubTab\(['"]orders['"]\)/);
+  it('S22.B.3 — handleCentralAddStockForProduct opens the in-place modal (no navigation)', () => {
+    expect(centralTabSrc).toMatch(/handleCentralAddStockForProduct\s*=\s*\(product\)\s*=>\s*setCentralAction\(\{\s*mode:\s*'order',\s*product\s*\}\)/);
+    expect(centralTabSrc).not.toMatch(/setSubTab\(['"]orders['"]\)/);
   });
 
   it('S22.B.4 — StockBalancePanel receives onAdjustProduct + onAddStockForProduct', () => {
@@ -122,14 +129,15 @@ describe('Phase 15.4 S22.B — CentralStockTab wiring', () => {
     expect(centralTabSrc).toMatch(/<StockBalancePanel[\s\S]{0,400}onAddStockForProduct=\{handleCentralAddStockForProduct\}/);
   });
 
-  it('S22.B.5 — StockAdjustPanel receives prefillProduct + onPrefillConsumed', () => {
-    expect(centralTabSrc).toMatch(/<StockAdjustPanel[\s\S]{0,400}prefillProduct=\{adjustPrefill\}/);
-    expect(centralTabSrc).toMatch(/<StockAdjustPanel[\s\S]{0,400}onPrefillConsumed=\{[^}]*setAdjustPrefill\(null\)/);
+  it('S22.B.5 — CentralStockActionModal rendered with warehouse scope + close/save handlers', () => {
+    expect(centralTabSrc).toMatch(/\{centralAction && \(\s*<CentralStockActionModal/);
+    expect(centralTabSrc).toMatch(/<CentralStockActionModal[\s\S]{0,400}warehouseId=\{selectedWarehouseId\}/);
+    expect(centralTabSrc).toMatch(/<CentralStockActionModal[\s\S]{0,400}onSaved=\{\(\) => setCentralAction\(null\)\}/);
   });
 
-  it('S22.B.6 — CentralStockOrderPanel receives prefillProduct + onPrefillConsumed', () => {
-    expect(centralTabSrc).toMatch(/<CentralStockOrderPanel[\s\S]{0,400}prefillProduct=\{orderPrefill\}/);
-    expect(centralTabSrc).toMatch(/<CentralStockOrderPanel[\s\S]{0,400}onPrefillConsumed=\{[^}]*setOrderPrefill\(null\)/);
+  it('S22.B.6 — panels no longer receive prefill props (modal owns the flow)', () => {
+    expect(centralTabSrc).not.toMatch(/prefillProduct=\{(orderPrefill|adjustPrefill)\}/);
+    expect(centralTabSrc).not.toMatch(/onPrefillConsumed/);
   });
 
   it('S22.B.7 — branchIdOverride still passed (preserve previous architecture)', () => {

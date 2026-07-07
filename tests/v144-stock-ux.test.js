@@ -125,13 +125,27 @@ describe('V144 Issue 4 — balance follows the global BranchSelector (no per-pan
 });
 
 describe('V144 / AV173 — class-of-bug doc + invariant', () => {
-  it('CB1 CentralStockTab is the KNOWN same-class deferred instance (still navigates)', () => {
-    // Documented: central balance buttons still setSubTab (different tab +
-    // different order component CentralStockOrderPanel + warehouse-scoped adjust).
-    // Deferred — flagged for the user. This test pins the deferred state so a
-    // future change there is a conscious decision, not silent drift.
-    expect(CentralSrc).toMatch(/handleCentralAdjustProduct/);
-    expect(CentralSrc).toMatch(/setSubTab\('adjust'\)/);
+  it('CB1 CentralStockTab deferred instance CLOSED (V144-followup 2026-07-07 — in-place modal, no bounce)', () => {
+    // V144 pinned this as the KNOWN same-class deferred instance (central
+    // balance buttons still setSubTab'd). V144-followup (2026-07-07) closed it
+    // consciously: CentralStockActionModal hosts AdjustCreateForm (warehouse-
+    // scoped via branchId=warehouseId) / the EXPORTED CentralOrderCreateForm
+    // in-place. This test now locks the CLOSED state.
+    expect(CentralSrc).toMatch(/handleCentralAdjustProduct\s*=\s*\(product\)\s*=>\s*setCentralAction\(\{\s*mode:\s*'adjust',\s*product\s*\}\)/);
+    expect(CentralSrc).toMatch(/handleCentralAddStockForProduct\s*=\s*\(product\)\s*=>\s*setCentralAction\(\{\s*mode:\s*'order',\s*product\s*\}\)/);
+    expect(CentralSrc).not.toMatch(/setSubTab\('adjust'\)/);
+    expect(CentralSrc).not.toMatch(/setSubTab\('orders'\)/);
+    // the central modal mirrors StockActionModal's AV78/AV205 shell
+    const CentralModalSrc = read('src/components/backend/CentralStockActionModal.jsx');
+    expect(CentralModalSrc).toMatch(/useModalScrollLock\(true\)/);
+    expect(CentralModalSrc).toMatch(/data-testid="central-stock-action-modal"/);
+    expect(CentralModalSrc).toMatch(/branchId=\{warehouseId\}/);            // adjust = warehouse-scoped
+    expect(CentralModalSrc).toMatch(/centralWarehouseId=\{warehouseId\}/);  // order = central PO form
+    // backdrop has NO onClick (AV78 explicit close only)
+    expect(CentralModalSrc).not.toMatch(/inset-0[^>]*onClick/);
+    // the central PO create form is now exported for the modal host
+    const CentralOrderPanelSrc = read('src/components/backend/CentralStockOrderPanel.jsx');
+    expect(CentralOrderPanelSrc).toMatch(/export function CentralOrderCreateForm\(/);
   });
   it('CB2 AV173 documented in audit skill', () => {
     expect(SkillSrc).toMatch(/### AV173 —/);

@@ -34,6 +34,9 @@ import CentralWarehousePanel from './CentralWarehousePanel.jsx';
 // Phase 15.2 (2026-04-27) — Central PO write flow
 import CentralStockOrderPanel from './CentralStockOrderPanel.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
+// V144-followup (2026-07-07) — in-place adjust/order modal for the central
+// Balance rows (closes the V144/AV173 deferred navigate-bounce instance).
+import CentralStockActionModal from './CentralStockActionModal.jsx';
 
 const SUB_TABS = [
   { id: 'balance',     label: 'ยอดคงเหลือ',  icon: <Package size={14} /> },
@@ -50,28 +53,20 @@ export default function CentralStockTab({ clinicSettings, theme }) {
   const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [subTab, setSubTab] = useState('balance');
-  // Phase 15.4 post-deploy s22 (2026-04-28) — prefill state for cross-subtab
-  // navigation triggered by StockBalancePanel's per-row "ปรับ"/"+" buttons.
-  // Bugs reported in s22: "+" button no-op + (suspected) cross-tier confusion.
-  // Fix mirrors StockTab.jsx pattern: clicking "ปรับ" on a Balance row routes
-  // to the central 'adjust' sub-tab with the picked product prefilled.
-  // Clicking "+" routes to 'orders' (Central PO) with the picked product prefilled.
-  const [adjustPrefill, setAdjustPrefill] = useState(null);
-  const [orderPrefill, setOrderPrefill] = useState(null);
+  // V144-followup (2026-07-07) — a central Balance row ปรับ/+ click opens an
+  // in-place MODAL (was setSubTab navigation to 'adjust'/'orders' — the same
+  // "bounce" V144 killed on the branch StockTab; this was the documented
+  // deferred instance pinned by test CB1). After save you stay on ยอดคงเหลือ +
+  // the BS-18 live listener refreshes the row. { mode: 'adjust'|'order', product }.
+  const [centralAction, setCentralAction] = useState(null);
   // V43-followup (2026-05-19 NIGHT+5 EOD+1) — own the ProductFormModal state
   // for the [✎ แก้ไข] button in StockBalancePanel Actions column. When admin
   // toggles skipStockDeduction + saves, the BS-18 listener in
   // StockBalancePanel will live-update; the row disappears instantly.
   const [editingProduct, setEditingProduct] = useState(null);
 
-  const handleCentralAdjustProduct = (product) => {
-    setAdjustPrefill(product);
-    setSubTab('adjust');
-  };
-  const handleCentralAddStockForProduct = (product) => {
-    setOrderPrefill(product);
-    setSubTab('orders');
-  };
+  const handleCentralAdjustProduct = (product) => setCentralAction({ mode: 'adjust', product });
+  const handleCentralAddStockForProduct = (product) => setCentralAction({ mode: 'order', product });
 
   // V145 (2026-06-02, AV175) — open ProductFormModal with the COMPLETE be_products
   // doc (StockBalancePanel passes the full live doc; guard fetches it if only a
@@ -231,8 +226,6 @@ export default function CentralStockTab({ clinicSettings, theme }) {
         <CentralStockOrderPanel
           centralWarehouseId={selectedWarehouseId}
           theme={theme}
-          prefillProduct={orderPrefill}
-          onPrefillConsumed={() => setOrderPrefill(null)}
         />
       )}
 
@@ -240,8 +233,6 @@ export default function CentralStockTab({ clinicSettings, theme }) {
         <StockAdjustPanel
           clinicSettings={clinicSettings} theme={theme}
           branchIdOverride={selectedWarehouseId}
-          prefillProduct={adjustPrefill}
-          onPrefillConsumed={() => setAdjustPrefill(null)}
         />
       )}
 
@@ -276,6 +267,19 @@ export default function CentralStockTab({ clinicSettings, theme }) {
           clinicSettings={clinicSettings}
           onClose={() => setEditingProduct(null)}
           onSaved={() => setEditingProduct(null)}
+        />
+      )}
+
+      {/* V144-followup — in-place adjust/order modal (ปรับ/+ from the central
+          Balance row). After save → close → the BS-18 live listener refreshes. */}
+      {centralAction && (
+        <CentralStockActionModal
+          mode={centralAction.mode}
+          product={centralAction.product}
+          warehouseId={selectedWarehouseId}
+          theme={theme}
+          onClose={() => setCentralAction(null)}
+          onSaved={() => setCentralAction(null)}
         />
       )}
     </div>
