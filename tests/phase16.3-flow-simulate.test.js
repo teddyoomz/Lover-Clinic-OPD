@@ -198,8 +198,10 @@ describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
     // 2026-05-17 post-V81-fix7b — REMOVED 'customer-data-recovery' (orphan after V81-fix4) → count = 59.
     // 2026-06-02 — added 'scheduled-tasks' (Scheduled Tasks tab) → count = 60.
     // Recon (2026-07-07) — added 'reports-reconciliation' (money reconciliation) → count = 61.
+    // 2026-07-08 — reports-home wire-up: +4 gates (reports-alt-sales / -outstanding
+    //   / -stock-movements / -stock-alert) → count = 65.
     const count = Object.keys(TAB_PERMISSION_MAP).length;
-    expect(count).toBe(61);
+    expect(count).toBe(65);
   });
 
   test('D.2 — Phase 16.3 doesn’t break existing tab gates (smoke test)', () => {
