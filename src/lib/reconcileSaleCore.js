@@ -158,7 +158,8 @@ export function reconcileSale({ sale, courses, deposits, walletNet, pointsNet, s
     invoiceNo: String(sale?.invoiceNo || sale?.invoice_no || saleId),
     customerId: String(sale?.customerId || ''),
     customerName: String(sale?.customerName || ''),
-    total: num(sale?.billing?.grandTotal ?? sale?.billing?.total ?? sale?.total),
+    // real prod shape: billing.netTotal (verified on live sales 2026-07-07)
+    total: num(sale?.billing?.netTotal ?? sale?.billing?.grandTotal ?? sale?.billing?.total ?? sale?.total),
     saleDate: String(sale?.saleDate || sale?.date || ''),
     cancelled,
     channels: {

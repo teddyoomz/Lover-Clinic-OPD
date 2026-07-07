@@ -188,7 +188,7 @@ describe('Phase 16.3 FS.C — cross-file wiring source-grep', () => {
 });
 
 describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
-  test('D.1 — TAB_PERMISSION_MAP count is 60 (2026-06-02 adds scheduled-tasks)', () => {
+  test('D.1 — TAB_PERMISSION_MAP count is 61 (2026-07-07 adds reports-reconciliation)', () => {
     // Phase 21.0 (2026-05-06) — added per-sub-tab gates for the 4 typed
     // appointment views. Phase 21.0-bis added 'appointment-all'. Count was 55.
     // V40 (2026-05-07) — added 'branch-backup' → count = 56.
@@ -197,8 +197,9 @@ describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
     // V75 Item 3 (2026-05-16) — added 'fb-settings' (per-branch FB Page) → count = 60.
     // 2026-05-17 post-V81-fix7b — REMOVED 'customer-data-recovery' (orphan after V81-fix4) → count = 59.
     // 2026-06-02 — added 'scheduled-tasks' (Scheduled Tasks tab) → count = 60.
+    // Recon (2026-07-07) — added 'reports-reconciliation' (money reconciliation) → count = 61.
     const count = Object.keys(TAB_PERMISSION_MAP).length;
-    expect(count).toBe(60);
+    expect(count).toBe(61);
   });
 
   test('D.2 — Phase 16.3 doesn’t break existing tab gates (smoke test)', () => {
