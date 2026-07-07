@@ -17,6 +17,22 @@
 // STAFF ONLY. Customer-facing pages use src/lib/freshGate.js (server-truth
 // only). ⛔ Never feed cache-leg data into a read→decide→WRITE flow (AV206.c) —
 // money/stock decisions read inside transactions (Rule T) which are server-only.
+// swrList — one-line adoption for the common staff-tab shape
+// `setItems(await listX(opts))`. fetchBySource(source) returns the rows;
+// apply(rows, { fromCache }) sets state. Empty-array cache results never paint
+// (same no-empty-flash guard as swrRun).
+export async function swrList(fetchBySource, apply) {
+  return swrRun({
+    cacheLoad: async () => {
+      const r = await fetchBySource('cache');
+      const hasData = Array.isArray(r) ? r.length > 0 : !!r;
+      return { hasData, data: r };
+    },
+    serverLoad: () => fetchBySource(undefined),
+    apply,
+  });
+}
+
 export async function swrRun({ cacheLoad, serverLoad, apply }) {
   let paintedFromCache = false;
   try {

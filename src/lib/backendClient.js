@@ -6521,7 +6521,7 @@ export async function listStockMovements(filters = {}) {
   if (filters.type != null) clauses.push(where('type', '==', Number(filters.type)));
 
   const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
-  const snap = await getDocs(q);
+  const snap = await _getDocsBySource(q, filters.source); // C2: SWR cache leg support
   let mvts = snap.docs.map(d => ({ ...d.data(), id: d.id }));
 
   if (filters.branchId != null) {
@@ -11000,8 +11000,8 @@ export async function getBranch(branchId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listBranches() {
-  const snap = await getDocs(branchesCol());
+export async function listBranches({ source } = {}) {
+  const snap = await _getDocsBySource(branchesCol(), source); // C2: SWR cache leg
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Phase 17.2: newest-first by updatedAt then createdAt (no isDefault).
   items.sort((a, b) => {
@@ -11215,8 +11215,8 @@ export async function getStaff(staffId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listStaff({ includeHidden = false } = {}) {
-  const snap = await getDocs(staffCol());
+export async function listStaff({ includeHidden = false, source } = {}) {
+  const snap = await _getDocsBySource(staffCol(), source); // C2: SWR cache leg
   // Phase 15.7-octies (2026-04-29) — compose `name` field at source
   // (mirror of listDoctors Phase 15.7-bis fix). be_staff stores
   // firstname/lastname/nickname (lowercase, ProClinic schema) but
@@ -11304,8 +11304,8 @@ export async function getDoctor(doctorId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listDoctors({ includeHidden = false } = {}) {
-  const snap = await getDocs(doctorsCol());
+export async function listDoctors({ includeHidden = false, source } = {}) {
+  const snap = await _getDocsBySource(doctorsCol(), source); // C2: SWR cache leg
   // Phase 15.7-bis (2026-04-28) — compose `name` field at source. be_doctors
   // stores firstname/lastname/nickname (ProClinic schema, lowercase) but
   // consumers (AppointmentFormModal picker, AppointmentTab grid via
@@ -11433,16 +11433,16 @@ export async function listStaffByBranch({ branchId } = {}) {
 }
 
 // Phase 14.10-tris — be_membership_types listing (was master_data/membership_types)
-export async function listMembershipTypes() {
-  const snap = await getDocs(membershipTypesCol());
+export async function listMembershipTypes({ source } = {}) {
+  const snap = await _getDocsBySource(membershipTypesCol(), source); // C2: SWR cache leg
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return items;
 }
 
 // Phase 14.10-tris — be_wallet_types listing (was master_data/wallet_types)
-export async function listWalletTypes() {
-  const snap = await getDocs(walletTypesCol());
+export async function listWalletTypes({ source } = {}) {
+  const snap = await _getDocsBySource(walletTypesCol(), source); // C2: SWR cache leg
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return items;
@@ -11524,12 +11524,12 @@ export async function getProduct(productId) {
  * causing handleDelete's `p.productId || p.id` fallback to resolve to the
  * wrong path → silent no-op delete. Rule of 3: see listCourses + audit AV17.
  */
-export async function listProducts({ branchId, allBranches = false } = {}) {
+export async function listProducts({ branchId, allBranches = false, source } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(productsCol(), where('branchId', '==', String(branchId)))
     : productsCol();
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source); // B1/C2: SWR cache leg support
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const oa = a.orderBy ?? null;
@@ -11591,12 +11591,12 @@ export async function getCourse(courseId) {
  * listProducts JSDoc above for full rationale. Mirror fix to keep both catalog
  * listers Rule-of-3 aligned. Audit AV17 enforces this pattern across listers.
  */
-export async function listCourses({ branchId, allBranches = false } = {}) {
+export async function listCourses({ branchId, allBranches = false, source } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(coursesCol(), where('branchId', '==', String(branchId)))
     : coursesCol();
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source); // B1/C2: SWR cache leg support
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const oa = a.orderBy ?? null;
