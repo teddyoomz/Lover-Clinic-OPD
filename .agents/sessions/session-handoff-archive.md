@@ -1,5 +1,27 @@
 # SESSION_HANDOFF — Overflow Archive
 
+## Archived 2026-07-07 — SESSION_HANDOFF overflow: sessions `2026-06-21` → `2026-06-21` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-21 — Staff-chat "ระบบ" System notification cards (AV198) — SHIPPED + DEPLOYED LIVE + 8-round bug-hunt converged
+
+master `a62c20c4` (+EOD docs). prod LIVE: vercel `lover-clinic-cc7twr3pm` (lover-clinic-app.vercel.app) + `firebase deploy --only functions,firestore:rules` (Probe-Deploy-Probe 13/13). full vitest **16914/0**; build clean.
+- **Feature**: intake / follow-up completion → `sendPushOnSubmit` writes a "ระบบ" card into the per-branch staff chat (sparkles icon, customer name+HN, clickable name → `/?backend=1&customer=<id>` new tab). Intake live-resolves to clickable+HN on registration; counts unread + plays the chat sound. `/brainstorming`→spec→`/writing-plans`(14)→inline.
+- NEW `functions/staffChatNotify.js` (deterministic id `CHAT-SYS-<sessionId>`) + `index.js` wire (before FCM + before token-guards, non-fatal, skip edits) + `src/lib/staffChatNotifyResolve.js` (live hook) + `StaffChatSystemCard.jsx` + `StaffChatMessage` branch + `useStaffChat`/`staffChatClient`/`firestore.rules` read-only guards. AV198.
+- **8-round adversarial bug-hunt CONVERGED** (Workflow): fixed deleted-customer downgrade, no-tokens→no-card (CRIT), dup-on-retry→deterministic id (CRIT), light-mode contrast, rule-layer immutability, hook↔picker consistency. Q4-chime = INTENDED (locked). Refuted: cross-branch (by-design), session-stuck-pending (semantically correct), same-ms tie (negligible+bad fix), sky-700 light (correct AA). V162: adjudicate every finding — agents overstate.
+- **Verified**: full vitest 16914/0 · build clean · functions OK · **L2 e2e 14/0 real prod** (incl. intake FLIP, zero orphans) · Rule R diag (branchId 35/35) · Probe-Deploy-Probe 13/13. **Honest gap**: real-form→card-in-authed-chat + live flip + staff-client delete-denied positive probe = USER L1 (auth/creds). Checkpoint `.agents/sessions/2026-06-21-staff-chat-system-notification-cards.md` · spec/plan `docs/superpowers/{specs,plans}/2026-06-20-staff-chat-system-notification-cards*`.
+
+---
+
+📂 **Older sessions (`2026-06-20 (cont.3)` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-06-21) — Staff-chat "ระบบ" System notification cards (AV198) SHIPPED + DEPLOYED LIVE + 8-round bug-hunt CONVERGED**: master `a62c20c4` (+EOD docs); prod = vercel `lover-clinic-cc7twr3pm` (lover-clinic-app.vercel.app) + `firebase deploy --only functions,firestore:rules` (Probe-Deploy-Probe **13/13**). Intake / follow-up form completion → `sendPushOnSubmit` ALSO writes a "ระบบ" card into the per-branch `be_staff_chat_messages` (sparkles icon, customer name + HN, clickable name → `/?backend=1&customer=<id>` new tab, sky never red). Intake cards **live-resolve** to clickable+HN the instant the walk-in is registered (`opd_session.brokerProClinicId`); counts unread + plays the chat sound (Q4, via V82 auto). `/brainstorming`(Visual Companion)→spec→`/writing-plans`(14)→inline impl. NEW `functions/staffChatNotify.js`(deterministic id)+`index.js`(write before FCM+before token-guards, non-fatal, skip edits)+`staffChatNotifyResolve.js`(live onSnapshot hook)+`StaffChatSystemCard.jsx`(theme-aware AA)+`StaffChatMessage` early-branch+`useStaffChat`/`staffChatClient`/`firestore.rules` read-only guards. **8-round adversarial bug-hunt (Workflow, Ultracode) CONVERGED** (R1 deleted-customer→R2 no-tokens CRIT→R3 dup-on-retry CRIT→R4 0/Q4-intended→R5 contrast→R6 rule-immutability→R7 hook↔picker→**R8 0 clean**). **Verified**: full vitest **16914/0** + build clean + **L2 e2e 14/0 real prod** (intake PENDING→register→FLIP, zero-orphan) + Rule R diag (branchId 35/35) + Probe-Deploy-Probe 13/13. **Honest L1 gap**: real form→card in authed chat + live flip = USER hands-on. Checkpoint `.agents/sessions/2026-06-21-staff-chat-system-notification-cards.md`.
+
+---
+
 ## Archived 2026-07-07 — SESSION_HANDOFF overflow: sessions `2026-06-20 (cont.3)` → `2026-06-20 (cont.3)` + Current-State index
 
 ### Session blocks (1)
