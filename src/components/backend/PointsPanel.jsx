@@ -14,6 +14,8 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import { fmtPoints, fmtMoney } from '../../lib/financeUtils.js';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
@@ -40,10 +42,18 @@ export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) 
   const [adjustModal, setAdjustModal] = useState(null);
   const [historyModal, setHistoryModal] = useState(null);
 
+  // C2 (2026-07-07 instant cold-start) — SWR display read (AV206.c-safe:
+  // adjustPoints mutates inside a transaction, never from this list).
+  const [syncing, setSyncing] = useState(false);
   const loadCustomers = useCallback(async () => {
     setLoading(true);
-    try { setCustomers(await getAllCustomers()); }
-    catch { setCustomers([]); }
+    try {
+      await swrList(
+        (source) => getAllCustomers({ source }),
+        (rows, { fromCache }) => { setCustomers(rows); setLoading(false); setSyncing(fromCache); },
+      );
+    }
+    catch { setCustomers([]); setSyncing(false); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
@@ -117,6 +127,10 @@ export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) 
         </p>
       </div>
 
+      {/* C2 — SWR sync indicator (cache-painted list, server not yet confirmed) */}
+      {!loading && syncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 size={22} className="animate-spin text-[var(--tx-muted)]" />

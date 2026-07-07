@@ -38,6 +38,8 @@ import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/custome
 import { VipName } from '../VipBadge.jsx';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 // 2026-05-31 — actual-paid resolvers for the ยอดชำระจริง column + pay-modal DRY.
 import { resolveSalePaidAmount, resolveSalePaidTone, resolveSaleOutstanding } from '../../lib/financeUtils.js';
 // 2026-05-31 — paginate the sales table 30/page (Rule C1 canonical pager).
@@ -386,9 +388,18 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   // Phase BS (2026-05-06) — branch-scoped fetch via the new {branchId}
   // contract on getAllSales. Re-loads when admin switches branch via the
   // top-right BranchSelector (BRANCH_ID dep).
+  // C2 (2026-07-07 instant cold-start) — SWR: cache leg paints the last-seen
+  // sale list instantly + "กำลังซิงค์…", server leg corrects. Display-only
+  // (AV206.c: cancel/edit flows re-read server-side / via transactions).
+  const [listSyncing, setListSyncing] = useState(false);
   const loadSales = useCallback(async () => {
     setListLoading(true);
-    try { setSales(await getAllSales({ branchId: BRANCH_ID })); } catch { setSales([]); }
+    try {
+      await swrList(
+        (source) => getAllSales({ branchId: BRANCH_ID, source }),
+        (rows, { fromCache }) => { setSales(rows); setListLoading(false); setListSyncing(fromCache); },
+      );
+    } catch { setSales([]); setListSyncing(false); }
     finally { setListLoading(false); }
   }, [BRANCH_ID]);
   useEffect(() => { loadSales(); }, [loadSales]);
@@ -1185,7 +1196,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
           <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
             <ShoppingCart size={12} /> {subTab === 'cancelled' ? 'รายการที่ยกเลิกแล้ว — ดูรายละเอียดหรือพิมพ์ได้' : 'จัดการใบเสร็จ ดูรายละเอียด ยกเลิก หรือรับชำระเพิ่ม'}
           </p>
-          <span className="text-xs text-[var(--tx-muted)] font-bold">{filtered.length} รายการ</span>
+          <span className="text-xs text-[var(--tx-muted)] font-bold">{filtered.length} รายการ {listSyncing && <SyncIndicator show />}</span>
         </div>
       </div>
 

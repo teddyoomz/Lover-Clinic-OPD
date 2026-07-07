@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Briefcase, Loader2, Tag, Clock, Package } from 'lucide-react';
 import { listCourses, deleteCourse } from '../../lib/scopedDataLayer.js';
+import { swrList } from '../../lib/swrRead.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import CourseFormModal from './CourseFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -27,10 +28,17 @@ export default function CoursesTab({ clinicSettings, theme }) {
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
 
+  // C2 (2026-07-07 instant cold-start) — SWR display read (AV206.c-safe).
+  const [syncing, setSyncing] = useState(false);
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listCourses({ branchId: selectedBranchId })); }
-    catch (e) { setError(e.message || 'โหลดคอร์สล้มเหลว'); setItems([]); }
+    try {
+      await swrList(
+        (source) => listCourses({ branchId: selectedBranchId, source }),
+        (rows, { fromCache }) => { setItems(rows); setLoading(false); setSyncing(fromCache); },
+      );
+    }
+    catch (e) { setError(e.message || 'โหลดคอร์สล้มเหลว'); setItems([]); setSyncing(false); }
     finally { setLoading(false); }
   }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
@@ -87,6 +95,7 @@ export default function CoursesTab({ clinicSettings, theme }) {
         extraFilters={extraFilters}
         error={error}
         loading={loading}
+        syncing={syncing}
         emptyText='ยังไม่มีคอร์ส — กด "เพิ่มคอร์ส" เพื่อเริ่มต้น'
         notFoundText="ไม่พบคอร์สที่ตรงกับตัวกรอง"
         clinicSettings={clinicSettings}

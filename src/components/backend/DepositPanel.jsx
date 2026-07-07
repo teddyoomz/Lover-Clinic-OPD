@@ -53,6 +53,8 @@ import { CustomerOption } from '../CustomerOption.jsx';
 import { VipName } from '../VipBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
 // LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
 import { LineNotifyConfirmation } from '../LineNotifyConfirmation.jsx';
@@ -272,10 +274,18 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   // user directive "ทำให้แถบมัดจำ แยกสาขากัน". scopedDataLayer.getAllDeposits
   // auto-injects current branchId on each call; deps include selectedBranchId
   // so the list re-loads when admin switches branch via top-right selector.
+  // C2 (2026-07-07 instant cold-start) — SWR display read (AV206.c-safe: apply/
+  // cancel deposit flows re-read inside transactions, never from this list).
+  const [listSyncing, setListSyncing] = useState(false);
   const loadList = useCallback(async () => {
     setListLoading(true);
-    try { setDeposits(await getAllDeposits()); }
-    catch (e) { console.warn('[DepositPanel] load list failed:', e); setDeposits([]); }
+    try {
+      await swrList(
+        (source) => getAllDeposits({ source }),
+        (rows, { fromCache }) => { setDeposits(rows); setListLoading(false); setListSyncing(fromCache); },
+      );
+    }
+    catch (e) { console.warn('[DepositPanel] load list failed:', e); setDeposits([]); setListSyncing(false); }
     finally { setListLoading(false); }
   }, [selectedBranchId]);
   useEffect(() => { loadList(); }, [loadList]);
@@ -696,6 +706,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
         </div>
       </div>
 
+      {/* C2 — SWR sync indicator (cache-painted list, server not yet confirmed) */}
+      {!listLoading && listSyncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       {/* ── Table / Empty state ── */}
       {listLoading ? (
         <div className="flex items-center justify-center py-16">

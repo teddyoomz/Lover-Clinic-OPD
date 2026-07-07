@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Package, Loader2, Tag } from 'lucide-react';
 import { listProducts } from '../../lib/scopedDataLayer.js';
+import { swrList } from '../../lib/swrRead.js';
 import { deleteProductWithCascade, previewProductDelete } from '../../lib/productDeleteClient.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
@@ -35,10 +36,19 @@ export default function ProductsTab({ clinicSettings, theme }) {
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
 
+  // C2 (2026-07-07 instant cold-start) — SWR: cache leg paints the last-seen
+  // list instantly (+ "กำลังซิงค์…"), server leg corrects. Display-only read
+  // (AV206.c: no decision-write consumes this).
+  const [syncing, setSyncing] = useState(false);
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listProducts({ branchId: selectedBranchId })); }
-    catch (e) { setError(e.message || 'โหลดสินค้าล้มเหลว'); setItems([]); }
+    try {
+      await swrList(
+        (source) => listProducts({ branchId: selectedBranchId, source }),
+        (rows, { fromCache }) => { setItems(rows); setLoading(false); setSyncing(fromCache); },
+      );
+    }
+    catch (e) { setError(e.message || 'โหลดสินค้าล้มเหลว'); setItems([]); setSyncing(false); }
     finally { setLoading(false); }
   }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
@@ -124,6 +134,7 @@ export default function ProductsTab({ clinicSettings, theme }) {
         extraFilters={extraFilters}
         error={error}
         loading={loading}
+        syncing={syncing}
         emptyText='ยังไม่มีสินค้า — กด "เพิ่มสินค้า" เพื่อเริ่มต้น'
         notFoundText="ไม่พบสินค้าที่ตรงกับตัวกรอง"
         clinicSettings={clinicSettings}

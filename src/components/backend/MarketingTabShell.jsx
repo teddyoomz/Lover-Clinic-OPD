@@ -11,6 +11,7 @@
 
 import { Plus, Search, Loader2 } from 'lucide-react';
 import { hexToRgb } from '../../utils.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 
 /**
  * @param {object} props
@@ -44,6 +45,10 @@ export default function MarketingTabShell({
   extraFilters = null,
   error = '',
   loading = false,
+  // C2 (2026-07-07 instant cold-start) — optional SWR flag: the tab painted
+  // from the persistent cache and the server leg hasn't confirmed yet →
+  // "กำลังซิงค์…" next to the counts. One prop here covers every shell consumer.
+  syncing = false,
   emptyText,
   notFoundText,
   clinicSettings,
@@ -82,6 +87,7 @@ export default function MarketingTabShell({
             </h2>
             <p className="text-sm text-[var(--tx-muted)] mt-1">
               จำนวน {totalCount} รายการ · แสดง {filteredCount} รายการ
+              {syncing && <> <SyncIndicator show /></>}
             </p>
           </div>
         </div>

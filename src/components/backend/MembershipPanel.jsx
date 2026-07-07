@@ -22,6 +22,8 @@ import FileUploadField from './FileUploadField.jsx';
 import { thaiTodayISO } from '../../utils.js';
 import { VipName } from '../VipBadge.jsx';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
+import { swrList } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 function todayStr() { return thaiTodayISO(); }
@@ -93,16 +95,30 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
   // Sell form
   const [sellOpen, setSellOpen] = useState(false);
 
+  // C2 (2026-07-07 instant cold-start) — SWR on the two big display datasets
+  // (memberships list + customers name-lookup): cache leg paints instantly +
+  // "กำลังซิงค์…", server leg corrects. cardTypes = tiny lookup, server-first.
+  const [syncing, setSyncing] = useState(false);
   const loadCardTypes = useCallback(async () => {
     try { setCardTypes(await listMembershipTypes()); }
     catch { setCardTypes([]); }
   }, []);
   const loadMemberships = useCallback(async () => {
-    try { setMemberships(await getAllMemberships()); }
-    catch { setMemberships([]); }
+    try {
+      await swrList(
+        (source) => getAllMemberships({ source }),
+        (rows, { fromCache }) => { setMemberships(rows); setLoading(false); setSyncing(fromCache); },
+      );
+    }
+    catch { setMemberships([]); setSyncing(false); }
   }, []);
   const loadCustomers = useCallback(async () => {
-    try { setCustomers(await getAllCustomers()); }
+    try {
+      await swrList(
+        (source) => getAllCustomers({ source }),
+        (rows) => setCustomers(rows),
+      );
+    }
     catch { setCustomers([]); }
   }, []);
 
@@ -235,6 +251,10 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
         )}
       </div>
 
+      {/* C2 — SWR sync indicator (cache-painted list, server not yet confirmed) */}
+      {!loading && syncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       {/* Memberships list */}
       {loading ? (
         <div className="flex items-center justify-center py-16">

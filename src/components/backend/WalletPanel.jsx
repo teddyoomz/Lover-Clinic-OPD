@@ -18,6 +18,8 @@ import { fmtMoney } from '../../lib/financeUtils.js';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
+import { swrList, swrRun } from '../../lib/swrRead.js';
+import SyncIndicator from '../SyncIndicator.jsx';
 
 import { thaiTodayISO } from '../../utils.js';
 
@@ -55,8 +57,14 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
   const [adjustModal, setAdjustModal] = useState(null);
   const [historyModal, setHistoryModal] = useState(null); // { customer, wallet? }
 
+  // C2 (2026-07-07 instant cold-start) — SWR on the display datasets: cache
+  // leg paints instantly + "กำลังซิงค์…", server leg corrects. Balances shown
+  // here are display-only (top-up/adjust mutate via transactions — AV206.c).
+  const [syncing, setSyncing] = useState(false);
   const loadCustomers = useCallback(async () => {
-    try { setCustomers(await getAllCustomers()); } catch { setCustomers([]); }
+    try {
+      await swrList((source) => getAllCustomers({ source }), (rows) => setCustomers(rows));
+    } catch { setCustomers([]); }
   }, []);
   const loadWalletTypes = useCallback(async () => {
     try { setWalletTypes((await listWalletTypes()).filter(w => w.status !== 'พักใช้งาน')); }
@@ -67,14 +75,19 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
     setLoading(true);
     try {
       // Fetch per customer would explode — fetch the collection once and group client-side
-      const { collection, getDocs } = await import('firebase/firestore');
+      const { collection, getDocs, getDocsFromCache } = await import('firebase/firestore');
       const { db, appId } = await import('../../firebase.js');
-      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'be_customer_wallets'));
-      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      setAllWallets(list);
+      const col = collection(db, 'artifacts', appId, 'public', 'data', 'be_customer_wallets');
+      const toList = (snap) => snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      await swrRun({
+        cacheLoad: async () => { const s = await getDocsFromCache(col); return { hasData: s.docs.length > 0, data: toList(s) }; },
+        serverLoad: async () => toList(await getDocs(col)),
+        apply: (list, { fromCache }) => { setAllWallets(list); setLoading(false); setSyncing(fromCache); },
+      });
     } catch (e) {
       console.warn('[WalletPanel] load wallets failed:', e);
       setAllWallets([]);
+      setSyncing(false);
     } finally { setLoading(false); }
   }, []);
 
@@ -163,6 +176,10 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
         </p>
       </div>
 
+      {/* C2 — SWR sync indicator (cache-painted balances, server not yet confirmed) */}
+      {!loading && syncing && (
+        <div className="flex justify-end pr-1"><SyncIndicator show /></div>
+      )}
       {/* Customer wallet cards */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
