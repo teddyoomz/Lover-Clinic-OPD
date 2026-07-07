@@ -9,12 +9,14 @@ import { X, CheckCircle2, Loader2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import { markSalePaid } from '../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../utils.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const METHOD_OPTIONS = Object.freeze([
   'เงินสด', 'โอน', 'บัตรเครดิต', 'บัตรสมาชิก', 'Wallet',
 ]);
 
 export default function SalePaymentModal({ sale, onClose, onSaved }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const s = sale || {};
   const netTotal = Number(s.billing?.netTotal ?? s.netTotal) || 0;
   const alreadyPaid = Number(s.totalPaidAmount) || 0;
@@ -61,7 +63,7 @@ export default function SalePaymentModal({ sale, onClose, onSaved }) {
 
   const content = (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-auto"
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-auto overscroll-contain"
       data-testid="sale-payment-overlay">
       <div className="w-full max-w-md mt-12 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl"
         data-testid="sale-payment-modal">

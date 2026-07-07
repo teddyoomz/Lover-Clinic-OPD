@@ -14,6 +14,7 @@ import {
 import { thaiTodayISO } from '../../../utils.js';
 import { resolveCustomerDisplayName } from '../../../lib/customerDisplayName.js'; // 2026-06-16 Part B — resolve ALL name shapes (kiosk firstNameTh, etc.)
 import PhoneLink from '../../PhoneLink.jsx';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 /**
  * Phase 29 (2026-05-14) — Create Recall modal with 2-slot design.
@@ -69,6 +70,7 @@ export function RecallCreateModal({
   onSaveAsRecallCase,
   onSaveToMaster, // DEPRECATED
 }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const todayISO = thaiTodayISO();
 
   // Phase 29.21-fix2 (2026-05-14) — customer picker for standalone-launch case.
@@ -308,7 +310,7 @@ export function RecallCreateModal({
   return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain"
       data-testid="recall-create-modal"
     >
       <div

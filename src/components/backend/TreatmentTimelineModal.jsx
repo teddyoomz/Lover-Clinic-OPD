@@ -26,6 +26,7 @@ import { useMemo, useEffect } from 'react';
 import { X, Activity, Edit3, Stethoscope } from 'lucide-react';
 import TreatmentReadOnlyPanel from './TreatmentReadOnlyPanel.jsx';
 import { VipName } from '../VipBadge.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // ─── Main modal ─────────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export default function TreatmentTimelineModal({
   customer, treatmentSummary, treatments, treatmentsLoading,
   theme, accentColor, onClose, onEditTreatment,
 }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const ac = accentColor || '#dc2626';
 
   // Esc closes the modal (panel handles its own lightbox Esc internally)
@@ -70,7 +72,7 @@ export default function TreatmentTimelineModal({
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       aria-labelledby="timeline-modal-title"

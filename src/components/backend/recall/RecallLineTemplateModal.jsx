@@ -8,6 +8,7 @@ import {
 } from '../../../lib/lineTemplateRenderer.js';
 import { recordRecallLineSend } from '../../../lib/scopedDataLayer.js';
 import { auth } from '../../../firebase.js';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 /**
  * Phase 29 (2026-05-14) — LINE template send modal.
@@ -32,6 +33,7 @@ import { auth } from '../../../firebase.js';
  * @param {function} [props.onSent] (messageId) => void
  */
 export function RecallLineTemplateModal({ recall, customer, onClose, onSent }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [customText, setCustomText] = useState('');
   const [sending, setSending] = useState(false);
@@ -111,7 +113,7 @@ export function RecallLineTemplateModal({ recall, customer, onClose, onSent }) {
   return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain"
       data-testid="recall-line-template-modal"
     >
       <div

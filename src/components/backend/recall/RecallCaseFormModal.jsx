@@ -6,6 +6,7 @@ import {
   validateRecallCase,
   findRecallCaseByName,
 } from '../../../lib/recallCaseValidation.js';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 /**
  * Phase 29.22 (2026-05-14) — Add/Edit modal for be_recall_cases.
@@ -17,6 +18,7 @@ import {
  * @param {()=>void} props.onClose
  */
 export function RecallCaseFormModal({ initial, existingCases = [], onSave, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(() =>
     initial ? { ...emptyRecallCaseForm(), ...initial } : emptyRecallCaseForm()
@@ -65,7 +67,7 @@ export function RecallCaseFormModal({ initial, existingCases = [], onSave, onClo
   // rounded cards in new-menu backend-content AND .admin-frontend-zone).
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain"
       onClick={() => !busy && onClose?.()}
     >
       <div

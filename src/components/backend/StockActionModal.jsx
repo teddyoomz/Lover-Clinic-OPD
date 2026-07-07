@@ -16,8 +16,10 @@ import { listProducts, listAllSellers } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { AdjustCreateForm } from './StockAdjustPanel.jsx';
 import { OrderCreateForm } from './OrderPanel.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 export default function StockActionModal({ mode, product, theme, onClose, onSaved }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const isDark = theme === 'dark';
   const { branchId } = useSelectedBranch();
   const [products, setProducts] = useState([]);
@@ -50,7 +52,7 @@ export default function StockActionModal({ mode, product, theme, onClose, onSave
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm overflow-y-auto flex items-start justify-center p-4 py-8"
+      className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain flex items-start justify-center p-4 py-8"
       data-testid="stock-action-modal"
       data-mode={mode}
     >

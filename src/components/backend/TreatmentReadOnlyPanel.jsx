@@ -38,6 +38,7 @@ import {
   resolveBranchDisplayName,
 } from '../../lib/treatmentDisplayResolvers.js';
 import { listDoctors, listStaff, listBranches } from '../../lib/scopedDataLayer.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // ─── Local helpers (mirror TreatmentTimelineModal.jsx) ──────────────────────
 
@@ -136,6 +137,8 @@ function ImageGridColumn({ label, images, isDark, onZoom }) {
 // consumers get correct two-step behaviour. Duplicate child handler removed
 // Phase 26.2b-review.
 function Lightbox({ src, label, onClose }) {
+  // AV205 — gate on src: hooks run before the early return below
+  useModalScrollLock(!!src);
   if (!src) return null;
   // audit-anti-vibe-code: AV78 lightbox-explicit-exception — fullscreen
   // image viewer; click-anywhere-closes IS expected UX. V115 (2026-05-23)
@@ -143,7 +146,7 @@ function Lightbox({ src, label, onClose }) {
   // touch target. Backdrop close already correct.
   // V117 (2026-05-23) — createPortal to document.body. AV117.
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       aria-label={`ขยายรูป ${label || ''}`}

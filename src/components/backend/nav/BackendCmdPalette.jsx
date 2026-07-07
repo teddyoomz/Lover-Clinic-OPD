@@ -10,8 +10,11 @@ import { Command } from 'cmdk';
 import { Search, CornerDownLeft, X } from 'lucide-react';
 import { NAV_SECTIONS, PINNED_ITEMS, TAB_COLOR_MAP } from './navConfig.js';
 import { useTabAccess } from '../../../hooks/useTabAccess.js';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   // Phase 13.5.2 — filter palette results by user permissions. Hidden tabs
   // never appear in fuzzy search; empty sections collapse out.
   const { canAccess } = useTabAccess();
@@ -67,7 +70,7 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
     //   - Desktop layout UNCHANGED (sm:max-w-xl + sm:max-h-[70vh] +
     //     sm:rounded-2xl all preserved).
     <div
-      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn overflow-y-auto overscroll-contain"
       onClick={(e) => { if (e.currentTarget === e.target) onOpenChange(false); }}
     >
       <Command

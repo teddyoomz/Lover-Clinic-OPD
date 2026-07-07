@@ -7,6 +7,7 @@ import { X, ChevronRight } from 'lucide-react';
 import { getMethodDocuments } from '../../../lib/paymentSummaryAggregator.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import DepositReceiptRow from './DepositReceiptRow.jsx';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 function fmtDateCE(iso) {
   if (!iso || typeof iso !== 'string') return '';
@@ -16,6 +17,7 @@ function fmtDateCE(iso) {
 }
 
 export default function PaymentDocsModal({ method, sales, deposits, range = {}, onViewSale, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
@@ -30,7 +32,7 @@ export default function PaymentDocsModal({ method, sales, deposits, range = {}, 
   return (
     // AV78: backdrop click does NOT close — explicit close only (X / ESC)
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       data-testid="payment-docs-modal"

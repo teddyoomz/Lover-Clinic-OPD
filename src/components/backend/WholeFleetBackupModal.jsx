@@ -13,8 +13,11 @@
 import { useState } from 'react';
 import { X, Loader2, Download, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { auth } from '../../firebase.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
+  // AV205 — gate on isOpen (early return below runs after hooks)
+  useModalScrollLock(!!isOpen);
   const [userNote, setUserNote] = useState('');
   const [branchIdFilter, setBranchIdFilter] = useState('');
   const [maxCustomers, setMaxCustomers] = useState('');
@@ -89,7 +92,7 @@ export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain"
       onClick={handleClose}
       data-testid="whole-fleet-backup-modal"
     >

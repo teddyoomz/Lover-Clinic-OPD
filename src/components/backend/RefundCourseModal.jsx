@@ -12,6 +12,7 @@ import { AlertCircle, Loader2, X } from 'lucide-react';
 import { refundCustomerCourse } from '../../lib/scopedDataLayer.js';
 import { auth } from '../../firebase.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * @param {object} props
@@ -21,6 +22,8 @@ import { fmtMoney } from '../../lib/financeUtils.js';
  *   - onCancel: () => void
  */
 export default function RefundCourseModal({ open, row, onSuccess, onCancel }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   // Suggest pro-rata default (qtyRemaining/qtyTotal × totalSpent), rounded down.
   const proRataDefault = (row && row.qtyTotal > 0)
     ? Math.floor((Number(row.qtyRemaining) / Number(row.qtyTotal)) * Number(row.totalSpent || 0))
@@ -72,7 +75,7 @@ export default function RefundCourseModal({ open, row, onSuccess, onCancel }) {
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       data-testid="refund-course-modal"

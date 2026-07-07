@@ -8,6 +8,7 @@ import {
   getStockTransfer, getStockBatch, listStockLocations,
 } from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime, fmtSlashDate } from '../../lib/dateFormat.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const STATUS_INFO = {
   0: { label: 'รอส่ง', color: 'amber' },
@@ -27,6 +28,7 @@ function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFrac
 const fmtDateTime = fmtSlashDateTime;
 
 export default function TransferDetailModal({ transferId, onClose }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [data, setData] = useState(null);
   const [batches, setBatches] = useState({});
   const [locations, setLocations] = useState([]);
@@ -65,7 +67,7 @@ export default function TransferDetailModal({ transferId, onClose }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
       <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--bd)] px-5 py-3 flex items-center gap-3">
           <Truck size={18} className="text-sky-400" />

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Check, Clock, MessageSquare, PhoneOff, Archive } from 'lucide-react';
 import { recordRecallOutcome, listStaff } from '../../../lib/scopedDataLayer.js';
 import StaffSelectField from '../StaffSelectField.jsx';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 /**
  * Phase 29 (2026-05-14) — Record-outcome modal.
@@ -92,6 +93,7 @@ const CLOSE_OPTION = {
 };
 
 export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const [outcome, setOutcome] = useState(null);
   const [outcomeNote, setOutcomeNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -153,7 +155,7 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
   return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain"
       data-testid="recall-outcome-modal"
     >
       <div

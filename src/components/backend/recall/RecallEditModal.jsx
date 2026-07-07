@@ -6,6 +6,7 @@ import { RecallCaseSelectField } from './RecallCaseSelectField.jsx';
 import { updateRecall } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
 import PhoneLink from '../../PhoneLink.jsx';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 /**
  * Bangkok-TZ-stable "today + N days" — mirror of RecallSlotCard's local helper.
@@ -55,6 +56,8 @@ function addDaysISO(isoDate, daysToAdd) {
  * @param {function} [props.onSaved] (id: string) => void — fires after successful save
  */
 export function RecallEditModal({ recall, recallCases = [], onClose, onSaved }) {
+  // AV205 — gate on recall (early return below runs after hooks)
+  useModalScrollLock(!!recall);
   const todayISO = thaiTodayISO();
   const [recallDate, setRecallDate] = useState(recall?.recallDate || '');
   const [reason, setReason] = useState(recall?.reason || '');
@@ -98,7 +101,7 @@ export function RecallEditModal({ recall, recallCases = [], onClose, onSaved }) 
   return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-contain"
       data-testid="recall-edit-modal"
     >
       <div

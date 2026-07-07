@@ -11,8 +11,10 @@
 // คอร์สจะถูกประกอบตาม pick แล้วใช้แบบ course ปกติจนหมด".
 
 import { useState, useMemo } from 'react';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 export default function PickProductsModal({ courseName, availableProducts, onCancel, onConfirm }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   // Initial state: all unchecked, qty = configured default for each option.
   const initialRows = useMemo(() => {
     return (availableProducts || []).map((p, idx) => ({
@@ -74,7 +76,7 @@ export default function PickProductsModal({ courseName, availableProducts, onCan
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pick-modal-title"

@@ -8,6 +8,7 @@ import { X, Loader2, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } fr
 import { auth } from '../../firebase.js';
 import { BUCKETS, bucketDefaultsForUI } from '../../lib/branchBackupBuckets.js';
 import { useMakeFreshStateMachine } from '../../lib/makeFreshStateMachine.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const BUCKET_ORDER = Object.keys(BUCKETS);
 
@@ -21,6 +22,7 @@ async function authedFetch(url, body) {
 }
 
 export default function MakeFreshModal({ branch, onClose, onComplete }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   const branchName = branch.branchName || branch.name || '?';
   const branchId = branch.branchId || branch.id;
 
@@ -42,7 +44,7 @@ export default function MakeFreshModal({ branch, onClose, onComplete }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto overscroll-contain" role="dialog">
       <div className="w-[95vw] max-w-2xl rounded-xl bg-[var(--bg-card)] border border-rose-800/40 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <header className="flex items-center justify-between sticky top-0 bg-[var(--bg-card)] pb-2">
           <h3 className="text-lg font-bold text-rose-300 flex items-center gap-2">

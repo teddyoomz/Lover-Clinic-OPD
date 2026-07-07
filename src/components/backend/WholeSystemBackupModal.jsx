@@ -6,8 +6,11 @@ import { useState } from 'react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../../firebase.js';
 import { Loader2, X, CheckCircle2 } from 'lucide-react';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 export default function WholeSystemBackupModal({ open, onClose, onComplete }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   const [stage, setStage] = useState('idle'); // idle | running | done | error
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
@@ -38,8 +41,8 @@ export default function WholeSystemBackupModal({ open, onClose, onComplete }) {
   if (!open) return null;
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] shadow-2xl w-full max-w-md p-6"
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
+      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-[var(--tx-heading)]">📥 สำรองทั้งระบบทันที</h2>

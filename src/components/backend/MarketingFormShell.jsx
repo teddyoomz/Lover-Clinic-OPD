@@ -12,6 +12,7 @@
 import { useEffect, useRef } from 'react';
 import { X, Save, Loader2, AlertCircle } from 'lucide-react';
 import { hexToRgb } from '../../utils.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const MAX_WIDTH_CLASS = {
   sm: 'max-w-sm',
@@ -61,6 +62,7 @@ export default function MarketingFormShell({
   clinicSettings,
   children,
 }) {
+  useModalScrollLock(true); // AV205 — form modals mount this shell only while open
   const closeBtnRef = useRef(null);
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -79,7 +81,7 @@ export default function MarketingFormShell({
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     // V85 (EOD9): fx-glow-u10 glassmorphism overrides bg/backdrop-filter — more depth + saturate
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 fx-glow-u10"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 fx-glow-u10 overflow-y-auto overscroll-contain"
     >
       <div
         className={`w-full ${widthClass} max-h-[92vh] rounded-2xl shadow-2xl flex flex-col bg-[var(--bg-surface)] border border-[var(--bd)] fx-glow-v10`}

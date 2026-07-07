@@ -26,6 +26,7 @@ import {
 } from '../../lib/treatmentDisplayResolvers.js';
 import { listDoctors, listStaff, listBranches } from '../../lib/scopedDataLayer.js';
 import { EditTreatmentBranchModal } from './EditAttributionModal.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -107,6 +108,8 @@ function imageThumbUrl(img) {
 // ─── Lightbox ──────────────────────────────────────────────────────────────
 
 function Lightbox({ src, label, onClose }) {
+  // AV205 — gate on src: hooks run before the early return below
+  useModalScrollLock(!!src);
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape') onClose?.();
@@ -127,7 +130,7 @@ function Lightbox({ src, label, onClose }) {
   // bypasses ancestor containing-block + stacking-context effects).
   return createPortal(
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 overflow-y-auto overscroll-contain"
       onClick={onClose}
       role="dialog"
       aria-label={label || 'ขยายรูป'}

@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import DateField from '../../DateField.jsx';
 import RequiredAsterisk from '../../ui/RequiredAsterisk.jsx';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 import {
   TIME_SLOTS,
   TYPE_LABEL,
@@ -123,6 +124,8 @@ export default function ScheduleEntryFormModal({
   staffKind = 'doctor',
   branchExamRooms = [],
 }) {
+  // AV205 — gate on open (early return below runs after hooks)
+  useModalScrollLock(!!open);
   // V56 / BS-15 — doctor-kind rooms only (matches V55 schedule-link
   // shownRooms pattern). Memoized so identity is stable across renders.
   const doctorRoomIds = useMemo(
@@ -231,8 +234,8 @@ export default function ScheduleEntryFormModal({
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] shadow-2xl overflow-hidden"
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] shadow-2xl"
         data-testid="schedule-entry-modal">
         <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--bd)]">
           <h2 className="text-sm font-bold text-[var(--tx-heading)]">

@@ -15,6 +15,7 @@ import DateField from '../DateField.jsx';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import { fmtSlashDate } from '../../lib/dateFormat.js';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -28,6 +29,7 @@ function currentAuditUser() {
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function OrderDetailModal({ orderId, onClose, onSaved }) {
+  useModalScrollLock(true); // AV205 — renders only while open
   // 2026-04-27 fix — branch list for human-readable name lookup.
   // Pre-fix the modal rendered `order.branchId` raw → user saw codes like
   // "BR-1777095572005-ae97f911" which are unreadable. resolveBranchName
@@ -144,7 +146,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto overscroll-contain">
       <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--bd)] px-5 py-3 flex items-center gap-3">

@@ -25,6 +25,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Copy, CheckCircle2, ExternalLink, Printer, QrCode } from 'lucide-react';
 import { generateQrDataUrl } from '../../lib/documentPrintEngine.js';
+import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 /**
  * Props:
@@ -43,6 +44,8 @@ function SendCustomerLinkModal({
   sessionName = '',
   alreadyProvisioned = false,
 }) {
+  // AV205 — gate on isOpen (early return below runs after hooks)
+  useModalScrollLock(!!isOpen);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -116,7 +119,7 @@ function SendCustomerLinkModal({
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain"
       data-testid="send-customer-link-modal"
     >
       <div

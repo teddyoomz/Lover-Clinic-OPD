@@ -12,6 +12,7 @@ import { X, Pill, ShoppingCart, Receipt, Users, Wallet, CreditCard } from 'lucid
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { resolveSellerName } from '../../../lib/documentFieldAutoFill.js';
 import { VipName } from '../../VipBadge.jsx';
+import { useModalScrollLock } from '../../../lib/useModalScrollLock.js';
 
 /** Format YYYY-MM-DD as dd/mm/yyyy ค.ศ. (admin convention — AR13). */
 function fmtDateCE(iso) {
@@ -37,6 +38,8 @@ const STATUS_LABEL = { paid: 'ชำระแล้ว', split: 'ชำระบ
  *   customer detail page.
  */
 export default function SaleDetailModal({ sale, onClose, onOpenCustomer, sellerLookup = [] }) {
+  // AV205 — gate on sale (early return below runs after hooks)
+  useModalScrollLock(!!sale);
   // Esc-to-close
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -78,7 +81,7 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer, sellerL
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sale-detail-title"

@@ -41,6 +41,7 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { VipName } from '../VipBadge.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import SaleInsuranceClaimFormModal from './SaleInsuranceClaimFormModal.jsx';
+import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 
 const STATUS_BADGE = {
   pending:  { label: 'รออนุมัติ', cls: 'bg-amber-700/20 border-amber-700/40 text-amber-400',   icon: Clock },
@@ -239,7 +240,8 @@ export default function SaleInsuranceClaimsTab({ clinicSettings }) {
       {/* Pay modal — transition to 'paid' with paidAmount */}
       {payOpen && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 overflow-y-auto overscroll-contain">
+          <ModalScrollLock />
           <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaySubmit}
             className="w-full max-w-md mx-4 rounded-2xl p-5 bg-[var(--bg-surface)] border border-[var(--bd)] space-y-3"
             data-testid="insurance-claim-pay-modal">
