@@ -94,7 +94,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setIsInitializing(false); });
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u); setIsInitializing(false);
+      // A1 (2026-07-07 instant cold-start): staff (non-anonymous) sessions ask the
+      // browser to protect IndexedDB (Firestore persistent cache) from eviction —
+      // Safari 17+ grants for home-screen PWAs. Best-effort; failure is harmless
+      // (falls back to evictable storage = today's behavior). Anonymous
+      // customer-link visitors intentionally excluded.
+      if (u && !u.isAnonymous) navigator.storage?.persist?.().catch(() => {});
+    });
     return () => unsub();
   }, []);
 

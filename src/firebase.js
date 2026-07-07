@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -20,10 +20,24 @@ export const auth = getAuth(app);
 // when the SDK detects the stream is broken. Flaky mobile networks / carrier
 // proxies half-connect WebSocket (looks connected but the snapshot stream never
 // delivers) → was the #1 cause of "stuck loading / empty skeleton" on mobile.
-// NO offline persistence (Q1 = fresh-always: customers must never see a stale
-// course balance / appointment time).
 // ponytail: autoDetect not forceLongPolling — escalate to force only if a
 // target carrier ever defeats auto-detection.
-export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+//
+// 2026-07-07 (instant cold-start, spec Q1=A) — persistent IndexedDB cache:
+// every onSnapshot now fires a cache snapshot ~instantly on cold start, then
+// the server snapshot follows and corrects it (stale-while-revalidate). This
+// REVERSES the 2026-06-16 "fresh-always" decision for STAFF surfaces only —
+// customer-facing pages (?session= ?schedule=) opt out via src/lib/freshGate.js
+// (render server-confirmed data only), and ?patient= reads /api/patient-view
+// (server API — fresh by construction). Write semantics UNCHANGED: awaited
+// setDoc/updateDoc resolve on server ack; transactions are server-only (Rule T).
+// Feature-detect: node/vitest + private-mode have no IndexedDB → omit localCache
+// = memory cache = pre-2026-07-07 behavior. Multi-tab manager: staff opens
+// frontend + backend tabs simultaneously (single shared cache, no lease fight).
+const canPersist = typeof indexedDB !== 'undefined';
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  ...(canPersist ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) } : {}),
+});
 export const storage = getStorage(app);
 export const appId = 'loverclinic-opd-4c39b';
