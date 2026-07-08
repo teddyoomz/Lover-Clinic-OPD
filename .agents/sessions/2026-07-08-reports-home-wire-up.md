@@ -1,12 +1,13 @@
-# Checkpoint 2026-07-08 — Reports-home fully functional — SHIPPED local, NOT deployed
+# Checkpoint 2026-07-08 — Reports-home fully functional — SHIPPED + DEPLOYED LIVE
 
 ## Summary
 User (verbatim, + screenshot of the รายงาน landing page): *"ทำให้หน้านี้ใช้ได้ทุก fucntion และเอาที่แนะนำเพิ่มเติมด้วยได้หรือเปล่า ถ้าได้ก็จัดการเลย"*.
 Finding = a **V52-class wiring gap**: `ReportsHomeTab` is a hand-maintained card grid that drifted from
 navConfig — 7 fully-built, registered, working report tabs (~2,445 LOC) were shown as "เร็วๆนี้"/hidden.
 `/brainstorming` (Q1=A wire-all + build-data-ready / Q2=remove-all-dead) → spec → `/writing-plans` →
-`/executing-plans` inline (per `feedback_no_large_agent_fanout` — no workflow fan-out). Master ahead of
-prod; NOT deployed (V18). Final gate: full vitest **17,573/17,573 · 0 fail** + build clean + Rule Q L1/L2.
+`/executing-plans` inline (per `feedback_no_large_agent_fanout` — no workflow fan-out). **DEPLOYED LIVE**
+(vercel-only `lover-clinic-n999lj1l7`, alias 200; rules UNCHANGED). Final gate: full vitest **17,573/17,573
+· 0 fail** + build clean + Rule Q L1/L2.
 
 ## Shipped (10 commits `20223de0`..`59f2b21f`, pushed; rules UNCHANGED → deploy = vercel-only)
 1. **Wired 7 mislabeled/hidden working tabs** on the home grid: กำไรขาดทุน→`reports-pnl` · รายจ่ายทั้งหมด→
@@ -56,13 +57,12 @@ MOD: reports/ReportsHomeTab.jsx · nav/navConfig.js · pages/BackendDashboard.js
 shell/subTabEmoji.js · phase16.3-flow-simulate.test.js (V21 61→65).
 
 ## Next Todo
-1. **User L1**: รายงาน → หน้ารายงาน → กดการ์ด (ล็อตหมดอายุ/ใกล้หมดสต็อค = ข้อมูลจริง · ขายค้างชำระ = ว่าง ✓ ถูกต้อง ·
-   ออนไลน์/คู่ค้า · กำไรขาดทุน P&L · Smart Audience) → เปิดถูกแท็บ.
-2. **Deploy** when user says "deploy" → vercel-only (rules UNCHANGED, no Probe-Deploy-Probe).
-3. Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
+1. **User L1 on LIVE prod**: รายงาน → หน้ารายงาน → กดการ์ด (ล็อตหมดอายุ/ใกล้หมดสต็อค = ข้อมูลจริง · ขายค้างชำระ = ว่าง
+   ✓ ถูกต้อง · ออนไลน์/คู่ค้า · กำไรขาดทุน P&L · Smart Audience) → เปิดถูกแท็บ.
+2. Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
 
 ## Resume Prompt
 Resume LoverClinic — 2026-07-08. Reports-home wire-up (7 tabs wired + 4 new report tabs + dead cards removed)
-SHIPPED local, NOT deployed (master ahead of prod `83210294`; rules UNCHANGED → vercel-only). Read CLAUDE.md →
+SHIPPED + DEPLOYED LIVE (master = prod, vercel-only, alias 200; rules UNCHANGED). Read CLAUDE.md →
 SESSION_HANDOFF.md → .agents/active.md → 00-session-start.md → this checkpoint. full vitest 17,573/17,573 + Rule
-Q L1/L2 green. Status: awaiting user L1 + explicit "deploy". No deploy without "deploy" (V18).
+Q L1/L2 green. Status: LIVE, awaiting user L1. No deploy without "deploy" (V18).

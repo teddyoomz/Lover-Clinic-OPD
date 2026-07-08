@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-07-08 — Reports-home wire-up: 7 mislabeled/hidden tabs wired + 4 data-ready new report tabs + dead cards removed. SHIPPED local, NOT deployed."
-status: "master ahead of prod (reports work). Awaiting user L1 on the reports page + explicit 'deploy'. Prior batch (EOD+3 + coldstart/AV205) already prod."
+updated_at: "2026-07-08 — Reports-home wire-up: 7 mislabeled/hidden tabs wired + 4 data-ready new report tabs + dead cards removed. SHIPPED + DEPLOYED LIVE (vercel-only)."
+status: "master = prod LIVE (alias 200 + fresh version.json). Awaiting user L1 on the reports page. Prior batch (EOD+3 + coldstart/AV205) also prod."
 branch: "master"
-last_commit: "59f2b21f — test(reports): V21 repoint TAB_PERMISSION_MAP 61→65"
+last_commit: "9c02daf9 — docs(state): reports-home wire-up checkpoint + handoff"
 tests: "full vitest 17,573/17,573 · 0 fail + build clean + Rule Q L2 (3 aggregators vs real prod) + Rule Q L1 Playwright PASS (home grid + stock-alert real-data render, screenshots eyeballed). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "83210294 (EOD+3 batch — LIVE). Reports-home work is NOT deployed (no 'deploy' this turn)."
-firestore_rules_version: "UNCHANGED (reports work = frontend-only Firestore reads → no rules change → deploy would be vercel-only)"
+production_commit: "= master (deployed 2026-07-08, vercel-only `lover-clinic-n999lj1l7`; firestore.rules UNCHANGED → no Probe-Deploy-Probe; alias 200)"
+firestore_rules_version: "UNCHANGED (reports = frontend-only Firestore reads → deploy was vercel-only)"
 ---
 
 # Active — 2026-07-08 — Reports-home fully functional
@@ -27,10 +27,8 @@ firestore_rules_version: "UNCHANGED (reports work = frontend-only Firestore read
   (pay-at-point-of-sale). Same class as the recon false-positive. `scripts/diag-reports-new-l2.mjs`.
 
 ## Next action
-- **User L1**: backend → รายงาน → หน้ารายงาน → กดการ์ดต่างๆ (โดยเฉพาะ ล็อตหมดอายุ/ใกล้หมดสต็อค,
+- **User L1 on LIVE prod**: backend → รายงาน → หน้ารายงาน → กดการ์ดต่างๆ (โดยเฉพาะ ล็อตหมดอายุ/ใกล้หมดสต็อค,
   ขายค้างชำระ [ควรว่าง = ถูกต้อง], การขายออนไลน์/คู่ค้า, กำไรขาดทุน P&L, Smart Audience) → เปิดถูกแท็บ + ข้อมูลจริง.
-- **Deploy**: awaiting explicit "deploy" (V18) → vercel-only (rules UNCHANGED → no Probe-Deploy-Probe).
 
 ## Outstanding user-triggered actions
-- Deploy the reports-home work (vercel-only) when ready.
-- Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
+- (none — reports-home DEPLOYED LIVE). Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
