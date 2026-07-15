@@ -1,5 +1,23 @@
 # SESSION_HANDOFF — Overflow Archive
 
+## Archived 2026-07-15 — SESSION_HANDOFF overflow: sessions `2026-06-29` → `2026-06-29` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-06-29 — V164 doctor-only header + Recall blink + V164-fix (per-date shift bug) + SKILL.md reconcile — SHIPPED + DEPLOYED
+
+master `1582675f`; prod `ef46aa8b` code DEPLOYED (`vercel --prod`, frontend-only; firestore.rules UNCHANGED → no Probe-Deploy-Probe). full vitest **16995/0 · success=true**; build clean.
+- **V164** (`76c1722b`, `/brainstorming`→spec→`/writing-plans`→inline): นัดหมาย header doctor-only (🩺 chips; none→"ไม่มีแพทย์เข้า"; dropped assistant chips); Recall-วันนี้ pill blinks while badge count>0 (gray↔red 1s ∞; reduced-motion→static red; reuses existing count, no new state). Q1/Q2/Q3=A. V21-fixups: v64-rtl R2.1 + v64-fix SC2. Rule Q L1 real-browser CSS.
+- **V164-fix** (`ef40ff12`, `/systematic-debugging` + Rule R): latent V64 bug — inline filter matched per-date by literal `type==='override'` but real shifts are `type='work'` (no 'override' type) → หมอมุก (work 17:00-20:00, นครราชสีมา) dropped → "ไม่มีแพทย์เข้า". Fix = NEW canonical `deriveWorkingDoctorShiftsForDate` (mergeSchedulesForDate override-wins + exported WORKING_TIME_TYPES); AppointmentHubView + TodaysDoctorsPanel share it (Rule of 3). class-grep: 1 instance, no siblings. AV199 + SS1-9 behavior + SG2 + SC2 repoint (was locking the bug). Rule Q L2: real helper vs real prod → หมอมุก returned.
+- **SKILL.md reconcile** (`1582675f`): the 2 audit-anti-vibe-code copies had silently diverged into complementary AV sets (AV80-96+190-199 only .claude; AV16-79+97-189+198 only .agents) → unified into one AV1-199 union, byte-identical + NEW `tests/skill-av-sync.test.js` guard. Surfaced when a cp during V164-fix overwrote .claude (caught + reverted same session; rtk `diff` falsely reported "identical").
+- **Honest gap (Rule Q)**: assembled-component render on an authed app (header shows หมอมุก; pill blinks) = USER L1 (auth-gated); L2 + unit + real-browser CSS done. Checkpoint `.agents/sessions/2026-06-29-v164-doctor-header-recall-blink.md`.
+
+---
+
+📂 **Older sessions (`2026-06-21` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+---
+
 ## Archived 2026-07-08 (reports-home trim)
 
 - **NEW (2026-06-29) — V164 doctor-only นัดหมาย header + Recall-วันนี้ blink + V164-fix (per-date 'work' shift bug) DEPLOYED + SKILL.md reconcile**: master `1582675f`; prod = `ef46aa8b` code (V164 + V164-fix) DEPLOYED `vercel --prod` (lover-clinic-app.vercel.app HTTP 200); **firestore.rules UNCHANGED → frontend-only, no Probe-Deploy-Probe**. **V164** (`76c1722b`, `/brainstorming`→spec→plan→inline): นัดหมาย header = **doctor-only** (🩺 chips name+hours; none → "ไม่มีแพทย์เข้า"; dropped assistant chips + old "ไม่มีพนักงานเข้างาน") + **Recall-วันนี้ pill blinks** while badge count>0 (gray↔red 1s ∞ / `-active` red-glow; reduced-motion → static red; reuses existing count). Q1/Q2/Q3=A. Rule Q L1 real-browser CSS. **V164-fix** (`ef40ff12`, `/systematic-debugging` + Rule R): latent V64 bug — inline filter matched per-date by literal `type==='override'` but real shifts are `type='work'` → หมอมุก dropped. Fix = NEW canonical `deriveWorkingDoctorShiftsForDate` shared by AppointmentHubView + TodaysDoctorsPanel; AV199; Rule Q L2 → หมอมุก returned. **SKILL.md reconcile**: 2 audit-anti-vibe-code copies unified into one AV1-199 union + `tests/skill-av-sync.test.js` guard. Full vitest **16995/0**. Checkpoint `.agents/sessions/2026-06-29-v164-doctor-header-recall-blink.md`.

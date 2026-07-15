@@ -32,3 +32,12 @@ firestore_rules_version: "UNCHANGED (reports = frontend-only Firestore reads →
 
 ## Outstanding user-triggered actions
 - (none — reports-home DEPLOYED LIVE). Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
+
+## ⚠️ Landmine — `scripts/trim-session-handoff.mjs` is BUGGY (do NOT run)
+It counts the HARD-CAP explainer text in SESSION_HANDOFF (which literally contains
+`` ### Session ...` ``) as a real session block → miscounts (self-reported "11 sessions") →
+duplicates whole sections + empties `## Current State`. Ran it 2026-07-08 at session-end →
+corrupted the file → reverted via `git checkout HEAD --`. **Trim by hand instead** (the file
+is currently correct at exactly 10 bullets + 10 blocks). It also left a PRE-EXISTING splice:
+the EOD+3 block sits inside the HARD-CAP sentence at ~line 10 (from an earlier run) — cosmetic,
+the block still reads, but worth repairing when someone fixes the script.
