@@ -177,6 +177,23 @@ describe('AV209.A — resolveCourseRowIndex (pure)', () => {
     });
     expect(res).toEqual({ removed: false, reason: 'terminal-status' });
   });
+
+  it('A15 R3-#1: applyCourseRefund refuses a CANCELLED row (both hint + courseId paths) — no double-reimbursement record', async () => {
+    const { applyCourseRefund } = await import('../src/lib/courseExchange.js');
+    // hint path (in-place cancel by the sale-cancel cascade)
+    const viaHint = { courses: [rowB({ status: 'ยกเลิก' })] };
+    expect(() => applyCourseRefund(viaHint, '', 500, {
+      courseIndex: 0, expectedName: 'คอร์ส B', expectedProduct: 'Prod B',
+    })).toThrow('course already cancelled');
+    // courseId path (byId returns terminal rows by design)
+    const viaId = { courses: [rowB({ courseId: 'cid-B', status: 'ยกเลิก' })] };
+    expect(() => applyCourseRefund(viaId, 'cid-B', 500, {})).toThrow('course already cancelled');
+    // refunded row control unchanged
+    const refunded = { courses: [rowB({ status: 'คืนเงิน' })] };
+    expect(() => applyCourseRefund(refunded, '', 500, {
+      courseIndex: 0, expectedName: 'คอร์ส B', expectedProduct: 'Prod B',
+    })).toThrow('course already refunded');
+  });
 });
 
 // ── B. adjustCourseRemainingQty EXECUTION (TOCTOU scenarios) ───────────────

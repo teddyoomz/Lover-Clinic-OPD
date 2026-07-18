@@ -246,6 +246,14 @@ export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
   const prevCourses = Array.isArray(customer.courses) ? customer.courses : [];
   const target = prevCourses[idx];
 
+  // Hunt R3-#1 fix (2026-07-19): mirror applyCourseCancel — a CANCELLED row
+  // must not be refundable (pre-existing hole since Phase 16.5; the sale-
+  // cancel cascade flips 'ยกเลิก' in place and has already reversed the
+  // money — a subsequent refund stamped refundAmount + a kind:'refund'
+  // audit doc = a double-reimbursement record).
+  if (target.status === 'ยกเลิก') {
+    throw new Error('course already cancelled');
+  }
   if (target.status === 'คืนเงิน') {
     throw new Error('course already refunded');
   }
