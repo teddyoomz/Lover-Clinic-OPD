@@ -30,7 +30,9 @@ describe('firebase.js — connection layer (Task 4)', () => {
     // tests). This test used to assert NO persistence; it now locks persistence
     // present + IDB feature-detect fallback (node/private-mode = memory =
     // pre-A1 behavior).
-    expect(src).toMatch(/persistentLocalCache\(\{\s*tabManager:\s*persistentMultipleTabManager\(\)\s*\}\)/);
+    // AV208 repoint (2026-07-18): the call gained cacheSizeBytes — lock the
+    // INVARIANT (tabManager inside persistentLocalCache), not the full literal.
+    expect(src).toMatch(/persistentLocalCache\(\{\s*tabManager:\s*persistentMultipleTabManager\(\)/);
     expect(src).toMatch(/typeof indexedDB !== 'undefined'/);
   });
 });

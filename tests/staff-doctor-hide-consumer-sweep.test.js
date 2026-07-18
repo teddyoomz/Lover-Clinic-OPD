@@ -28,9 +28,11 @@ describe('CS1 — Lookup-map consumers opt-in {includeHidden:true}', () => {
   });
 
   it('CS1.4 — TreatmentFormPage opts in for both listStaff + listDoctors', () => {
+    // AV208 repoint (2026-07-18): TFP's calls gained `, ...opts` (SWR source
+    // threading) — lock the includeHidden:true opt-in, tolerate trailing opts.
     const code = read('src/components/TreatmentFormPage.jsx');
-    expect(code).toMatch(/listStaff\(\s*\{\s*includeHidden:\s*true\s*\}/);
-    expect(code).toMatch(/listDoctors\(\s*\{\s*includeHidden:\s*true\s*\}/);
+    expect(code).toMatch(/listStaff\(\s*\{\s*includeHidden:\s*true[,\s]/);
+    expect(code).toMatch(/listDoctors\(\s*\{\s*includeHidden:\s*true[,\s]/);
   });
 
   it('CS1.5 — AdminDashboard opts in for both listStaff + listDoctors', () => {
