@@ -46,6 +46,22 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
 
+  // Warmup ping (2026-07-19, perf punchlist residual): `?ping=1` warms the
+  // EXPENSIVE cold-start path — firebase-admin initializeApp + the first
+  // Firestore RTT (a bounded 1-doc read) — without touching any token logic
+  // or returning any data. Driven by api/cron/patient-view-warmup.js so a
+  // customer's first link-open skips the ~3.5s cold serverless floor.
+  // Harmless unauthenticated (returns only {ok:true}; cost ≈ 1 doc read).
+  if (req.query.ping === '1') {
+    try {
+      const db = getDb();
+      await dataCol(db, 'be_customers').limit(1).get();
+      return res.status(200).json({ ok: true, ping: true });
+    } catch {
+      return res.status(200).json({ ok: true, ping: true, warm: 'partial' });
+    }
+  }
+
   const token = String(req.query.token || '');
   if (!token || token.length < 16) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 

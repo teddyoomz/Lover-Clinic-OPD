@@ -85,7 +85,8 @@
     { "path": "/api/cron/chat-history-retention-sweep", "schedule": "0 21 * * *" },
     { "path": "/api/cron/opd-session-cleanup-sweep", "schedule": "*/30 * * * *" },
     { "path": "/api/cron/patient-link-cleanup-sweep", "schedule": "30 21 * * *" },
-    { "path": "/api/cron/money-reconciliation-sweep", "schedule": "15 21 * * *" }
+    { "path": "/api/cron/money-reconciliation-sweep", "schedule": "15 21 * * *" },
+    { "path": "/api/cron/patient-view-warmup", "schedule": "*/5 * * * *" }
   ],
   "headers": [
     {
