@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>TFP Entry SWR Cold-Start Fix — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .phone { width: 300px; border: 2px solid #333; border-radius: 14px; padding: 12px; background: #0a0a0a; color: #ddd; font-size: 12px; min-height: 190px; }
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #dc2626; border-top-color: transparent; border-radius: 50%; }
+    .chip { display: inline-block; background: rgba(245,158,11,.15); color: #f59e0b; border: 1px solid rgba(245,158,11,.4); border-radius: 999px; padding: 1px 8px; font-size: 10px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .box { border: 1px solid var(--bd); border-radius: 8px; padding: .6em .9em; background: #fff; }
+    .arrow { align-self: center; color: var(--tx-muted); font-weight: bold; }
+    .flowlane { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin: .6em 0; }
+    .lane-label { min-width: 110px; font-weight: bold; font-size: .85em; color: var(--tx-muted); align-self: center; }
+  </style>
+</head>
+<body>
+
+<h1>TFP Entry SWR Cold-Start Fix — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-18 · <strong>Status:</strong> Approved direction (Q1=ก / Q2=A / Q3=A) — awaiting spec review ·
+  <strong>Implementation plan:</strong> <a href="../plans/2026-07-18-tfp-entry-swr-coldstart-fix.html">2026-07-18-tfp-entry-swr-coldstart-fix.html</a>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+  User report: เปิดหน้า TFP (TreatmentFormPage) บนเครื่องคลินิก (WiFi คลินิก) เจอ spinner
+  "กำลังโหลดฟอร์มการรักษา..." หมุนค้างนานมาก — บน 5G เร็ว, หน้าอื่นเร็วหมด, ช้าเฉพาะ TFP,
+  และเครื่องที่เปิด TFP บ่อยทั้งวันคือเครื่องที่ช้า.
+</p>
+<div class="section">
+  <strong>Root cause (วัดจริงบน LIVE prod, Playwright + admin-SDK diag — 2026-07-18):</strong>
+  <ol>
+    <li><strong>Architectural:</strong> TFP เป็นหน้า staff หน้าเดียวที่ first paint ผูก network 100% —
+      ทุกการเปิดดึง 6 collections (products 354 + courses 239 + doctors + staff + dfGroups + dfRates
+      ≈ <strong>600 docs / 520-630KB</strong>) จาก server ก่อนปิด spinner. TFP หลุดจาก AV206 SWR sweep
+      (ไม่อยู่ทั้ง ADOPT/SANCTIONED — classifier ไม่ scan ไฟล์นี้).</li>
+    <li><strong>Cache eviction บนเครื่องใช้หนัก:</strong> working set ทั้งแอป ≈ 17.6MB raw ≈ ~44MB ใน
+      IndexedDB ชนเพดาน default 40MB → LRU เขี่ย query targets ของ TFP ระหว่างวัน → เปิดซ้ำ = cold pull เต็ม.</li>
+    <li><strong>WiFi คลินิกคุณภาพต่ำเป็นตัวคูณ:</strong> วัดจริง — cold pull: 2.4s (เน็ทดี) / 7.2s (1.5Mbps/200ms) /
+      23.8s (0.4Mbps/500ms); congestion + loss จริงคูณต่อเป็น 30-60s+. Warm (resume-token delta ~4KB) ≤3.2s เสมอ.</li>
+  </ol>
+  <strong>ไม่ใช่:</strong> การโดน block (เครื่องเดียวกัน IP เดียวกันเร็ว; Firestore ไม่มี IP block) · ไม่ใช่ cookie
+  (Firestore ใช้ IndexedDB; การล้าง cache/temp ยิ่งแย่ลงเพราะบังคับ cold pull).
+</div>
+
+<h2>Mockup Design</h2>
+<div class="row">
+  <div class="mockup">
+    <div class="mockup-label">BEFORE — เครื่องคลินิก WiFi แย่ (ทุกการเปิด TFP)</div>
+    <div class="phone">
+      <div style="text-align:center; padding-top:60px;">
+        <span class="spin"></span>
+        <div style="color:#9ca3af; margin-top:8px;">กำลังโหลดฟอร์มการรักษา...</div>
+        <div style="color:#ef4444; margin-top:14px; font-size:11px;">ค้าง 10–60s+ (รอดึง 600 docs จาก server)</div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">AFTER — cache paint ทันที + server แก้ตามหลังเงียบๆ</div>
+    <div class="phone">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong style="color:#fff;">บันทึกการรักษา — นางสาว อริยาภรณ์</strong>
+        <span class="chip">⟳ กำลังซิงค์…</span>
+      </div>
+      <div style="border:1px solid #333; border-radius:8px; padding:6px; margin-top:8px;">Vital Signs — BP [____] HR [____]</div>
+      <div style="border:1px solid #333; border-radius:8px; padding:6px; margin-top:6px;">ข้อมูลการใช้คอร์ส — ☐ Shock Wave (5/12)</div>
+      <div style="border:1px solid #333; border-radius:8px; padding:6px; margin-top:6px;">ยา/สินค้า [ค้นหา…]</div>
+      <div style="color:#22c55e; margin-top:8px; font-size:11px;">ฟอร์มโผล่ ≤1s จาก cache — chip หายเมื่อ server ยืนยัน</div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Save-gate (Q2=A) — กดบันทึกช่วง server ยังไม่ยืนยัน (window วินาทีเดียว, แทบไม่มีใครเจอ)</div>
+  <div class="row">
+    <div class="box">ปุ่ม <strong>บันทึก</strong> → หมุนสั้นๆ (สถานะ saving เดิมที่มีอยู่แล้ว)</div>
+    <div class="arrow">→</div>
+    <div class="box">await serverFreshPromise (bounded 15s)</div>
+    <div class="arrow">→</div>
+    <div class="box">เขียนจริงผ่าน transaction เดิม (Rule T)</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">TFP open → SWR paint → server correct → save (ชั้นที่ 1)</div>
+  <div class="flowlane"><div class="lane-label">เปิด TFP</div>
+    <div class="box">loadFormData เรียก <code>fetchAll('cache')</code><br><small>6 getters + getCustomer ด้วย <code>{source:'cache'}</code></small></div>
+    <div class="arrow">→</div>
+    <div class="box"><code>setOptions(cacheResult)</code> + <code>setLoading(false)</code><br><small>ฟอร์มโผล่ทันที (≤1s), chip ⟳ แสดง</small></div>
+    <div class="arrow">→</div>
+    <div class="box">background: <code>fetchAll('server')</code><br><small>ถึงแล้ว → setOptions(serverResult) + chip หาย + resolve serverFreshPromise</small></div>
+  </div>
+  <div class="flowlane"><div class="lane-label">cache ว่าง</div>
+    <div class="box">cache คืน empty/บางส่วน → คง spinner ไว้ รอ server (พฤติกรรมเดิม)<br><small>กัน false-empty form — mirror หลัก swrRead "empty-cache ไม่ paint" (AV206)</small></div>
+  </div>
+  <div class="flowlane"><div class="lane-label">กดบันทึก</div>
+    <div class="box">handleSubmit → <code>await serverFreshPromise</code> (bounded 15s)</div>
+    <div class="arrow">→</div>
+    <div class="box">เส้นเขียนเดิมทั้งหมด: deductCourseItems / deductStock / createBackendSale ใน transaction ฝั่ง server (Rule T — over-deduct เป็นไปไม่ได้อยู่แล้ว)</div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">ชั้นที่ 2+3 — cache cap + prefetch (data flow)</div>
+  <div class="flowlane"><div class="lane-label">firebase.js</div>
+    <div class="box"><code>persistentLocalCache({ cacheSizeBytes: 200MB })</code><br><small>working set ~44MB ไม่ชนเพดานอีก → LRU ไม่เขี่ย TFP targets → resume-token delta (~4KB) ทำงานทุกการเปิดซ้ำ</small></div>
+  </div>
+  <div class="flowlane"><div class="lane-label">Shell idle</div>
+    <div class="box">Backend/Admin shell paint เสร็จ</div>
+    <div class="arrow">→ +3-5s idle →</div>
+    <div class="box">prefetch <code>listProducts + listCourses + listDfGroups + listDfStaffRates</code> (server, catch-swallow, ครั้งเดียว/session)</div>
+    <div class="arrow">→</div>
+    <div class="box">IndexedDB อุ่นก่อน user กดเข้า TFP ครั้งแรกของวัน</div>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+  <ol>
+    <li><strong>ชั้น 1 — SWR-adopt TFP (ไฟล์หลัก <code>src/components/TreatmentFormPage.jsx</code>):</strong>
+      แยก body ของ load-form effect (บรรทัด ~753-1068) เป็น <code>fetchFormData(source)</code> ภายใน effect เดิม
+      แล้ววิ่งผ่านแพทเทิร์น <code>swrRun</code> ที่มีอยู่ (<code>src/lib/swrRead.js</code>): cache-paint → server-correct.
+      getters ที่รองรับ <code>{source:'cache'}</code> แล้ว: listProducts / listCourses / listStaff / listDoctors (grep-verified);
+      ต้องขยาย 4 ตัว: <code>listDfGroups</code> + <code>listDfStaffRates</code> (ผ่าน <code>_getDocsBySource</code> เดิม)
+      และ <code>getCustomer</code> + <code>getTreatment</code> (เพิ่ม single-doc variant <code>_getDocBySource</code> แพทเทิร์นเดียวกัน).
+      Apply → setState เท่านั้น (AV206.c). Edit-mode getTreatment ร่วม SWR ด้วย (server correction ทับก่อน user แตะฟอร์ม).
+      แสดง sync chip มุมหัวฟอร์มระหว่างรอ server (reuse ภาษา/สไตล์ SyncIndicator ของ hub).</li>
+    <li><strong>Save-gate (Q2=A):</strong> effect เก็บ <code>serverFreshRef.current = serverPromise</code>;
+      <code>handleSubmit</code> await ก่อนเข้าเส้นเขียน (bounded 15s — เกินนั้นปล่อยไป ให้ transaction ฝั่ง server
+      เป็นผู้ตัดสิน/แจ้ง error จริง). ปุ่มบันทึกใช้สถานะ saving เดิม ไม่มี UI ใหม่.</li>
+    <li><strong>ชั้น 2 — cache cap (<code>src/firebase.js</code>):</strong> <code>cacheSizeBytes: 200 * 1024 * 1024</code>
+      (ไม่ใช้ UNLIMITED — คง GC เป็น backstop กัน IDB โตไม่จำกัดข้ามปี).</li>
+    <li><strong>ชั้น 3 — idle prefetch (Q3=A):</strong> module <code>src/lib/tfpPrefetch.js</code> — ยิง 4 listers
+      (server source, <code>Promise.allSettled</code>, ครั้งเดียว/session ผ่าน module flag) หลัง shell mount + idle ~3-5s.
+      Mount จุดเดียวต่อ shell: BackendDashboard + AdminDashboard (staff-authed เท่านั้น; ไม่แตะ customer-facing routes).</li>
+    <li><strong>ชั้น 4 — institutional lock:</strong> ขยาย AV206 classifier
+      (<code>tests/instant-coldstart-av206-classifier.test.js</code>) ให้ scan mount-blocking one-shot loads ทั้ง
+      <code>src/components/**</code> + <code>src/pages/**</code> (ไม่ใช่เฉพาะรายชื่อ ADOPT) — ไฟล์ที่มี pattern
+      ต้องอยู่ใน inventory (ADOPT/SANCTIONED) ไม่งั้น fail. เพิ่ม TFP เข้า ADOPT table ใน
+      <code>docs/perf/swr-inventory.md</code>.</li>
+  </ol>
+</div>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = ก:</strong> Defense-in-depth 3 ชั้น (SWR-adopt TFP + cache cap 200MB + classifier expansion) — ไม่เอา minimal (ข) / listener-ize (ค).</li>
+  <li><strong>Q2 = A:</strong> Save-gate แบบรอเงียบๆ อัตโนมัติ (await serverFreshPromise, bounded 15s, ใช้ saving state เดิม).</li>
+  <li><strong>Q3 = A:</strong> Idle prefetch products+courses+DF หลัง shell paint (~3-5s, ครั้งเดียว/session) เพื่ออุ่นเครื่อง cache เย็นก่อนเปิด TFP แรกของวัน.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><strong>Warm-cache TFP open</strong> (in-app, ไม่ reload): ฟอร์มโผล่จาก cache <strong>≤1.5s แม้ throttle 400kbps/500ms</strong> — วัดด้วย probe เดิม (<code>scripts/diag-tfp-cold-timeline.mjs</code> WARM mode) ก่อน/หลัง.</li>
+  <li><strong>Cold-cache + prefetch:</strong> เปิด backend shell รอ ≥10s แล้วเข้า TFP ครั้งแรก → พฤติกรรมเท่า warm (prefetch อุ่นให้แล้ว).</li>
+  <li><strong>Rule Q L2:</strong> re-run diag probes บน LIVE prod — TFP reopen ดึง Firestore ≤ หลักสิบ KB (resume delta) ไม่ใช่ 630KB.</li>
+  <li><strong>Rule Q L1:</strong> Playwright บน LIVE prod + throttle เทียบ before/after + screenshot eyeball (Q-vis); ตามด้วย user L1 บนเครื่องคลินิกที่ช้าจริง.</li>
+  <li><strong>ไม่มี regression เส้นเขียน:</strong> full vitest เขียว; save produces docs เหมือนเดิม; AV206.c classifier เขียว (cache ไม่ถึง write โดยไม่ผ่าน save-gate); empty-cache ไม่ paint ฟอร์มเปล่า.</li>
+  <li><strong>Classifier ใหม่จับของจริง:</strong> ลบ TFP ออกจาก inventory → test ต้องแดง (พิสูจน์ scan ทำงาน).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<div class="section">
+  <ul>
+    <li><strong>Stale-price display window (วินาทีเดียว):</strong> ราคา/รายการจาก cache อาจเก่าชั่วครู่ก่อน server ทับ —
+      semantics เดิมของฟอร์มคือ snapshot-at-pick อยู่แล้ว + เงิน/สต็อค validate ใน tx ฝั่ง server (Rule T) → ความเสี่ยงจริง ≈ 0 แต่บันทึกไว้ตรงนี้.</li>
+    <li><strong>iOS IDB eviction หลังทิ้งแอปนาน:</strong> degrade กลับเป็นพฤติกรรม server-first วันนี้ (ครั้งเดียวแล้วอุ่น) — ไม่แย่กว่าเดิม (precedent AV206).</li>
+    <li><strong>Prefetch bandwidth:</strong> ~630KB × 1 ครั้ง/session ทุกเครื่อง staff — ยอมรับ (เครื่องคลินิกเปิด TFP ตลอดวันอยู่แล้ว; mobile staff ก็ประหยัดกว่าที่ต้อง cold-pull ตอนเปิดจริง).</li>
+    <li><strong>เพดาน 200MB:</strong> ถ้า working set โตเกินในอนาคต (หลายปี) LRU กลับมา churn — เฝ้าด้วย diag
+      <code>scripts/diag-staffapp-working-set.mjs</code> (เก็บเป็น recurring health check).</li>
+    <li><strong>Multi-tab primary-throttle stall (ยังไม่ได้พิสูจน์ — Q-honest):</strong> เป็นไปได้ว่าเครื่องคลินิกเปิดหลาย tab
+      แล้ว primary tab โดน background-throttle ทำ query ค้างเพิ่ม — fix ชุดนี้ลดผลกระทบ (paint ไม่รอ network แล้ว)
+      แต่ไม่ได้แก้กลไกนั้นตรงๆ; ถ้า user L1 หลัง deploy ยังเจอค้าง → รอบสอง investigate multi-tab โดยเฉพาะ.</li>
+  </ul>
+</div>
+
+<h2>Evidence appendix (Rule R/Q probes, 2026-07-18)</h2>
+<div class="section">
+  <ul>
+    <li><code>scripts/diag-tfp-entry-payload.mjs</code> — 6-collection payload: 600 docs / ~730KB raw (นครราชสีมา-scoped).</li>
+    <li><code>scripts/diag-tfp-entry-probe.mjs</code> + <code>diag-tfp-cold-timeline.mjs</code> + <code>diag-tfp-idbcold-probe.mjs</code> —
+      ตาราง cold/warm × 3 network profiles (ดู Purpose) — ทุกตัววิ่งบน LIVE prod จากเครื่องคลินิกจริง.</li>
+    <li><code>scripts/diag-staffapp-working-set.mjs</code> — 17.6MB raw / ~44MB IDB vs 40MB cap.</li>
+  </ul>
+</div>
+
+</body>
+</html>
