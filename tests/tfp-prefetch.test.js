@@ -2,20 +2,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 
-const calls = { products: 0, courses: 0, dfGroups: 0, dfRates: 0 };
+const calls = { products: 0, courses: 0, dfGroups: 0, dfRates: 0, doctors: 0, staff: 0 };
 let rejectAll = false;
 vi.mock('../src/lib/scopedDataLayer.js', () => ({
   listProducts: vi.fn(async () => { calls.products++; if (rejectAll) throw new Error('x'); return []; }),
   listCourses: vi.fn(async () => { calls.courses++; if (rejectAll) throw new Error('x'); return []; }),
   listDfGroups: vi.fn(async () => { calls.dfGroups++; if (rejectAll) throw new Error('x'); return []; }),
   listDfStaffRates: vi.fn(async () => { calls.dfRates++; if (rejectAll) throw new Error('x'); return []; }),
+  // R2-B#5: doctors + staff warmed too (TFP cache-MISS gate requires doctors)
+  listDoctors: vi.fn(async () => { calls.doctors++; if (rejectAll) throw new Error('x'); return []; }),
+  listStaff: vi.fn(async () => { calls.staff++; if (rejectAll) throw new Error('x'); return []; }),
 }));
 
 import { warmTfpMasterData, _resetTfpPrefetchForTests } from '../src/lib/tfpPrefetch.js';
 
 beforeEach(() => {
   _resetTfpPrefetchForTests();
-  calls.products = calls.courses = calls.dfGroups = calls.dfRates = 0;
+  calls.products = calls.courses = calls.dfGroups = calls.dfRates = calls.doctors = calls.staff = 0;
   rejectAll = false;
   vi.useFakeTimers();
 });
@@ -31,6 +34,8 @@ describe('AV208 P — warmTfpMasterData', () => {
     expect(calls.courses).toBe(1);
     expect(calls.dfGroups).toBe(1);
     expect(calls.dfRates).toBe(1);
+    expect(calls.doctors).toBe(1);   // R2-B#5
+    expect(calls.staff).toBe(1);     // R2-B#5
   });
 
   it('P2 once per session — a second call (2nd shell mounting) is a no-op', async () => {

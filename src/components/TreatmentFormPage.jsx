@@ -771,6 +771,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     let hydrated = false;   // AV208: Part-2 edit hydration runs at most ONCE across both passes
     let prefilled = false;  // AV208: Part-3 patientData prefill once-only (server pass must not clobber typing)
 
+    // R2-#2b fix (bug-hunt 2026-07-18): ONE shared server point-read of the
+    // treatment for BOTH passes — the R1-lens2-#1 server-always read issued
+    // twice (once per pass; the 2nd was unused waste) and, sitting inside the
+    // sequential cache leg, delayed serverLoad by an extra RTT. Memoized
+    // promise: both passes await the SAME read; each await attaches its own
+    // handler so an offline rejection is never unhandled (cache leg → MISS,
+    // server leg → rethrow → setError).
+    let existingPromise = null;
+    const fetchExistingOnce = () => {
+      if (!existingPromise) {
+        existingPromise = (async () => {
+          const { getTreatment: getBackendTreatment } = await import('../lib/scopedDataLayer.js');
+          return getBackendTreatment(treatmentId);
+        })();
+      }
+      return existingPromise;
+    };
+
     // FETCH-ONLY — no setState. Cache pass returns null (= MISS, no paint)
     // when any paint-critical piece is absent; server-leg errors propagate.
     const fetchFormData = async (source) => {
@@ -781,7 +799,6 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       // universal — branch soft-gate via filterStaffByBranch /
       // filterDoctorsByBranch (Phase BS V1) is preserved below.
       const {
-        getTreatment: getBackendTreatment,
         getCustomer: getBackendCustomer,
         listDfGroups,
         listDfStaffRates,
@@ -790,6 +807,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         listStaff,
         listDoctors,
       } = await import('../lib/scopedDataLayer.js');
+      // (getTreatment is imported inside fetchExistingOnce — R2-#2b single shared read)
       const opts = source ? { source } : {};
       // V41 (2026-05-08) — opt-in for full lookup map (handles past-record
       // name display for hidden persons) + filter visible client-side for
@@ -805,7 +823,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       ]);
       // AV208 no-empty-paint: a cold cache yields empty lists → the whole
       // cache pass is a MISS (never paint a form with empty pickers).
-      if (source === 'cache' && productItems.length === 0 && courseItems.length === 0) { debugLog('tfp-swr', 'cache MISS: empty lists'); return null; }
+      // R2-B#5 hardening (2026-07-18): doctors included — a PARTIAL eviction
+      // (products cached, doctors evicted) must not paint an empty แพทย์
+      // picker for the sync window; a clinic always has ≥1 doctor.
+      if (source === 'cache' && ((productItems.length === 0 && courseItems.length === 0) || doctorItems.length === 0)) { debugLog('tfp-swr', 'cache MISS: empty lists'); return null; }
       let custData = null;
       if (customerId) {
         try { custData = await getBackendCustomer(customerId, opts); } catch (e) { if (source !== 'cache') debugLog('tfp-swr', 'getCustomer failed', e); custData = null; }
@@ -815,16 +836,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       let existing = null;
       if (isEdit && treatmentId) {
         // R1-lens2-#1 fix (bug-hunt 2026-07-18): the treatment doc is fetched
-        // SERVER-FRESH on BOTH passes (no {source:'cache'}) — hydration +
+        // SERVER-FRESH (never {source:'cache'}) — hydration +
         // existingStockSnapshot must never freeze to a stale cache copy, or a
         // concurrent edit from another machine (vitals station vs doctor
         // station) gets silently overwritten on an image-only save AND the
         // stock diff-on-save false-negatives (treatment doc vs stock ledger
         // divergence). Edit-mode paint = cache lists (the 630KB win) + ONE
-        // server point-read (~1 RTT) — deliberate, pre-AV208 freshness parity.
+        // shared server point-read (~1 RTT) — deliberate, pre-AV208 freshness
+        // parity. R2-#2b: the read is memoized (fetchExistingOnce) so both
+        // passes share a single network read.
         // pre-AV208 fidelity: the SERVER leg's error PROPAGATES (→ setError);
         // the cache leg swallows (offline point-read = MISS, not an error).
-        try { existing = await getBackendTreatment(treatmentId); }
+        try { existing = await fetchExistingOnce(); }
         catch (e) { if (source !== 'cache') throw e; existing = null; }
         // edit-mode cache paint must include the treatment — else MISS.
         if (source === 'cache' && !existing) { debugLog('tfp-swr', 'cache MISS: no server treatment (offline)'); return null; }
@@ -1144,11 +1167,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // no-deduct). Fix: SERIALIZE the applies into a chain (also removes
           // any cache/server apply interleaving) and gate BOTH the save-gate
           // and the loading-clear on the chain's completion.
+          // R2-#1a fix (bug-hunt 2026-07-18): each chain link carries its OWN
+          // catch — a rejected cache apply must never poison the chain (the
+          // server apply always runs; pre-R1 resilience restored) and must
+          // never sit as a transient unhandledrejection. applyFormData has no
+          // realistic throw path today (every risky spot is try/wrapped) —
+          // this is defense-in-depth; failures are logged, not swallowed
+          // silently (debugLog).
           let applyChain = Promise.resolve();
           const run = swrRun({
             cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
             serverLoad: () => fetchFormData(undefined),
-            apply: (b, meta) => { applyChain = applyChain.then(() => applyFormData(b, meta)); },
+            apply: (b, meta) => {
+              applyChain = applyChain
+                .then(() => applyFormData(b, meta))
+                .catch((e) => { debugLog('tfp-swr', 'applyFormData failed', e); });
+            },
           });
           // save-gate handle (Q2=A): handleSubmit awaits this (bounded 15s) so
           // money/stock serialization never runs against unconfirmed cache

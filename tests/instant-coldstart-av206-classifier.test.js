@@ -129,7 +129,10 @@ describe('AV208 — full-scan: every mount-blocking Promise.all list-load is cla
       }
       return acc;
     };
-    const re = /await Promise\.all\(\[[^\]]*?list(Products|Courses|Staff|Doctors|DfGroups|DfStaffRates|OnlineSales|VendorSales|AllSellers)/s;
+    // R2-B#4 hardening (2026-07-18): (a) Promise.allSettled matched too;
+    // (b) [\s\S]{0,400}? instead of [^\]]*? — a `.catch(() => [])` (which
+    // contains `]`) before the first list* no longer hides the surface.
+    const re = /await Promise\.all(?:Settled)?\(\[[\s\S]{0,400}?list(Products|Courses|Staff|Doctors|DfGroups|DfStaffRates|OnlineSales|VendorSales|AllSellers)/;
     const inventory = read('docs/perf/swr-inventory.md');
     const offenders = [];
     for (const f of [...walk('src/components'), ...walk('src/pages')]) {

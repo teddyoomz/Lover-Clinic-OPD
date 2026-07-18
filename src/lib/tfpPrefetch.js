@@ -13,8 +13,14 @@ export function warmTfpMasterData({ delayMs = 4000 } = {}) {
   fired = true;
   setTimeout(async () => {
     try {
-      const { listProducts, listCourses, listDfGroups, listDfStaffRates } = await import('./scopedDataLayer.js');
-      await Promise.allSettled([listProducts(), listCourses(), listDfGroups(), listDfStaffRates()]);
+      // R2-B#5 hardening: doctors + staff included so a partially-evicted
+      // cache can't paint TFP with empty แพทย์/ผู้ช่วย pickers (both are tiny
+      // universal lists; the TFP cache-MISS gate also requires doctors).
+      const { listProducts, listCourses, listDfGroups, listDfStaffRates, listDoctors, listStaff } = await import('./scopedDataLayer.js');
+      await Promise.allSettled([
+        listProducts(), listCourses(), listDfGroups(), listDfStaffRates(),
+        listDoctors({ includeHidden: true }), listStaff({ includeHidden: true }),
+      ]);
     } catch { /* best-effort warm — never surfaces */ }
   }, delayMs);
 }

@@ -40,13 +40,17 @@ describe('AV208 C2 — fetchFormData threads {source} into all 8 fetches', () =>
     expect(body).toMatch(/listDfGroups\(opts\)/);
     expect(body).toMatch(/listDfStaffRates\(opts\)/);
   });
-  it('C2.2 customer fetch receives opts; treatment fetch is SERVER-ALWAYS (R1-lens2-#1)', () => {
+  it('C2.2 customer fetch receives opts; treatment fetch is SERVER-ALWAYS + SINGLE shared read (R1-lens2-#1 + R2-#2b)', () => {
     expect(body).toMatch(/getBackendCustomer\(customerId, opts\)/);
     // the treatment doc must NEVER be cache-sourced — hydration +
     // existingStockSnapshot freezing to a stale cache copy caused the
     // concurrent-edit lost-update + stock-diff false-negative (bug-hunt R1).
-    expect(body).toMatch(/getBackendTreatment\(treatmentId\)/);
-    expect(body).not.toMatch(/getBackendTreatment\(treatmentId, opts\)/);
+    // R2-#2b: both passes share ONE memoized server point-read.
+    expect(body).toMatch(/await fetchExistingOnce\(\)/);
+    expect(tfp).toMatch(/let existingPromise = null;/);
+    expect(tfp).toMatch(/const fetchExistingOnce = \(\) => \{/);
+    expect(tfp).toMatch(/return getBackendTreatment\(treatmentId\);/);
+    expect(tfp).not.toMatch(/getBackendTreatment\(treatmentId, opts\)/);
   });
   it('C2.3 fetchFormData is FETCH-ONLY (no setState calls inside)', () => {
     expect(body).not.toMatch(/setOptions\(|setDfGroups\(|setLoading\(|setTfpSyncing\(/);
@@ -55,8 +59,8 @@ describe('AV208 C2 — fetchFormData threads {source} into all 8 fetches', () =>
 
 describe('AV208 C3 — the 3 cache-MISS gates (no false paint)', () => {
   const body = fetchBody;
-  it('C3.1 empty product+course lists → MISS', () => {
-    expect(body).toMatch(/source === 'cache' && productItems\.length === 0 && courseItems\.length === 0/);
+  it('C3.1 empty product+course lists OR empty doctors → MISS (R2-B#5: partial eviction must not paint empty pickers)', () => {
+    expect(body).toMatch(/source === 'cache' && \(\(productItems\.length === 0 && courseItems\.length === 0\) \|\| doctorItems\.length === 0\)/);
   });
   it('C3.2 customer absent from cache → MISS', () => {
     expect(body).toMatch(/source === 'cache' && !custData/);
@@ -103,12 +107,15 @@ describe('AV208 C5 — chip honesty + orchestrator', () => {
     expect(orch).toMatch(/await run;/);
   });
 
-  it('C5.6 R1-#1 fix: applies are SERIALIZED into applyChain and the orchestrator awaits the chain (spinner + save-gate cover the hydration tail)', () => {
-    const orch = slice('let applyChain = Promise.resolve();', 1400);
-    expect(orch).toMatch(/applyChain = applyChain\.then\(\(\) => applyFormData\(b, meta\)\);/);
+  it('C5.6 R1-#1 + R2-#1a: applies SERIALIZED into applyChain with PER-LINK catch; orchestrator awaits the chain', () => {
+    const orch = slice('let applyChain = Promise.resolve();', 1700);
+    expect(orch).toMatch(/applyChain = applyChain\s*\.then\(\(\) => applyFormData\(b, meta\)\)\s*\.catch\(\(e\) => \{ debugLog\('tfp-swr', 'applyFormData failed', e\); \}\);/);
     expect(orch).toMatch(/await applyChain;/);
     // ANTI: the fire-and-forget shape that opened the V101-class window
     expect(tfp).not.toMatch(/apply: \(b, meta\) => \{ applyFormData\(b, meta\); \}/);
+    // ANTI: a catch-less chain link poisons the chain (R2-#1a — server apply
+    // must still run after a rejected cache apply)
+    expect(tfp).not.toMatch(/applyChain\.then\(\(\) => applyFormData\(b, meta\)\);/);
   });
   it('C5.5 effect cleanup cancels + applyFormData guards on cancelled', () => {
     expect(tfp).toMatch(/return \(\) => \{ cancelled = true; \};/);

@@ -7,13 +7,20 @@ import { swrRun } from '../src/lib/swrRead.js';
 
 // ── Faithful mirror of the TFP orchestration (fetch gates + once-guards +
 //    chip + loading gate + save-gate handle) with injected fetchers/state ──
-function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId = null, fetchers }) {
+function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId = null, fetchers, failCacheApply = false }) {
   const state = {
     loading: true, syncing: false, error: '', applies: [], hydrations: 0, prefills: 0,
-    options: null, cancelled: false, serverFresh: Promise.resolve(),
+    options: null, cancelled: false, serverFresh: Promise.resolve(), applyFailures: 0,
   };
   let hydrated = false;
   let prefilled = false;
+
+  // R2-#2b mirror: ONE shared server point-read for both passes
+  let existingPromise = null;
+  const fetchExistingOnce = () => {
+    if (!existingPromise) existingPromise = fetchers.getTreatment(treatmentId);
+    return existingPromise;
+  };
 
   const fetchFormData = async (source) => {
     const opts = source ? { source } : {};
@@ -29,9 +36,9 @@ function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId
     }
     let existing = null;
     if (isEdit && treatmentId) {
-      // R1-lens2-#1 fix mirror: treatment fetched SERVER-FRESH on BOTH passes
-      // (no source opt) — hydration/snapshot must never freeze to cache.
-      try { existing = await fetchers.getTreatment(treatmentId); }
+      // R1-lens2-#1 + R2-#2b mirror: treatment fetched SERVER-FRESH via ONE
+      // shared memoized read — hydration/snapshot must never freeze to cache.
+      try { existing = await fetchExistingOnce(); }
       catch (e) { if (source !== 'cache') throw e; existing = null; }
       if (source === 'cache' && !existing) return null;
     }
@@ -40,6 +47,7 @@ function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId
 
   const applyFormData = async (bundle, { fromCache } = {}) => {
     if (state.cancelled || !bundle) return;
+    if (failCacheApply && fromCache) throw new Error('cache apply exploded');
     state.syncing = !!fromCache;
     state.applies.push({ fromCache: !!fromCache, products: bundle.productItems.length });
     state.options = { products: bundle.productItems, customerCourses: bundle.custData?.courses || [] };
@@ -51,13 +59,18 @@ function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId
     if (!isEdit || hydrated) state.loading = false;
   };
 
-  // R1-#1 fix mirror: applies serialized into a chain; save-gate + loading
-  // anchored on run AND the chain (the hydration tail).
+  // R1-#1 + R2-#1a fix mirror: applies serialized into a chain with PER-LINK
+  // catch (a rejected cache apply must not poison the chain); save-gate +
+  // loading anchored on run AND the chain (the hydration tail).
   let applyChain = Promise.resolve();
   const run = swrRun({
     cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
     serverLoad: () => fetchFormData(undefined),
-    apply: (b, meta) => { applyChain = applyChain.then(() => applyFormData(b, meta)); },
+    apply: (b, meta) => {
+      applyChain = applyChain
+        .then(() => applyFormData(b, meta))
+        .catch(() => { state.applyFailures += 1; });
+    },
   });
   state.serverFresh = run.then(() => applyChain).catch(() => {});
   const done = run.then(() => applyChain)
@@ -228,6 +241,36 @@ describe('AV208 F8 — R1-#1 fix: save-gate + loading cover the HYDRATION TAIL',
     await orch.done;
     expect(await gate(orch.state.serverFresh)).toBe('resolved');
     expect(tailDone).toBe(true);
+  });
+
+  it('R2-#1a: a REJECTED cache apply does NOT poison the chain — the server apply still runs', async () => {
+    const fetchers = {
+      listProducts: async () => rows(5),
+      listCourses: async () => rows(3),
+      getCustomer: async () => ({ courses: [] }),
+      getTreatment: async () => null,
+    };
+    const { state, done } = makeTfpOrchestration({ fetchers, failCacheApply: true });
+    await done;
+    expect(state.applyFailures).toBe(1);                 // cache apply exploded — logged
+    expect(state.applies.length).toBe(1);                // ...but the SERVER apply still landed
+    expect(state.applies[0].fromCache).toBe(false);
+    expect(state.error).toBe('');                        // no spurious setError from the apply
+    await expect(state.serverFresh).resolves.toBeUndefined(); // gate opens (never hangs)
+  });
+
+  it('R2-#2b: the treatment is fetched EXACTLY ONCE across both passes (shared memoized read)', async () => {
+    let treatmentReads = 0;
+    const fetchers = {
+      listProducts: async () => rows(5),
+      listCourses: async () => rows(3),
+      getCustomer: async () => ({ courses: [] }),
+      getTreatment: async () => { treatmentReads += 1; return { detail: { fresh: true } }; },
+    };
+    const { state, done } = makeTfpOrchestration({ isEdit: true, treatmentId: 'BT-X', fetchers });
+    await done;
+    expect(treatmentReads).toBe(1);
+    expect(state.hydrations).toBe(1);
   });
 
   it('applies are SERIALIZED — apply(server) never starts before apply(cache) finishes (no interleave)', async () => {
