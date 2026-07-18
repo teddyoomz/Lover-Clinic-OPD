@@ -89,7 +89,9 @@ describe('F2: auto-sale creation timing — createBackendSale FIRST, then course
 
   it('F2.5: deductStockForTreatment receives treatmentItems with productId preserved', () => {
     // Save payload shape: each treatmentItem has productId (not just name)
-    expect(TFP).toMatch(/treatmentItems:\s*treatmentItems\.filter\([^)]*\)\.map\(t\s*=>\s*\(\{[^}]*productId:\s*t\.productId/);
+    // AV208 R1-#4 repoint (2026-07-19): IIFE wrapper (skip-flag live-resolve);
+    // productId preservation invariant unchanged.
+    expect(TFP).toMatch(/return treatmentItems\.filter\(t => t\.name\)\.map\(t => \(\{ id: t\.id, productId: t\.productId \|\| ''/);
   });
 });
 

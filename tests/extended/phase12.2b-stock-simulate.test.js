@@ -389,7 +389,11 @@ describe('F7: source-grep regression guards (stock flow)', () => {
   it('F7.2: TFP save-payload treatmentItems includes productId + fillLater (not just name/qty)', () => {
     // Bug 2026-04-24: save-payload was `{name, qty, unit, price}` — stripped
     // productId → stock silently skipped fill-later items. Regression guard.
-    expect(TFP).toMatch(/treatmentItems:\s*treatmentItems\.filter\([^)]*\)\.map\(t\s*=>\s*\(\{[^}]*productId:\s*t\.productId/);
+    // AV208 R1-#4 repoint (2026-07-19): the save-payload treatmentItems became
+    // an IIFE (skip-flag write-time live-resolve via skipFlagByRowId) — the
+    // productId + fillLater INVARIANT is unchanged, only the wrapper shape.
+    expect(TFP).toMatch(/treatmentItems: \(\(\) => \{/);
+    expect(TFP).toMatch(/return treatmentItems\.filter\(t => t\.name\)\.map\(t => \(\{ id: t\.id, productId: t\.productId \|\| ''/);
     expect(TFP).toMatch(/fillLater:\s*!!t\.fillLater/);
   });
 

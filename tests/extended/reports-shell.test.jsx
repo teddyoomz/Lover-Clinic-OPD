@@ -147,12 +147,16 @@ describe('DateRangePicker.buildPresets', () => {
 });
 
 describe('navConfig — Phase 10 reports section wired', () => {
-  it('reports section exists with 13 items (8 P10 + 2 P10.X + 2 P12.8 + 1 P13.4 df-payout)', () => {
-    // Phase 12.8 appended reports-pnl + reports-payment.
-    // Phase 13.4 appended reports-df-payout.
+  it('reports section exists with at least the 13 historical items (now 22)', () => {
+    // 2026-07-19 repoint: the section grew past 13 (expense-report, clinic-report,
+    // reports-reconciliation, reports-remaining-course, smart-audience,
+    // reports-alt-sales, reports-outstanding, reports-stock-movements,
+    // reports-stock-alert appended through 2026-07-08). Lock a floor + the
+    // current count instead of the stale exact-13.
     const reports = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reports).toBeDefined();
-    expect(reports.items).toHaveLength(13);
+    expect(reports.items.length).toBeGreaterThanOrEqual(13);
+    expect(reports.items).toHaveLength(22);
   });
 
   it('all 8 report tab IDs are in ALL_ITEM_IDS whitelist (URL deep-link)', () => {
@@ -170,10 +174,12 @@ describe('navConfig — Phase 10 reports section wired', () => {
     expect(sectionOf('reports-sale')).toBe('reports');
   });
 
-  it('reports section uses sky/amber/emerald colors (P12.8 added emerald for P&L + payment)', () => {
+  it('reports section uses sky/amber/emerald/rose colors', () => {
+    // 2026-07-19 repoint: 'rose' joined the palette (expense-report +
+    // reports-outstanding) after the section expanded past Phase 13.4.
     const reports = NAV_SECTIONS.find(s => s.id === 'reports');
     const colors = new Set(reports.items.map(i => i.color));
-    [...colors].forEach(c => expect(['sky', 'amber', 'emerald']).toContain(c));
+    [...colors].forEach(c => expect(['sky', 'amber', 'emerald', 'rose']).toContain(c));
   });
 
   it('does not break existing nav (Phase 9 marketing items still present)', () => {
@@ -181,8 +187,12 @@ describe('navConfig — Phase 10 reports section wired', () => {
     expect(marketing.items.map(i => i.id)).toEqual(['promotions', 'coupons', 'vouchers']);
   });
 
-  it('PINNED_ITEMS unchanged (only "appointments")', () => {
-    expect(PINNED_ITEMS).toHaveLength(1);
-    expect(PINNED_ITEMS[0].id).toBe('appointments');
+  it('PINNED_ITEMS is empty — appointments moved into the appointments-section (Phase 21.0)', () => {
+    // 2026-07-19 repoint: the pinned 'appointments' item was replaced by a full
+    // 'appointments-section' with per-type sub-tabs; PINNED_ITEMS is now [].
+    expect(PINNED_ITEMS).toHaveLength(0);
+    const apptSection = NAV_SECTIONS.find(s => s.id === 'appointments-section');
+    expect(apptSection).toBeDefined();
+    expect(apptSection.items.map(i => i.id)).toContain('appointment-all');
   });
 });

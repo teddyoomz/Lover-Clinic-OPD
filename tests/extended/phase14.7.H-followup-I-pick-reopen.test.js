@@ -639,8 +639,9 @@ describe('F18.5: source-grep regression guards', () => {
   });
 
   it('F18.5.8: TFP imports + calls addPicksToResolvedGroup in the reopen onConfirm', () => {
-    // The dynamic import line is the canonical wiring site
-    expect(TFP).toMatch(/import\(['"]\.\.\/lib\/backendClient\.js['"]\)[\s\S]{0,200}addPicksToResolvedGroup/);
+    // 2026-07-19 repoint: Phase BSA — TFP's dynamic import now targets
+    // scopedDataLayer.js (BS-1), not backendClient.js.
+    expect(TFP).toMatch(/addPicksToResolvedGroup[\s\S]{0,120}?await import\(['"]\.\.\/lib\/scopedDataLayer\.js['"]\)/);
     // Match the actual call (paren-anchored — ignores comment mentions)
     expect(TFP).toMatch(/await\s+addPicksToResolvedGroup\(\s*customerId/);
   });

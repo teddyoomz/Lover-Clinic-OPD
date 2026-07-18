@@ -14,22 +14,29 @@ const FIX_CUSTOMERS = [
 const FIX_STAFF = [{ id: 'S1', name: 'พี่เอ็ม' }];
 
 // Dates must fall within the tab's default "thisMonth" preset range
-// (computed from bangkokNow → first-of-month → today). Using early-month
-// dates keeps the fixture inside the range regardless of today's date
-// within the month.
+// (computed from bangkokNow → first-of-month → today).
+// 2026-07-19 repoint: the hardcoded '2026-04-0x' dates drifted OUT of the
+// current month as the calendar moved on → 0 rows → ReportShell hides the
+// table. Derive first-of-CURRENT-month (Bangkok) so the fixture stays inside
+// the default range forever.
+const _bkkNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+const FIRST_OF_MONTH = `${_bkkNow.getFullYear()}-${String(_bkkNow.getMonth() + 1).padStart(2, '0')}-01`;
 const FIX_APPTS = [
   {
     id: 'A1', appointmentId: 'A1', customerId: 'c1', customerHN: 'HN0001', customerName: 'คุณต้น',
-    date: '2026-04-02', startTime: '10:00', endTime: '10:30',
-    appointmentType: 'sales', status: 'confirmed',
+    date: FIRST_OF_MONTH, startTime: '10:00', endTime: '10:30',
+    // 2026-07-19 repoint: Phase 19.0 appointment-type SSOT — 'sales' is a
+    // LEGACY value; canonical values are deposit-booking / no-deposit-booking /
+    // treatment-in / follow-up / walk-in (src/lib/appointmentTypes.js).
+    appointmentType: 'deposit-booking', status: 'confirmed',
     doctorId: 'D1', doctorName: 'หมอเอ', assistantIds: ['S1'],
     advisorName: 'พี่แอน',
     roomName: 'ห้องตรวจ 1', appointmentTo: 'Botox', preparation: 'งดกินยา', expectedSales: 5000,
   },
   {
     id: 'A2', appointmentId: 'A2', customerId: 'c2', customerHN: 'HN0002', customerName: 'คุณนิด',
-    date: '2026-04-03', startTime: '14:00', endTime: '14:30',
-    appointmentType: 'followup', status: 'pending',
+    date: FIRST_OF_MONTH, startTime: '14:00', endTime: '14:30', // 2026-07-19 repoint: keep in-range (see FIRST_OF_MONTH)
+    appointmentType: 'follow-up', status: 'pending', // 2026-07-19 repoint: Phase 19.0 canonical value
     doctorId: 'D2', doctorName: 'หมอบี', assistantIds: [],
     advisorName: '',
     roomName: 'ห้องตรวจ 2', appointmentTo: '', preparation: '', expectedSales: 0,
@@ -104,10 +111,12 @@ describe('AppointmentReportTab — render + interactions', () => {
     });
   });
 
-  it('type filter narrows to followup only', async () => {
+  it('type filter narrows to follow-up only', async () => {
+    // 2026-07-19 repoint: filter select values come from APPOINTMENT_TYPES
+    // SSOT (Phase 19.0) — canonical value is 'follow-up', not legacy 'followup'.
     render(<AppointmentReportTab clinicSettings={{}} />);
     await waitFor(() => screen.getByTestId('appt-row-A1'));
-    fireEvent.change(screen.getByTestId('appt-filter-type'), { target: { value: 'followup' } });
+    fireEvent.change(screen.getByTestId('appt-filter-type'), { target: { value: 'follow-up' } });
     await waitFor(() => {
       expect(screen.queryByTestId('appt-row-A1')).not.toBeInTheDocument();
       expect(screen.getByTestId('appt-row-A2')).toBeInTheDocument();

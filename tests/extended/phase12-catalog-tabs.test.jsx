@@ -12,9 +12,23 @@ beforeAll(() => {
       dispatchEvent: () => false,
     });
   }
+  // 2026-07-19 repoint: post-BSA the tabs import list*/delete* from
+  // scopedDataLayer.js (BS-1), whose _autoInject wrapper short-circuits to []
+  // when resolveSelectedBranchId() is null — the raw-layer mocks would never
+  // be hit. Prime the legacy localStorage key so the BS-9 read resolves.
+  window.localStorage.setItem('selectedBranchId', 'BR-TEST');
 });
 
 vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
+
+// 2026-07-19 repoint: catalog tabs render CrossBranchImportButton →
+// useTabAccess → useSystemConfig → real Firestore onSnapshot against the
+// mocked db:{} throws inside useEffect and unmounts the tree. Stub the
+// shared-listener hook with static defaults (tabOverrides {}).
+vi.mock('../../src/hooks/useSystemConfig.js', () => ({
+  useSystemConfig: () => ({ config: { tabOverrides: {}, featureFlags: {} }, loading: false, error: null }),
+  __resetSystemConfigCache: () => {},
+}));
 
 const mockListProducts = vi.fn();
 const mockDeleteProduct = vi.fn();
@@ -24,6 +38,16 @@ const mockDeleteCourse = vi.fn();
 const mockSaveCourse = vi.fn();
 const mockListProductGroups = vi.fn();
 const mockListProductUnitGroups = vi.fn();
+
+// 2026-07-19 repoint: AV176 (2026-06-02) — ProductsTab delete now goes through
+// productDeleteClient (previewProductDelete guard → deleteProductWithCascade),
+// NOT bare backendClient.deleteProduct (which left orphan batches/course refs).
+const mockPreviewProductDelete = vi.fn();
+const mockDeleteProductWithCascade = vi.fn();
+vi.mock('../../src/lib/productDeleteClient.js', () => ({
+  previewProductDelete: (...a) => mockPreviewProductDelete(...a),
+  deleteProductWithCascade: (...a) => mockDeleteProductWithCascade(...a),
+}));
 
 vi.mock('../../src/lib/backendClient.js', () => ({
   listProducts: (...a) => mockListProducts(...a),
@@ -73,14 +97,18 @@ describe('ProductsTab', () => {
     mockListProductUnitGroups.mockResolvedValue([]);
   });
 
+  // 2026-07-19 repoint: C2 (instant cold-start) switched the tabs to the
+  // swrList two-pass read — each reload calls listProducts TWICE (cache leg
+  // + server leg). mockResolvedValueOnce starved the server leg (undefined →
+  // crash); use mockResolvedValue / paired Onces to feed both legs.
   it('PT1: empty state', async () => {
-    mockListProducts.mockResolvedValueOnce([]);
+    mockListProducts.mockResolvedValue([]);
     render(<ProductsTab clinicSettings={{}} />);
     await waitFor(() => expect(screen.getByText(/ยังไม่มีสินค้า/)).toBeInTheDocument());
   });
 
   it('PT2: renders card with name + price', async () => {
-    mockListProducts.mockResolvedValueOnce([makeProduct()]);
+    mockListProducts.mockResolvedValue([makeProduct()]);
     render(<ProductsTab clinicSettings={{}} />);
     await waitFor(() => screen.getByText('Paracetamol'));
     const card = screen.getByTestId('product-card-PROD-1');
@@ -89,7 +117,7 @@ describe('ProductsTab', () => {
   });
 
   it('PT3: type filter isolates', async () => {
-    mockListProducts.mockResolvedValueOnce([
+    mockListProducts.mockResolvedValue([
       makeProduct(),
       makeProduct({ productId: 'PROD-2', productName: 'IV Drip', productType: 'บริการ' }),
     ]);
@@ -100,15 +128,22 @@ describe('ProductsTab', () => {
     expect(screen.getByText('IV Drip')).toBeInTheDocument();
   });
 
-  it('PT4: delete invokes backend', async () => {
+  it('PT4: delete invokes cascade client (AV176 preview → deleteProductWithCascade)', async () => {
+    // 2026-07-19 repoint: 2 calls per reload (swrList cache+server legs) +
+    // AV176 delete path — previewProductDelete guard first, then
+    // deleteProductWithCascade({ productId }). Bare deleteProduct is dead here.
     mockListProducts.mockResolvedValueOnce([makeProduct()]);
-    mockListProducts.mockResolvedValueOnce([]);
-    mockDeleteProduct.mockResolvedValueOnce();
+    mockListProducts.mockResolvedValueOnce([makeProduct()]);
+    mockListProducts.mockResolvedValue([]);
+    mockPreviewProductDelete.mockResolvedValueOnce({ blocked: false, reasons: [], plan: {} });
+    mockDeleteProductWithCascade.mockResolvedValueOnce({});
     const spy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<ProductsTab clinicSettings={{}} />);
     await waitFor(() => screen.getByText('Paracetamol'));
     fireEvent.click(screen.getByLabelText('ลบสินค้า Paracetamol'));
-    await waitFor(() => expect(mockDeleteProduct).toHaveBeenCalledWith('PROD-1'));
+    await waitFor(() => expect(mockDeleteProductWithCascade).toHaveBeenCalledWith({ productId: 'PROD-1' }));
+    expect(mockPreviewProductDelete).toHaveBeenCalledWith({ productId: 'PROD-1' });
+    expect(mockDeleteProduct).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 });
@@ -163,14 +198,16 @@ describe('CoursesTab', () => {
     mockListProducts.mockResolvedValue([]);
   });
 
+  // 2026-07-19 repoint: swrList two-pass read (cache + server legs) — feed
+  // both legs (see ProductsTab note above).
   it('CT1: empty state', async () => {
-    mockListCourses.mockResolvedValueOnce([]);
+    mockListCourses.mockResolvedValue([]);
     render(<CoursesTab clinicSettings={{}} />);
     await waitFor(() => expect(screen.getByText(/ยังไม่มีคอร์ส/)).toBeInTheDocument());
   });
 
   it('CT2: renders card with category + price + sub-items count', async () => {
-    mockListCourses.mockResolvedValueOnce([makeCourse()]);
+    mockListCourses.mockResolvedValue([makeCourse()]);
     render(<CoursesTab clinicSettings={{}} />);
     await waitFor(() => screen.getByText('Laser 1 ครั้ง'));
     const card = screen.getByTestId('course-card-COURSE-1');
@@ -180,8 +217,10 @@ describe('CoursesTab', () => {
   });
 
   it('CT3: delete invokes backend', async () => {
+    // 2026-07-19 repoint: 2 calls per reload (swrList cache+server legs).
     mockListCourses.mockResolvedValueOnce([makeCourse()]);
-    mockListCourses.mockResolvedValueOnce([]);
+    mockListCourses.mockResolvedValueOnce([makeCourse()]);
+    mockListCourses.mockResolvedValue([]);
     mockDeleteCourse.mockResolvedValueOnce();
     const spy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<CoursesTab clinicSettings={{}} />);
@@ -358,16 +397,24 @@ describe('Phase 12.2 — Rule E', () => {
     }
   });
 
-  it('RE4: createStockOrder auto-opt-in writes stockConfig to be_products', () => {
+  it('RE4: stock-order auto-opt-in routes through _ensureProductTracked → be_products', () => {
+    // 2026-07-19 repoint: the V36 multi-writer sweep (2026-04-29) unified the
+    // per-writer inline auto-opt-in ("_stockConfigSetBy: 'createStockOrder'")
+    // into the shared _ensureProductTracked(productId, { setBy }) helper —
+    // _buildBatchFromOrderItem (the batch builder createStockOrder/
+    // receiveCentralStockOrder use) delegates to it, and the helper writes
+    // stockConfig to 'be_products' (single-writer contract).
     const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
-    // The createStockOrder auto-opt-in block must write to be_products
-    // (not master_data). We assert the string `'be_products'` appears
-    // within 400 chars after the "_stockConfigSetBy: 'createStockOrder'"
-    // sentinel — ensures the fix didn't get split off elsewhere.
-    const sentinelIdx = src.indexOf("_stockConfigSetBy: 'createStockOrder'");
-    expect(sentinelIdx).toBeGreaterThan(-1);
-    const contextBefore = src.slice(Math.max(0, sentinelIdx - 400), sentinelIdx);
-    expect(contextBefore).toContain("'be_products'");
+    // (a) the batch builder delegates with its setBy sentinel
+    expect(src).toContain("setBy: '_buildBatchFromOrderItem'");
+    // (b) the shared helper writes to be_products and stamps _stockConfigSetBy
+    const helperIdx = src.indexOf('async function _ensureProductTracked');
+    expect(helperIdx).toBeGreaterThan(-1);
+    const helperBody = src.slice(helperIdx, helperIdx + 3000);
+    expect(helperBody).toContain("'be_products'");
+    expect(helperBody).toContain('_stockConfigSetBy: setBy');
+    // (c) anti-regression: no writer re-inlines the old master_data write
+    expect(helperBody).not.toContain("'master_data'");
   });
 
   // Phase 12.2b follow-up (2026-04-24): fill-later consume-on-use guards.

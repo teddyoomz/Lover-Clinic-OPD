@@ -388,11 +388,18 @@ describe('F7: source-grep regression guards', () => {
     expect(dash).toMatch(/activeTab === 'document-templates'/);
     expect(dash).toMatch(/<DocumentTemplatesTab/);
   });
-  it('F7.4: CustomerDetailView mounts DocumentPrintModal + has print button', () => {
+  it('F7.4: CustomerDetailView mounts DocumentPrintModal + print button lives in TreatmentHistoryHeader', () => {
+    // 2026-07-19 repoint: the Phase 28 treatment-history redesign moved the
+    // "พิมพ์เอกสาร" button into treatment-history/TreatmentHistoryHeader.jsx
+    // (wired via TreatmentHistoryCard onPrintDoc → setPrintDocOpen). The old
+    // inline data-testid="print-document-btn" is gone.
     const src = read('src/components/backend/CustomerDetailView.jsx');
     expect(src).toMatch(/DocumentPrintModal/);
-    expect(src).toMatch(/พิมพ์เอกสาร/);
-    expect(src).toMatch(/data-testid="print-document-btn"/);
+    expect(src).toMatch(/setPrintDocOpen=\{setPrintDocOpen\}/);
+    const card = read('src/components/backend/treatment-history/TreatmentHistoryCard.jsx');
+    expect(card).toMatch(/onPrintDoc=\{\(\) => setPrintDocOpen\(true\)\}/);
+    const header = read('src/components/backend/treatment-history/TreatmentHistoryHeader.jsx');
+    expect(header).toMatch(/พิมพ์เอกสาร/);
   });
   it('F7.5: Rule E — no brokerClient or /api/proclinic in doc files', () => {
     const files = [

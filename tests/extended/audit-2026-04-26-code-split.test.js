@@ -69,22 +69,38 @@ describe('AC1: BackendDashboard code-split', () => {
     expect(SRC).toMatch(/data-testid="backend-tab-loading"/);
   });
 
-  it('AC1.6: ANTI-REGRESSION — always-on tabs (Clone, CustomerList, MasterData, Sale, Stock, Finance, Appointment, Promotion, Coupon, Voucher) stay eager', () => {
-    // These are the entry-point tabs the user lands on — eager load is correct
-    const ALWAYS_EAGER = [
-      'CloneTab', 'CustomerListTab', 'MasterDataTab', 'AppointmentTab',
-      'SaleTab', 'FinanceTab', 'StockTab', 'PromotionTab', 'CouponTab',
-      'VoucherTab', 'BackendNav',
-    ];
-    for (const tab of ALWAYS_EAGER) {
-      const eagerRe = new RegExp(`^import\\s+${tab}\\s+from\\s+['"]`, 'm');
+  // 2026-07-19 repoint: the original "always eager" list is obsolete on two
+  // fronts — (a) CloneTab / MasterDataTab / AppointmentTab were DELETED by the
+  // V50 ProClinic strip; (b) the 2026-07-06 perf pass (P1/P2) flipped every
+  // heavy tab (CustomerListTab, SaleTab, FinanceTab, StockTab, marketing tabs,
+  // even TreatmentFormPage — 347KB chunk) to lazy. Only the shell chrome stays
+  // eager now. Lock the CURRENT split direction instead.
+  it('AC1.6: shell chrome stays eager; the heavy entry tabs are lazy (perf P1/P2)', () => {
+    const ALWAYS_EAGER = ['BackendNav', 'BranchSelector', 'ProfileDropdown', 'ThemeToggle'];
+    for (const comp of ALWAYS_EAGER) {
+      const eagerRe = new RegExp(`^import\\s+${comp}\\s+from\\s+['"]`, 'm');
       expect(SRC).toMatch(eagerRe);
-      const lazyRe = new RegExp(`const\\s+${tab}\\s*=\\s*lazy\\(`);
+      const lazyRe = new RegExp(`const\\s+${comp}\\s*=\\s*lazy\\(`);
       expect(SRC).not.toMatch(lazyRe);
+    }
+    const NOW_LAZY = ['CustomerListTab', 'SaleTab', 'FinanceTab', 'StockTab', 'PromotionTab', 'CouponTab', 'VoucherTab'];
+    for (const tab of NOW_LAZY) {
+      const lazyRe = new RegExp(`const\\s+${tab}\\s*=\\s*lazy\\(\\(\\)\\s*=>\\s*import\\(`);
+      expect(SRC).toMatch(lazyRe);
+      const eagerRe = new RegExp(`^import\\s+${tab}\\s+from\\s+['"]`, 'm');
+      expect(SRC).not.toMatch(eagerRe);
+    }
+    // V50-deleted tabs must not resurface as imports (deletion comments at
+    // BackendDashboard:32/42 legitimately still name them).
+    for (const dead of ['CloneTab', 'MasterDataTab']) {
+      expect(SRC).not.toMatch(new RegExp(`^import\\s+${dead}\\s+from`, 'm'));
+      expect(SRC).not.toMatch(new RegExp(`const\\s+${dead}\\s*=\\s*lazy\\(`));
     }
   });
 
-  it('AC1.7: TreatmentFormPage stays eager (used in multiple places, lazy would block edit-on-click)', () => {
-    expect(SRC).toMatch(/^import\s+TreatmentFormPage\s+from\s+['"]/m);
+  it('AC1.7: TreatmentFormPage is lazy (perf P1.2 — 347KB chunk loads only when a treatment opens)', () => {
+    // 2026-07-19 repoint: was "stays eager"; perf P1.2 flipped it to lazy.
+    expect(SRC).toMatch(/const\s+TreatmentFormPage\s*=\s*lazy\(\(\)\s*=>\s*import\(/);
+    expect(SRC).not.toMatch(/^import\s+TreatmentFormPage\s+from\s+['"]/m);
   });
 });

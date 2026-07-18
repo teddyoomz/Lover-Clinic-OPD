@@ -389,7 +389,9 @@ describe('WIRING — source files use the right helper at the right callsite', (
   const treatmentForm = readFileSync(resolve(root, 'src/components/TreatmentFormPage.jsx'), 'utf8');
 
   it('SaleTab imports flattenPromotionsForStockDeduction', () => {
-    expect(saleTab).toContain("import { flattenPromotionsForStockDeduction }");
+    // 2026-07-19 repoint: the import line gained a sibling
+    // (buildPromotionSubCourseProducts) — match the named import loosely.
+    expect(saleTab).toMatch(/import \{ flattenPromotionsForStockDeduction[^}]*\} from '\.\.\/\.\.\/lib\/treatmentBuyHelpers\.js'/);
   });
 
   it('SaleTab wraps EVERY deductStockForSale call with flatten()', () => {

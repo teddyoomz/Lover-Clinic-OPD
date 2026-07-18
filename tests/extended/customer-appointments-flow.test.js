@@ -125,7 +125,10 @@ describe('F3: backendClient appointment helpers shape', () => {
 
   it('F3.1: createBackendAppointment writes to be_appointments with appointmentId + timestamps', () => {
     expect(src).toMatch(/export async function createBackendAppointment/);
-    expect(src).toMatch(/appointmentId\s*=\s*`BA-\$\{Date\.now\(\)\}`/);
+    // 2026-07-19 repoint: appointment-loop R3 (2026-06-03) added a crypto-random
+    // suffix (`BA-${ts}-${hex}`) so same-millisecond creates can't collide.
+    expect(src).toMatch(/const appointmentId = `BA-\$\{_baTs\}-/);
+    expect(src).toMatch(/getRandomValues\(_baBuf\)/);
     expect(src).toMatch(/setDoc\(appointmentDoc\(appointmentId\)/);
   });
 
@@ -163,10 +166,11 @@ describe('F4: CustomerDetailView wiring (source-grep regression guards)', () => 
   });
 
   it('F4.3: useEffect subscribes to listenToCustomerAppointments on mount (Phase 14.7.H follow-up B)', () => {
-    // Was: useEffect(() => { reloadCustomerAppointments() }, [reloadCustomerAppointments])
-    // Now: useEffect(() => { ...listenToCustomerAppointments(customer.proClinicId, ...) }, [customer?.proClinicId])
-    // Reload-callback retained as no-op shim for legacy callsites.
-    expect(src).toMatch(/listenToCustomerAppointments\(\s*customer\.proClinicId/);
+    // 2026-07-19 repoint: CDV now derives a single canonical
+    // `customerId = customer?.id || customer?.proClinicId` (CDV:233) and every
+    // customer-attached listener subscribes with it (was customer.proClinicId).
+    expect(src).toMatch(/const customerId = customer\?\.id \|\| customer\?\.proClinicId/);
+    expect(src).toMatch(/listenToCustomerAppointments\(\s*customerId/);
     expect(src).toMatch(/const\s+reloadCustomerAppointments/);
   });
 
@@ -208,10 +212,13 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
     expect(src).toMatch(/export default function AppointmentFormModal/);
   });
 
-  it('F5.1: payload includes customerId/customerName/customerHN from formData', () => {
-    expect(src).toMatch(/customerId:\s*formData\.customerId/);
-    expect(src).toMatch(/customerName:\s*formData\.customerName/);
-    expect(src).toMatch(/customerHN:\s*formData\.customerHN/);
+  it('F5.1: payload includes customerId/customerName/customerHN from formData (pickLater-gated)', () => {
+    // 2026-07-19 repoint: Phase 24.0-terdecies added the pickLater branch —
+    // payload customer identity is now ternary-gated on formData.pickLater
+    // (customerId '' + temp name when picking later).
+    expect(src).toMatch(/customerId:\s*formData\.pickLater \? '' : formData\.customerId/);
+    expect(src).toMatch(/customerName:\s*formData\.pickLater \? tempName : formData\.customerName/);
+    expect(src).toMatch(/customerHN:\s*formData\.pickLater \? '' : formData\.customerHN/);
   });
 
   it('F5.2: payload includes date + startTime + endTime', () => {
@@ -225,7 +232,11 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
     expect(src).toMatch(/advisorName:\s*formData\.advisorName/);
     expect(src).toMatch(/doctorId:\s*formData\.doctorId/);
     expect(src).toMatch(/doctorName:\s*formData\.doctorName/);
-    expect(src).toMatch(/assistantIds:\s*formData\.assistantIds/);
+    // 2026-07-19 repoint: Phase 15.7 denormalizes assistantNames at save —
+    // payload now carries assistantIdsForSave (from formData.assistantIds).
+    expect(src).toMatch(/const assistantIdsForSave = formData\.assistantIds \|\| \[\]/);
+    expect(src).toMatch(/assistantIds:\s*assistantIdsForSave/);
+    expect(src).toMatch(/assistantNames:\s*assistantNamesForSave/);
     expect(src).toMatch(/roomName:\s*formData\.roomName/);
     expect(src).toMatch(/channel:\s*formData\.channel/);
     expect(src).toMatch(/appointmentTo:\s*formData\.appointmentTo/);
@@ -234,7 +245,10 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
     expect(src).toMatch(/customerNote:\s*formData\.customerNote/);
     expect(src).toMatch(/notes:\s*formData\.notes/);
     expect(src).toMatch(/appointmentColor:\s*formData\.appointmentColor/);
-    expect(src).toMatch(/lineNotify:\s*!!formData\.lineNotify/);
+    // 2026-07-19 repoint: V68 (2026-05-15) stripped `lineNotify` — the channel
+    // state now lives in the notifyChannel array on the payload.
+    expect(src).toMatch(/notifyChannel,/);
+    expect(src).not.toMatch(/lineNotify:\s*!!formData\.lineNotify/);
   });
 
   it('F5.4: payload status defaults pending on create, preserves on edit', () => {
@@ -249,11 +263,14 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
   });
 
   it('F5.6: skipCollisionCheck=true bypasses overlap warning', () => {
-    expect(src).toMatch(/if\s*\(\s*!skipCollisionCheck\s*\)/);
+    // 2026-07-19 repoint: the gate gained `&& !formData.noAppointment` (the
+    // no-appointment mode skips all collision machinery).
+    expect(src).toMatch(/if\s*\(\s*!skipCollisionCheck\s*&&\s*!formData\.noAppointment\s*\)/);
   });
 
   it('F5.7: skipHolidayCheck=true bypasses holiday confirm', () => {
-    expect(src).toMatch(/if\s*\(\s*mode === ['"]create['"]\s*&&\s*!skipHolidayCheck\s*\)/);
+    // 2026-07-19 repoint: same `&& !formData.noAppointment` extension.
+    expect(src).toMatch(/if\s*\(\s*mode === ['"]create['"]\s*&&\s*!skipHolidayCheck\s*&&\s*!formData\.noAppointment\s*\)/);
   });
 
   it('F5.8: edit-mode dispatches updateBackendAppointment, create-mode createBackendAppointment', () => {
@@ -275,7 +292,8 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
     // shared component as an opt-in gate. AppointmentTab passes false to
     // preserve its pre-refactor behavior; CustomerDetailView keeps default.
     expect(src).toMatch(/skipStaffScheduleCheck\s*=\s*true/);
-    expect(src).toMatch(/if\s*\(\s*!skipStaffScheduleCheck\s*&&\s*formData\.doctorId\s*\)/);
+    // 2026-07-19 repoint: gate gained `&& !formData.noAppointment`.
+    expect(src).toMatch(/if\s*\(\s*!skipStaffScheduleCheck\s*&&\s*formData\.doctorId\s*&&\s*!formData\.noAppointment\s*\)/);
     expect(src).toMatch(/listStaffSchedules\(\{\s*staffId:\s*formData\.doctorId/);
     expect(src).toMatch(/checkAppointmentCollision\(\s*formData\.doctorId/);
   });
@@ -329,18 +347,22 @@ describe('F6: AppointmentTab uses shared AppointmentFormModal (Phase 14.7.C)', (
     expect(src).toMatch(/setFormMode\(\{\s*mode:\s*['"]edit['"]\s*,\s*appt\s*\}\)/);
   });
 
-  it('F6.8: refreshAfterSave reloads day + month after a save', () => {
+  it('F6.8: refreshAfterSave closes the form; live listeners cover the data refresh', () => {
+    // 2026-07-19 repoint: 2026-05-28 dropped the one-shot getAppointmentsByMonth
+    // re-fetch — BOTH the day grid AND the month strip are live onSnapshot
+    // listeners now, so refreshAfterSave only closes the form + kicks loadDay.
     expect(src).toMatch(/loadDay\(selectedDate\)/);
-    expect(src).toMatch(/getAppointmentsByMonth\(monthStr\)/);
+    expect(src).toMatch(/listenToAppointmentsByMonth\(/);
+    expect(src).not.toMatch(/getAppointmentsByMonth\(monthStr\)/);
     expect(src).toMatch(/onSaved=\{refreshAfterSave\}/);
   });
 
   it('F6.9: holiday banner + listenToHolidays still wired (regression — Phase 11.8 W1-W5 pass)', () => {
-    // Phase 14.7.H follow-up H (2026-04-26): migrated from one-shot
-    // listHolidays() to onSnapshot via listenToHolidays(). LC8 covers the
-    // listener contract; this guard locks the AppointmentTab integration.
+    // 2026-07-19 repoint: Phase BSA Task 8 (2026-05-04) migrated the holiday
+    // listener to useBranchAwareListener(listenToHolidays, {allBranches:true},
+    // setHolidays, ...) — the direct listenToHolidays(setHolidays call is gone.
     expect(src).toMatch(/data-testid="appt-holiday-banner"/);
-    expect(src).toMatch(/listenToHolidays\(setHolidays/);
+    expect(src).toMatch(/useBranchAwareListener\(\s*listenToHolidays,\s*\{\s*allBranches:\s*true\s*\},\s*setHolidays/);
     expect(src).toMatch(/isDateHoliday\(selectedDate,\s*holidays\)/);
   });
 });

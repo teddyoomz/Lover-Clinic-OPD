@@ -444,16 +444,11 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
       expect(noCommentBody).not.toMatch(/\.matches\(['"`]\.\*@loverclinic/);
     });
 
-    it('H5.2: dev-only Sync ProClinic infra unaffected (per Rule H-bis + user 2026-04-26)', () => {
-      // User: "ทุกปุ่มใน tab นั้นจะถูกลบทั้งหมด ... ไม่ต้องให้ความสำคัญกับ
-      // เรื่องความปลอดภัยมาก". MasterDataTab is dev-only and doesn't
-      // need to use isClinicStaff custom claims — it stays as-is, will
-      // be stripped at production-launch time.
-      const masterTab = READ('src/components/backend/MasterDataTab.jsx');
-      // Dev-only marker present (or the tab is on the strip-list at minimum)
-      // Just ensure we did NOT accidentally add custom-claim wiring to
-      // MasterDataTab (would be wasted work).
-      expect(masterTab).not.toMatch(/setUserPermission/);
+    // 2026-07-19: H5.2 repointed — MasterDataTab.jsx (dev-only Sync ProClinic
+    // infra) was DELETED by the V50 ProClinic strip (Rule H-bis EXECUTED), so
+    // the "stays as-is until launch strip" contract is now "gone for good".
+    it('H5.2: dev-only Sync ProClinic infra was stripped (V50 — Rule H-bis EXECUTED)', () => {
+      expect(fs.existsSync(path.join(ROOT, 'src/components/backend/MasterDataTab.jsx'))).toBe(false);
     });
   });
 });

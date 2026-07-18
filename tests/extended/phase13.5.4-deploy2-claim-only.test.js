@@ -71,9 +71,13 @@ describe('Phase 13.5.4 Deploy 2 (V26) — firestore.rules isClinicStaff() claim-
       expect(updateMatch[0]).toMatch(/affectedKeys\(\)[\s\S]{0,40}\.hasOnly\(/);
     });
 
-    it('D2.2: opd_sessions create + delete + read rules unchanged', () => {
+    it('D2.2: opd_sessions create + delete + get/list rules (WS1 C1 split)', () => {
+      // 2026-07-19 repoint: WS1 C1 (2026-06-10) split `allow read` into
+      // get (isSignedIn — anon get-by-crypto-id) + list (isClinicStaff —
+      // kills anon mass-PII enumeration).
       const block = RULES.match(/match\s+\/opd_sessions\/\{sessionId\}\s*\{[\s\S]*?\n\s+\}/);
-      expect(block[0]).toMatch(/allow\s+read:\s*if\s+isSignedIn\(\)/);
+      expect(block[0]).toMatch(/allow\s+get:\s*if\s+isSignedIn\(\)/);
+      expect(block[0]).toMatch(/allow\s+list:\s*if\s+isClinicStaff\(\)/);
       expect(block[0]).toMatch(/allow\s+create:\s*if\s+true/);
       expect(block[0]).toMatch(/allow\s+delete:\s*if\s+isClinicStaff\(\)/);
     });
@@ -92,33 +96,37 @@ describe('Phase 13.5.4 Deploy 2 (V26) — firestore.rules isClinicStaff() claim-
       expect(fn[0]).toMatch(/setPermission|bootstrap-self|Sync ทุก staff/);
     });
 
-    it('D3.3: 00-session-start.md contains V26 entry', () => {
+    it('D3.3: V26 entry lives in the v-log archive (compact table in 00-session-start)', () => {
+      // 2026-07-19 repoint: the V-log was compacted — verbose `### V26` entries
+      // moved to .claude/rules/v-log-archive.md; 00-session-start.md keeps a
+      // one-line table row.
+      const ARCHIVE = READ('.claude/rules/v-log-archive.md');
+      expect(ARCHIVE).toMatch(/^### V26 —/m);
+      expect(ARCHIVE).toMatch(/Phase 13\.5\.4 Deploy 2/);
       const RULE_00 = READ('.claude/rules/00-session-start.md');
-      expect(RULE_00).toMatch(/^### V26 —/m);
-      expect(RULE_00).toMatch(/Phase 13\.5\.4 Deploy 2/);
+      expect(RULE_00).toMatch(/\|\s*V26\s*\|/);
     });
   });
 
-  describe('D4: chat_conversations + pc_* + opd_sessions anon paths still work', () => {
-    // These rules use `if true` (chat_conversations + pc_*) or hasOnly path
-    // (opd_sessions whitelist) — they do NOT depend on isClinicStaff().
-    // The V26 change should not affect them. This test validates that
-    // assumption by asserting the rules still match expected patterns.
-    it('D4.1: chat_conversations create/update still `if true`', () => {
+  describe('D4: successor contracts for the old anon-write paths', () => {
+    it('D4.1: chat_conversations create/update tightened to isClinicStaff (WS1 H1)', () => {
+      // 2026-07-19 repoint: WS1 H1 (2026-06-10) — webhooks now write via the
+      // firebase-admin SDK (bypasses rules), so the anon `if true` was
+      // tightened to isClinicStaff(). A `if true` here would be a REGRESSION.
       const block = RULES.match(/match\s+\/chat_conversations\/\{convId\}\s*\{[\s\S]*?\n\s+\}/);
       expect(block).toBeTruthy();
-      expect(block[0]).toMatch(/allow\s+create,\s*update:\s*if\s+true/);
+      expect(block[0]).toMatch(/allow\s+create,\s*update:\s*if\s+isClinicStaff\(\)/);
+      expect(block[0]).not.toMatch(/allow\s+create,\s*update:\s*if\s+true/);
     });
 
-    it('D4.2: pc_appointments write still `if true`', () => {
-      const block = RULES.match(/match\s+\/pc_appointments\/\{docId\}\s*\{[\s\S]*?\n\s+\}/);
-      expect(block).toBeTruthy();
-      expect(block[0]).toMatch(/allow\s+write:\s*if\s+true/);
-    });
-
-    it('D4.3: clinic_settings/proclinic_session* still open for cookie-relay', () => {
-      expect(RULES).toMatch(/match\s+\/clinic_settings\/proclinic_session\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+true/);
-      expect(RULES).toMatch(/match\s+\/clinic_settings\/proclinic_session_trial\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+true/);
+    // 2026-07-19: D4.2 (pc_appointments `if true`) + D4.3
+    // (clinic_settings/proclinic_session* open for cookie-relay) DELETED —
+    // the pc_* mirrors + proclinic_session docs + cookie-relay extension were
+    // all removed by the V50 ProClinic strip; their rule blocks were dropped
+    // in V50-followup (default-deny is the intended state now).
+    it('D4.2: pc_* + proclinic_session rule blocks are GONE (V50 default-deny)', () => {
+      expect(RULES).not.toMatch(/match\s+\/pc_appointments\//);
+      expect(RULES).not.toMatch(/match\s+\/clinic_settings\/proclinic_session/);
     });
   });
 });

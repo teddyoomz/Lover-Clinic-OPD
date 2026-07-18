@@ -3,7 +3,12 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck } from 'lucide-react';
+// 2026-07-19 (V163-class fix, found by the extended-test un-quarantine sweep):
+// Loader2 was rendered at the delete-busy branch (line ~184) but never
+// imported — build-invisible (undeclared identifier → global lookup) →
+// runtime ReferenceError the moment a delete was in-flight → React unmounted
+// the tab (black screen on permission-group delete).
+import { Edit2, Trash2, ShieldCheck, Loader2 } from 'lucide-react';
 import { listPermissionGroups, deletePermissionGroup } from '../../lib/scopedDataLayer.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

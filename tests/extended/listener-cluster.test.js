@@ -157,7 +157,10 @@ describe('LC3: CustomerDetailView uses listenToCustomerSales + listenToCustomerA
   });
 
   it('LC3.2: sales listener subscribed in useEffect with proper cleanup', () => {
-    expect(SRC).toMatch(/listenToCustomerSales\(\s*customer\.proClinicId/);
+    // 2026-07-19 repoint: CDV now subscribes with the canonical
+    // `customerId = customer?.id || customer?.proClinicId` local (CDV:233),
+    // not customer.proClinicId directly.
+    expect(SRC).toMatch(/listenToCustomerSales\(\s*customerId/);
     // The listener is assigned to a local `unsubscribe` const, and the
     // useEffect that owns it returns () => unsubscribe(). Search for both.
     expect(SRC).toMatch(/const\s+unsubscribe\s*=\s*listenToCustomerSales/);
@@ -165,7 +168,8 @@ describe('LC3: CustomerDetailView uses listenToCustomerSales + listenToCustomerA
   });
 
   it('LC3.3: appointments listener subscribed in useEffect with proper cleanup', () => {
-    expect(SRC).toMatch(/listenToCustomerAppointments\(\s*customer\.proClinicId/);
+    // 2026-07-19 repoint: same canonical-customerId subscription as LC3.2.
+    expect(SRC).toMatch(/listenToCustomerAppointments\(\s*customerId/);
     expect(SRC).toMatch(/const\s+unsubscribe\s*=\s*listenToCustomerAppointments/);
     // 3 separate `return () => unsubscribe()` exist in this file (treatments,
     // sales, appointments listeners). Just assert one exists; LC3.2 checks
@@ -210,8 +214,12 @@ describe('LC4: AppointmentTab uses listenToAppointmentsByDate', () => {
     expect(SRC).toMatch(/const\s+loadDay\s*=\s*useCallback\(/);
   });
 
-  it('LC4.5: month-level getAppointmentsByMonth still one-shot (intentional — reduces snapshot cost)', () => {
-    expect(SRC).toMatch(/getAppointmentsByMonth\(monthStr\)\.then\(setMonthAppts\)/);
+  it('LC4.5: month-level aggregation is now a live listener (2026-05-28 real-time strip)', () => {
+    // 2026-07-19 repoint: the one-shot getAppointmentsByMonth(monthStr) was
+    // replaced by the onSnapshot listenToAppointmentsByMonth listener so the
+    // week strip / mini-cal update in real time across devices.
+    expect(SRC).toMatch(/listenToAppointmentsByMonth\(\s*monthStr/);
+    expect(SRC).not.toMatch(/getAppointmentsByMonth\(monthStr\)\.then\(setMonthAppts\)/);
   });
 });
 
@@ -237,10 +245,11 @@ describe('LC5: anti-regression source-grep guards', () => {
   });
 
   it('LC5.3: listener subscriptions have stable deps so they don\'t re-subscribe on every render', () => {
-    // CustomerDetailView appointments useEffect has `[customer?.proClinicId]` as dep
-    expect(VIEW).toMatch(/listenToCustomerAppointments[\s\S]+?\}\,\s*\[\s*customer\?\.proClinicId\s*\]\s*\)/);
-    // AppointmentTab day-listener has `[selectedDate]`
-    expect(APPT).toMatch(/listenToAppointmentsByDate[\s\S]+?\}\,\s*\[selectedDate\]\s*\)/);
+    // 2026-07-19 repoint: CDV deps are now the canonical `[customerId]` local;
+    // the AppointmentTab day-listener gained `selectedBranchId` in deps
+    // (Phase BS branch-switch re-subscribe).
+    expect(VIEW).toMatch(/listenToCustomerAppointments[\s\S]+?\}\,\s*\[\s*customerId\s*\]\s*\)/);
+    expect(APPT).toMatch(/listenToAppointmentsByDate[\s\S]+?\}\,\s*\[selectedDate,\s*selectedBranchId\]\s*\)/);
   });
 
   it('LC5.4: NO inline backendClient brokerClient or /api/proclinic/* call (Rule E)', () => {
@@ -335,9 +344,11 @@ describe('LC6: listenToCustomerFinance — bundled finance listener', () => {
     expect(VIEW).toMatch(/listenToCustomerFinance/);
   });
 
-  it('LC6.12: CustomerDetailView subscribes via useEffect with [customer?.proClinicId] dep + cleanup', () => {
-    expect(VIEW).toMatch(/const\s+unsubscribe\s*=\s*listenToCustomerFinance\(\s*customer\.proClinicId/);
-    expect(VIEW).toMatch(/listenToCustomerFinance[\s\S]+?\}\,\s*\[\s*customer\?\.proClinicId\s*\]\s*\)/);
+  it('LC6.12: CustomerDetailView subscribes via useEffect with [customerId] dep + cleanup', () => {
+    // 2026-07-19 repoint: canonical customerId local (CDV:233) replaced the
+    // direct customer.proClinicId subscription + dep.
+    expect(VIEW).toMatch(/const\s+unsubscribe\s*=\s*listenToCustomerFinance\(\s*customerId/);
+    expect(VIEW).toMatch(/listenToCustomerFinance[\s\S]+?\}\,\s*\[\s*customerId\s*\]\s*\)/);
   });
 
   it('LC6.13: legacy Promise.all([getActiveDeposits, getCustomerWallets, getPointBalance, getCustomerMembership]) removed', () => {
@@ -497,9 +508,13 @@ describe('LC8: listenToHolidays — multi-consumer cross-tab refresh', () => {
     expect(SRC).toMatch(/export\s+function\s+listenToHolidays/);
   });
 
-  it('LC8.2: returns onSnapshot subscription over holidaysCol()', () => {
+  it('LC8.2: returns onSnapshot subscription over holidaysCol() (branch-filtered query)', () => {
+    // 2026-07-19 repoint: listenToHolidays gained {branchId, allBranches} opts
+    // (Phase BSA) — it now builds `q` from holidaysCol() (where-filtered when
+    // branch-scoped) and subscribes onSnapshot(q, ...).
     const fn = SRC.match(/export function listenToHolidays[\s\S]+?^}/m)?.[0] || '';
-    expect(fn).toMatch(/return onSnapshot\(holidaysCol\(\),/);
+    expect(fn).toMatch(/query\(holidaysCol\(\),\s*where\('branchId'/);
+    expect(fn).toMatch(/return onSnapshot\(q,/);
   });
 
   it('LC8.3: sort contract preserves listHolidays semantics (updatedAt desc, createdAt tiebreak)', () => {
@@ -531,26 +546,29 @@ describe('LC8: listenToHolidays — multi-consumer cross-tab refresh', () => {
     expect(HOLI).not.toMatch(/[\{\,]\s*listHolidays\s*[\,\}]|\blistHolidays\(/);
   });
 
-  it('LC8.8: AppointmentTab useEffect returns the unsub (cleanup on unmount)', () => {
-    // Pattern: const unsub = listenToHolidays(...); return unsub;
-    expect(APPT).toMatch(/const unsub = listenToHolidays\([\s\S]+?\)\;\s*return unsub;/);
+  it('LC8.8: AppointmentTab holiday listener wired through useBranchAwareListener', () => {
+    // 2026-07-19 repoint: Phase BSA Task 8 migrated the direct
+    // `const unsub = listenToHolidays(...); return unsub;` useEffect to the
+    // useBranchAwareListener hook (which owns subscribe + cleanup + branch
+    // re-subscribe internally).
+    expect(APPT).toMatch(/useBranchAwareListener\(\s*listenToHolidays,\s*\{\s*allBranches:\s*true\s*\},\s*setHolidays/);
   });
 
-  it('LC8.9: AppointmentFormModal useEffect returns the unsub', () => {
-    expect(FORM).toMatch(/const unsub = listenToHolidays\([\s\S]+?\)\;\s*return unsub;/);
+  it('LC8.9: AppointmentFormModal holiday listener wired through useBranchAwareListener', () => {
+    // 2026-07-19 repoint: same Phase BSA Task 8 migration as LC8.8.
+    expect(FORM).toMatch(/useBranchAwareListener\(\s*listenToHolidays,\s*\{\s*allBranches:\s*true\s*\},\s*setHolidays/);
   });
 
-  it('LC8.10: HolidaysTab listener subscribes inside useEffect AND clears loading on first emit', () => {
-    // Pattern: setLoading(true); …; const unsub = listenToHolidays((list) => { …; setLoading(false); }, …);
-    const block = HOLI.match(/useEffect\(\(\) => \{\s*setLoading\(true\)[\s\S]+?return unsub;[\s\S]+?\}\, \[\]\)/)?.[0] || '';
-    expect(block).toMatch(/const unsub = listenToHolidays/);
-    expect(block).toMatch(/setLoading\(false\)/);
+  it('LC8.10: HolidaysTab listener wired through useBranchAwareListener + clears loading on emit', () => {
+    // 2026-07-19 repoint: Phase BSA Task 8 — the tab subscribes via
+    // useBranchAwareListener(listenToHolidays, {}, onChange, onError); the
+    // onChange callback still clears loading on first emit.
+    expect(HOLI).toMatch(/useBranchAwareListener\(\s*listenToHolidays,\s*\{\},\s*\(list\) => \{ setItems\(list\); setLoading\(false\); \}/);
   });
 
   it('LC8.11: HolidaysTab error path also clears loading + sets empty items', () => {
-    const block = HOLI.match(/useEffect\(\(\) => \{\s*setLoading\(true\)[\s\S]+?return unsub;[\s\S]+?\}\, \[\]\)/)?.[0] || '';
-    expect(block).toMatch(/setItems\(\[\]\)/);
-    expect(block).toMatch(/setLoading\(false\)/);
+    // 2026-07-19 repoint: error callback of the useBranchAwareListener wire.
+    expect(HOLI).toMatch(/setError\(e\?\.message \|\| 'โหลดวันหยุดล้มเหลว'\); setItems\(\[\]\); setLoading\(false\);/);
   });
 
   it('LC8.12: NO setInterval polling near any holiday consumer', () => {

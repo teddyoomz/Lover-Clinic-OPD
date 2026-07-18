@@ -38,14 +38,30 @@ vi.mock('../../src/lib/backendClient.js', () => ({
   // Phase 14.7.H follow-up B — listener variant. Mock returns the same
   // shape as onSnapshot: returns an unsubscribe function. Calls onChange
   // synchronously with [] so the component lands in a stable empty state.
-  listenToAppointmentsByDate: (date, onChange) => {
+  // 2026-07-19 repoint: Phase BS added an `opts` ({branchId}) 2nd positional
+  // arg → current signature is (date, opts, onChange, onError).
+  listenToAppointmentsByDate: (date, opts, onChange) => {
     if (onChange) onChange([]);
     return () => {};
   },
+  // 2026-07-19 repoint: 2026-05-28 real-time month strip switched the one-shot
+  // getAppointmentsByMonth → onSnapshot listenToAppointmentsByMonth (flat array
+  // → grouped by the component). Mock emits [] so the tab mounts.
+  listenToAppointmentsByMonth: (monthStr, opts, onChange) => {
+    if (onChange) onChange([]);
+    return () => {};
+  },
+  // 2026-07-19 repoint: Phase 18.0 branch-scoped exam rooms + V128 peek-phone
+  // live-resolve — stub the new entry points the current view calls.
+  listExamRooms: () => Promise.resolve([]),
+  getCustomer: () => Promise.resolve(null),
   getAllCustomers: vi.fn(() => Promise.resolve([])),
   // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
   listHolidays: (...a) => mockListHolidays(...a),
-  listenToHolidays: (onChange, onError) => {
+  // 2026-07-19 repoint: Phase BSA Task 8 routed the holiday banner through
+  // useBranchAwareListener → listeners now receive (opts, onChange, onError)
+  // (opts = {allBranches:true, branchId}), NOT (onChange, onError).
+  listenToHolidays: (opts, onChange, onError) => {
     Promise.resolve(mockListHolidays()).then(
       (items) => onChange(items || []),
       (err) => (onError || (() => {}))(err),

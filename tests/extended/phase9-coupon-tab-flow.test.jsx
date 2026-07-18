@@ -2,8 +2,17 @@
 // Covers CRUD, search/filter, discount boundary, Bangkok-TZ expiry (AV9
 // regression guard), branch multi-select, code uppercase, edit-mode restore.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+
+// 2026-07-19 repoint: post-BSA the tab imports listCoupons/deleteCoupon from
+// scopedDataLayer.js (BS-1), whose _autoInject wrapper short-circuits to []
+// when resolveSelectedBranchId() is null — the mock below would never be hit.
+// Prime the legacy localStorage key so the BS-9 branch-scoped read resolves
+// and the raw-layer mock receives the auto-injected { branchId } call.
+beforeAll(() => {
+  window.localStorage.setItem('selectedBranchId', 'BR-TEST');
+});
 
 vi.mock('../../src/lib/backendClient.js', () => ({
   listCoupons: vi.fn(),

@@ -9,6 +9,12 @@ vi.mock('../../src/lib/reportsLoaders.js', () => ({
   loadSalesByDateRange: vi.fn(async () => FIXTURE_SALES),
   loadAllCustomersForReport: vi.fn(async () => []), // 10.3 backfill — empty by default
   loadSaleInsuranceClaimsByDateRange: vi.fn(async () => []), // Phase 12.3 — empty by default
+  // 2026-07-19 repoint: deposit-in-reports (2026-06-09) added
+  // loadDepositsByDateRange to the tab's parallel Promise.all — the mock
+  // factory must provide it or every render rejects at load time.
+  // (listAllSellers/getAllDeposits come via scopedDataLayer _autoInject,
+  // which resolves to [] with no selected branch — no extra mock needed.)
+  loadDepositsByDateRange: vi.fn(async () => []),
 }));
 
 vi.mock('../../src/firebase.js', () => ({
@@ -40,21 +46,26 @@ describe('SaleReportTab — render + interaction', () => {
   });
 
   it('renders 18 ProClinic column headers (no separate action col — whole row is clickable)', async () => {
+    // 2026-07-19 repoint: ReportShell renders emptyText INSTEAD of the table
+    // when 0 rows — the default last30 window no longer covers the April-2026
+    // fixture (calendar drift). Switch to the "ปีนี้" preset FIRST so rows
+    // exist and the table mounts (same pattern as the sibling tests).
     render(<SaleReportTab clinicSettings={{}} />);
+    await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
     await waitFor(() => screen.getByTestId('sale-report-table'));
     const ths = screen.getByTestId('sale-report-table').querySelectorAll('th');
     expect(ths.length).toBe(18);
   });
 
   it('renders rows from loader after mount', async () => {
+    // 2026-07-19 repoint: switch preset before waiting for the table (see above).
     render(<SaleReportTab clinicSettings={{}} />);
-    await waitFor(() => screen.getByTestId('sale-report-table'));
-    // After loader resolves with FIXTURE_SALES, find a known sale row
     await waitFor(() => {
       // Switch to "ปีนี้" preset to capture April 2026 dates
       const yearBtn = screen.getByText('ปีนี้');
       fireEvent.click(yearBtn);
     });
+    await waitFor(() => screen.getByTestId('sale-report-table'));
     await waitFor(() => {
       expect(screen.queryByTestId('row-INV-20260415-0001')).toBeInTheDocument();
     });

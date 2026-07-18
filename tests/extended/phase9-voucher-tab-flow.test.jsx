@@ -1,8 +1,16 @@
 // ─── Phase 9 — VoucherTab integration flow tests ───────────────────────────
 // Covers CRUD, platform filter, commission boundary, period toggle, edit-mode.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+
+// 2026-07-19 repoint: post-BSA the tab imports listVouchers/deleteVoucher from
+// scopedDataLayer.js (BS-1), whose _autoInject wrapper short-circuits to [] when
+// resolveSelectedBranchId() is null — the raw-layer mock would never be hit.
+// Prime the legacy localStorage key so the BS-9 branch-scoped read resolves.
+beforeAll(() => {
+  window.localStorage.setItem('selectedBranchId', 'BR-TEST');
+});
 
 vi.mock('../../src/lib/backendClient.js', () => ({
   listVouchers: vi.fn(),

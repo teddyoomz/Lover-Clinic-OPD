@@ -218,10 +218,12 @@ describe('frozen constants', () => {
     expect(TYPE_LABEL.work).toBe('ทำงาน');
     expect(TYPE_LABEL.holiday).toBe('วันหยุด');
   });
-  it('SV28: TIME_SLOTS covers 08:30-22:00 at 30-min steps', () => {
+  it('SV28: TIME_SLOTS covers 08:15-22:00 at 15-min steps', () => {
+    // 2026-07-19 repoint: the axis moved to 15-min granularity starting 08:15
+    // (56 slots) — see staffScheduleValidation.js:62-72 (V53 canonical axis).
     expect(Object.isFrozen(TIME_SLOTS)).toBe(true);
-    expect(TIME_SLOTS[0]).toBe('08:30');
+    expect(TIME_SLOTS[0]).toBe('08:15');
     expect(TIME_SLOTS[TIME_SLOTS.length - 1]).toBe('22:00');
-    expect(TIME_SLOTS.length).toBe(28);
+    expect(TIME_SLOTS.length).toBe(56);
   });
 });

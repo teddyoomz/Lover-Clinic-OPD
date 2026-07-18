@@ -202,6 +202,10 @@ describe('F-B — every MOVEMENT_TYPES code has a known emission point in produc
     'src/components/backend/StockTransferPanel.jsx',
     'src/components/backend/StockWithdrawalPanel.jsx',
     'src/components/backend/OrderPanel.jsx',
+    // 2026-07-19 repoint: Phase 15.5b moved the WITHDRAWAL_APPROVE (15) /
+    // WITHDRAWAL_REJECT (16) audit-only movement emission to the privileged
+    // admin endpoint (server-side, admin SDK) — include it in the corpus.
+    'api/admin/stock-withdrawal-approve.js',
   ];
   const corpus = sources
     .filter(s => existsSync(resolve(root, s)))

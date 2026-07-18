@@ -160,14 +160,17 @@ describe('MarketingFormShell', () => {
     expect(screen.getByText('บันทึกล้มเหลว')).toBeInTheDocument();
   });
 
-  it('F6 click on backdrop fires onClose', () => {
+  it('F6 click on backdrop does NOT close (AV78 explicit-close-only)', () => {
+    // 2026-07-19 repoint: V83/AV78 (2026-05-18) stripped backdrop-click-closes
+    // across ALL modals — users kept losing half-filled forms to stray clicks.
+    // Close is explicit-only (X / Cancel / ESC).
     const onClose = vi.fn();
     const { container } = render(
       <MarketingFormShell {...baseProps} onClose={onClose}><div>body</div></MarketingFormShell>
     );
     const backdrop = container.firstChild;
     fireEvent.click(backdrop);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('F7 click on modal body does NOT close', () => {

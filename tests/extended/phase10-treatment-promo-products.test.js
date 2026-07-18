@@ -25,6 +25,9 @@ describe('mapPromotionProductsToConsumables — promotion.products → consumabl
   };
 
   it('maps each product to a consumable carrying name/qty/unit', () => {
+    // 2026-07-19 repoint: V162 (2026-06-09) added the per-purchase `purchaseUid`
+    // field so two buys of the same promo can be removed independently
+    // (defaults to '' when the promotion carries no uid).
     const out = mapPromotionProductsToConsumables(promotion);
     expect(out).toHaveLength(2);
     expect(out[0]).toEqual({
@@ -34,6 +37,7 @@ describe('mapPromotionProductsToConsumables — promotion.products → consumabl
       unit: 'หลอด',
       promotionId: 'PROMO-001',
       promotionName: 'Filler 3900 แถมสลายแฟต',
+      purchaseUid: '',
     });
     expect(out[1]).toEqual({
       id: 'PROD-B',
@@ -42,6 +46,7 @@ describe('mapPromotionProductsToConsumables — promotion.products → consumabl
       unit: 'ชิ้น',
       promotionId: 'PROMO-001',
       promotionName: 'Filler 3900 แถมสลายแฟต',
+      purchaseUid: '',
     });
   });
 

@@ -209,10 +209,13 @@ describe('BF4: pc_* Firestore rules = sanctioned ProClinic mirrors only', () => 
 // H-bis — dev-only scaffolding banner
 // ═══════════════════════════════════════════════════════════════════════
 
-describe('H-bis: dev-only scaffolding has strip banner', () => {
-  it('H-bis.1: api/proclinic/explore.js has @dev-only banner', () => {
-    const content = readFile('api/proclinic/explore.js');
-    expect(content).toMatch(/@dev-only.*STRIP BEFORE PRODUCTION RELEASE/);
+// 2026-07-19: H-bis.1 DELETED — api/proclinic/** was removed entirely by the
+// V50 ProClinic strip (Rule H-bis EXECUTED); the @dev-only banner check on
+// api/proclinic/explore.js exercises deleted infrastructure. The stronger
+// current guard is AV28 (no proclinic imports at all).
+describe('H-bis: dev-only scaffolding fully stripped (V50)', () => {
+  it('H-bis.1: api/proclinic/ no longer exists (V50 strip is permanent)', () => {
+    expect(fs.existsSync('api/proclinic')).toBe(false);
   });
 });
 

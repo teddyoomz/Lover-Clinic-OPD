@@ -47,42 +47,57 @@ describe('CustomerCard', () => {
   });
 
   it('renders HN badge', () => {
+    // 2026-07-19 repoint: V68 editorial redesign renders HN inside the joined
+    // tagline "HN <hn> · <age> · <gender>" (single <p>), not a standalone badge.
     render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="cloned" />);
-    expect(screen.getByText('HN-001')).toBeInTheDocument();
+    expect(screen.getByText(/HN HN-001/)).toBeInTheDocument();
   });
 
   it('renders phone number', () => {
+    // 2026-07-19 repoint: V68 formats the phone as XXX-XXX-XXXX inside PhoneLink.
     render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="cloned" />);
-    expect(screen.getByText('0891234567')).toBeInTheDocument();
+    expect(screen.getByText('089-123-4567')).toBeInTheDocument();
   });
 
-  it('shows "ดูรายละเอียด" button in cloned mode', () => {
+  it('cloned-mode card itself is clickable and fires onView', () => {
+    // 2026-07-19 repoint: V68 removed the "ดูรายละเอียด" button — the WHOLE card
+    // is the click target (role="button" + onClick → onView(customer)).
     const onView = vi.fn();
     render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="cloned" onView={onView} />);
-    const btn = screen.getByText('ดูรายละเอียด');
-    expect(btn).toBeInTheDocument();
-    fireEvent.click(btn);
+    const card = screen.getByTestId('customer-card-123');
+    expect(card).toHaveAttribute('role', 'button');
+    fireEvent.click(card);
     expect(onView).toHaveBeenCalledWith(mockCustomer);
   });
 
   it('shows "ดูดข้อมูลทั้งหมด" button in search mode', () => {
+    // 2026-07-19 repoint: V68 prefixes the label with an emoji ("⬇️ ดูดข้อมูลทั้งหมด")
+    // in the same text node → substring matcher.
     const onClone = vi.fn();
     render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="search" onClone={onClone} />);
-    const btn = screen.getByText('ดูดข้อมูลทั้งหมด');
+    const btn = screen.getByText(/ดูดข้อมูลทั้งหมด/);
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(onClone).toHaveBeenCalledWith('123');
   });
 
-  it('shows clone status "complete" badge', () => {
-    render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="cloned" />);
-    expect(screen.getByText('Clone สมบูรณ์')).toBeInTheDocument();
+  it('shows clone status "done" label in search mode', () => {
+    // 2026-07-19 repoint: the cloned-mode "Clone สมบูรณ์" badge was removed in the
+    // V68 redesign; clone-status labels now live ONLY in the search-mode footer
+    // ('done' → "✓ Clone สำเร็จ").
+    render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="search" cloneStatus="done" onClone={() => {}} />);
+    expect(screen.getByText(/Clone สำเร็จ/)).toBeInTheDocument();
   });
 
   it('shows treatment + course counts in cloned mode', () => {
+    // 2026-07-19 repoint: V68 splits the count into <strong>{n}</strong> inside the
+    // span ("💊 5 รักษา") → match on the SPAN's full textContent.
     render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="cloned" />);
-    expect(screen.getByText('5 รักษา')).toBeInTheDocument();
-    expect(screen.getByText('1 คอร์ส')).toBeInTheDocument();
+    const spanWithText = (txt) => screen.getByText(
+      (_, el) => el?.tagName === 'SPAN' && el.textContent.replace(/\s+/g, ' ').trim() === txt
+    );
+    expect(spanWithText('💊 5 รักษา')).toBeInTheDocument();
+    expect(spanWithText('📦 1 คอร์ส')).toBeInTheDocument();
   });
 
   it('shows progress bar during cloning', () => {
@@ -91,9 +106,10 @@ describe('CustomerCard', () => {
   });
 
   it('shows error retry button', () => {
+    // 2026-07-19 repoint: V68 label is "↻ ลองอีกครั้ง" (retry glyph in same text node).
     const onClone = vi.fn();
     render(<CustomerCard customer={mockCustomer} accentColor="#dc2626" mode="search" cloneStatus="error" onClone={onClone} />);
-    const btn = screen.getByText('ลองอีกครั้ง');
+    const btn = screen.getByText(/ลองอีกครั้ง/);
     fireEvent.click(btn);
     expect(onClone).toHaveBeenCalled();
   });

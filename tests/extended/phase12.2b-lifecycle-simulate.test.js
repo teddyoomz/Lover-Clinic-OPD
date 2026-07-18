@@ -345,7 +345,9 @@ describe('F6: 3-visit cumulative scenario — buffet + specific-qty + fill-later
 describe('F7: source-grep — lifecycle short-circuits wired in both Step-1 and Step-2', () => {
   const BC = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
   const fnIdx = BC.indexOf('export async function deductCourseItems');
-  const body = BC.slice(fnIdx, fnIdx + 5000);
+  // 2026-07-19 repoint: window 5000→7000 — V148 atomic-tx + AV209 comments
+  // grew the function; the F7.5 throw sits past the old window (K.2 pattern).
+  const body = BC.slice(fnIdx, fnIdx + 7000);
 
   it('F7.1: fill-later (เหมาตามจริง) appears at least 3 times (Step-1 + Step-2 fallback + Step-2 skip)', () => {
     const matches = body.match(/เหมาตามจริง/g) || [];

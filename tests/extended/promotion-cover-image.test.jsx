@@ -7,8 +7,16 @@
 //
 // Uses vi.mock on backendClient to feed canned promotion lists; no Firebase.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+
+// 2026-07-19 repoint: post-BSA PromotionTab imports listPromotions from
+// scopedDataLayer.js (BS-1), whose _autoInject wrapper short-circuits to []
+// when resolveSelectedBranchId() is null — the raw-layer mock would never be
+// hit. Prime the legacy localStorage key so the BS-9 branch-scoped read resolves.
+beforeAll(() => {
+  window.localStorage.setItem('selectedBranchId', 'BR-TEST');
+});
 
 // Mock backendClient BEFORE importing PromotionTab (which imports it).
 vi.mock('../../src/lib/backendClient.js', () => ({

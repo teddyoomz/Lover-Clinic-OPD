@@ -2,7 +2,10 @@
 import { test, expect } from '@playwright/test';
 import { goToCustomer } from './helpers.js';
 
-const CUSTOMER_ID = '2867';
+// 2026-07-19: the hardcoded prod customer '2867' was deleted from prod → every
+// test died in goToCustomer (stale fixture, pre-existing). Overridable so the
+// runner can seed a TEST- customer (V33.10 prefix discipline) and clean up.
+const CUSTOMER_ID = process.env.E2E_BUY_CUSTOMER || '2867';
 
 // Helper: open treatment form for this customer
 async function openTreatmentForm(page) {

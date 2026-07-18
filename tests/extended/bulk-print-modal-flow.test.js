@@ -24,8 +24,10 @@ describe('BP.A — BulkPrintModal shape', () => {
     expect(modalFile).toMatch(/BulkPrintModal\(\{\s*customers[\s\S]*?clinicSettings[\s\S]*?onClose/);
   });
 
-  it('A.3 — imports listDocumentTemplates + recordDocumentPrint from backendClient', () => {
-    expect(modalFile).toMatch(/listDocumentTemplates[\s\S]*?recordDocumentPrint[\s\S]*?from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  it('A.3 — imports listDocumentTemplates + recordDocumentPrint from scopedDataLayer (BS-1)', () => {
+    // 2026-07-19 repoint: Phase BSA moved UI imports backendClient →
+    // scopedDataLayer.js (BS-1).
+    expect(modalFile).toMatch(/listDocumentTemplates[\s\S]*?recordDocumentPrint[\s\S]*?from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
 
   it('A.4 — imports exportDocumentToPdf from documentPrintEngine', () => {

@@ -301,9 +301,22 @@ beforeAll(() => {
       dispatchEvent: () => false,
     });
   }
+  // 2026-07-19 repoint: the tab reads via scopedDataLayer auto-inject
+  // (Phase 17.2-bis safe-by-default) — when NO branch resolves it returns []
+  // WITHOUT calling the lister. Prime the legacy localStorage key so
+  // resolveSelectedBranchId() resolves and the mocked lister is reached.
+  window.localStorage.setItem('selectedBranchId', 'TEST-BR-EXT');
 });
 
 vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
+
+// 2026-07-19 repoint: the tab now renders CrossBranchImportButton →
+// useTabAccess → useSystemConfig → real Firestore doc() against the mocked
+// db {} → FirebaseError at mount. Stub the hook (same pattern as
+// branch.test.jsx / tests/phase11-master-data-scaffold.test.jsx).
+vi.mock('../../src/hooks/useSystemConfig.js', () => ({
+  useSystemConfig: () => ({ config: { tabOverrides: {}, featureFlags: {} }, loading: false, error: null }),
+}));
 
 const mockList = vi.fn();
 const mockSave = vi.fn();

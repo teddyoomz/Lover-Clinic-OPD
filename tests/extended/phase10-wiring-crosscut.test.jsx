@@ -27,12 +27,13 @@ const REPORT_TAB_IDS = [
 ];
 
 describe('navConfig — Phase 10 + 12.8 report items present', () => {
-  it('reports section has 13 items (P10: 10 + P12.8: 2 + P13.4: 1 df-payout)', () => {
-    // Phase 12.8 (2026-04-20) appended reports-pnl + reports-payment.
-    // Phase 13.4 (2026-04-24) appended reports-df-payout.
+  it('reports section has the current 22 items (grew past the P13.4-era 13)', () => {
+    // 2026-07-19 repoint: expense-report / clinic-report / reconciliation /
+    // remaining-course / smart-audience / alt-sales / outstanding /
+    // stock-movements / stock-alert appended through 2026-07-08.
     const reportsSection = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reportsSection).toBeDefined();
-    expect(reportsSection.items.length).toBe(13);
+    expect(reportsSection.items.length).toBe(22);
   });
 
   it('every report tab id is in ALL_ITEM_IDS whitelist (URL deep-link support)', () => {
@@ -89,9 +90,14 @@ describe('navConfig — Phase 10 + 12.8 report items present', () => {
   });
 });
 
-describe('PINNED_ITEMS — appointments is still pinned', () => {
-  it('appointments is pinned (not nested in a section)', () => {
-    expect(PINNED_ITEMS.some(i => i.id === 'appointments')).toBe(true);
+describe('PINNED_ITEMS — appointments moved into a section (Phase 21.0)', () => {
+  it('PINNED_ITEMS is empty; appointments live in appointments-section', () => {
+    // 2026-07-19 repoint: Phase 21.0 replaced the pinned 'appointments' item
+    // with a full 'appointments-section' (per-type sub-tabs); PINNED_ITEMS = [].
+    expect(PINNED_ITEMS).toHaveLength(0);
+    const apptSection = NAV_SECTIONS.find(s => s.id === 'appointments-section');
+    expect(apptSection).toBeDefined();
+    expect(apptSection.items.some(i => i.id === 'appointment-all')).toBe(true);
   });
 });
 
@@ -103,10 +109,12 @@ vi.mock('../../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 import ReportsHomeTab from '../../src/components/backend/reports/ReportsHomeTab.jsx';
 
 describe('ReportsHomeTab — card clicks fire onNavigate with correct tabId', () => {
-  it('clicking "การขาย" card fires onNavigate("reports-sale")', () => {
+  it('clicking "การขาย (ใบเสร็จ)" card fires onNavigate("reports-sale")', () => {
+    // 2026-07-19 repoint: 2026-07-08 reports-home wire-up renamed the card
+    // 'การขาย' → 'การขาย (ใบเสร็จ)'.
     const onNavigate = vi.fn();
     render(<ReportsHomeTab onNavigate={onNavigate} clinicSettings={{}} />);
-    const saleCard = screen.getAllByText('การขาย').find(el => el.closest('button'));
+    const saleCard = screen.getAllByText('การขาย (ใบเสร็จ)').find(el => el.closest('button'));
     fireEvent.click(saleCard.closest('button'));
     expect(onNavigate).toHaveBeenCalledWith('reports-sale');
   });
@@ -119,10 +127,12 @@ describe('ReportsHomeTab — card clicks fire onNavigate with correct tabId', ()
     expect(onNavigate).toHaveBeenCalledWith('reports-rfm');
   });
 
-  it('clicking "สต็อคสินค้า" category card fires onNavigate("reports-stock")', () => {
+  it('clicking "สต็อคสินค้า (คงเหลือ)" category card fires onNavigate("reports-stock")', () => {
+    // 2026-07-19 repoint: 2026-07-08 reports-home wire-up renamed the card
+    // 'สต็อคสินค้า' → 'สต็อคสินค้า (คงเหลือ)'.
     const onNavigate = vi.fn();
     render(<ReportsHomeTab onNavigate={onNavigate} clinicSettings={{}} />);
-    const stockBtn = screen.getAllByText('สต็อคสินค้า').find(el => el.closest('button'));
+    const stockBtn = screen.getAllByText('สต็อคสินค้า (คงเหลือ)').find(el => el.closest('button'));
     fireEvent.click(stockBtn.closest('button'));
     expect(onNavigate).toHaveBeenCalledWith('reports-stock');
   });
@@ -137,15 +147,19 @@ describe('ReportsHomeTab — card clicks fire onNavigate with correct tabId', ()
     expect(callArgs).not.toContain(null);
   });
 
-  it('6 category sections render', () => {
+  it('5 category sections render', () => {
+    // 2026-07-19 repoint: the 2026-07-08 wire-up consolidated the categories to
+    // sales / customer / expense / appointment / stock ('marketing' + 'general'
+    // dead cards removed).
     const onNavigate = vi.fn();
     render(<ReportsHomeTab onNavigate={onNavigate} clinicSettings={{}} />);
     expect(screen.getByTestId('category-sales')).toBeInTheDocument();
-    expect(screen.getByTestId('category-marketing')).toBeInTheDocument();
     expect(screen.getByTestId('category-customer')).toBeInTheDocument();
-    expect(screen.getByTestId('category-general')).toBeInTheDocument();
     expect(screen.getByTestId('category-expense')).toBeInTheDocument();
+    expect(screen.getByTestId('category-appointment')).toBeInTheDocument();
     expect(screen.getByTestId('category-stock')).toBeInTheDocument();
+    expect(screen.queryByTestId('category-marketing')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('category-general')).not.toBeInTheDocument();
   });
 
   it('4 analytics cards render (RFM / Revenue / Appt-Analysis / Smart-Audience)', () => {

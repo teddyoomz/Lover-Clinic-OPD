@@ -195,7 +195,9 @@ describe('DST — Phase 13.2.7 DoctorSchedulesTab + scheduling', () => {
 
     it('DST.D.5 ScheduleEntryFormModal validates via validateStaffScheduleStrict before save', () => {
       expect(modalSrc).toMatch(/import\s+\{[^}]*validateStaffScheduleStrict/s);
-      expect(modalSrc).toMatch(/validateStaffScheduleStrict\(payload\)/);
+      // 2026-07-19 repoint: V56/BS-15 threads staffKind into the strict
+      // validator (doctor shifts require roomIds; assistants must not).
+      expect(modalSrc).toMatch(/validateStaffScheduleStrict\(\{ \.\.\.payload, staffKind \}\)/);
     });
   });
 

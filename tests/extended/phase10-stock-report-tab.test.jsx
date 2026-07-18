@@ -1,8 +1,17 @@
 // Phase 10.5 — StockReportTab UI render + interaction tests.
 // Mocks Firestore loaders so the tab can render in jsdom without auth.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+// 2026-07-19 repoint: V52 migrated the tab's product-master read to
+// scopedDataLayer auto-inject (Phase 17.2-bis safe-by-default) — when NO
+// branch resolves it returns [] WITHOUT calling the mocked lister, so the
+// status/type/category columns render '-' and the filters have no options.
+// Prime the legacy localStorage key so resolveSelectedBranchId() resolves.
+beforeAll(() => {
+  window.localStorage.setItem('selectedBranchId', 'TEST-BR-EXT');
+});
 
 const FIX_PRODUCTS = [
   { id: 'P001', name: 'Botox 100U', type: 'ยา', category: 'Botox',

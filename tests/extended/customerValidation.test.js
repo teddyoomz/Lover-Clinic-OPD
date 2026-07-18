@@ -171,14 +171,25 @@ describe('normalizeCustomer', () => {
     expect(normalizeCustomer({ ...base(), citizen_id: '1-2345-67890-12-3' }).citizen_id).toBe('1234567890123');
   });
   it('NC6: consent shape normalized always', () => {
-    expect(normalizeCustomer({}).consent).toEqual({ marketing: false, healthData: false });
-    expect(normalizeCustomer({ consent: { marketing: true } }).consent).toEqual({ marketing: true, healthData: false });
-    expect(normalizeCustomer({ consent: 'invalid' }).consent).toEqual({ marketing: false, healthData: false });
+    // 2026-07-19 repoint: V33-customer-create added consent.imageMarketing to
+    // the consent ladder — normalized shape is now 3 keys.
+    expect(normalizeCustomer({}).consent).toEqual({ marketing: false, healthData: false, imageMarketing: false });
+    expect(normalizeCustomer({ consent: { marketing: true } }).consent).toEqual({ marketing: true, healthData: false, imageMarketing: false });
+    expect(normalizeCustomer({ consent: 'invalid' }).consent).toEqual({ marketing: false, healthData: false, imageMarketing: false });
   });
-  it('NC7: coerces truthy non-boolean flags', () => {
+  it('NC7: coerces truthy non-boolean flags (consent.imageMarketing wins over the deprecated flat field)', () => {
     const n = normalizeCustomer({ ...base(), pregnanted: 1, is_image_marketing_allowed: 'yes' });
     expect(n.pregnanted).toBe(true);
-    expect(n.is_image_marketing_allowed).toBe(true);
+    // 2026-07-19 repoint: V33-customer-create — when consent.imageMarketing is
+    // EXPLICITLY set (emptyCustomerForm sets it false), it takes precedence
+    // over the deprecated flat is_image_marketing_allowed, and the flat field
+    // is mirrored back from the final consent value.
+    expect(n.is_image_marketing_allowed).toBe(false);
+    expect(n.consent.imageMarketing).toBe(false);
+    // Legacy shape WITHOUT a consent object: the flat field is honored + coerced.
+    const legacy = normalizeCustomer({ firstname: 'x', pregnanted: 1, is_image_marketing_allowed: 'yes' });
+    expect(legacy.is_image_marketing_allowed).toBe(true);
+    expect(legacy.consent.imageMarketing).toBe(true);
   });
   it('NC8: preserves non-numeric customer_type / source strings', () => {
     const n = normalizeCustomer({ ...base(), customer_type: 'ลูกค้าเก่า', source: 'Facebook' });

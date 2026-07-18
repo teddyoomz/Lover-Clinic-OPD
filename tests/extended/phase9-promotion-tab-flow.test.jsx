@@ -9,8 +9,16 @@
 // These complement the existing pure-unit Phase 9 tests (362 scenarios
 // across 10 files). Goal: catch wiring bugs the pure tests can't see.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+
+// 2026-07-19 repoint: post-BSA the tab imports listPromotions/deletePromotion from
+// scopedDataLayer.js (BS-1), whose _autoInject wrapper short-circuits to [] when
+// resolveSelectedBranchId() is null — the raw-layer mock would never be hit.
+// Prime the legacy localStorage key so the BS-9 branch-scoped read resolves.
+beforeAll(() => {
+  window.localStorage.setItem('selectedBranchId', 'BR-TEST');
+});
 
 vi.mock('../../src/lib/backendClient.js', () => ({
   listPromotions: vi.fn(),

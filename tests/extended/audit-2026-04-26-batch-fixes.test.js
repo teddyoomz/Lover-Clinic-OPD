@@ -25,8 +25,11 @@ describe('AB1: AP1 server-side appointment collision check', () => {
   const SRC = READ('src/lib/backendClient.js');
 
   it('AB1.1: createBackendAppointment reads existing appointments before write', () => {
+    // 2026-07-19 repoint: Phase BS made the doctor-collision scan explicitly
+    // cross-branch ({allBranches: true}) — a doctor can't be in two places
+    // even across branches.
     const fn = SRC.match(/export async function createBackendAppointment[\s\S]+?^}/m)?.[0] || '';
-    expect(fn).toMatch(/getAppointmentsByDate\(targetDate\)/);
+    expect(fn).toMatch(/getAppointmentsByDate\(targetDate,\s*\{\s*allBranches:\s*true\s*\}\)/);
   });
 
   it('AB1.2: filters by doctorId AND non-cancelled status', () => {
@@ -234,9 +237,15 @@ describe('AB4: RP5 silent catches migrated to debugLog', () => {
     expect(src).toMatch(/debugLog\(['"]chart-template-load['"]/);
   });
 
-  it('AB4.9: ChartTemplateSelector ProClinic chart-template fetch logs', () => {
+  // 2026-07-19: AB4.9 (chart-template-pc fetch logging) DELETED — the ProClinic
+  // chart-template fetch path was removed by the V50 ProClinic strip; the
+  // 'chart-template-pc' debugLog tag no longer exists. Repointed to the live
+  // Firestore-side tags so RP5 catch-coverage on this file stays locked.
+  it('AB4.9: ChartTemplateSelector Firestore mutation catches log (upload/delete/lock)', () => {
     const src = READ('src/components/ChartTemplateSelector.jsx');
-    expect(src).toMatch(/debugLog\(['"]chart-template-pc['"]/);
+    expect(src).toMatch(/debugLog\(['"]chart-template-upload['"]/);
+    expect(src).toMatch(/debugLog\(['"]chart-template-delete['"]/);
+    expect(src).toMatch(/debugLog\(['"]chart-template-lock['"]/);
   });
 
   it('AB4.10: ANTI-REGRESSION — no naked `} catch (_) {}` in TFP outer-load functions', () => {

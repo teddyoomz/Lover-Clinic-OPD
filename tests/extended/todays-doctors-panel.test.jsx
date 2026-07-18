@@ -178,10 +178,16 @@ describe('TDP — Phase 13.2.9 TodaysDoctorsPanel', () => {
       expect(codeOnly).not.toMatch(/getAppointments/);
     });
 
-    it('TDP.C.2 panel filters by type (recurring|work|halfday)', () => {
-      expect(codeOnly).toMatch(/['"]recurring['"]/);
-      expect(codeOnly).toMatch(/['"]work['"]/);
-      expect(codeOnly).toMatch(/['"]halfday['"]/);
+    it('TDP.C.2 panel filters by type via shared WORKING_TIME_TYPES (recurring|work|halfday)', () => {
+      // 2026-07-19 repoint: V164 extracted the inline type literals into the
+      // shared WORKING_TIME_TYPES Set (staffScheduleValidation.js:51) — the
+      // panel filters with .has(s.type) instead of repeating the literals.
+      expect(codeOnly).toMatch(/WORKING_TIME_TYPES\.has\(s\.type\)/);
+      const validationSrc = readFileSync(
+        resolve(__dirname, '..', '..', 'src/lib/staffScheduleValidation.js'),
+        'utf-8'
+      );
+      expect(validationSrc).toMatch(/WORKING_TIME_TYPES = new Set\(\['recurring', 'work', 'halfday'\]\)/);
     });
 
     it('TDP.C.3 panel uses pre-merged data shape (no internal Firestore calls)', () => {

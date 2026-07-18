@@ -22,8 +22,10 @@ describe('VendorSalesTab route wiring (Phase 14.3 G6 follow-up C)', () => {
     expect(NAV).toMatch(/ขายให้คู่ค้า/);
   });
 
-  it('VS2: BackendDashboard imports VendorSalesTab', () => {
-    expect(DASH).toMatch(/import\s+VendorSalesTab\s+from\s*['"]\.\.\/components\/backend\/VendorSalesTab\.jsx['"]/);
+  it('VS2: BackendDashboard lazy-imports VendorSalesTab (perf code-split)', () => {
+    // 2026-07-19 repoint: the perf pass flipped the eager import to
+    // React.lazy — the tab chunk loads only when opened.
+    expect(DASH).toMatch(/const\s+VendorSalesTab\s*=\s*lazy\(\(\)\s*=>\s*import\(['"]\.\.\/components\/backend\/VendorSalesTab\.jsx['"]\)\)/);
   });
 
   it('VS3: BackendDashboard render branch matches activeTab === "vendor-sales"', () => {

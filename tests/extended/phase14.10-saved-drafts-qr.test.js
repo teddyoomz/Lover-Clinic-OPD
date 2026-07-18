@@ -80,7 +80,9 @@ describe('SD.A — backendClient saved-draft helpers', () => {
 // ─── SD.B — DocumentPrintModal auto-save ────────────────────────────
 describe('SD.B — DocumentPrintModal auto-save (debounced)', () => {
   it('B.1 — imports saveDocumentDraft + findResumableDraft + deleteDocumentDraft', () => {
-    expect(modalFile).toMatch(/saveDocumentDraft[^}]*}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+    // 2026-07-19 repoint: Phase BSA moved UI imports backendClient →
+    // scopedDataLayer.js (BS-1).
+    expect(modalFile).toMatch(/saveDocumentDraft[^}]*}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
     expect(modalFile).toContain('findResumableDraft');
     expect(modalFile).toContain('deleteDocumentDraft');
   });

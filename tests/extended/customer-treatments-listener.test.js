@@ -141,12 +141,16 @@ describe('L2: listener fires onChange with sorted treatments + handles errors', 
 describe('L3: CustomerDetailView uses the listener (not one-shot fetch)', () => {
   const SRC = READ('src/components/backend/CustomerDetailView.jsx');
 
-  it('L3.1: imports listenToCustomerTreatments from backendClient', () => {
-    expect(SRC).toMatch(/import\s*\{[\s\S]*?listenToCustomerTreatments[\s\S]*?\}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  it('L3.1: imports listenToCustomerTreatments from scopedDataLayer (BS-1)', () => {
+    // 2026-07-19 repoint: Phase BSA migrated ALL UI imports backendClient →
+    // scopedDataLayer.js (BS-1 invariant).
+    expect(SRC).toMatch(/import\s*\{[\s\S]*?listenToCustomerTreatments[\s\S]*?\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
 
   it('L3.2: calls listenToCustomerTreatments inside the treatments-load useEffect', () => {
-    expect(SRC).toMatch(/listenToCustomerTreatments\(\s*customer\.proClinicId/);
+    // 2026-07-19 repoint: CDV subscribes with the canonical
+    // `customerId = customer?.id || customer?.proClinicId` local (CDV:233).
+    expect(SRC).toMatch(/listenToCustomerTreatments\(\s*customerId/);
   });
 
   it('L3.3: stores the unsubscribe + returns it from useEffect cleanup', () => {
@@ -164,7 +168,9 @@ describe('L3: CustomerDetailView uses the listener (not one-shot fetch)', () => 
     // The useEffect's dep array is the FIRST `}, [...])` after the call.
     const depMatch = region.match(/\},\s*\[([^\]]+)\]\s*\)/);
     expect(depMatch).toBeTruthy();
-    expect(depMatch[1]).toMatch(/customer\?\.proClinicId/);
+    // 2026-07-19 repoint: dep is now the canonical `customerId` local
+    // (customer?.id || customer?.proClinicId) instead of customer?.proClinicId.
+    expect(depMatch[1]).toMatch(/customerId/);
     expect(depMatch[1]).not.toMatch(/treatmentCount/);
   });
 

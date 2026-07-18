@@ -160,7 +160,9 @@ describe('AR2 — empty/null input safety', () => {
     const out = aggregateAppointmentReport([{}], FIX_CUSTOMERS, FIX_STAFF);
     expect(out.rows).toHaveLength(1);
     expect(out.rows[0].statusLabel).toBe('รอยืนยัน'); // default status
-    expect(out.rows[0].appointmentTypeLabel).toBe('นัดเพื่อขาย'); // default type
+    // 2026-07-19 repoint: Phase 19.0/21.0 appointmentTypes SSOT — the default
+    // type is 'no-deposit-booking' → label 'จองไม่มัดจำ' (was legacy 'นัดเพื่อขาย').
+    expect(out.rows[0].appointmentTypeLabel).toBe('จองไม่มัดจำ');
     expect(out.rows[0].doctorName).toBe('-');
     expect(out.rows[0].advisorName).toBe('-');
   });
@@ -251,10 +253,17 @@ describe('AR14 — defensive access + label derivation', () => {
     expect(out.rows[0].statusLabel).toBe('somethingweird');
   });
 
-  it('appointmentType label maps sales/followup; unknown falls through', () => {
+  it('appointmentType label: legacy sales/followup fall back to the SSOT default label', () => {
+    // 2026-07-19 repoint: Phase 19.0/21.0 replaced the 2-value 'sales'/'followup'
+    // enum with the 5-value canonical taxonomy; legacy values resolve to the
+    // DEFAULT_APPOINTMENT_TYPE label ('จองไม่มัดจำ') via resolveAppointmentTypeLabel.
     const out = aggregateAppointmentReport(FIX_APPTS, FIX_CUSTOMERS, FIX_STAFF);
-    expect(out.rows.find(r => r.appointmentType === 'sales').appointmentTypeLabel).toBe('นัดเพื่อขาย');
-    expect(out.rows.find(r => r.appointmentType === 'followup').appointmentTypeLabel).toBe('นัดติดตาม');
+    expect(out.rows.find(r => r.appointmentType === 'sales').appointmentTypeLabel).toBe('จองไม่มัดจำ');
+    expect(out.rows.find(r => r.appointmentType === 'followup').appointmentTypeLabel).toBe('จองไม่มัดจำ');
+    // Canonical values still map to their own labels.
+    const canon = aggregateAppointmentReport(
+      [{ ...FIX_APPTS[0], appointmentType: 'follow-up' }], FIX_CUSTOMERS, FIX_STAFF);
+    expect(canon.rows[0].appointmentTypeLabel).toBe('ติดตามอาการ');
   });
 
   it('appointment with no customerId returns customerType=ลูกค้าทั่วไป fallback', () => {
@@ -463,7 +472,9 @@ describe('buildAppointmentReportRow — direct', () => {
       startTime: '10:00',
       endTime: '10:30',
       appointmentType: 'sales',
-      appointmentTypeLabel: 'นัดเพื่อขาย',
+      // 2026-07-19 repoint: legacy 'sales' resolves to the SSOT default label
+      // (Phase 19.0/21.0 appointmentTypes taxonomy).
+      appointmentTypeLabel: 'จองไม่มัดจำ',
       status: 'confirmed',
       statusLabel: 'ยืนยันแล้ว',
       doctorName: 'หมอเอ',

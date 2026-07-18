@@ -203,8 +203,10 @@ describe('AL.C — recordDocumentPrint source-grep contract', () => {
 
 // ─── AL.D — DocumentPrintModal wiring ───────────────────────────────
 describe('AL.D — DocumentPrintModal recordDocumentPrint wiring', () => {
-  it('D.1 — imports recordDocumentPrint from backendClient', () => {
-    expect(modalFile).toMatch(/recordDocumentPrint[^}]*}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  it('D.1 — imports recordDocumentPrint from scopedDataLayer (BS-1)', () => {
+    // 2026-07-19 repoint: Phase BSA moved UI imports backendClient →
+    // scopedDataLayer.js (BS-1).
+    expect(modalFile).toMatch(/recordDocumentPrint[^}]*}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
 
   it('D.2 — handlePrint calls recordDocumentPrint after successful printDocument', () => {

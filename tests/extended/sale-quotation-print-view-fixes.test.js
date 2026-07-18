@@ -157,41 +157,55 @@ describe('PV.D — runtime semantic guards', () => {
 describe('PV.E — seller name fallback chain (SaleTab + SalePrintView)', () => {
   const saleTabFile = readFileSync(join(ROOT, 'src/components/backend/SaleTab.jsx'), 'utf8');
 
-  it('E.1 — SalePrintView reads firstSeller.name (canonical, not sellerName)', () => {
-    expect(saleFile).toMatch(/firstSeller\.name/);
+  // 2026-07-19 repoint (E.1/E.2/E.4/E.6/E.7): the inline name→sellerName→
+  // lookup fallback chain was extracted (Rule of 3) into the shared
+  // resolveSellerName helper (src/lib/documentFieldAutoFill.js) — the V22
+  // follow-up also DROPPED the numeric-id fallback ("614" leak). SalePrintView
+  // now calls resolveSellerName(firstSeller, sellersLookup).
+  const autoFillFile = readFileSync(join(ROOT, 'src/lib/documentFieldAutoFill.js'), 'utf8');
+
+  it('E.1 — SalePrintView resolves the first seller via the shared resolveSellerName helper', () => {
+    expect(saleFile).toMatch(/const firstSeller = \(s\.sellers \|\| \[\]\)\[0\] \|\| \{\}/);
+    expect(saleFile).toMatch(/resolveSellerName\(firstSeller,\s*sellersLookup\)/);
+    // Canonical first read (seller.name) lives inside the helper now.
+    expect(autoFillFile).toMatch(/seller\.name === 'string' \? seller\.name\.trim\(\)/);
   });
 
-  it('E.2 — SalePrintView fallback chain: name → sellerName → lookupName → id', () => {
-    expect(saleFile).toMatch(/sellerDisplay\s*=\s*firstSeller\.name[\s\S]*?firstSeller\.sellerName[\s\S]*?lookupName[\s\S]*?firstSeller\.id/);
+  it('E.2 — fallback chain: name → sellerName → lookup → NEVER numeric id (V22 lock)', () => {
+    expect(autoFillFile).toMatch(/seller\.name[\s\S]*?seller\.sellerName[\s\S]*?lookup\.find/);
+    expect(autoFillFile).toMatch(/never leak numeric ID/i);
+    expect(saleFile).toMatch(/sellerDisplay\s*=\s*sellerName[\s\S]*?s\.createdByName/);
   });
 
   it('E.3 — SalePrintView accepts sellersLookup prop for id→name resolution', () => {
     expect(saleFile).toMatch(/sellersLookup\s*=\s*\[\]/);
   });
 
-  it('E.4 — sellersLookup is consulted only when firstSeller.id is set + array', () => {
-    expect(saleFile).toMatch(/Array\.isArray\(sellersLookup\)/);
-    expect(saleFile).toMatch(/sellersLookup\.find\(/);
+  it('E.4 — lookup is consulted only when seller.id is set + array (inside the shared helper)', () => {
+    expect(autoFillFile).toMatch(/Array\.isArray\(lookup\)/);
+    expect(autoFillFile).toMatch(/lookup\.find\(/);
   });
 
   it('E.5 — SaleTab passes its sellers state as sellersLookup prop to SalePrintView', () => {
     expect(saleTabFile).toMatch(/<SalePrintView[\s\S]*?sellersLookup=\{sellers\}/);
   });
 
-  it('E.6 — SaleDetailModal seller render falls back to sellers state lookup', () => {
-    // The resolveName chain inside the modal must consult sellers state
-    // when s.name is missing.
+  it('E.6 — SaleDetailModal seller render resolves via the shared helper + sellers state', () => {
+    // 2026-07-19 repoint: the inline sellers.find chain moved into
+    // resolveSellerName; the modal calls it with the sellers state lookup.
     expect(saleTabFile).toContain('resolvedName');
-    expect(saleTabFile).toMatch(/sellers\.find\(/);
-    expect(saleTabFile).toMatch(/String\(opt\.id\)\s*===\s*String\(s\.id\)/);
+    expect(saleTabFile).toMatch(/resolveSellerName\(s,\s*sellers\)/);
+    expect(autoFillFile).toMatch(/String\(opt\.id\)\s*===\s*String\(seller\.id\)/);
   });
 
-  it('E.7 — anti-regression: old `s.sellerName` (wrong key) NOT used in display path', () => {
-    // s.sellerName MAY appear in fallback (defensive) but the canonical
-    // first read should be firstSeller.name
+  it('E.7 — anti-regression: canonical first read is seller.name (helper), display starts from resolved name', () => {
+    // 2026-07-19 repoint: sellerDisplay now starts from the helper output
+    // (sellerName) whose FIRST read is seller.name — s.sellerName is only the
+    // 2nd defensive fallback inside the helper.
     const sellerDisplayBlock = saleFile.match(/const sellerDisplay\s*=\s*[\s\S]*?;/)?.[0] || '';
-    // The first OR clause must be firstSeller.name
-    expect(sellerDisplayBlock).toMatch(/=\s*firstSeller\.name/);
+    expect(sellerDisplayBlock).toMatch(/=\s*sellerName/);
+    const helperFn = autoFillFile.match(/export function resolveSellerName[\s\S]*?\n\}/)?.[0] || '';
+    expect(helperFn.indexOf('seller.name')).toBeLessThan(helperFn.indexOf('seller.sellerName'));
   });
 });
 
@@ -215,32 +229,42 @@ describe('PV.F — sellers source switched to listAllSellers (be_*)', () => {
     expect(block).toMatch(/Promise\.all\(\[listStaff\(\),\s*listDoctors\(\)\]\)/);
   });
 
-  it('F.3 — listAllSellers buildName composes firstname+lastname with nickname fallback', () => {
-    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+  // 2026-07-19 repoint (F.3-F.5): Phase 15.5A extracted the buildName/expand/
+  // dedupe machinery into mergeSellersWithBranchFilter; listAllSellers is now
+  // a thin delegate. Grep the extracted helper instead.
+  const mergeBlock = () => backendFile.match(/export function mergeSellersWithBranchFilter[\s\S]*?\n\}/)?.[0] || '';
+
+  it('F.3 — buildName composes firstname+lastname with nickname fallback (mergeSellersWithBranchFilter)', () => {
+    const block = mergeBlock();
     expect(block).toContain('firstname');
     expect(block).toContain('lastname');
     expect(block).toContain('nickname');
+    expect(backendFile).toMatch(/export async function listAllSellers[\s\S]{0,200}mergeSellersWithBranchFilter/);
   });
 
   it('F.4 — expand emits row per id (id, staffId, doctorId, proClinicId) so legacy numeric ids resolve', () => {
-    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+    const block = mergeBlock();
     expect(block).toContain('staffId');
     expect(block).toContain('doctorId');
     expect(block).toContain('proClinicId');
   });
 
   it('F.5 — dedupe via Map by id (later doctors override earlier staff for same id)', () => {
-    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+    const block = mergeBlock();
     expect(block).toMatch(/new Map\(\)/);
     expect(block).toMatch(/byId\.set\(opt\.id,\s*opt\)/);
   });
 
-  it('F.6 — SaleTab imports listAllSellers from backendClient', () => {
-    expect(saleTabFile).toMatch(/listAllSellers[\s\S]*?from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  it('F.6 — SaleTab imports listAllSellers from scopedDataLayer (BS-1)', () => {
+    // 2026-07-19 repoint: Phase BSA migrated ALL UI imports backendClient →
+    // scopedDataLayer (BS-1); the helper is re-exported there.
+    expect(saleTabFile).toMatch(/listAllSellers,[\s\S]*?from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
 
   it('F.7 — SaleTab loadOptions calls listAllSellers (NOT inline listStaff/listDoctors anymore)', () => {
-    const block = saleTabFile.match(/const loadOptions\s*=[\s\S]*?\}, \[customers\.length, sellers\.length\]\);/)?.[0] || '';
+    // 2026-07-19 repoint: V108 made loadOptions load-only-missing; deps grew
+    // to [customers.length, sellers.length, medProducts.length].
+    const block = saleTabFile.match(/const loadOptions\s*=[\s\S]*?\}, \[customers\.length, sellers\.length, medProducts\.length\]\);/)?.[0] || '';
     expect(block).toContain('listAllSellers()');
     // Old master_data calls removed
     expect(block).not.toMatch(/getAllMasterDataItems\(['"]staff['"]/);
