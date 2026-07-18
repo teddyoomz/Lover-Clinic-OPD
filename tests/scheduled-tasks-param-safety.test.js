@@ -14,6 +14,7 @@ import { SCHEDULED_TASKS, resolveParam } from '../src/lib/scheduledTasksRegistry
 import { RETENTION_HOURS } from '../src/lib/chatHistoryRetentionCore.js';
 import { RETENTION_DAYS as STAFF_CHAT_DAYS } from '../src/lib/staffChatRetentionCore.js';
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from '../src/lib/stockMovementRetentionCore.js';
+import { ARCHIVE_RETENTION_DAYS } from '../src/lib/opdSessionCleanupCore.js';
 import { SESSION_TIMEOUT_MS } from '../src/constants.js';
 
 const PARAM_TASKS = SCHEDULED_TASKS.filter((t) => t.params.length > 0);
@@ -105,6 +106,7 @@ describe('G3 · param default parity (UI default == cron fallback default)', () 
     stockMovementRetention: { retentionDays: STOCK_MOVE_DAYS },
     opdSessionCleanup: { sessionTimeoutHours: Math.round(SESSION_TIMEOUT_MS / 3600000) },
     patientLinkCleanup: { graceDays: 30 }, // literal in both registry + cron
+    opdSessionArchiveRetention: { retentionDays: ARCHIVE_RETENTION_DAYS }, // 2026-07-19
   };
   for (const t of PARAM_TASKS) {
     for (const p of t.params) {
@@ -145,6 +147,11 @@ describe('G4 · cron param threading via resolveParam (clamped) + unit-conversio
     const s = read('stock-movement-retention.js');
     expect(s).toMatch(/resolveParam\(TASK_ID,\s*'retentionDays',\s*cfg\.params\?\.retentionDays\)/);
     expect(s).toMatch(/computeCutoffISO\(new Date\(\),\s*retentionDays\)/);
+  });
+  it('opdSessionArchiveRetention: resolveParam(retentionDays) → sweep (days unit, no conversion)', () => {
+    const s = read('opd-session-archive-retention.js');
+    expect(s).toMatch(/resolveParam\(TASK_ID,\s*'retentionDays',\s*cfg\.params\?\.retentionDays\)/);
+    expect(s).toMatch(/sweepOpdSessionArchiveRetention\(\{ db, now: Date\.now\(\), retentionDays \}\)/);
   });
 });
 
@@ -199,6 +206,7 @@ describe('G7 · destructive param-crons import resolveParam', () => {
     stockMovementRetention: 'stock-movement-retention.js',
     patientLinkCleanup: 'patient-link-cleanup-sweep.js',
     opdSessionCleanup: 'opd-session-cleanup-sweep.js',
+    opdSessionArchiveRetention: 'opd-session-archive-retention.js', // 2026-07-19
   };
   for (const t of PARAM_TASKS) {
     it(`${t.id} imports resolveParam from the registry`, () => {

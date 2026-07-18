@@ -6,8 +6,9 @@ import { RETENTION_DAYS as STAFF_CHAT_DAYS } from '../src/lib/staffChatRetention
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from '../src/lib/stockMovementRetentionCore.js';
 
 describe('scheduledTasksRegistry', () => {
-  it('has exactly 10 tasks, all source=vercel (Firebase fn retired)', () => {
-    expect(SCHEDULED_TASKS.length).toBe(10);
+  it('has exactly 11 tasks, all source=vercel (Firebase fn retired)', () => {
+    // 10 → 11 (2026-07-19): + opdSessionArchiveRetention (punchlist #22)
+    expect(SCHEDULED_TASKS.length).toBe(11);
     expect(SCHEDULED_TASKS.every(t => t.source === 'vercel')).toBe(true);
   });
 
@@ -28,9 +29,10 @@ describe('scheduledTasksRegistry', () => {
     expect(listParams('opdSessionCleanup').find(p => p.key === 'sessionTimeoutHours').default).toBe(2);
   });
 
-  it('safety-critical = backup + chatHistory + opdSession', () => {
+  it('safety-critical = backup + chatHistory + opdSession + opdArchiveRetention', () => {
     const crit = SCHEDULED_TASKS.filter(t => t.safetyCritical).map(t => t.id).sort();
-    expect(crit).toEqual(['chatHistoryRetention', 'opdSessionCleanup', 'wholeSystemBackup']);
+    // + opdSessionArchiveRetention (2026-07-19 — permanently deletes archived intake sessions)
+    expect(crit).toEqual(['chatHistoryRetention', 'opdSessionArchiveRetention', 'opdSessionCleanup', 'wholeSystemBackup']);
   });
 
   it('every safety-critical task has a Thai safetyNote', () => {
@@ -41,7 +43,7 @@ describe('scheduledTasksRegistry', () => {
   });
 
   it('ids unique; every param has key/default/min/max', () => {
-    expect(new Set(SCHEDULED_TASKS.map(t => t.id)).size).toBe(10);
+    expect(new Set(SCHEDULED_TASKS.map(t => t.id)).size).toBe(11); // 10 → 11 (2026-07-19)
     for (const t of SCHEDULED_TASKS) {
       for (const p of t.params) {
         expect(p.key && typeof p.default === 'number').toBeTruthy();

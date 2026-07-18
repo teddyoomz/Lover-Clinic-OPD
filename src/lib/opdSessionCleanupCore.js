@@ -102,3 +102,79 @@ export function decideCleanupAction(data, nowMs = Date.now(), timeoutMs = SESSIO
   }
   return { action: 'delete', reason: 'expired-no-data-no-link' };
 }
+
+// ─── Archive retention (2026-07-19 — punchlist #22 residual) ─────────────────
+//
+// The cleanup sweep above SKIPS every isArchived doc → archived intake
+// sessions accumulated FOREVER (143/155 prod docs at design time; patient
+// data retained indefinitely). User-approved policy: safe-delete archived
+// sessions older than 180 days, guarded by every referenced-session class.
+// Deleted docs are captured by the nightly whole-system backup (03:00 BKK,
+// runs BEFORE the 03:20 retention cron — recoverable for the backup window).
+
+export const ARCHIVE_RETENTION_DAYS = 180;
+
+// Dual-type timestamp coercion — Firestore Timestamp | {_seconds} | number |
+// ISO string. The chat-history retention cron was DEAD for 46 runs because it
+// assumed ONE type (2026-07-07 dead-cron lesson); never assume here.
+export function anyTimestampMs(v) {
+  if (!v) return null;
+  if (typeof v.toMillis === 'function') {
+    try { return v.toMillis(); } catch { return null; }
+  }
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v._seconds === 'number') {
+    return v._seconds * 1000 + ((v._nanoseconds || 0) / 1e6);
+  }
+  if (typeof v === 'string') {
+    const ms = Date.parse(v);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+}
+
+/**
+ * Decide whether ONE archived opd_session may be retention-deleted.
+ *
+ * Guards (every one V23-aware — decided in JS over a FULL scan, never via a
+ * server-side where() that would silently exclude missing-field docs):
+ *   - not archived                        → skip (the cleanup sweep owns it)
+ *   - isPermanent                          → skip (permanent links never age out)
+ *   - live patient link (token + enabled)  → skip (deleting breaks the customer's URL;
+ *                                            /api/patient-view still resolves legacy
+ *                                            opd_session tokens)
+ *   - referenced by be_appointments/be_deposits.linkedOpdSessionId → skip
+ *     (admin flows dereference the session to open/serve-complete it)
+ *   - no resolvable timestamp              → skip (conservative — never guess age)
+ *   - age ≤ retentionDays                  → skip
+ *   - else                                 → delete
+ *
+ * Age anchor fallback chain: archivedAt (cron-stamped since 2026-05-24; legacy
+ * archived docs may lack it) → updatedAt (⚠ ISO string on one admin path) →
+ * submittedAt → createdAt. All via anyTimestampMs (dual-type).
+ *
+ * @param {string} id — doc id (checked against referencedIds)
+ * @param {object} data — doc data
+ * @param {{nowMs?: number, retentionDays?: number, referencedIds?: Set<string>}} opts
+ */
+export function decideArchiveRetention(id, data, { nowMs = Date.now(), retentionDays = ARCHIVE_RETENTION_DAYS, referencedIds } = {}) {
+  if (!data || typeof data !== 'object') return { action: 'skip', reason: 'invalid-data' };
+  if (!data.isArchived) return { action: 'skip', reason: 'not-archived' };
+  if (data.isPermanent) return { action: 'skip', reason: 'permanent-link' };
+  if (data.patientLinkToken && data.patientLinkEnabled === true) {
+    return { action: 'skip', reason: 'live-patient-link' };
+  }
+  if (referencedIds instanceof Set && referencedIds.has(String(id))) {
+    return { action: 'skip', reason: 'referenced-by-booking' };
+  }
+  const ms = anyTimestampMs(data.archivedAt)
+    ?? anyTimestampMs(data.updatedAt)
+    ?? anyTimestampMs(data.submittedAt)
+    ?? anyTimestampMs(data.createdAt);
+  if (ms == null) return { action: 'skip', reason: 'no-timestamp' };
+  const ageMs = nowMs - ms;
+  if (ageMs <= retentionDays * 24 * 60 * 60 * 1000) {
+    return { action: 'skip', reason: 'younger-than-retention' };
+  }
+  return { action: 'delete', reason: 'archived-older-than-retention' };
+}

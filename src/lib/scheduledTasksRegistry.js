@@ -19,6 +19,7 @@
 import { RETENTION_HOURS } from './chatHistoryRetentionCore.js';
 import { RETENTION_DAYS as STAFF_CHAT_DAYS } from './staffChatRetentionCore.js';
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from './stockMovementRetentionCore.js';
+import { ARCHIVE_RETENTION_DAYS } from './opdSessionCleanupCore.js';
 import { SESSION_TIMEOUT_MS } from '../constants.js';
 
 const num = (key, label, def, min, max, unit) =>
@@ -107,6 +108,17 @@ export const SCHEDULED_TASKS = Object.freeze([
     auditOpPrefix: 'opd-session-cleanup-sweep', deletesData: true, safetyCritical: true,
     safetyNote: 'ปิดแล้ว = opd_sessions ค้างสะสม → listener cascade + หน้าค้าง',
     params: [num('sessionTimeoutHours', 'หมดอายุหลัง', Math.round(SESSION_TIMEOUT_MS / 3600000), 1, 24, 'ชม.')],
+  }),
+  Object.freeze({
+    // 2026-07-19 (punchlist #22 residual) — archived opd_sessions retained
+    // FOREVER pre-this-task (the cleanup sweep skips isArchived docs).
+    id: 'opdSessionArchiveRetention', category: 'retention', source: 'vercel',
+    label: 'ลบ OPD session ที่ archive เก่า',
+    description: 'ลบ opd_sessions ที่ archive แล้วเก่ากว่าที่ตั้งไว้ (กัน isPermanent / ลิงก์ลูกค้าที่ยังเปิด / ที่ถูกนัด-มัดจำอ้างถึง)',
+    scheduleHuman: 'ทุกวัน 03:20', cronPath: '/api/cron/opd-session-archive-retention',
+    auditOpPrefix: 'opd-session-archive-retention', deletesData: true, safetyCritical: true,
+    safetyNote: 'ลบถาวร (มีใน backup รายวันคืนก่อนลบ) — ประวัติ intake ที่ archive เกินอายุจะหายจากแท็บประวัติ',
+    params: [num('retentionDays', 'ลบ archive เก่ากว่า', ARCHIVE_RETENTION_DAYS, 30, 3650, 'วัน')],
   }),
 ]);
 
