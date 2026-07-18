@@ -255,6 +255,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const serverFreshRef = useRef(Promise.resolve());
   // doctorName-edge fix (2026-07-19): persisted attribution stash (edit mode)
   const persistedAttributionRef = useRef({ doctorId: '', doctorName: '', assistantNames: {} });
+  // TFP resilient-timeout (2026-07-19, AV208 backlog): half-dead-network escape.
+  // A cold MISS whose server pass hangs (request neither resolves nor errors —
+  // the mobile-load half-dead class) left the spinner FOREVER with no way out.
+  // 15s → visible ลองใหม่ escape; retry reconnects the SDK (shared debounced
+  // toggle) THEN re-runs the load effect via the nonce. Deliberately NO silent
+  // auto-reconnect mid-flight: a network toggle would resolve the pending
+  // one-shot server getDocs from (possibly empty) cache → an empty-options
+  // paint is worse than the escape. Warm machines never see this — the cache
+  // pass paints instantly and the chip covers the syncing state.
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const [loadRetryNonce, setLoadRetryNonce] = useState(0);
   const [saving, setSaving] = useState(false);
   // appointment-loop R3 (2026-06-03) — SYNCHRONOUS double-submit guard. The
   // save buttons use disabled={saving}, but React state lags one render, so a
@@ -773,6 +784,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     let hydrated = false;   // AV208: Part-2 edit hydration runs at most ONCE across both passes
     let prefilled = false;  // AV208: Part-3 patientData prefill once-only (server pass must not clobber typing)
 
+    // TFP resilient-timeout (2026-07-19): arm the escape for THIS attempt.
+    // The timer only matters while `loading` is still true (render-guarded),
+    // and is cleared when the load settles or the effect re-runs/unmounts.
+    setLoadTimedOut(false);
+    const timeoutTimer = setTimeout(() => { if (!cancelled) setLoadTimedOut(true); }, 15000);
+
     // R2-#2b fix (bug-hunt 2026-07-18): ONE shared server point-read of the
     // treatment for BOTH passes — the R1-lens2-#1 server-always read issued
     // twice (once per pass; the 2nd was unused waste) and, sitting inside the
@@ -1220,17 +1237,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       } finally {
         // tfpSyncing is NOT cleared here — applyFormData owns the chip (a
         // network-down server leg keeps it ON honestly, B1.4-bis).
+        clearTimeout(timeoutTimer);  // TFP resilient-timeout — load settled
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timeoutTimer); };
   // Phase 17.2-quinquies (2026-05-05) — SELECTED_BRANCH_ID added to deps so
   // when the user switches the top-right BranchSelector mid-TFP-life, the
   // page-level state (productItems / courseItems / dfGroupItems / staffItems
   // / doctorItems → masterCourses + options + DF lookups) refreshes against
   // the new branch's master data. Without this dep, all in-page lookups
   // remained pinned to the branch active at TFP mount.
-  }, [customerId, treatmentId, isEdit, SELECTED_BRANCH_ID]);
+  // TFP resilient-timeout (2026-07-19) — loadRetryNonce re-runs the whole
+  // load after the ลองใหม่ escape (post-reconnect, fresh attempt).
+  }, [customerId, treatmentId, isEdit, SELECTED_BRANCH_ID, loadRetryNonce]);
 
   // ── Toggle assistant ──
   const toggleAssistant = (id) => {
@@ -3499,6 +3519,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         <div className="flex flex-col items-center gap-3">
           <Loader2 size={24} className="animate-spin" style={{ color: accent }} />
           <p className="text-xs text-gray-500">กำลังโหลดฟอร์มการรักษา...</p>
+          {/* TFP resilient-timeout (2026-07-19): half-dead-network escape —
+              15s without a settle → offer a reconnect+retry instead of an
+              infinite spinner (no red on any name per Thai-UI rules). */}
+          {loadTimedOut && (
+            <div className="flex flex-col items-center gap-2 mt-2" data-testid="tfp-load-timeout-escape">
+              <p className="text-xs text-amber-500">การเชื่อมต่อช้ากว่าปกติ — ยังโหลดข้อมูลไม่สำเร็จ</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadTimedOut(false);
+                  import('../lib/firestoreReconnect.js')
+                    .then(m => m.reconnectFirestore())
+                    .catch(() => {})
+                    .finally(() => setLoadRetryNonce(n => n + 1));
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-teal-700 hover:bg-teal-600 transition-all"
+              >ลองใหม่</button>
+            </div>
+          )}
         </div>
       </div>
     );
