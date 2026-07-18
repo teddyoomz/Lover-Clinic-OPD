@@ -14,6 +14,12 @@ export default function BackendShellNew({
   activeTabId,
   onNavigate,
   isSpecificEntityContext = false,
+  // ArcBloom deep-link fix (2026-07-19): a `?backend=1&tab=X` deep link must
+  // land ON the tab, not under the bloom overlay (old-menu mode already
+  // honored tab params; new-menu mode covered them). Feeds ONLY the initial
+  // bloomOpen useState — the V90 auto-close effect stays keyed on the real
+  // entity signal so mid-session behavior is untouched.
+  initialBloomClosed = false,
   clinicSettings,
   theme,
   setTheme,
@@ -34,7 +40,7 @@ export default function BackendShellNew({
   // User reported mobile bug 2026-05-18 EOD+11 LATE: "เปิดค้างทับหน้านั้น
   // ไว้ ปิดไม่ได้". V82 menu-untouchable lock honored — only state defaults
   // change; menu visuals + handlers identical.
-  const [bloomOpen, setBloomOpen] = useState(!isSpecificEntityContext);
+  const [bloomOpen, setBloomOpen] = useState(!(isSpecificEntityContext || initialBloomClosed));
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // V90 (EOD+11 LATE) — auto-close bloom on transition INTO specific entity

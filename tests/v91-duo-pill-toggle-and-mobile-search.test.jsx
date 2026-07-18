@@ -126,7 +126,8 @@ describe('V91 — BackendShellNew wiring', () => {
 
   it('S2.4 — V90 isSpecificEntityContext prop preserved', () => {
     expect(SOURCE_SHELL).toMatch(/isSpecificEntityContext\s*=\s*false/);
-    expect(SOURCE_SHELL).toMatch(/useState\(!isSpecificEntityContext\)/);
+    // DL repoint (2026-07-19): the deep-link signal is folded into the initial state.
+    expect(SOURCE_SHELL).toMatch(/useState\(!\(isSpecificEntityContext \|\| initialBloomClosed\)\)/);
   });
 });
 

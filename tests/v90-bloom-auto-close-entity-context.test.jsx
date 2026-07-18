@@ -150,7 +150,8 @@ describe('V90 — source-grep regression (wiring + V82 lock preservation)', () =
   });
 
   it('S1.2 — bloomOpen useState reads from isSpecificEntityContext on initial mount', () => {
-    expect(SOURCE_SHELL).toMatch(/useState\(!isSpecificEntityContext\)/);
+    // DL repoint (2026-07-19): the deep-link signal is folded into the initial state.
+    expect(SOURCE_SHELL).toMatch(/useState\(!\(isSpecificEntityContext \|\| initialBloomClosed\)\)/);
   });
 
   it('S1.3 — useEffect closes bloom on isSpecificEntityContext transition', () => {
@@ -191,5 +192,42 @@ describe('V90 — source-grep regression (wiring + V82 lock preservation)', () =
     // Default value `false` means bloomOpen = useState(!false) = useState(true)
     // → bloom OPEN on mount (EOD+5 directive preserved).
     expect(SOURCE_SHELL).toMatch(/isSpecificEntityContext\s*=\s*false/);
+  });
+});
+
+// ─── ArcBloom deep-link fix (2026-07-19) — `?backend=1&tab=X` lands ON the tab ─
+// Backlog "ArcBloom deep-link gap": the resolver useEffect set activeTab
+// correctly, but new-menu mode mounted the bloom overlay ON TOP → every tab
+// deep link visually landed on the bloom home (old-menu mode honored them).
+// Fix: BackendDashboard captures a validated `hadTabDeepLink` ONCE at mount →
+// shell prop `initialBloomClosed` feeds ONLY the initial bloomOpen state.
+describe('DL — tab deep-link starts bloom CLOSED (2026-07-19)', () => {
+  it('DL.1 — initialBloomClosed=true → bloom overlay NOT mounted at start', () => {
+    render(
+      <BackendShellNew activeTabId="reports" onNavigate={() => {}} initialBloomClosed={true}>
+        <div data-testid="tab-content">tab</div>
+      </BackendShellNew>
+    );
+    expect(screen.queryByTestId('bloom-overlay')).toBeNull();
+    expect(screen.queryByTestId('tab-content')).not.toBeNull();
+  });
+
+  it('DL.2 — default (no prop) keeps EOD+5 bloom-open behavior (backward compat)', () => {
+    render(
+      <BackendShellNew activeTabId="appointment-all" onNavigate={() => {}}>
+        <div>main</div>
+      </BackendShellNew>
+    );
+    expect(screen.queryByTestId('bloom-overlay')).not.toBeNull();
+  });
+
+  it('DL.3 — source-grep: dashboard computes validated hadTabDeepLink + passes the prop', () => {
+    expect(SOURCE_DASH).toMatch(/const \[hadTabDeepLink\] = useState\(\(\) => \{/);
+    // validation mirrors the resolver mapping (appointments → appointment-all + ALL_ITEM_IDS gate)
+    expect(SOURCE_DASH).toMatch(/t === 'appointments' \? 'appointment-all' : t/);
+    expect(SOURCE_DASH).toMatch(/ALL_ITEM_IDS\.includes\(resolved\)/);
+    expect(SOURCE_DASH).toMatch(/initialBloomClosed=\{hadTabDeepLink\}/);
+    // shell: V90 auto-close effect UNCHANGED (keyed on the entity signal only)
+    expect(SOURCE_SHELL).toMatch(/\}, \[isSpecificEntityContext\]\)/);
   });
 });

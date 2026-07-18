@@ -859,6 +859,22 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   // useEffect that closes bloom whenever the flag transitions to true.
   const isSpecificEntityContext = !!viewingCustomer || !!treatmentFormMode || !!editingCustomer;
 
+  // ArcBloom deep-link fix (2026-07-19): `?backend=1&tab=X` deep links set
+  // activeTab correctly (resolver useEffect above) but new-menu mode mounted
+  // the bloom overlay ON TOP of the selected tab — every tab deep link landed
+  // on the bloom home (old-menu mode honored them; backlog "ArcBloom deep-link
+  // gap"). Captured ONCE at mount (useState initializer, mirroring the
+  // initialApptDate synchronous-read pattern + the resolver's tab mapping) and
+  // fed only into the shell's INITIAL bloom state — mid-session bloom behavior
+  // (V90 auto-close, orb toggle) untouched.
+  const [hadTabDeepLink] = useState(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      const resolved = t === 'appointments' ? 'appointment-all' : t;
+      return !!(resolved && ALL_ITEM_IDS.includes(resolved));
+    } catch { return false; }
+  });
+
   // Backend Menu D — conditional shell. Both branches receive byte-identical
   // props; mainContent is the same children block. Mode toggle swaps shells
   // via React state — no route change, no re-mount of child tabs.
@@ -867,6 +883,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       activeTabId={activeTab}
       onNavigate={handleNavigate}
       isSpecificEntityContext={isSpecificEntityContext}
+      initialBloomClosed={hadTabDeepLink}
       clinicSettings={clinicSettings}
       theme={theme}
       setTheme={setTheme}
