@@ -1,43 +1,37 @@
 ---
-updated_at: "2026-07-08 — Reports-home wire-up: 7 mislabeled/hidden tabs wired + 4 data-ready new report tabs + dead cards removed. SHIPPED + DEPLOYED LIVE (vercel-only)."
-status: "master = prod LIVE (alias 200 + fresh version.json). Awaiting user L1 on the reports page. Prior batch (EOD+3 + coldstart/AV205) also prod."
+updated_at: "2026-07-18 — TFP Entry SWR cold-start fix (AV208): root cause 3 ชั้นวัดจริง + fix 4 ชั้น + bug-hunt R1(4)→R2(4)→R3(0) CONVERGED. SHIPPED local, NOT deployed."
+status: "master = 10 commits ahead of prod. รอ user สั่ง 'deploy' (rules UNCHANGED → vercel-only, no Probe-Deploy-Probe) แล้ว user L1 บนเครื่องคลินิกที่ช้าจริง."
 branch: "master"
-last_commit: "9c02daf9 — docs(state): reports-home wire-up checkpoint + handoff"
-tests: "full vitest 17,573/17,573 · 0 fail + build clean + Rule Q L2 (3 aggregators vs real prod) + Rule Q L1 Playwright PASS (home grid + stock-alert real-data render, screenshots eyeballed). Do NOT re-run at boot."
+last_commit: "(R2 hardenings — ดู git log; spec/plan/diag/fix/test ครบใน 10 commits วันนี้)"
+tests: "full vitest 17,631/17,631 · 0 fail (definitive) + AV208 bank 76/0 + build clean + Rule Q L1 adversarial 5/5 บน real prod. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "= master (deployed 2026-07-08, vercel-only `lover-clinic-n999lj1l7`; firestore.rules UNCHANGED → no Probe-Deploy-Probe; alias 200)"
-firestore_rules_version: "UNCHANGED (reports = frontend-only Firestore reads → deploy was vercel-only)"
+production_commit: "21306fc6-era (2026-07-08 reports-home) — AV208 batch NOT deployed yet"
+firestore_rules_version: "UNCHANGED (AV208 = frontend-only) → next deploy = vercel-only"
 ---
 
-# Active — 2026-07-08 — Reports-home fully functional
+# Active — 2026-07-18 — TFP Entry SWR (AV208) shipped local
 
 ## State
-- User: make the รายงาน landing page's every card work + add recommended reports.
-- Finding = a wiring gap (V52-family): 7 fully-built, registered, working tabs were shown as
-  "เร็วๆนี้"/hidden on the home grid (P&L, expense, DF-payout, remaining-course, clinic-report,
-  payment-summary, **Smart Audience**). Wired them + built 4 data-ready new reports; removed all
-  dead cards → zero "เร็วๆนี้"/disabled cards remain.
-- 4 new report tabs: `reports-alt-sales` (online+vendor) · `reports-outstanding` (ค้างชำระ) ·
-  `reports-stock-alert` (expiry+low-stock) · `reports-stock-movements` → **reuses MovementLogPanel**
-  (ponytail — didn't rebuild a richer existing viewer). SSOT pure aggregators + ReportShell scaffold.
-- **Drift-guard test** (`reports-home-wiring-drift-guard.test.js`): every active card's tabId must be
-  a registered navConfig id → this wiring-gap class can't recur.
-- 🔬 **Rule Q L2 caught a would-ship bug**: outstanding read `totalPaidAmount` (undefined on every live
-  sale) → ฿1.67M FAKE receivables. Real payment = `payment.channels[]`. Fixed → prod outstanding = 0
-  (pay-at-point-of-sale). Same class as the recon false-positive. `scripts/diag-reports-new-l2.mjs`.
+- User report: TFP เปิดแล้วหมุนค้างบน WiFi คลินิก (5G เร็ว, หน้าอื่นเร็ว, เครื่องเปิด TFP บ่อย = ช้าสุด).
+- Root cause (วัดจริงบน LIVE prod จากเครื่องคลินิก): TFP หลุดจาก AV206 sweep → หน้าเดียวที่ paint
+  ผูก network (~600 docs/630KB ทุกการเปิด) + working set ~44MB ชน cache cap 40MB → LRU evict
+  บนเครื่องใช้หนัก → cold pull ทุกรอบ + WiFi แย่คูณ (cold 23.8s@0.4Mbps vs warm ≤3.2s).
+  ไม่ใช่ block / ไม่ใช่ cookie (ล้าง cache ยิ่งแย่).
+- Fix 4 ชั้น: TFP swrRun 2-pass (cache paint + chip + save-gate) · cacheSizeBytes 200MB ·
+  idle prefetch 6 listers · AV208 full-scan classifier (จับได้อีก 8 ไฟล์ unclassified).
+- Bug-hunt loop (≤5 agents/รอบ ตาม user): R1 = 4 confirmed fixed (applyChain gate เงิน V101-class /
+  treatment server-fresh กัน stale snapshot / DF-rate gate / skip-flag live-resolve) → R2 = 4 hardenings
+  (chain poison / single point-read / classifier regex / doctors gate) → R3 = 0 → CONVERGED.
+- ตัวเลข: TFP reopen ดึง 4-18KB (เดิม 630KB) · spinner ~0.5-2s แม้ 400kbps/500ms.
 
 ## Next action
-- **User L1 on LIVE prod**: backend → รายงาน → หน้ารายงาน → กดการ์ดต่างๆ (โดยเฉพาะ ล็อตหมดอายุ/ใกล้หมดสต็อค,
-  ขายค้างชำระ [ควรว่าง = ถูกต้อง], การขายออนไลน์/คู่ค้า, กำไรขาดทุน P&L, Smart Audience) → เปิดถูกแท็บ + ข้อมูลจริง.
+1. User สั่ง **"deploy"** → vercel-only → re-run probes บน PROD → **user L1 เครื่องคลินิกที่ช้าจริง**
+   (กดเข้า TFP ซ้ำๆ ต้อง ≤1-2s + เห็น chip ⟳ แว๊บแล้วหาย; เทียบ 5G; มือถือด้วย).
+2. Prior batches L1 ยังค้าง: reports-home + mobile cold-start + AV205 scroll + push.
 
-## Outstanding user-triggered actions
-- (none — reports-home DEPLOYED LIVE). Prior batch L1 still open (mobile cold-start / AV205 scroll / push).
+## Backlog (จากรอบนี้)
+- TFP resilient-timeout สำหรับ half-dead network (ตอนนี้ = pre-AV208 parity, autoDetect คุม)
+- Positional-rowId identity (courses[]) — pre-existing TOCTOU watchlist
+- doctorName '' เมื่อ doctor โดน filter (พักใช้งาน/hidden) ตอน edit-save — pre-existing
 
-## ⚠️ Landmine — `scripts/trim-session-handoff.mjs` is BUGGY (do NOT run)
-It counts the HARD-CAP explainer text in SESSION_HANDOFF (which literally contains
-`` ### Session ...` ``) as a real session block → miscounts (self-reported "11 sessions") →
-duplicates whole sections + empties `## Current State`. Ran it 2026-07-08 at session-end →
-corrupted the file → reverted via `git checkout HEAD --`. **Trim by hand instead** (the file
-is currently correct at exactly 10 bullets + 10 blocks). It also left a PRE-EXISTING splice:
-the EOD+3 block sits inside the HARD-CAP sentence at ~line 10 (from an earlier run) — cosmetic,
-the block still reads, but worth repairing when someone fixes the script.
+## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
