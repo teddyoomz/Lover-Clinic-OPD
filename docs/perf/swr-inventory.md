@@ -33,6 +33,7 @@ listeners.
 | `src/components/backend/MovementLogPanel.jsx` | movements list (listStockMovements) |
 | `src/components/backend/DoctorSchedulesTab.jsx` | listDoctors + loadSchedules |
 | `src/components/backend/EmployeeSchedulesTab.jsx` | listStaff + loadSchedules |
+| `src/components/TreatmentFormPage.jsx` | fetchFormData 2-pass ผ่าน swrRun (AV208 — hydration-once + save-gate; ดู tests/tfp-entry-swr-contract.test.js) |
 
 ## SANCTIONED — deliberately server-first (reason = the contract)
 
@@ -40,9 +41,9 @@ listeners.
 |---|---|---|
 | Reports ทุก tab | `src/components/backend/reports/**` | ตัวเลขเงิน/สถิติที่ admin อ่านแล้วตัดสินใจ — ห้ามโชว์ค่า cache แม้ชั่วคราว (V52 BS-11 surface) |
 | Stock OPERATION panels | OrderPanel, StockAdjustPanel, StockTransferPanel, StockWithdrawalPanel, CentralStockOrderPanel, CentralStockTab, CentralWarehousePanel, StockSeedPanel, OrderDetailModal, StockActionModal | operator อ่านยอดเพื่อสั่ง/ปรับ/โอน — decision-read ต้อง server-fresh (การเขียนมี tx คุ้มอยู่แล้ว แต่จอที่ใช้ตัดสินใจไม่ควร stale) |
-| Modal-open loads | AppointmentFormModal, ProductGroupFormModal, QuotationFormModal, ExchangeCourseModal, ฯลฯ (ทุก modal) | action-scoped: โหลดตอน user เปิด modal เพื่อทำรายการ — ขนาดเล็ก + ต้อง fresh ณ จุดตัดสินใจ |
+| Modal-open loads | AppointmentFormModal, ProductGroupFormModal, QuotationFormModal, ExchangeCourseModal, CourseFormModal, DoctorFormModal, ProductFormModal, StaffFormModal, DeleteCustomerCascadeModal, ฯลฯ (ทุก modal) | action-scoped: โหลดตอน user เปิด modal เพื่อทำรายการ — ขนาดเล็ก + ต้อง fresh ณ จุดตัดสินใจ |
 | Admin/destructive | BackupManagerTab, LinkRequestsTab, ScheduledTasksTab, SystemSettingsTab, SystemConfigAuditPanel, RecallCasesAdminPanel | รายการที่นำไปสู่ destructive/approval action — server truth เท่านั้น |
-| Master-data small tabs | ProductGroupsTab, ProductUnitsTab, MedicalInstrumentsTab, HolidaysTab, BranchesTab, ExamRoomsTab, StaffTab, DoctorsTab, DfGroupsTab, PromotionTab, CouponTab, VoucherTab, QuotationTab, FinanceMasterTab, DocumentTemplatesTab, LineReminderHistoryPanel | โหลดเล็ก+เร็ว + เข้าไม่บ่อย — cost/benefit ไม่คุ้ม regression risk; รอบหน้า adopt ได้ถ้า pain จริง |
+| Master-data small tabs | ProductGroupsTab, ProductUnitsTab, MedicalInstrumentsTab, HolidaysTab, BranchesTab, ExamRoomsTab, StaffTab, DoctorsTab, DfGroupsTab, PromotionTab, CouponTab, VoucherTab, QuotationTab, FinanceMasterTab, DocumentTemplatesTab, LineReminderHistoryPanel, OnlineSalesTab, VendorSalesTab, SmartAudienceTab | โหลดเล็ก+เร็ว + เข้าไม่บ่อย — cost/benefit ไม่คุ้ม regression risk; รอบหน้า adopt ได้ถ้า pain จริง (3 ตัวท้าย = AV208 full-scan catch 2026-07-18) |
 | AdminDashboard action awaits | `src/pages/AdminDashboard.jsx` (5 จุด) | action-scoped loads (กดปุ่มแล้วค่อยโหลด) — ไม่ block cold-start paint; คิว/แชท/ปฏิทิน = listeners (ฟรีจาก layer 0) |
 
 ## กติกากลาง (AV206.c)

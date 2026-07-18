@@ -48,6 +48,9 @@ const ADOPTED = [
   'src/components/backend/MovementLogPanel.jsx',
   'src/components/backend/DoctorSchedulesTab.jsx',
   'src/components/backend/EmployeeSchedulesTab.jsx',
+  // AV208 (2026-07-18) — TFP entry SWR: swrRun 2-pass, hydration-once,
+  // save-gate. Contract locks: tests/tfp-entry-swr-contract.test.js.
+  'src/components/TreatmentFormPage.jsx',
 ];
 
 describe('AV206.b — SWR adoption matches the inventory', () => {
@@ -104,5 +107,37 @@ describe("AV206.c — {source:'cache'} never reaches a write path", () => {
 
   it('swrRead.js documents the AV206.c contract (no decision-writes from cache)', () => {
     expect(read('src/lib/swrRead.js')).toMatch(/AV206\.c/);
+  });
+});
+
+// ── AV208 — FULL-SCAN: no unclassified mount-blocking list loads ────────────
+// (2026-07-18, TFP entry SWR fix.) TFP escaped the original AV206 sweep
+// because the classifier only checked files ALREADY in the ADOPT list — a
+// network-gated page could hide by simply not being listed. This scan walks
+// ALL of src/components + src/pages: any file with an `await Promise.all([
+// list*...])` mount-load shape MUST be classified in swr-inventory.md
+// (ADOPT or SANCTIONED — matched by basename). First run caught 9
+// unclassified surfaces: TFP (→ ADOPT) + 5 form modals + OnlineSalesTab/
+// VendorSalesTab/SmartAudienceTab (→ SANCTIONED).
+describe('AV208 — full-scan: every mount-blocking Promise.all list-load is classified', () => {
+  it('src/components + src/pages have zero unclassified list-load surfaces', () => {
+    const walk = (dir, acc = []) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p, acc);
+        else if (/\.jsx?$/.test(e.name)) acc.push(p);
+      }
+      return acc;
+    };
+    const re = /await Promise\.all\(\[[^\]]*?list(Products|Courses|Staff|Doctors|DfGroups|DfStaffRates|OnlineSales|VendorSales|AllSellers)/s;
+    const inventory = read('docs/perf/swr-inventory.md');
+    const offenders = [];
+    for (const f of [...walk('src/components'), ...walk('src/pages')]) {
+      const src = readFileSync(f, 'utf8');
+      if (!re.test(src)) continue;
+      const base = path.basename(f).replace(/\.jsx?$/, '');
+      if (!inventory.includes(base)) offenders.push(f);
+    }
+    expect(offenders, `unclassified mount-load surface(s): ${offenders.join(', ')} — classify in docs/perf/swr-inventory.md (ADOPT with swrRun, or SANCTIONED with a reason)`).toEqual([]);
   });
 });
