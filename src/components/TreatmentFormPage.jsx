@@ -253,6 +253,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // handleSubmit awaits (bounded 15s) before serializing money/stock writes.
   const [tfpSyncing, setTfpSyncing] = useState(false);
   const serverFreshRef = useRef(Promise.resolve());
+  // doctorName-edge fix (2026-07-19): persisted attribution stash (edit mode)
+  const persistedAttributionRef = useRef({ doctorId: '', doctorName: '', assistantNames: {} });
   const [saving, setSaving] = useState(false);
   // appointment-loop R3 (2026-06-03) — SYNCHRONOUS double-submit guard. The
   // save buttons use disabled={saving}, but React state lags one render, so a
@@ -933,6 +935,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               id: d.id, name: d.name, position: d.position,
               defaultDfGroupId: d.defaultDfGroupId || '',
             })),
+            // doctorName-edge fix (2026-07-19, AV208 watchlist): UNFILTERED
+            // lookup for SAVE-TIME name resolution ONLY (never a picker
+            // source — V41/AV20 keeps hidden persons out of pickers). A
+            // doctor hidden/suspended/branch-moved AFTER selection is absent
+            // from the filtered options → the old `.find(...)?.name || ''`
+            // blanked doctorName on the OPD record + chat card.
+            doctorsUnfiltered: (doctorItems || []).map(d => ({ id: d.id, name: d.name })),
             assistants: allDoctors
               .map(d => ({ id: d.id, name: d.name, defaultDfGroupId: d.defaultDfGroupId || '' })),
             // Phase 12.2b follow-up (2026-04-25): bloodTypeOptions must
@@ -988,6 +997,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               // the read-only locked table (default false).
               setLoadedHasNoCourseUsage(!(t.courseItems?.length) && !(t.treatmentItems?.length));
               if (t.doctorId) setDoctorId(t.doctorId);
+              // doctorName-edge fix (2026-07-19): stash the treatment's
+              // PERSISTED attribution names so a re-save can't blank
+              // doctorName / assistants[].name when the person is gone from
+              // the filtered picker options (hidden / suspended / branch-
+              // moved) or deleted entirely. Same-person-only fallback.
+              persistedAttributionRef.current = {
+                doctorId: String(t.doctorId || ''),
+                doctorName: String(t.doctorName || ''),
+                assistantNames: Object.fromEntries(
+                  (Array.isArray(t.assistants) ? t.assistants : [])
+                    .filter(a => a && typeof a === 'object' && a.id)
+                    .map(a => [String(a.id), String(a.name || '')]),
+                ),
+              };
               if (t.assistants?.length) setAssistantIds(t.assistants.map(a => a.id || a).filter(Boolean));
               if (t.treatmentDate) setTreatmentDate(t.treatmentDate);
               if (t.healthInfo?.bloodType) setBloodType(t.healthInfo.bloodType);
@@ -2234,6 +2257,26 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // 2nd param was added for editorContext (which was never actually
   // passed via 2nd arg — re-invoke at line 578 passes it via FIRST arg
   // as `{saveMode, editorContext}`).
+  // doctorName-edge fix (2026-07-19, AV208 watchlist): the picker options are
+  // branch+hidden+status FILTERED (V41/AV20), so a doctor selected earlier —
+  // or restored in edit mode — can be ABSENT from options at save time, and
+  // every `.find(...)?.name || ''` then blanked doctorName on the OPD record,
+  // the assistants[] names, and the staff-chat card. Resolution chain:
+  // filtered options → UNFILTERED be_doctors lookup → the treatment's
+  // persisted name (edit mode, same person only) → ''.
+  const resolvePersonNameById = (id) => {
+    const s = String(id || '');
+    if (!s) return '';
+    const hit = (options?.doctors || []).find(d => String(d.id) === s)
+      || (options?.assistants || []).find(d => String(d.id) === s)
+      || (options?.doctorsUnfiltered || []).find(d => String(d.id) === s);
+    if (hit?.name) return hit.name;
+    const p = persistedAttributionRef.current;
+    if (s === p.doctorId && p.doctorName) return p.doctorName;
+    if (p.assistantNames[s]) return p.assistantNames[s];
+    return '';
+  };
+
   const handleSubmit = async (eventOrSaveMode, submitOpts = {}) => {
     // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Defensive
     // coercion: any value OTHER than the literal string 'doctor' resolves
@@ -2516,11 +2559,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const backendDetail = clean({
           treatmentDate,
           doctorId,
-          doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
-          assistants: assistantIds.map(aid => {
-            const a = [...(options?.doctors || []), ...(options?.assistants || [])].find(x => String(x.id) === String(aid));
-            return { id: aid, name: a?.name || '' };
-          }),
+          // doctorName-edge fix (2026-07-19): resolve via the fallback chain
+          // (filtered → unfiltered → persisted) so a filtered-out doctor can
+          // never blank the OPD record's attribution on save/re-save.
+          doctorName: resolvePersonNameById(doctorId),
+          assistants: assistantIds.map(aid => ({ id: aid, name: resolvePersonNameById(aid) })),
           // Phase 27.0 (2026-05-14) — stamp branchId from BranchSelector context so
           // TreatmentReadOnlyMirror can display "สาขา <name>" without a separate lookup.
           // branchName is intentionally omitted — render-side resolveBranchDisplayName
@@ -2783,7 +2826,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               customerId,
               customerName: patientName || '',
               customerHN: customerHNProp || '',
-              doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
+              doctorName: resolvePersonNameById(doctorId), // doctorName-edge fix (2026-07-19)
               branchId: (isEdit && loadedTreatmentBranchId) || selectedBranchId || '',
             })).catch(() => {});
           }
