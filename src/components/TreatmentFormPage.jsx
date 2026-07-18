@@ -1136,6 +1136,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   if (stale()) return;   // AV208: effect re-ran mid-await (+R1-#1 seq)
                   if (c) setCouponInfo(c);
                 } catch { /* coupon expired / deleted — keep code string, skip badge */ }
+                if (stale()) return; // R2-#2: the catch-continuation bypasses the mid-await guard
               }
               if (t.payment?.paymentStatus) setPaymentStatus(t.payment.paymentStatus);
               if (t.payment?.paymentDate) setPaymentDate(t.payment.paymentDate);
@@ -1161,6 +1162,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   });
                 }
               } catch (e) { console.warn('[TreatmentForm] restore deposits/wallet failed:', e); }
+              if (stale()) return; // R2-#2: the catch-continuation bypasses the mid-await guard
               // Phase 6: Restore courseItems for deduction reversal + checkbox restore
               if (t.courseItems?.length) {
                 setExistingCourseItems(t.courseItems);
@@ -1202,7 +1204,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // treatment skips hydration and the orchestrator's finally clears
           // the spinner — the pre-AV208 "not-found renders empty edit form"
           // behavior is preserved.)
-          if (!isEdit || hydrated) setLoading(false);
+          // R2-#2 (2026-07-19): stale-guarded — a seq-invalidated run reaching
+          // here via a rejected interior await must not clear the spinner.
+          if (!stale() && (!isEdit || hydrated)) setLoading(false);
     };
 
     (async () => {

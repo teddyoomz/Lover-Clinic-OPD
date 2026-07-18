@@ -135,16 +135,47 @@ describe('AV209.A — resolveCourseRowIndex (pure)', () => {
     })).toBe(-1); // pre-fix: fell through to the hint → P2 silently mutated
   });
 
-  it('A13 R1-#3: terminal-status twins (คืนเงิน/ยกเลิก) never satisfy identity matching', () => {
-    // hint lands on a refunded twin → rejected → live twin found by search
-    const courses = [rowB({ status: 'คืนเงิน' }), rowB()];
-    expect(resolveCourseRowIndex(courses, { courseIndex: 0, name: 'คอร์ส B', product: 'Prod B' })).toBe(1);
-    // ONLY terminal twins exist → -1 (never top-up a refunded course)
+  it('A13 R1-#3 + R2-#1: terminal handling is SPLIT — a matching HINT wins even when terminal; the SEARCH excludes terminal twins', () => {
+    // IN-PLACE terminalization (R2-#1): the admin's row (hint 0) went terminal
+    // via a concurrent sale-cancel cascade (status flip, no move) → return the
+    // HINT so downstream raises already-refunded / COURSE_ROW_TERMINAL_MSG.
+    // (The R1 draft redirected to the live twin here → silent wrong-row
+    // cancel/refund of a DIFFERENT purchase — locked out permanently.)
+    const inPlace = [rowB({ status: 'คืนเงิน' }), rowB()];
+    expect(resolveCourseRowIndex(inPlace, { courseIndex: 0, name: 'คอร์ส B', product: 'Prod B' })).toBe(0);
+    // Array-SHIFT: hint mismatches identity → the search EXCLUDES the
+    // refunded twin and finds the single live one.
+    const shifted = [rowA(), rowB({ status: 'คืนเงิน' }), rowB()];
+    expect(resolveCourseRowIndex(shifted, { courseIndex: 0, name: 'คอร์ส B', product: 'Prod B' })).toBe(2);
+    // Hint OOB + only terminal twins remain → -1 (never resurrect via search)
     const allDead = [rowB({ status: 'ยกเลิก' }), rowB({ status: 'คืนเงิน' })];
     expect(resolveCourseRowIndex(allDead, { courseIndex: 5, name: 'คอร์ส B', product: 'Prod B' })).toBe(-1);
-    // explicit courseId hit still returns the terminal row (informative
-    // already-refunded error path in applyCourseRefund/Cancel)
-    expect(resolveCourseRowIndex(allDead, { courseId: undefined, courseIndex: 1 })).toBe(1); // no-identity legacy = bounds only
+    // Legacy no-identity: bounds-only parity (terminal at hint accepted;
+    // downstream already-X guards handle it)
+    expect(resolveCourseRowIndex(allDead, { courseIndex: 1 })).toBe(1);
+  });
+
+  it('A14 R2-#1 execution: adjust/exchange/remove refuse a terminalized target with the Thai terminal error / no-op', async () => {
+    const { COURSE_ROW_TERMINAL_MSG } = await import('../src/lib/courseExchange.js');
+    const { adjustCourseRemainingQty, exchangeCourseProduct, removeCustomerCourseRowAtomic } = await import('../src/lib/backendClient.js');
+    // adjust: in-place-terminalized hint → Thai terminal error, NO write
+    _docData = { courses: [{ name: 'คอร์ส B', product: 'Prod B', qty: '6 / 12 ครั้ง', status: 'คืนเงิน' }] };
+    _written = null;
+    await expect(adjustCourseRemainingQty('TEST-AV209', 0, 1, {
+      expectedName: 'คอร์ส B', expectedProduct: 'Prod B',
+    })).rejects.toThrow(COURSE_ROW_TERMINAL_MSG);
+    expect(_written).toBeNull();
+    // exchange: same refusal
+    _docData = { courses: [{ name: 'คอร์ส B', product: 'Prod B', qty: '6 / 12 ครั้ง', status: 'ยกเลิก' }] };
+    await expect(exchangeCourseProduct('TEST-AV209', 0, { name: 'ใหม่', qty: 1 }, '', {
+      expectedName: 'คอร์ส B', expectedProduct: 'Prod B',
+    })).rejects.toThrow(COURSE_ROW_TERMINAL_MSG);
+    // remove: non-fatal no-op (audit-trail rows must survive)
+    _docData = { courses: [{ name: 'คอร์ส B', product: 'Prod B', qty: '0 / 12 ครั้ง', status: 'คืนเงิน' }] };
+    const res = await removeCustomerCourseRowAtomic('TEST-AV209', {
+      courseIndex: 0, expectedName: 'คอร์ส B', expectedProduct: 'Prod B',
+    });
+    expect(res).toEqual({ removed: false, reason: 'terminal-status' });
   });
 });
 

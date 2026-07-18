@@ -2026,7 +2026,7 @@ export async function adjustCourseRemainingQty(customerId, courseIndex, delta, o
   // that went stale (concurrent insert/remove from another machine) can
   // never adjust the WRONG row. Legacy callers without identity keep the
   // pre-AV209 bounds-only behavior.
-  const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG } = await import('./courseExchange.js');
+  const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG, isTerminalCourseRow, COURSE_ROW_TERMINAL_MSG } = await import('./courseExchange.js');
   const amount = Math.abs(Number(delta) || 0);
   const isReduce = (Number(delta) || 0) < 0;
   // Hunt R1-#1 (2026-07-19): STRING values are constraints ('' included —
@@ -2042,6 +2042,10 @@ export async function adjustCourseRemainingQty(customerId, courseIndex, delta, o
       product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : undefined,
     });
     if (idx < 0) throw new Error(hasIdentity ? COURSE_ROW_STALE_MSG : 'Invalid course index');
+    // R2-#1 (2026-07-19): the hint now returns an identity-matching row even
+    // when terminal (that IS the admin's row, terminalized in place) — but
+    // แก้คงเหลือ must never top-up a refunded/cancelled course.
+    if (isTerminalCourseRow(courses[idx])) throw new Error(COURSE_ROW_TERMINAL_MSG);
     appliedIndex = idx;
     before = courses[idx];
     beforeQty = String(before.qty || '');
@@ -2424,7 +2428,7 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
   // opts.expectedName / opts.expectedProduct validated in-tx); a stale
   // UI-frozen index can never exchange the WRONG row. Legacy callers
   // without identity keep bounds-only behavior.
-  const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG } = await import('./courseExchange.js');
+  const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG, isTerminalCourseRow, COURSE_ROW_TERMINAL_MSG } = await import('./courseExchange.js');
   // Hunt R1-#1 (2026-07-19): STRING values are constraints ('' included).
   const hasIdentity = typeof opts.expectedName === 'string'
     || typeof opts.expectedProduct === 'string' || !!opts.courseId;
@@ -2440,6 +2444,10 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
     product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : undefined,
   });
   if (targetIndex < 0) throw new Error(hasIdentity ? COURSE_ROW_STALE_MSG : 'Invalid course index');
+  // R2-#1 (2026-07-19): never exchange ON a refunded/cancelled row (the hint
+  // returns an identity-matching terminal row so the admin gets THIS error,
+  // not a silent twin mutation).
+  if (hasIdentity && isTerminalCourseRow(courses[targetIndex])) throw new Error(COURSE_ROW_TERMINAL_MSG);
 
   const oldCourse = courses[targetIndex];
   // Phase 16.5-ter (2026-04-29) — capture staff identification on exchange.
@@ -2485,7 +2493,7 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
 export async function removeCustomerCourseRowAtomic(customerId, {
   courseIndex, courseId, expectedName, expectedProduct, requireZeroRemaining = true,
 } = {}) {
-  const { resolveCourseRowIndex } = await import('./courseExchange.js');
+  const { resolveCourseRowIndex, isTerminalCourseRow } = await import('./courseExchange.js');
   return _mutateCustomerCoursesAtomic(customerId, (courses) => {
     const idx = resolveCourseRowIndex(courses, {
       courseIndex,
@@ -2495,6 +2503,9 @@ export async function removeCustomerCourseRowAtomic(customerId, {
       product: typeof expectedProduct === 'string' ? expectedProduct : undefined,
     });
     if (idx < 0) return { removed: false, reason: 'not-found' };
+    // R2-#1 (2026-07-19): never splice a refunded/cancelled row (audit-trail
+    // rows stay; a concurrent refund mid-exchange must not be erased).
+    if (isTerminalCourseRow(courses[idx])) return { removed: false, reason: 'terminal-status' };
     if (requireZeroRemaining) {
       const parsed = parseQtyString(String(courses[idx]?.qty || ''));
       if ((Number(parsed.remaining) || 0) > 0) return { removed: false, reason: 'remaining>0' };

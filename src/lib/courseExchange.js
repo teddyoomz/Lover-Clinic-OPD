@@ -95,19 +95,25 @@ export function resolveCourseRowIndex(courses, { courseIndex, courseId, name, pr
   // identity-less callers keep bounds-only behavior).
   const wantName = typeof name === 'string';
   const wantProduct = typeof product === 'string';
-  // Hunt R1-#3 fix: terminal rows never satisfy IDENTITY matching — a
-  // refunded/cancelled twin must not absorb an adjust/exchange/refund aimed
-  // at the live purchase. (An EXPLICIT courseId hit still returns the
-  // terminal row so applyCourseRefund/Cancel raise their informative
-  // 'already refunded/cancelled' errors.)
+  // Hunt R1-#3 + R2-#1 (2026-07-19): terminal-row handling is SPLIT by path.
+  //   - The INDEX HINT: an identity-MATCHING row at the hint is returned even
+  //     when terminal — that IS the admin's row, terminalized IN PLACE by a
+  //     concurrent writer (sale-cancel cascade flips status without moving
+  //     rows). Downstream guards then raise the informative already-refunded/
+  //     cancelled errors (R2-#1: redirecting to a live twin here silently
+  //     cancelled/refunded a DIFFERENT purchase — worse than the pre-AV209
+  //     safe throw).
+  //   - The IDENTITY SEARCH: terminal rows never match — when the array
+  //     SHIFTED, a refunded/cancelled twin must not absorb an op aimed at the
+  //     live purchase.
   const TERMINAL_STATUS = ['คืนเงิน', 'ยกเลิก'];
-  const matches = (c) => {
+  const matchesIdentity = (c) => {
     if (!c || typeof c !== 'object') return false;
-    if (TERMINAL_STATUS.includes(String(c.status || ''))) return false;
     if (wantName && String(c.name || '') !== name) return false;
     if (wantProduct && String(c.product || '') !== product) return false;
     return true;
   };
+  const matchesLive = (c) => matchesIdentity(c) && !TERMINAL_STATUS.includes(String(c?.status || ''));
   if (wantId) {
     const byId = list.findIndex((c) => c && String(c.courseId) === String(courseId));
     if (byId >= 0) return byId;
@@ -118,13 +124,22 @@ export function resolveCourseRowIndex(courses, { courseIndex, courseId, name, pr
     return -1;
   }
   const idxOk = typeof courseIndex === 'number' && courseIndex >= 0 && courseIndex < list.length;
-  if (idxOk && (!(wantName || wantProduct) || matches(list[courseIndex]))) return courseIndex;
+  if (idxOk && (!(wantName || wantProduct) || matchesIdentity(list[courseIndex]))) return courseIndex;
   if (wantName || wantProduct) {
     const found = [];
-    list.forEach((c, i) => { if (matches(c)) found.push(i); });
+    list.forEach((c, i) => { if (matchesLive(c)) found.push(i); });
     if (found.length === 1) return found[0];
   }
   return -1;
+}
+
+// R2-#1 (2026-07-19) — shared terminal-status predicate for the mutators that
+// have no downstream already-X guard of their own (adjust/exchange/remove).
+// applyCourseRefund/applyCourseCancel keep their informative specific throws.
+export const COURSE_ROW_TERMINAL_MSG =
+  'คอร์สนี้ถูกคืนเงินหรือยกเลิกไปแล้ว — กรุณารีเฟรชหน้าแล้วตรวจสอบอีกครั้ง';
+export function isTerminalCourseRow(c) {
+  return ['คืนเงิน', 'ยกเลิก'].includes(String(c?.status || ''));
 }
 
 /**

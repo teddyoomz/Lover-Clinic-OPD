@@ -83,7 +83,9 @@ describe('AV208 C4 — once-only guards (server pass must never clobber typing)'
     expect(tfp).toMatch(/prefilled = true;/);
   });
   it('C4.3 edit-mode loading clears only after hydration', () => {
-    expect(tfp).toMatch(/if \(!isEdit \|\| hydrated\) setLoading\(false\);/);
+    // R2-#2 repoint (2026-07-19): + stale() guard — a seq-invalidated run
+    // reaching this line via a rejected interior await must not clear loading.
+    expect(tfp).toMatch(/if \(!stale\(\) && \(!isEdit \|\| hydrated\)\) setLoading\(false\);/);
   });
 });
 
