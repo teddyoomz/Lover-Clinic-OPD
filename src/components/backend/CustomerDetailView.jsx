@@ -1776,6 +1776,9 @@ function AddQtyModal({ course, courseIndex, courseName, product, customerId, cus
             try {
               const res = await adjustCourseRemainingQty(customerId, courseIndex, isReduce ? -amt : amt, {
                 staffId, staffName: selectedStaff?.name || '', actor: selectedStaff?.name || '',
+                // AV209 — identity of the row the admin actually saw; validated
+                // in-tx so a concurrently-shifted array can't hit the wrong row.
+                expectedName: courseName || '', expectedProduct: product || '',
               });
               // Sale name from the AUTHORITATIVE mutated course — the specific
               // sub-product, not the bundle (Issue 4) and never a stale snapshot.
@@ -1950,7 +1953,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
             setSaving(true);
             try {
               const bc = await import('../../lib/scopedDataLayer.js');
-              const { deductCourseItems, createBackendSale, assignCourseToCustomer, updateCustomer, getCustomer } = bc;
+              const { deductCourseItems, createBackendSale, assignCourseToCustomer, removeCustomerCourseRowAtomic } = bc;
               const isRetail = selected.type === 'สินค้าหน้าร้าน';
               const deductAmount = Number(qty);
               // Phase 16.5-quater fix (V14 lock + Option B partial-qty per user
@@ -1958,7 +1961,10 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
               // course from customer.courses[] when remaining hits 0.
 
               // 1. Deduct from source course (reduces qty; stays in array)
-              await deductCourseItems(customerId, [{ courseIndex, deductQty: deductAmount, courseName: course.name }]);
+              // AV209 — carry productName too so matchesDed validates the FULL
+              // identity (name-only let a same-name/different-product row at a
+              // concurrently-shifted index absorb the deduction).
+              await deductCourseItems(customerId, [{ courseIndex, deductQty: deductAmount, courseName: course.name, productName: course.product || course.name }]);
 
               // 2. Sale record (price=0) for audit trail. V14 lock: every field coerced.
               await createBackendSale(JSON.parse(JSON.stringify({
@@ -1991,19 +1997,19 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
               // 4. Phase 16.5-quater (Option B per user): if remaining hits 0,
               // SPLICE the source course out of customer.courses[]. The audit
               // entry preserves the snapshot for ประวัติการใช้คอร์ส tab.
+              // AV209 (2026-07-18) — was getCustomer → splice → updateCustomer
+              // (non-atomic whole-array RMW, Rule T class V148 closed elsewhere,
+              // + a stale-index fallback). Now an identity-located atomic
+              // single-row removal; requireZeroRemaining guards racing top-ups.
               const wasFullExchange = deductAmount >= currentParsed.remaining;
               if (wasFullExchange) {
-                const fresh = await getCustomer(customerId);
-                const cur = Array.isArray(fresh?.courses) ? [...fresh.courses] : [];
-                // Re-find by courseId or fallback to courseIndex (defensive)
-                let removeIdx = course.courseId
-                  ? cur.findIndex(c => c && String(c.courseId) === String(course.courseId))
-                  : -1;
-                if (removeIdx < 0) removeIdx = courseIndex;
-                if (removeIdx >= 0 && removeIdx < cur.length) {
-                  cur.splice(removeIdx, 1);
-                  await updateCustomer(customerId, { courses: cur });
-                }
+                await removeCustomerCourseRowAtomic(customerId, {
+                  courseIndex,
+                  courseId: course.courseId || '',
+                  expectedName: course.name || '',
+                  expectedProduct: course.product || '',
+                  requireZeroRemaining: true,
+                });
               }
 
               // 5. Audit emit (kind='exchange') for ประวัติการใช้คอร์ส tab.
@@ -2159,7 +2165,8 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
               const { deductCourseItems, assignCourseToCustomer, createBackendSale } = await import('../../lib/scopedDataLayer.js');
               const toId = selectedCust.proClinicId || selectedCust.id;
               // 1. Deduct from source customer
-              await deductCourseItems(fromCustomerId, [{ courseIndex, deductQty: Number(shareQty), courseName: course.name }]);
+              // AV209 — full identity (name+product) validated in-tx (see ExchangeModal)
+              await deductCourseItems(fromCustomerId, [{ courseIndex, deductQty: Number(shareQty), courseName: course.name, productName: course.product || course.name }]);
               // 2. Assign to target customer
               await assignCourseToCustomer(toId, {
                 name: course.name,

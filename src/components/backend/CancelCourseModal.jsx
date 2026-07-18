@@ -64,6 +64,9 @@ export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
         courseIndex: row.courseIndex,
         staffId: actor.userId,
         staffName: actor.userName,
+        // AV209 — identity validated in-tx (see RefundCourseModal)
+        expectedName: row.courseName || '',
+        expectedProduct: row.product || '',
       });
       setActorId(''); setReason('');
       onSuccess?.();

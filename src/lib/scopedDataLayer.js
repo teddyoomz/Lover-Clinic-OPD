@@ -623,6 +623,8 @@ export const resolvePickedCourseInCustomer = (...args) => raw.resolvePickedCours
 export const cancelCustomerCourse = (...args) => raw.cancelCustomerCourse(...args);
 export const refundCustomerCourse = (...args) => raw.refundCustomerCourse(...args);
 export const exchangeCourseProduct = (...args) => raw.exchangeCourseProduct(...args);
+// AV209 (2026-07-18) — identity-located atomic single-row removal (ExchangeModal full-exchange cleanup)
+export const removeCustomerCourseRowAtomic = (...args) => raw.removeCustomerCourseRowAtomic(...args);
 
 // ─── Stock operations (writers + analysis) ─────────────────────────────────
 export const createStockOrder = (...args) => raw.createStockOrder(...args);

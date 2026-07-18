@@ -55,6 +55,60 @@ export function findCourseIndex(customer, courseId) {
   return customer.courses.findIndex(c => String(c.courseId) === String(courseId));
 }
 
+// AV209 (2026-07-18) — Thai user-facing error for a stale-row resolution
+// failure. Shown when a UI-frozen index no longer matches the row it was
+// captured from AND identity search can't disambiguate (concurrent edit
+// from another machine between render and commit).
+export const COURSE_ROW_STALE_MSG =
+  'ไม่พบคอร์สที่เลือก — ข้อมูลคอร์สอาจถูกแก้ไขพร้อมกันจากเครื่องอื่น กรุณารีเฟรชหน้าแล้วลองใหม่';
+
+/**
+ * AV209 (2026-07-18) — identity-first row resolution for customer.courses[].
+ *
+ * Closes the positional-rowId TOCTOU class: a UI-frozen array index applied
+ * inside a transaction after a concurrent insert/remove/reorder targets the
+ * WRONG row silently (money-adjacent — wrong course adjusted/exchanged/
+ * refunded). Mirrors the proven `matchesDed` hint-then-validate pattern of
+ * deductCourseItems: the index is only a HINT; identity decides.
+ *
+ * Resolution order:
+ *   1. `courseId` (strongest — unique per assign) → findIndex match wins.
+ *   2. `courseIndex` hint, ACCEPTED only when no identity was supplied
+ *      (legacy callers keep pre-AV209 bounds-only behavior) OR the row at
+ *      that index still matches the supplied name/product.
+ *   3. Identity search (name + product) — applied ONLY on an unambiguous
+ *      single match. 0 or >1 matches → -1 (caller throws
+ *      COURSE_ROW_STALE_MSG; safer than guessing among duplicates).
+ *
+ * @param {Array} courses — the IN-TX re-read courses array
+ * @param {{courseIndex?: number, courseId?: string, name?: string, product?: string}} target
+ * @returns {number} resolved index or -1
+ */
+export function resolveCourseRowIndex(courses, { courseIndex, courseId, name, product } = {}) {
+  const list = Array.isArray(courses) ? courses : [];
+  const wantId = courseId !== '' && courseId !== null && courseId !== undefined;
+  const wantName = typeof name === 'string' && name !== '';
+  const wantProduct = typeof product === 'string' && product !== '';
+  const matches = (c) => {
+    if (!c || typeof c !== 'object') return false;
+    if (wantName && String(c.name || '') !== name) return false;
+    if (wantProduct && String(c.product || '') !== product) return false;
+    return true;
+  };
+  if (wantId) {
+    const byId = list.findIndex((c) => c && String(c.courseId) === String(courseId));
+    if (byId >= 0) return byId;
+  }
+  const idxOk = typeof courseIndex === 'number' && courseIndex >= 0 && courseIndex < list.length;
+  if (idxOk && (!(wantName || wantProduct) || matches(list[courseIndex]))) return courseIndex;
+  if (wantName || wantProduct) {
+    const found = [];
+    list.forEach((c, i) => { if (matches(c)) found.push(i); });
+    if (found.length === 1) return found[0];
+  }
+  return -1;
+}
+
 /**
  * Build the post-exchange `customer.courses[]` array.
  * - Removes the source course at index `idx`.
@@ -135,12 +189,24 @@ export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
   if (typeof refundAmount !== 'number' || refundAmount < 0 || !Number.isFinite(refundAmount)) {
     throw new Error('refundAmount must be non-negative finite number');
   }
-  let idx = hasIdInput ? findCourseIndex(customer, courseId) : -1;
-  if (idx < 0 && hasIdxInput) {
-    const len = Array.isArray(customer.courses) ? customer.courses.length : 0;
-    if (opts.courseIndex < len) idx = opts.courseIndex;
+  // AV209 (2026-07-18) — identity-validated resolution replaces the bounds-only
+  // index fallback (positional TOCTOU: a stale index after a concurrent
+  // insert/remove refunded the WRONG row). Callers pass expectedName/
+  // expectedProduct from the row snapshot the admin actually saw; legacy
+  // callers without identity keep the pre-AV209 bounds-only behavior.
+  const idx = resolveCourseRowIndex(customer.courses, {
+    courseIndex: hasIdxInput ? opts.courseIndex : undefined,
+    courseId: hasIdInput ? courseId : undefined,
+    name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
+    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+  });
+  if (idx < 0) {
+    throw new Error(
+      (opts.expectedName || opts.expectedProduct)
+        ? COURSE_ROW_STALE_MSG
+        : `course not found: ${courseId || `index ${opts.courseIndex}`}`,
+    );
   }
-  if (idx < 0) throw new Error(`course not found: ${courseId || `index ${opts.courseIndex}`}`);
 
   const prevCourses = Array.isArray(customer.courses) ? customer.courses : [];
   const target = prevCourses[idx];
@@ -196,12 +262,20 @@ export function applyCourseCancel(customer, courseId, opts = {}) {
   const hasIdInput = courseId !== '' && courseId !== null && courseId !== undefined;
   const hasIdxInput = typeof opts.courseIndex === 'number' && opts.courseIndex >= 0;
   if (!hasIdInput && !hasIdxInput) throw new Error('courseId or opts.courseIndex required');
-  let idx = hasIdInput ? findCourseIndex(customer, courseId) : -1;
-  if (idx < 0 && hasIdxInput) {
-    const len = Array.isArray(customer.courses) ? customer.courses.length : 0;
-    if (opts.courseIndex < len) idx = opts.courseIndex;
+  // AV209 (2026-07-18) — identity-validated resolution (see applyCourseRefund).
+  const idx = resolveCourseRowIndex(customer.courses, {
+    courseIndex: hasIdxInput ? opts.courseIndex : undefined,
+    courseId: hasIdInput ? courseId : undefined,
+    name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
+    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+  });
+  if (idx < 0) {
+    throw new Error(
+      (opts.expectedName || opts.expectedProduct)
+        ? COURSE_ROW_STALE_MSG
+        : `course not found: ${courseId || `index ${opts.courseIndex}`}`,
+    );
   }
-  if (idx < 0) throw new Error(`course not found: ${courseId || `index ${opts.courseIndex}`}`);
 
   const prevCourses = Array.isArray(customer.courses) ? customer.courses : [];
   const target = prevCourses[idx];
@@ -251,8 +325,15 @@ export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, 
   //   'exchange' — applyCourseExchange (existing)
   //   'refund'   — applyCourseRefund (existing)
   //   'cancel'   — applyCourseCancel (existing)
-  if (!['exchange', 'refund', 'cancel', 'add', 'share', 'use'].includes(kind)) {
-    throw new Error('kind must be exchange|refund|cancel|add|share|use');
+  //   'reduce'   — adjustCourseRemainingQty ลดคงเหลือ (AV209-bonus 2026-07-18:
+  //                the 2026-06-09 unified add/reduce emitted kind='reduce' but
+  //                this whitelist was never extended → EVERY reduce audit emit
+  //                threw into the non-fatal catch → ประวัติการใช้คอร์ส silently
+  //                missed all reduces. CourseHistoryTab already renders 'reduce'
+  //                (label/icon/± line) — the validator was the only gap. Caught
+  //                live by scripts/e2e-av209-course-row-identity.mjs.)
+  if (!['exchange', 'refund', 'cancel', 'add', 'reduce', 'share', 'use'].includes(kind)) {
+    throw new Error('kind must be exchange|refund|cancel|add|reduce|share|use');
   }
   const changeId = `cc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const createdAt = now || new Date().toISOString();

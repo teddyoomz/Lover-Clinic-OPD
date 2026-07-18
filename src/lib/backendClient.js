@@ -2020,12 +2020,27 @@ export async function adjustCourseRemainingQty(customerId, courseIndex, delta, o
   // 2026-06-09 — unified add/reduce ("แก้คงเหลือ"). delta > 0 = เพิ่ม (capped at
   // total, reverseQty math); delta < 0 = ลด (floored at 0, total unchanged).
   // V148 — atomic (concurrent add/reduce ↔ use lost-update guard).
+  // AV209 (2026-07-18) — identity-first row targeting: opts.expectedName /
+  // opts.expectedProduct / opts.courseId (when supplied by the UI) are
+  // validated INSIDE the tx via resolveCourseRowIndex, so a UI-frozen index
+  // that went stale (concurrent insert/remove from another machine) can
+  // never adjust the WRONG row. Legacy callers without identity keep the
+  // pre-AV209 bounds-only behavior.
+  const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG } = await import('./courseExchange.js');
   const amount = Math.abs(Number(delta) || 0);
   const isReduce = (Number(delta) || 0) < 0;
-  let before; let beforeQty = ''; let afterQtyStr = '';
+  const hasIdentity = !!(opts.expectedName || opts.expectedProduct || opts.courseId);
+  let before; let beforeQty = ''; let afterQtyStr = ''; let appliedIndex = -1;
   const courses = await _mutateCustomerCoursesAtomic(customerId, (courses) => {
-    if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
-    before = courses[courseIndex];
+    const idx = resolveCourseRowIndex(courses, {
+      courseIndex,
+      courseId: opts.courseId,
+      name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
+      product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+    });
+    if (idx < 0) throw new Error(hasIdentity ? COURSE_ROW_STALE_MSG : 'Invalid course index');
+    appliedIndex = idx;
+    before = courses[idx];
     beforeQty = String(before.qty || '');
     if (isReduce) {
       const { remaining, total, unit } = parseQtyString(beforeQty);
@@ -2033,7 +2048,7 @@ export async function adjustCourseRemainingQty(customerId, courseIndex, delta, o
     } else {
       afterQtyStr = reverseQty(beforeQty, amount); // add, capped at total
     }
-    courses[courseIndex] = { ...before, qty: afterQtyStr };
+    courses[idx] = { ...before, qty: afterQtyStr };
   });
 
   // Authoritative identity from the MUTATED course (not a frozen UI snapshot) —
@@ -2070,7 +2085,9 @@ export async function adjustCourseRemainingQty(customerId, courseIndex, delta, o
   }
 
   return {
-    course: courses[courseIndex],
+    // AV209 — the identity-resolved index (may differ from the caller's
+    // stale hint when a concurrent edit shifted the array).
+    course: courses[appliedIndex],
     courseName, productName, unit,
     delta: isReduce ? -amount : amount,
     qtyBefore: beforeQty, qtyAfter: afterQtyStr, isReduce,
@@ -2400,14 +2417,26 @@ export async function addPicksToResolvedGroup(customerId, pickedFromCourseId, ad
 export async function exchangeCourseProduct(customerId, courseIndex, newProduct, reason = '', opts = {}) {
   // V148 — atomic 2-field write (courses + courseExchangeLog) via runTransaction
   // (concurrent exchange↔use/exchange lost-update guard).
+  // AV209 (2026-07-18) — identity-first row targeting (opts.courseId /
+  // opts.expectedName / opts.expectedProduct validated in-tx); a stale
+  // UI-frozen index can never exchange the WRONG row. Legacy callers
+  // without identity keep bounds-only behavior.
+  const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG } = await import('./courseExchange.js');
+  const hasIdentity = !!(opts.expectedName || opts.expectedProduct || opts.courseId);
   return runTransaction(db, async (tx) => {
   const _ref = customerDoc(customerId);
   const snap = await tx.get(_ref);
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
-  if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
+  const targetIndex = resolveCourseRowIndex(courses, {
+    courseIndex,
+    courseId: opts.courseId,
+    name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
+    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+  });
+  if (targetIndex < 0) throw new Error(hasIdentity ? COURSE_ROW_STALE_MSG : 'Invalid course index');
 
-  const oldCourse = courses[courseIndex];
+  const oldCourse = courses[targetIndex];
   // Phase 16.5-ter (2026-04-29) — capture staff identification on exchange.
   // Coerced for V14 lock (no undefined leaves).
   const exchangeEntry = {
@@ -2421,7 +2450,7 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
     staffName: String(opts.staffName || ''),
   };
 
-  courses[courseIndex] = {
+  courses[targetIndex] = {
     ...oldCourse,
     product: newProduct.name,
     qty: buildQtyString(Number(newProduct.qty) || 1, newProduct.unit || ''),
@@ -2434,6 +2463,39 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
   });
   return { success: true, courses, exchangeLog: exchangeEntry };
   }); // V148 — end atomic exchange
+}
+
+/**
+ * AV209 (2026-07-18) — atomically remove ONE course row located by identity.
+ * Replaces the ExchangeModal's getCustomer → splice → updateCustomer sequence
+ * (a non-atomic whole-array RMW, Rule T violation: a concurrent mutation
+ * between the read and the write was silently lost — same class V148 closed
+ * for the other mutators — AND the splice fell back to a stale UI index).
+ *
+ * Non-fatal by design: post-deduct cleanup — when the row is already gone
+ * (or identity can't disambiguate) it no-ops instead of throwing.
+ * `requireZeroRemaining` (default true) guards against racing top-ups:
+ * the row is only spliced when its remaining hit 0.
+ */
+export async function removeCustomerCourseRowAtomic(customerId, {
+  courseIndex, courseId, expectedName, expectedProduct, requireZeroRemaining = true,
+} = {}) {
+  const { resolveCourseRowIndex } = await import('./courseExchange.js');
+  return _mutateCustomerCoursesAtomic(customerId, (courses) => {
+    const idx = resolveCourseRowIndex(courses, {
+      courseIndex,
+      courseId,
+      name: typeof expectedName === 'string' ? expectedName : '',
+      product: typeof expectedProduct === 'string' ? expectedProduct : '',
+    });
+    if (idx < 0) return { removed: false, reason: 'not-found' };
+    if (requireZeroRemaining) {
+      const parsed = parseQtyString(String(courses[idx]?.qty || ''));
+      if ((Number(parsed.remaining) || 0) > 0) return { removed: false, reason: 'remaining>0' };
+    }
+    courses.splice(idx, 1);
+    return { removed: true, reason: '' };
+  });
 }
 
 // ─── Appointment CRUD ───────────────────────────────────────────────────────
@@ -4972,6 +5034,9 @@ export async function refundCustomerCourse(customerId, courseId, refundAmount, o
       customer, courseId, refundAmount, {
         reason: opts.reason || '',
         courseIndex: opts.courseIndex,
+        // AV209 — identity from the row snapshot the admin saw (in-tx validated)
+        expectedName: opts.expectedName || '',
+        expectedProduct: opts.expectedProduct || '',
         // Phase 16.5-quater — also persist staff on the course
         staffId: opts.staffId || '',
         staffName: opts.staffName || '',
@@ -5023,6 +5088,9 @@ export async function cancelCustomerCourse(customerId, courseId, reason, opts = 
       customer, courseId, {
         reason: reason || '',
         courseIndex: opts.courseIndex,
+        // AV209 — identity from the row snapshot the admin saw (in-tx validated)
+        expectedName: opts.expectedName || '',
+        expectedProduct: opts.expectedProduct || '',
         // Phase 16.5-quater — also persist staff on the course
         staffId: opts.staffId || '',
         staffName: opts.staffName || '',

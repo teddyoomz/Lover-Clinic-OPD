@@ -135,6 +135,10 @@ describe('M1 CancelCourseModal', () => {
       courseIndex: 2,
       staffId: 'staff-1',
       staffName: 'นาง สมหญิง ใจดี',
+      // AV209 (2026-07-18) — modal now passes the row's identity so the
+      // backend validates the index in-tx (stale-index TOCTOU guard).
+      expectedName: 'Botox 50U',
+      expectedProduct: '',
     });
     expect(onSuccess).toHaveBeenCalled();
   });
@@ -152,6 +156,9 @@ describe('M1 CancelCourseModal', () => {
       courseIndex: 2,
       staffId: 'staff-1',
       staffName: 'นาง สมหญิง ใจดี',
+      // AV209 — identity accompanies the index fallback (legacy rows too)
+      expectedName: 'Botox 50U',
+      expectedProduct: '',
     });
   });
 
@@ -214,6 +221,9 @@ describe('M2 RefundCourseModal', () => {
       reason: 'customer request',
       actor: 'admin@test.local',
       courseIndex: 2,
+      // AV209 — identity accompanies the index (stale-index TOCTOU guard)
+      expectedName: 'Botox 50U',
+      expectedProduct: '',
     });
     expect(onSuccess).toHaveBeenCalled();
   });
@@ -228,6 +238,8 @@ describe('M2 RefundCourseModal', () => {
     await waitFor(() => expect(refundMock).toHaveBeenCalled());
     expect(refundMock).toHaveBeenCalledWith('cust-1', '', 500, {
       reason: 'r', actor: 'admin@test.local', courseIndex: 2,
+      // AV209 — identity accompanies the index fallback
+      expectedName: 'Botox 50U', expectedProduct: '',
     });
   });
 
@@ -300,7 +312,11 @@ describe('M3 ExchangeCourseModal', () => {
       name: 'Premium Botox',
       qty: '10/10',
       unit: 'U',
-    }, 'upgrade', { staffId: 'staff-1', staffName: 'นาง สมหญิง ใจดี' });
+    }, 'upgrade', {
+      staffId: 'staff-1', staffName: 'นาง สมหญิง ใจดี',
+      // AV209 — identity opts (baseRow has no real courseId → '')
+      courseId: '', expectedName: 'Botox 50U', expectedProduct: '',
+    });
     expect(onSuccess).toHaveBeenCalled();
   });
 

@@ -90,6 +90,11 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
       await exchangeCourseProduct(row.customerId, row.courseIndex, newProduct, reason.trim(), {
         staffId: actor.userId,
         staffName: actor.userName,
+        // AV209 — identity validated in-tx: real courseId when the row has one,
+        // else name+product; a stale index can never exchange the wrong row.
+        courseId: row.hasRealCourseId ? row.courseId : '',
+        expectedName: row.courseName || '',
+        expectedProduct: row.product || '',
       });
       setActorId(''); setSearch(''); setPickedCourseId(''); setReason('');
       onSuccess?.();

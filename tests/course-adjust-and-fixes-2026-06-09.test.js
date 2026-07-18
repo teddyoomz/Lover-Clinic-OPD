@@ -65,7 +65,9 @@ describe('C1 — adjustCourseRemainingQty (add/reduce) source-grep', () => {
   const SRP = SRC('src/components/backend/SaleRowParts.jsx');
   const CDV = SRC('src/components/backend/CustomerDetailView.jsx');
   const idx = BC.indexOf('export async function adjustCourseRemainingQty');
-  const fn = idx > -1 ? BC.slice(idx, idx + 3000) : '';
+  // AV209 (2026-07-18) — window 3000→4500: the identity-resolution block +
+  // comments grew the function (V21 slice-window repoint, K.2 pattern).
+  const fn = idx > -1 ? BC.slice(idx, idx + 4500) : '';
 
   it('C1.6 adjustCourseRemainingQty exists + routes through the atomic helper', () => {
     expect(idx).toBeGreaterThan(-1);

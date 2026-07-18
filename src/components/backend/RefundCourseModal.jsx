@@ -55,6 +55,10 @@ export default function RefundCourseModal({ open, row, onSuccess, onCancel }) {
         reason: reason.trim(),
         actor,
         courseIndex: row.courseIndex,
+        // AV209 — identity of the row the admin saw; validated in-tx so a
+        // stale index (concurrent edit) can never refund the wrong row.
+        expectedName: row.courseName || '',
+        expectedProduct: row.product || '',
       });
       setAmount('');
       setReason('');
