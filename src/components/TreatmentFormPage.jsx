@@ -42,6 +42,9 @@ import DateField from './DateField.jsx';
 import OpdNoteTemplateMenu from './OpdNoteTemplateMenu.jsx';
 import { appendTemplateToCc } from '../lib/opdNoteTemplateValidation.js';
 import ImageLightbox from './ImageLightbox.jsx';
+// AV208 (2026-07-18, TFP entry SWR) — cache paint + silent server correct.
+import SyncIndicator from './SyncIndicator.jsx';
+import { swrRun } from '../lib/swrRead.js';
 import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import EditAttributionModal from './backend/EditAttributionModal.jsx';
@@ -245,6 +248,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   // ── Core state ──────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
+  // AV208 (2026-07-18, TFP entry SWR) — amber chip while the form shows
+  // cache-painted data the server hasn't confirmed yet + the save-gate handle
+  // handleSubmit awaits (bounded 15s) before serializing money/stock writes.
+  const [tfpSyncing, setTfpSyncing] = useState(false);
+  const serverFreshRef = useRef(Promise.resolve());
   const [saving, setSaving] = useState(false);
   // appointment-loop R3 (2026-06-03) — SYNCHRONOUS double-submit guard. The
   // save buttons use disabled={saving}, but React state lags one render, so a
@@ -750,39 +758,82 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   }, [customerId, treatmentId, isEdit]);
 
   // ── Load form data ──────────────────────────────────────────────────────
+  // AV208 (2026-07-18, TFP entry SWR) — restructured into fetchFormData
+  // (FETCH-ONLY) + applyFormData (setState), orchestrated by swrRun: the
+  // cache pass paints the form instantly on warm machines; the server pass
+  // silently corrects. Root cause: TFP was the ONLY staff surface whose
+  // first paint was 100% network-gated (~600 docs / ~630KB per open) —
+  // spinner hangs of 10-60s on weak clinic WiFi. The interior of
+  // applyFormData is the pre-AV208 effect body moved VERBATIM (original
+  // indentation preserved intentionally — V163-class move-risk minimization).
   useEffect(() => {
-    (async () => {
-      try {
-        // ── BACKEND MODE: load from master_data + be_treatments ──
-        if (saveTarget === 'backend') {
-          // Task 7 (BSA, 2026-05-04) — Rule H-quater fix: replaced the legacy
-          // master-data universal-pool lister (branch-blind) with be_* listers
-          // via scopedDataLayer. listProducts/listCourses
-          // auto-inject the selected branchId. listStaff/listDoctors are
-          // universal — branch soft-gate via filterStaffByBranch /
-          // filterDoctorsByBranch (Phase BS V1) is preserved below.
-          const {
-            getTreatment: getBackendTreatment,
-            getCustomer: getBackendCustomer,
-            listDfGroups,
-            listDfStaffRates,
-            listProducts,
-            listCourses,
-            listStaff,
-            listDoctors,
-          } = await import('../lib/scopedDataLayer.js');
-          // V41 (2026-05-08) — opt-in for full lookup map (handles past-record
-          // name display for hidden persons) + filter visible client-side for
-          // picker dropdowns via filterDoctorsByBranch / filterStaffByBranch +
-          // !isHidden below. AV20.
-          const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
-            listDoctors({ includeHidden: true }).catch(() => []),  // universal — soft-gate below
-            listProducts().catch(() => []),                        // auto-inject branchId
-            listStaff({ includeHidden: true }).catch(() => []),    // universal — soft-gate below
-            listCourses().catch(() => []),                  // auto-inject branchId
-            listDfGroups().catch(() => []),
-            listDfStaffRates().catch(() => []),
-          ]);
+    let cancelled = false;
+    let hydrated = false;   // AV208: Part-2 edit hydration runs at most ONCE across both passes
+    let prefilled = false;  // AV208: Part-3 patientData prefill once-only (server pass must not clobber typing)
+
+    // FETCH-ONLY — no setState. Cache pass returns null (= MISS, no paint)
+    // when any paint-critical piece is absent; server-leg errors propagate.
+    const fetchFormData = async (source) => {
+      // Task 7 (BSA, 2026-05-04) — Rule H-quater fix: replaced the legacy
+      // master-data universal-pool lister (branch-blind) with be_* listers
+      // via scopedDataLayer. listProducts/listCourses
+      // auto-inject the selected branchId. listStaff/listDoctors are
+      // universal — branch soft-gate via filterStaffByBranch /
+      // filterDoctorsByBranch (Phase BS V1) is preserved below.
+      const {
+        getTreatment: getBackendTreatment,
+        getCustomer: getBackendCustomer,
+        listDfGroups,
+        listDfStaffRates,
+        listProducts,
+        listCourses,
+        listStaff,
+        listDoctors,
+      } = await import('../lib/scopedDataLayer.js');
+      const opts = source ? { source } : {};
+      // V41 (2026-05-08) — opt-in for full lookup map (handles past-record
+      // name display for hidden persons) + filter visible client-side for
+      // picker dropdowns via filterDoctorsByBranch / filterStaffByBranch +
+      // !isHidden below. AV20.
+      const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
+        listDoctors({ includeHidden: true, ...opts }).catch(() => []),  // universal — soft-gate below
+        listProducts(opts).catch(() => []),                             // auto-inject branchId
+        listStaff({ includeHidden: true, ...opts }).catch(() => []),    // universal — soft-gate below
+        listCourses(opts).catch(() => []),                              // auto-inject branchId
+        listDfGroups(opts).catch(() => []),
+        listDfStaffRates(opts).catch(() => []),
+      ]);
+      // AV208 no-empty-paint: a cold cache yields empty lists → the whole
+      // cache pass is a MISS (never paint a form with empty pickers).
+      if (source === 'cache' && productItems.length === 0 && courseItems.length === 0) { debugLog('tfp-swr', 'cache MISS: empty lists'); return null; }
+      let custData = null;
+      if (customerId) {
+        try { custData = await getBackendCustomer(customerId, opts); } catch (e) { if (source !== 'cache') debugLog('tfp-swr', 'getCustomer failed', e); custData = null; }
+        // cache paint must include the customer (courses list) — else MISS.
+        if (source === 'cache' && !custData) { debugLog('tfp-swr', 'cache MISS: no custData'); return null; }
+      }
+      let existing = null;
+      if (isEdit && treatmentId) {
+        // pre-AV208 fidelity: the SERVER leg's getTreatment error PROPAGATES
+        // (→ outer catch → setError, as before). Only the cache leg swallows
+        // (a cache-absent doc is a MISS, not an error).
+        try { existing = await getBackendTreatment(treatmentId, opts); }
+        catch (e) { if (source !== 'cache') throw e; existing = null; }
+        // edit-mode cache paint must include the treatment — else MISS.
+        if (source === 'cache' && !existing) { debugLog('tfp-swr', 'cache MISS: no existing treatment'); return null; }
+      }
+      return { doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems, custData, existing };
+    };
+
+    // applyFormData — ALL setState lives here. Destructure re-binds the
+    // exact identifiers the verbatim body already references.
+    const applyFormData = async (bundle, { fromCache } = {}) => {
+      if (cancelled || !bundle) return;
+      // chip: ON at the cache paint, OFF when the server confirms. A
+      // network-down "server" leg is __fromCache-tagged → stays ON (honest,
+      // B1.4-bis).
+      setTfpSyncing(!!fromCache);
+      const { doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems, custData, existing } = bundle;
           setDfGroups(dfGroupItems || []);
           setDfStaffRates(dfStaffRatesItems || []);
           // Phase 14.4 bug fix (2026-04-24): build name→master-courseId map
@@ -808,9 +859,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // index so deductCourseItems can target that specific entry.
           let customerCoursesForForm = [];
           let customerPromotionsForForm = [];
-          if (customerId) {
+          if (customerId && custData) {   // AV208: custData fetched in fetchFormData
             try {
-              const custData = await getBackendCustomer(customerId);
               const rawCourses = custData?.courses || [];
               // Phase 12.2b follow-up (2026-04-25): extracted into
               // `mapRawCoursesToForm` so the branch logic (pick-at-treatment
@@ -873,9 +923,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             healthInfo: {}, vitalsDefaults: {},
           };
           setOptions(backendOptions);
-          // Edit mode: load existing backend treatment
-          if (isEdit && treatmentId) {
-            const existing = await getBackendTreatment(treatmentId);
+          // Edit mode: hydrate from the fetched treatment — ONCE across both
+          // passes (AV208: a server re-apply must never clobber user edits).
+          if (isEdit && treatmentId && existing && !hydrated) {
+            hydrated = true;
             // Phase 26.0a (V26.0, 2026-05-13) — capture top-level status field
             // (e.g. 'doctor-recorded' | 'completed' | undefined) so the
             // canAddNewItems flag (computed at top of render, after the
@@ -996,6 +1047,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 try {
                   const { findCouponByCode } = await import('../lib/scopedDataLayer.js');
                   const c = await findCouponByCode(t.couponCode);
+                  if (cancelled) return;   // AV208: effect re-ran mid-await
                   if (c) setCouponInfo(c);
                 } catch { /* coupon expired / deleted — keep code string, skip badge */ }
               }
@@ -1010,6 +1062,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               try {
                 const { getSaleByTreatmentId } = await import('../lib/scopedDataLayer.js');
                 const linkedSale = await getSaleByTreatmentId(treatmentId);
+                if (cancelled) return;   // AV208: effect re-ran mid-await
                 const deps = Array.isArray(linkedSale?.billing?.depositIds) ? linkedSale.billing.depositIds : [];
                 if (deps.length > 0) {
                   setSelectedDeposits(deps.map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 })));
@@ -1037,7 +1090,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             }
           }
           // Pre-fill from patient data (Phase 26.2g-fillin-bis — canonical resolver reads)
-          if (patientData) {
+          // AV208: once-only — the server pass must not overwrite user-typed values.
+          if (patientData && !prefilled) {
+            prefilled = true;
             if (patientData.bloodType && !isEdit) setBloodType(patientData.bloodType);
             if (!isEdit) {
               // Phase 26.2g-fillin-bis (2026-05-13) — read CANONICAL patientData fields
@@ -1055,19 +1110,43 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (history) setTreatmentHistory(history);
             }
           }
-          setLoading(false);
-          return;
-        }
+          // AV208: edit mode keeps the spinner until the treatment hydrated.
+          // (fetchFormData guarantees existing≠null on a cache paint, so a
+          // painted cache pass always hydrates. A SERVER pass with a missing
+          // treatment skips hydration and the orchestrator's finally clears
+          // the spinner — the pre-AV208 "not-found renders empty edit form"
+          // behavior is preserved.)
+          if (!isEdit || hydrated) setLoading(false);
+    };
 
+    (async () => {
+      try {
         // V50 (2026-05-08) — PROCLINIC MODE block deleted (~177 lines).
         // saveTarget defaults to 'backend' + only callsites pass 'backend';
         // proclinic fallthrough was unreachable. Full strip per H-bis.
+        if (saveTarget === 'backend') {
+          // AV208 — SWR 2-pass via the canonical swrRun (AV206 contract):
+          // instant cache paint on warm machines → silent server correction.
+          const run = swrRun({
+            cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
+            serverLoad: () => fetchFormData(undefined),
+            apply: (b, meta) => { applyFormData(b, meta); },
+          });
+          // save-gate handle (Q2=A): handleSubmit awaits this (bounded 15s) so
+          // money/stock serialization never runs against unconfirmed cache
+          // options. .catch() so an abandoned form can't unhandled-reject.
+          serverFreshRef.current = run.catch(() => {});
+          await run;   // server-leg errors surface via the catch below (Rule Q-honest)
+        }
       } catch (e) {
-        setError(e.message);
+        if (!cancelled) { setError(e.message); setTfpSyncing(false); }
       } finally {
-        setLoading(false);
+        // tfpSyncing is NOT cleared here — applyFormData owns the chip (a
+        // network-down server leg keeps it ON honestly, B1.4-bis).
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   // Phase 17.2-quinquies (2026-05-05) — SELECTED_BRANCH_ID added to deps so
   // when the user switches the top-right BranchSelector mid-TFP-life, the
   // page-level state (productItems / courseItems / dfGroupItems / staffItems
@@ -2201,6 +2280,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     submitInFlightRef.current = true;
     setSaving(true);
     setError('');
+    // AV208 save-gate (Q2=A, 2026-07-18): the form may have painted from the
+    // SWR cache pass — never serialize money/stock writes against options the
+    // server hasn't confirmed. Waits the in-flight server leg (normally already
+    // resolved minutes before the user saves); bounded 15s so a dead network
+    // degrades to the server transactions (Rule T) surfacing the real error.
+    await Promise.race([serverFreshRef.current, new Promise((r) => setTimeout(r, 15000))]);
     try {
       // Build seller entries from pmSellers array
       const sellerPayload = {};
@@ -3367,6 +3452,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               <h2 className="text-base font-bold flex items-center gap-2 truncate" style={{ color: accent }}>
                 {isEdit ? <Edit3 size={18} /> : <Stethoscope size={18} />}
                 <span className="truncate">{isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}</span>
+                {/* AV208 — on while the form shows cache data awaiting server confirm */}
+                <SyncIndicator show={tfpSyncing} />
               </h2>
               {patientName && (
                 <p className="text-xs text-gray-500 truncate">

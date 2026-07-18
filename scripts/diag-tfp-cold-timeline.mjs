@@ -3,7 +3,9 @@
 // → TFP mount spinner → options loaded → form). Captures console + pageerrors.
 import { chromium } from '@playwright/test';
 
-const PROD = 'https://lover-clinic-app.vercel.app';
+// PROBE_BASE override → point at a local build (vite preview) for pre-deploy
+// before/after measurement (T9). Defaults to LIVE prod.
+const PROD = process.env.PROBE_BASE || 'https://lover-clinic-app.vercel.app';
 const FIREBASE_API_KEY = 'AIzaSyDrUal7dR9eweWQKgi4ZhDK7k0hiF9tx20';
 const TREATMENT_ID = process.argv[2] || 'BT-1782130311262';
 const CUSTOMER_ID = process.argv[3] || 'LC-26000182';
@@ -65,6 +67,7 @@ for (let i = 0; i < 180; i++) {
     const has = (t) => document.body.innerText.includes(t);
     return {
       spinner: has('กำลังโหลดฟอร์มการรักษา'),
+      chip: has('กำลังซิงค์'),
       anyLoading: (document.body.innerText.match(/กำลังโหลด/g) || []).length,
       custDetail: has('ลิงก์ดูข้อมูล'),
       tfpForm: has('Vital Signs') || has('ข้อมูลการใช้คอร์ส') || has('บันทึกสำหรับแพทย์'),
@@ -74,7 +77,7 @@ for (let i = 0; i < 180; i++) {
   if (!state) { console.log(`${Date.now() - t0}ms  (eval failed — navigating?)`); await page.waitForTimeout(500); continue; }
   const sig = JSON.stringify(state);
   if (sig !== last) {
-    console.log(`${String(Date.now() - t0).padStart(6)}ms  spinner=${state.spinner} loadingTexts=${state.anyLoading} custDetail=${state.custDetail} tfpForm=${state.tfpForm} bodyLen=${state.bodyLen}`);
+    console.log(`${String(Date.now() - t0).padStart(6)}ms  spinner=${state.spinner} chip=${state.chip} loadingTexts=${state.anyLoading} custDetail=${state.custDetail} tfpForm=${state.tfpForm} bodyLen=${state.bodyLen}`);
     last = sig;
   }
   if (state.tfpForm) { console.log(`FORM READY at ${Date.now() - t0}ms  firestoreReqs=${fsb.count} firestoreKB=${(fsb.bytes / 1024).toFixed(0)}`); break; }
