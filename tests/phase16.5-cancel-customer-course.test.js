@@ -224,20 +224,20 @@ describe('C3 cancelCustomerCourse backend wrapper', () => {
 
   test('C3.2 uses runTransaction for atomic write', () => {
     const idx = CLIENT_SRC.indexOf('export async function cancelCustomerCourse(');
-    const slice = CLIENT_SRC.slice(idx, idx + 1500);
+    const slice = CLIENT_SRC.slice(idx, idx + 2200);
     expect(slice).toMatch(/runTransaction\(db,/);
   });
 
   test('C3.3 reads customer doc inside tx + throws on not-found', () => {
     const idx = CLIENT_SRC.indexOf('export async function cancelCustomerCourse(');
-    const slice = CLIENT_SRC.slice(idx, idx + 1500);
+    const slice = CLIENT_SRC.slice(idx, idx + 2200);
     expect(slice).toMatch(/tx\.get\(cRef\)/);
     expect(slice).toMatch(/Customer not found/);
   });
 
   test('C3.4 calls applyCourseCancel + buildChangeAuditEntry kind:cancel', () => {
     const idx = CLIENT_SRC.indexOf('export async function cancelCustomerCourse(');
-    const slice = CLIENT_SRC.slice(idx, idx + 1500);
+    const slice = CLIENT_SRC.slice(idx, idx + 2200);
     expect(slice).toMatch(/applyCourseCancel\(/);
     expect(slice).toMatch(/buildChangeAuditEntry\(/);
     expect(slice).toMatch(/kind: 'cancel'/);
@@ -245,13 +245,13 @@ describe('C3 cancelCustomerCourse backend wrapper', () => {
 
   test('C3.5 writes to be_course_changes via courseChangeDoc', () => {
     const idx = CLIENT_SRC.indexOf('export async function cancelCustomerCourse(');
-    const slice = CLIENT_SRC.slice(idx, idx + 1500);
+    const slice = CLIENT_SRC.slice(idx, idx + 2200);
     expect(slice).toMatch(/tx\.set\(courseChangeDoc/);
   });
 
   test('C3.6 returns { changeId, fromCourse, cancelledAt }', () => {
     const idx = CLIENT_SRC.indexOf('export async function cancelCustomerCourse(');
-    const slice = CLIENT_SRC.slice(idx, idx + 1500);
+    const slice = CLIENT_SRC.slice(idx, idx + 2200);
     expect(slice).toMatch(/return \{ changeId: audit\.changeId, fromCourse, cancelledAt \}/);
   });
 });

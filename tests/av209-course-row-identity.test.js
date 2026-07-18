@@ -114,6 +114,38 @@ describe('AV209.A — resolveCourseRowIndex (pure)', () => {
     const th = [rowA({ name: 'คอร์ส 💉 ฟิลเลอร์' })];
     expect(resolveCourseRowIndex(th, { courseIndex: 7, name: 'คอร์ส 💉 ฟิลเลอร์' })).toBe(0);
   });
+
+  // ── Hunt R1 hardenings (2026-07-19) ──────────────────────────────────────
+  it("A11 R1-#1: product '' is a CONSTRAINT — a legacy ''-product row never matches a different-product sibling", () => {
+    // Pre-fix: '' skipped the product constraint → name-only search hit the
+    // ProdY sibling → wrong-row refund (pre-AV209 this state was a safe throw).
+    const courses = [rowA({ name: 'X', product: 'ProdY' })]; // legacy row L{X, ''} was removed concurrently
+    expect(resolveCourseRowIndex(courses, { courseIndex: 1, name: 'X', product: '' })).toBe(-1);
+    // and '' matches '' (the legacy row itself, post-shift)
+    const legacy = [rowA({ name: 'X', product: '' })];
+    expect(resolveCourseRowIndex(legacy, { courseIndex: 9, name: 'X', product: '' })).toBe(0);
+    // undefined product = genuinely no constraint (legacy identity-less caller)
+    expect(resolveCourseRowIndex(courses, { courseIndex: 0 })).toBe(0);
+  });
+
+  it('A12 R1-#2: a supplied courseId that no longer exists is DEFINITIVE staleness — identity twins are never fallen into', () => {
+    const courses = [rowB({ courseId: 'cid-P2' })]; // P1 (cid-P1) was cancelled/spliced concurrently
+    expect(resolveCourseRowIndex(courses, {
+      courseIndex: 0, courseId: 'cid-P1', name: 'คอร์ส B', product: 'Prod B',
+    })).toBe(-1); // pre-fix: fell through to the hint → P2 silently mutated
+  });
+
+  it('A13 R1-#3: terminal-status twins (คืนเงิน/ยกเลิก) never satisfy identity matching', () => {
+    // hint lands on a refunded twin → rejected → live twin found by search
+    const courses = [rowB({ status: 'คืนเงิน' }), rowB()];
+    expect(resolveCourseRowIndex(courses, { courseIndex: 0, name: 'คอร์ส B', product: 'Prod B' })).toBe(1);
+    // ONLY terminal twins exist → -1 (never top-up a refunded course)
+    const allDead = [rowB({ status: 'ยกเลิก' }), rowB({ status: 'คืนเงิน' })];
+    expect(resolveCourseRowIndex(allDead, { courseIndex: 5, name: 'คอร์ส B', product: 'Prod B' })).toBe(-1);
+    // explicit courseId hit still returns the terminal row (informative
+    // already-refunded error path in applyCourseRefund/Cancel)
+    expect(resolveCourseRowIndex(allDead, { courseId: undefined, courseIndex: 1 })).toBe(1); // no-identity legacy = bounds only
+  });
 });
 
 // ── B. adjustCourseRemainingQty EXECUTION (TOCTOU scenarios) ───────────────

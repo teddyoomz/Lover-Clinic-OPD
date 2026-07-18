@@ -87,10 +87,23 @@ export const COURSE_ROW_STALE_MSG =
 export function resolveCourseRowIndex(courses, { courseIndex, courseId, name, product } = {}) {
   const list = Array.isArray(courses) ? courses : [];
   const wantId = courseId !== '' && courseId !== null && courseId !== undefined;
-  const wantName = typeof name === 'string' && name !== '';
-  const wantProduct = typeof product === 'string' && product !== '';
+  // Hunt R1-#1 fix (2026-07-19): a STRING identity value is a CONSTRAINT —
+  // INCLUDING '' (a legacy row with product:'' must only match ''-product
+  // rows; the pre-fix ''-skips-the-constraint let a name-only search land on
+  // a same-name/DIFFERENT-product sibling — a wrong-row refund/cancel that
+  // pre-AV209 was a safe throw). undefined/null = no constraint (legacy
+  // identity-less callers keep bounds-only behavior).
+  const wantName = typeof name === 'string';
+  const wantProduct = typeof product === 'string';
+  // Hunt R1-#3 fix: terminal rows never satisfy IDENTITY matching — a
+  // refunded/cancelled twin must not absorb an adjust/exchange/refund aimed
+  // at the live purchase. (An EXPLICIT courseId hit still returns the
+  // terminal row so applyCourseRefund/Cancel raise their informative
+  // 'already refunded/cancelled' errors.)
+  const TERMINAL_STATUS = ['คืนเงิน', 'ยกเลิก'];
   const matches = (c) => {
     if (!c || typeof c !== 'object') return false;
+    if (TERMINAL_STATUS.includes(String(c.status || ''))) return false;
     if (wantName && String(c.name || '') !== name) return false;
     if (wantProduct && String(c.product || '') !== product) return false;
     return true;
@@ -98,6 +111,11 @@ export function resolveCourseRowIndex(courses, { courseIndex, courseId, name, pr
   if (wantId) {
     const byId = list.findIndex((c) => c && String(c.courseId) === String(courseId));
     if (byId >= 0) return byId;
+    // Hunt R1-#2 fix: a supplied courseId that no longer exists is DEFINITIVE
+    // staleness (the intended purchase is gone) — never fall through to the
+    // hint/identity search, where an identity TWIN of the deleted purchase
+    // would be silently mutated (its qty even overwritten on exchange).
+    return -1;
   }
   const idxOk = typeof courseIndex === 'number' && courseIndex >= 0 && courseIndex < list.length;
   if (idxOk && (!(wantName || wantProduct) || matches(list[courseIndex]))) return courseIndex;
@@ -197,12 +215,14 @@ export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
   const idx = resolveCourseRowIndex(customer.courses, {
     courseIndex: hasIdxInput ? opts.courseIndex : undefined,
     courseId: hasIdInput ? courseId : undefined,
-    name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
-    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+    // Hunt R1-#1 (2026-07-19): pass STRINGS through verbatim ('' constrains —
+    // legacy-row semantics) and undefined when the caller supplied nothing.
+    name: typeof opts.expectedName === 'string' ? opts.expectedName : undefined,
+    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : undefined,
   });
   if (idx < 0) {
     throw new Error(
-      (opts.expectedName || opts.expectedProduct)
+      (typeof opts.expectedName === 'string' || typeof opts.expectedProduct === 'string')
         ? COURSE_ROW_STALE_MSG
         : `course not found: ${courseId || `index ${opts.courseIndex}`}`,
     );
@@ -266,12 +286,14 @@ export function applyCourseCancel(customer, courseId, opts = {}) {
   const idx = resolveCourseRowIndex(customer.courses, {
     courseIndex: hasIdxInput ? opts.courseIndex : undefined,
     courseId: hasIdInput ? courseId : undefined,
-    name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
-    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+    // Hunt R1-#1 (2026-07-19): pass STRINGS through verbatim ('' constrains —
+    // legacy-row semantics) and undefined when the caller supplied nothing.
+    name: typeof opts.expectedName === 'string' ? opts.expectedName : undefined,
+    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : undefined,
   });
   if (idx < 0) {
     throw new Error(
-      (opts.expectedName || opts.expectedProduct)
+      (typeof opts.expectedName === 'string' || typeof opts.expectedProduct === 'string')
         ? COURSE_ROW_STALE_MSG
         : `course not found: ${courseId || `index ${opts.courseIndex}`}`,
     );

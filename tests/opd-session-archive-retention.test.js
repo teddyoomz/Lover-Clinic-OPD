@@ -131,4 +131,10 @@ describe('OR3 — wiring locks (cron + CLI + registry + vercel.json)', () => {
     expect(CLI).toMatch(/sweepOpdSessionArchiveRetention/);
     expect(CLI).toMatch(/--apply/);
   });
+
+  it('OR3.7 Hunt R1-#2: the scan PAGINATES via startAfter (a single limit(N) window silently stranded docs beyond the first N ids)', () => {
+    expect(CRON).toMatch(/startAfter\(cursor\)/);
+    expect(CRON).toMatch(/MAX_PAGES/);
+    expect(CRON).toMatch(/if \(snap\.size < limit\) break;/);
+  });
 });

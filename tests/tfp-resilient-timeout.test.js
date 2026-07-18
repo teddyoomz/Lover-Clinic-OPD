@@ -22,7 +22,8 @@ describe('RT — TFP resilient-timeout contract', () => {
   it('RT.1 escape state exists + timer armed at 15s inside the load effect', () => {
     expect(TFP).toMatch(/const \[loadTimedOut, setLoadTimedOut\] = useState\(false\)/);
     expect(TFP).toMatch(/const \[loadRetryNonce, setLoadRetryNonce\] = useState\(0\)/);
-    expect(TFP).toMatch(/const timeoutTimer = setTimeout\(\(\) => \{ if \(!cancelled\) setLoadTimedOut\(true\); \}, 15000\)/);
+    // Hunt R1-#1 repoint: the timer guard is stale() (cancelled + run-seq)
+    expect(TFP).toMatch(/const timeoutTimer = setTimeout\(\(\) => \{ if \(!stale\(\)\) setLoadTimedOut\(true\); \}, 15000\)/);
   });
 
   it('RT.2 timer cleared on settle (finally) AND on effect cleanup (no orphaned-timer, mobile-load R3 lesson)', () => {
@@ -37,7 +38,7 @@ describe('RT — TFP resilient-timeout contract', () => {
   it('RT.4 escape UI: render-guarded inside the loading screen + reconnect THEN nonce bump', () => {
     const i = TFP.indexOf('data-testid="tfp-load-timeout-escape"');
     expect(i).toBeGreaterThan(-1);
-    const w = TFP.slice(i - 600, i + 1200);
+    const w = TFP.slice(i - 600, i + 1600);
     expect(w).toMatch(/loadTimedOut && \(/);
     expect(w).toMatch(/reconnectFirestore\(\)/);
     expect(w).toMatch(/setLoadRetryNonce\(n => n \+ 1\)/);
@@ -50,8 +51,29 @@ describe('RT — TFP resilient-timeout contract', () => {
     // reconnectFirestore appears ONLY in the escape button handler, never
     // inside the load effect body / a timer callback.
     const hits = TFP.match(/reconnectFirestore/g) || [];
-    expect(hits.length).toBeLessThanOrEqual(2); // dynamic import line + call
+    expect(hits.length).toBeLessThanOrEqual(3); // comment + dynamic import line + call
     const timerBody = TFP.match(/const timeoutTimer = setTimeout\([^;]*;/)[0];
     expect(timerBody).not.toMatch(/reconnect/i);
+  });
+
+  it('RT.6 Hunt R1-#1: the retry INVALIDATES the hung run BEFORE the network toggle (seq ref) + stale() guards every settle path', () => {
+    // Ordering in the button handler: loadRunSeqRef.current++ BEFORE the
+    // firestoreReconnect import chain (the hung run's pending server getDocs
+    // settle from cache during disableNetwork — un-invalidated they painted
+    // empty options, set a sticky error, and cleared loading = no-escape).
+    const btn = TFP.slice(TFP.indexOf('data-testid="tfp-load-timeout-escape"'), TFP.indexOf('data-testid="tfp-load-timeout-escape"') + 1600);
+    const seqIdx = btn.indexOf('loadRunSeqRef.current++');
+    const reconnectIdx = btn.indexOf("import('../lib/firestoreReconnect.js')");
+    expect(seqIdx).toBeGreaterThan(-1);
+    expect(reconnectIdx).toBeGreaterThan(seqIdx);
+    // retry clears the sticky error
+    expect(btn).toMatch(/setError\(''\)/);
+    // the effect derives stale() from cancelled + the seq and guards the
+    // paint/catch/finally/timer paths with it
+    expect(TFP).toMatch(/const stale = \(\) => cancelled \|\| loadRunSeqRef\.current !== myRunSeq;/);
+    expect(TFP).toMatch(/if \(stale\(\) \|\| !bundle\) return;/);
+    expect(TFP).toMatch(/if \(!stale\(\)\) \{ setError\(e\.message\); setTfpSyncing\(false\); \}/);
+    expect(TFP).toMatch(/if \(!stale\(\)\) setLoading\(false\);/);
+    expect(TFP).toMatch(/if \(!stale\(\)\) setLoadTimedOut\(true\)/);
   });
 });

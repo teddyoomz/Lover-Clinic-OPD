@@ -72,24 +72,37 @@ export async function sweepOpdSessionArchiveRetention({
   const reasons = {};
   const deletedIds = [];
 
+  const referencedIds = await collectReferencedIds(db);
+
   // FULL scan, client-side decision (V23: a server-side isArchived equality
   // filter would skip missing-field docs — and the guards need per-doc JS
   // logic anyway).
-  const snap = await db.collection(OPD_SESSIONS_COL).limit(limit).get();
-  scanned = snap.size;
-
-  const referencedIds = await collectReferencedIds(db);
-
+  // Hunt R1-#2 fix (2026-07-19): CURSOR pagination — a single limit(N)
+  // snapshot only ever saw the lexicographically-first N doc ids; once ≥N
+  // keep-docs occupied that window, eligible docs beyond it were NEVER
+  // scanned again (silent retention incompleteness). Page via startAfter
+  // until exhausted (MAX_PAGES backstop far above any real population).
+  const MAX_PAGES = 20;
   const toDelete = [];
-  for (const d of snap.docs) {
-    const decision = decideArchiveRetention(d.id, d.data(), { nowMs: now, retentionDays, referencedIds });
-    reasons[decision.reason] = (reasons[decision.reason] || 0) + 1;
-    if (decision.action === 'delete') {
-      if (toDelete.length < DELETE_CAP) toDelete.push(d.ref);
-      else capped++; // no silent caps — reported in the audit doc
-    } else {
-      skipped++;
+  let cursor = null;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    let q = db.collection(OPD_SESSIONS_COL).limit(limit);
+    if (cursor) q = q.startAfter(cursor);
+    const snap = await q.get();
+    if (snap.empty) break;
+    scanned += snap.size;
+    for (const d of snap.docs) {
+      const decision = decideArchiveRetention(d.id, d.data(), { nowMs: now, retentionDays, referencedIds });
+      reasons[decision.reason] = (reasons[decision.reason] || 0) + 1;
+      if (decision.action === 'delete') {
+        if (toDelete.length < DELETE_CAP) toDelete.push(d.ref);
+        else capped++; // no silent caps — reported in the audit doc
+      } else {
+        skipped++;
+      }
     }
+    if (snap.size < limit) break;
+    cursor = snap.docs[snap.docs.length - 1];
   }
 
   if (apply && toDelete.length > 0) {

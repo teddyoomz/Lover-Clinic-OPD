@@ -117,9 +117,14 @@ describe('AV208 C5 — chip honesty + orchestrator', () => {
     // must still run after a rejected cache apply)
     expect(tfp).not.toMatch(/applyChain\.then\(\(\) => applyFormData\(b, meta\)\);/);
   });
-  it('C5.5 effect cleanup cancels + applyFormData guards on cancelled', () => {
+  it('C5.5 effect cleanup cancels + applyFormData guards on stale runs', () => {
     expect(tfp).toMatch(/return \(\) => \{ cancelled = true; \};/);
-    expect(tfp).toMatch(/if \(cancelled \|\| !bundle\) return;/);
+    // Hunt R1-#1 repoint (2026-07-19): the paint guard is stale() — cancelled
+    // extended with the retry run-seq so the ลองใหม่ button can invalidate a
+    // hung run BEFORE the network toggle (its cache-settled server leg must
+    // never paint).
+    expect(tfp).toMatch(/if \(stale\(\) \|\| !bundle\) return;/);
+    expect(tfp).toMatch(/const stale = \(\) => cancelled \|\| loadRunSeqRef\.current !== myRunSeq;/);
   });
 });
 

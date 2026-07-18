@@ -2029,14 +2029,17 @@ export async function adjustCourseRemainingQty(customerId, courseIndex, delta, o
   const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG } = await import('./courseExchange.js');
   const amount = Math.abs(Number(delta) || 0);
   const isReduce = (Number(delta) || 0) < 0;
-  const hasIdentity = !!(opts.expectedName || opts.expectedProduct || opts.courseId);
+  // Hunt R1-#1 (2026-07-19): STRING values are constraints ('' included —
+  // legacy-row semantics); undefined = legacy identity-less caller.
+  const hasIdentity = typeof opts.expectedName === 'string'
+    || typeof opts.expectedProduct === 'string' || !!opts.courseId;
   let before; let beforeQty = ''; let afterQtyStr = ''; let appliedIndex = -1;
   const courses = await _mutateCustomerCoursesAtomic(customerId, (courses) => {
     const idx = resolveCourseRowIndex(courses, {
       courseIndex,
       courseId: opts.courseId,
-      name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
-      product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+      name: typeof opts.expectedName === 'string' ? opts.expectedName : undefined,
+      product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : undefined,
     });
     if (idx < 0) throw new Error(hasIdentity ? COURSE_ROW_STALE_MSG : 'Invalid course index');
     appliedIndex = idx;
@@ -2422,7 +2425,9 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
   // UI-frozen index can never exchange the WRONG row. Legacy callers
   // without identity keep bounds-only behavior.
   const { resolveCourseRowIndex, COURSE_ROW_STALE_MSG } = await import('./courseExchange.js');
-  const hasIdentity = !!(opts.expectedName || opts.expectedProduct || opts.courseId);
+  // Hunt R1-#1 (2026-07-19): STRING values are constraints ('' included).
+  const hasIdentity = typeof opts.expectedName === 'string'
+    || typeof opts.expectedProduct === 'string' || !!opts.courseId;
   return runTransaction(db, async (tx) => {
   const _ref = customerDoc(customerId);
   const snap = await tx.get(_ref);
@@ -2431,8 +2436,8 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
   const targetIndex = resolveCourseRowIndex(courses, {
     courseIndex,
     courseId: opts.courseId,
-    name: typeof opts.expectedName === 'string' ? opts.expectedName : '',
-    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : '',
+    name: typeof opts.expectedName === 'string' ? opts.expectedName : undefined,
+    product: typeof opts.expectedProduct === 'string' ? opts.expectedProduct : undefined,
   });
   if (targetIndex < 0) throw new Error(hasIdentity ? COURSE_ROW_STALE_MSG : 'Invalid course index');
 
@@ -2485,8 +2490,9 @@ export async function removeCustomerCourseRowAtomic(customerId, {
     const idx = resolveCourseRowIndex(courses, {
       courseIndex,
       courseId,
-      name: typeof expectedName === 'string' ? expectedName : '',
-      product: typeof expectedProduct === 'string' ? expectedProduct : '',
+      // Hunt R1-#1 (2026-07-19): STRING = constraint ('' included); undefined = none.
+      name: typeof expectedName === 'string' ? expectedName : undefined,
+      product: typeof expectedProduct === 'string' ? expectedProduct : undefined,
     });
     if (idx < 0) return { removed: false, reason: 'not-found' };
     if (requireZeroRemaining) {
@@ -5034,9 +5040,11 @@ export async function refundCustomerCourse(customerId, courseId, refundAmount, o
       customer, courseId, refundAmount, {
         reason: opts.reason || '',
         courseIndex: opts.courseIndex,
-        // AV209 — identity from the row snapshot the admin saw (in-tx validated)
-        expectedName: opts.expectedName || '',
-        expectedProduct: opts.expectedProduct || '',
+        // AV209 — identity from the row snapshot the admin saw (in-tx validated).
+        // Hunt R1-#1: pass through VERBATIM — the old `|| ''` coercion turned an
+        // identity-less legacy caller into a constrain-to-empty caller.
+        expectedName: opts.expectedName,
+        expectedProduct: opts.expectedProduct,
         // Phase 16.5-quater — also persist staff on the course
         staffId: opts.staffId || '',
         staffName: opts.staffName || '',
@@ -5088,9 +5096,10 @@ export async function cancelCustomerCourse(customerId, courseId, reason, opts = 
       customer, courseId, {
         reason: reason || '',
         courseIndex: opts.courseIndex,
-        // AV209 — identity from the row snapshot the admin saw (in-tx validated)
-        expectedName: opts.expectedName || '',
-        expectedProduct: opts.expectedProduct || '',
+        // AV209 — identity from the row snapshot the admin saw (in-tx validated).
+        // Hunt R1-#1: pass through VERBATIM (see refundCustomerCourse).
+        expectedName: opts.expectedName,
+        expectedProduct: opts.expectedProduct,
         // Phase 16.5-quater — also persist staff on the course
         staffId: opts.staffId || '',
         staffName: opts.staffName || '',

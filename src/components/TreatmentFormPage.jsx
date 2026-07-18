@@ -270,6 +270,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // pass paints instantly and the chip covers the syncing state.
   const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [loadRetryNonce, setLoadRetryNonce] = useState(0);
+  // Hunt R1-#1 (2026-07-19): run-sequence — the retry button bumps this
+  // SYNCHRONOUSLY to invalidate the hung run BEFORE the network toggle.
+  const loadRunSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
   // appointment-loop R3 (2026-06-03) — SYNCHRONOUS double-submit guard. The
   // save buttons use disabled={saving}, but React state lags one render, so a
@@ -791,8 +794,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // TFP resilient-timeout (2026-07-19): arm the escape for THIS attempt.
     // The timer only matters while `loading` is still true (render-guarded),
     // and is cleared when the load settles or the effect re-runs/unmounts.
+    // Hunt R1-#1 fix (2026-07-19): `stale()` extends `cancelled` with a run
+    // sequence the ลองใหม่ button can bump SYNCHRONOUSLY — the hung run must
+    // be invalidated BEFORE reconnectFirestore toggles the network, because
+    // disableNetwork makes its pending server getDocs settle FROM CACHE
+    // (AV206 S1): un-invalidated, that settle painted empty options, set a
+    // sticky error, and cleared `loading` (killing the escape UI — a
+    // no-recovery end-state strictly worse than the spinner).
     setLoadTimedOut(false);
-    const timeoutTimer = setTimeout(() => { if (!cancelled) setLoadTimedOut(true); }, 15000);
+    const myRunSeq = ++loadRunSeqRef.current;
+    const stale = () => cancelled || loadRunSeqRef.current !== myRunSeq;
+    const timeoutTimer = setTimeout(() => { if (!stale()) setLoadTimedOut(true); }, 15000);
 
     // R2-#2b fix (bug-hunt 2026-07-18): ONE shared server point-read of the
     // treatment for BOTH passes — the R1-lens2-#1 server-always read issued
@@ -881,7 +893,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // applyFormData — ALL setState lives here. Destructure re-binds the
     // exact identifiers the verbatim body already references.
     const applyFormData = async (bundle, { fromCache } = {}) => {
-      if (cancelled || !bundle) return;
+      if (stale() || !bundle) return;  // Hunt R1-#1: seq-invalidated runs never paint
       // chip: ON at the cache paint, OFF when the server confirms. A
       // network-down "server" leg is __fromCache-tagged → stays ON (honest,
       // B1.4-bis).
@@ -1121,7 +1133,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 try {
                   const { findCouponByCode } = await import('../lib/scopedDataLayer.js');
                   const c = await findCouponByCode(t.couponCode);
-                  if (cancelled) return;   // AV208: effect re-ran mid-await
+                  if (stale()) return;   // AV208: effect re-ran mid-await (+R1-#1 seq)
                   if (c) setCouponInfo(c);
                 } catch { /* coupon expired / deleted — keep code string, skip badge */ }
               }
@@ -1136,7 +1148,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               try {
                 const { getSaleByTreatmentId } = await import('../lib/scopedDataLayer.js');
                 const linkedSale = await getSaleByTreatmentId(treatmentId);
-                if (cancelled) return;   // AV208: effect re-ran mid-await
+                if (stale()) return;   // AV208: effect re-ran mid-await (+R1-#1 seq)
                 const deps = Array.isArray(linkedSale?.billing?.depositIds) ? linkedSale.billing.depositIds : [];
                 if (deps.length > 0) {
                   setSelectedDeposits(deps.map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 })));
@@ -1237,12 +1249,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           await applyChain; // hydration tail (post-await restores) completes before finally clears loading
         }
       } catch (e) {
-        if (!cancelled) { setError(e.message); setTfpSyncing(false); }
+        if (!stale()) { setError(e.message); setTfpSyncing(false); }
       } finally {
         // tfpSyncing is NOT cleared here — applyFormData owns the chip (a
         // network-down server leg keeps it ON honestly, B1.4-bis).
         clearTimeout(timeoutTimer);  // TFP resilient-timeout — load settled
-        if (!cancelled) setLoading(false);
+        // Hunt R1-#1: a seq-invalidated run must NOT clear loading — the
+        // spinner + escape stay up until the retry's fresh run settles.
+        if (!stale()) setLoading(false);
       }
     })();
     return () => { cancelled = true; clearTimeout(timeoutTimer); };
@@ -3533,6 +3547,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 type="button"
                 onClick={() => {
                   setLoadTimedOut(false);
+                  setError('');
+                  // Hunt R1-#1 fix: invalidate the HUNG run FIRST — its pending
+                  // server getDocs settle from cache during the reconnect
+                  // toggle and must never paint / setError / clear loading.
+                  // Then heal the socket, and only THEN start the fresh run
+                  // (so the retry fetches on a healed connection, never during
+                  // the disableNetwork window).
+                  loadRunSeqRef.current++;
                   import('../lib/firestoreReconnect.js')
                     .then(m => m.reconnectFirestore())
                     .catch(() => {})
