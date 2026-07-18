@@ -149,8 +149,11 @@ describe('G3 status fallback + Thai enum + audit log', () => {
     expect(slice).toMatch(/kind: 'cancel'/);
   });
 
-  test('G3.6 Phase 16.5-quater — buildChangeAuditEntry kind enum extended (add/share/use)', () => {
-    expect(COURSE_EXCH).toMatch(/\['exchange', 'refund', 'cancel', 'add', 'share', 'use'\]/);
+  test('G3.6 Phase 16.5-quater — buildChangeAuditEntry kind enum extended (add/reduce/share/use)', () => {
+    // 2026-07-19 repoint (AV209-bonus): 'reduce' joined the whitelist — the
+    // 2026-06-09 unified add/reduce emitted kind='reduce' but the enum was
+    // never extended → every ลดคงเหลือ audit emit failed silently.
+    expect(COURSE_EXCH).toMatch(/\['exchange', 'refund', 'cancel', 'add', 'reduce', 'share', 'use'\]/);
   });
 });
 
