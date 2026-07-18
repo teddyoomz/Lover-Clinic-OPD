@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>TFP Entry SWR Cold-Start Fix — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding: 0.5em 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .box { border: 1px solid var(--bd); border-radius: 8px; padding: .5em .8em; background: #fff; font-size: .9em; }
+    .arrow { align-self: center; color: var(--tx-muted); font-weight: bold; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; font-size: .92em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>TFP Entry SWR Cold-Start Fix — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline — per <code>feedback_no_large_agent_fanout</code>; bug-hunt rounds may fan out ≤5 agents/round per user directive 2026-07-18).
+  Spec: <a href="../specs/2026-07-18-tfp-entry-swr-coldstart-fix-design.html">2026-07-18-tfp-entry-swr-coldstart-fix-design.html</a>
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> TFP เปิดแล้วฟอร์มโผล่จาก cache ทันที (≤1.5s แม้ WiFi แย่) แทน spinner ค้างรอ 600-doc server pull — ทุก PC/mobile.</p>
+  <p><strong>Architecture:</strong> 4 ชั้น — (1) TFP load effect → swrRun 2-pass (cache paint + server correct, hydration-once, save-gate) (2) cacheSizeBytes 200MB หยุด LRU eviction (3) idle prefetch อุ่น cache ที่ shell (4) AV208 classifier scan ทั้ง src/ กันหน้าอื่นหลุดแบบ TFP.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Firebase JS SDK (persistentLocalCache / getDocsFromCache / getDocFromCache) + swrRead.js เดิม + Vitest + Playwright.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">TFP header หลัง cache paint — SyncIndicator (shared component เดิม) ข้างชื่อคนไข้</div>
+  <div style="background:#0a0a0a; color:#ddd; border-radius:10px; padding:10px; max-width:520px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div><strong style="color:#fff;">บันทึกการรักษา — นางสาว อริยาภรณ์</strong>
+        <span style="color:#f59e0b; font-size:10px; margin-left:8px;">● กำลังซิงค์…</span></div>
+      <button style="background:none; border:1px solid #444; color:#aaa; border-radius:6px;">ปิด</button>
+    </div>
+    <div style="border:1px solid #333; border-radius:8px; padding:6px; margin-top:8px; font-size:12px;">Vital Signs — BP [____] HR [____]</div>
+    <div style="border:1px solid #333; border-radius:8px; padding:6px; margin-top:6px; font-size:12px;">ข้อมูลการใช้คอร์ส — ☐ Shock Wave (5/12)</div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Data shape — bundle ที่ fetchFormData(source) คืน (fetch แยกจาก apply)</div>
+<pre><code>{ doctorItems: [...], productItems: [...354], staffItems: [...], courseItems: [...239],
+  dfGroupItems: [...2], dfStaffRatesItems: [...], custData: {courses:[...]}|null, existing: {detail:...}|null }
+// cache pass คืน null (= MISS, ไม่ paint) เมื่อ: products+courses ว่างทั้งคู่ · customerId มีแต่ custData ไม่อยู่ใน cache
+// · edit mode แต่ treatment ไม่อยู่ใน cache</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">2-pass orchestration ผ่าน swrRun เดิม + hydration-once + save-gate</div>
+  <div class="row">
+    <div class="box">TFP mount</div><div class="arrow">→</div>
+    <div class="box">swrRun.cacheLoad = fetchFormData('cache')<br><small>miss → ไม่ paint (spinner คงเดิม)</small></div><div class="arrow">→</div>
+    <div class="box">apply(bundle,{fromCache:true})<br><small>Part1 options + Part2 hydrate ครั้งเดียว + setLoading(false) + chip ⟳ on</small></div><div class="arrow">→</div>
+    <div class="box">swrRun.serverLoad = fetchFormData()<br><small>error → propagate สู่ setError เดิม</small></div><div class="arrow">→</div>
+    <div class="box">apply(bundle,{fromCache:false})<br><small>Part1 ทับ (options เท่านั้น) · Part2 ข้าม (hydrated แล้ว) · chip off (คงไว้ถ้า __fromCache=offline)</small></div>
+  </div>
+  <div class="row" style="margin-top:10px;">
+    <div class="box">กดบันทึก → handleSubmit</div><div class="arrow">→</div>
+    <div class="box">await Promise.race([serverFreshRef.current, 15s])</div><div class="arrow">→</div>
+    <div class="box">เส้นเขียนเดิมทั้งหมด (tx ฝั่ง server — Rule T)</div>
+  </div>
+  <div class="row" style="margin-top:10px;">
+    <div class="box">Backend/Admin shell mount</div><div class="arrow">→ 4s idle →</div>
+    <div class="box">warmTfpMasterData(): 4 listers server-source, allSettled, ครั้งเดียว/session</div><div class="arrow">→</div>
+    <div class="box">IndexedDB อุ่น + resume tokens พร้อมก่อนเปิด TFP แรกของวัน</div>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>ทำอะไร</th></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>MOD — NEW <code>_getDocBySource</code>; thread <code>{source}</code> เข้า listDfGroups / listDfStaffRates / getCustomer / getTreatment (+_tagCache)</td></tr>
+  <tr><td><code>src/firebase.js</code></td><td>MOD — <code>cacheSizeBytes: 200MB</code></td></tr>
+  <tr><td><code>src/components/TreatmentFormPage.jsx</code></td><td>MOD — load effect → fetchFormData/applyFormData + swrRun 2-pass + serverFreshRef + SyncIndicator chip + save-gate ใน handleSubmit</td></tr>
+  <tr><td><code>src/lib/tfpPrefetch.js</code></td><td>NEW — idle warm-up module (once/session)</td></tr>
+  <tr><td><code>src/pages/BackendDashboard.jsx</code> + <code>src/pages/AdminDashboard.jsx</code></td><td>MOD — mount warmTfpMasterData()</td></tr>
+  <tr><td><code>docs/perf/swr-inventory.md</code> + <code>tests/instant-coldstart-av206-classifier.test.js</code></td><td>MOD — TFP เข้า ADOPT + AV208 full-scan invariant</td></tr>
+  <tr><td><code>tests/tfp-entry-swr-*.test.js(x)</code></td><td>NEW — unit + contract + Rule I flow-simulate</td></tr>
+  <tr><td><code>.claude/skills/audit-anti-vibe-code/SKILL.md</code> + <code>.agents/skills/.../SKILL.md</code></td><td>MOD — AV208 (byte-identical, SY1 guard)</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: backendClient — source-thread 4 getters (TDD)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> · Test <code>tests/tfp-entry-swr-getters.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: failing test</strong> — mock <code>firebase/firestore</code> (แพทเทิร์นเดียวกับ tests ของ coldstart batch): assert (a) <code>listDfGroups({source:'cache'})</code>/<code>listDfStaffRates({source:'cache'})</code> เรียก <code>getDocsFromCache</code> ไม่ใช่ <code>getDocs</code>; ไม่ส่ง source → <code>getDocs</code>; (b) <code>getCustomer(id,{source:'cache'})</code>/<code>getTreatment(id,{source:'cache'})</code> เรียก <code>getDocFromCache</code>; (c) ผลลัพธ์ list ถูก <code>_tagCache</code> (มี <code>__fromCache</code> non-enumerable ตาม snap.metadata)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: run → FAIL</strong> <code>npx vitest run tests/tfp-entry-swr-getters.test.js</code></div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: implement</strong></div>
+<pre><code>// import: เพิ่ม getDocFromCache ใน firebase/firestore import list (getDocsFromCache มีแล้ว)
+
+// วางถัดจาก _getDocsBySource (line ~135):
+// AV208 (2026-07-18) — single-doc SWR cache leg (TFP getCustomer/getTreatment).
+// cache-absent → getDocFromCache THROWS → caller's cache leg treats as miss.
+async function _getDocBySource(ref, source) {
+  if (source === 'cache') return await getDocFromCache(ref);
+  return await getDoc(ref);
+}
+
+// getCustomer (line ~191) — signature เพิ่ม opts (backward-compat):
+export async function getCustomer(proClinicId, { source } = {}) {
+  const snap = await _getDocBySource(customerDoc(proClinicId), source);
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+// getTreatment (line ~1413) — เหมือนกันเป๊ะ (treatmentDoc)
+
+// listDfGroups (line ~12481) + listDfStaffRates (line ~12526):
+export async function listDfGroups({ branchId, allBranches = false, source } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter ? query(dfGroupsCol(), where('branchId', '==', String(branchId))) : dfGroupsCol();
+  const snap = await _getDocsBySource(ref, source); // AV208: SWR cache leg
+  const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+  return _tagCache(items, snap);   // (คง logic เดิมที่เหลือของแต่ละ fn ไว้ครบ)
+}</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 4: run → PASS</strong> + targeted collateral: <code>npx vitest run tests/instant-coldstart-swr-read.test.js</code> + grep-list ไฟล์ tests ที่ import getters ทั้ง 4 แล้วรันชุดนั้น (Rule N)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 5: commit</strong> <code>feat(swr): source-thread listDfGroups/listDfStaffRates/getCustomer/getTreatment (AV208 T1)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: firebase.js — cacheSizeBytes 200MB</h3>
+  <p><strong>Files:</strong> Modify <code>src/firebase.js:40</code> · Test: extend <code>tests/tfp-entry-swr-getters.test.js</code> (source-grep block)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: implement</strong></div>
+<pre><code>// AV208 (2026-07-18) — working set ทั้งแอป ~44MB ใน IDB ชนเพดาน default 40MB →
+// เครื่องใช้หนักโดน LRU เขี่ย TFP query targets → ทุกการเปิด = cold 630KB pull.
+// 200MB (ไม่ใช่ UNLIMITED — คง GC เป็น backstop ข้ามปี). diag:
+// scripts/diag-staffapp-working-set.mjs
+...(canPersist ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager(), cacheSizeBytes: 200 * 1024 * 1024 }) } : {}),</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: source-grep lock</strong> — test asserts <code>firebase.js</code> มี <code>cacheSizeBytes: 200 * 1024 * 1024</code> ภายใน <code>persistentLocalCache(</code> call + ยังมี <code>persistentMultipleTabManager</code> + <code>experimentalAutoDetectLongPolling</code> (กัน regression ของ 2 อันเดิม)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: run PASS → commit</strong> <code>feat(swr): raise Firestore cache cap 40→200MB (AV208 T2 — stop LRU churn on heavy-use machines)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 3: TFP load effect → swrRun 2-pass (โครงสร้างก่อน, test bank ที่ Task 5 — Rule K)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/TreatmentFormPage.jsx:753-1077</code> (load effect) + state declarations (~line 247) + import block</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: state + import</strong> — เพิ่ม <code>const [tfpSyncing, setTfpSyncing] = useState(false);</code> ข้าง <code>loading</code> (~247) + <code>const serverFreshRef = useRef(Promise.resolve());</code> + <code>import SyncIndicator from './SyncIndicator.jsx';</code></div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: แยก fetch จาก apply (VERBATIM-preserving)</strong> — ใน effect เดิม (753) สร้าง 2 closures:</div>
+<pre><code>useEffect(() => {
+  let cancelled = false;
+  let hydrated = false;   // Part-2 (edit hydration) + Part-3 (prefill) run at most ONCE across both passes
+
+  // fetch เท่านั้น — ไม่มี setState. server-leg errors PROPAGATE (Rule Q-honest).
+  const fetchFormData = async (source) => {
+    const { getTreatment: getBackendTreatment, getCustomer: getBackendCustomer,
+      listDfGroups, listDfStaffRates, listProducts, listCourses, listStaff, listDoctors,
+    } = await import('../lib/scopedDataLayer.js');
+    const opts = source ? { source } : {};
+    const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] =
+      await Promise.all([
+        listDoctors({ includeHidden: true, ...opts }).catch(() => []),
+        listProducts(opts).catch(() => []),
+        listStaff({ includeHidden: true, ...opts }).catch(() => []),
+        listCourses(opts).catch(() => []),
+        listDfGroups(opts).catch(() => []),
+        listDfStaffRates(opts).catch(() => []),
+      ]);
+    // AV208 no-empty-paint: cold cache = empty lists → ทั้ง pass เป็น MISS
+    if (source === 'cache' && productItems.length === 0 && courseItems.length === 0) return null;
+    let custData = null;
+    if (customerId) {
+      try { custData = await getBackendCustomer(customerId, opts); } catch { custData = null; }
+      if (source === 'cache' && !custData) return null;   // ห้าม paint ฟอร์มที่คอร์สลูกค้าหาย
+    }
+    let existing = null;
+    if (isEdit && treatmentId) {
+      try { existing = await getBackendTreatment(treatmentId, opts); } catch { existing = null; }
+      if (source === 'cache' && !existing) return null;   // edit ต้องมี treatment ก่อน paint
+    }
+    return { doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems, custData, existing };
+  };
+
+  const applyFormData = async (bundle, { fromCache } = {}) => {
+    if (cancelled || !bundle) return;
+    setTfpSyncing(!!fromCache);   // chip: on ที่ cache pass, off เมื่อ server ยืนยัน (คงไว้ถ้า offline __fromCache)
+    // ---- Part 1 (ทำซ้ำได้ทั้ง 2 pass): ย้ายบรรทัด 786-875 เดิมมา VERBATIM ----
+    //   เปลี่ยนตัวแปร: doctorItems→bundle.doctorItems (ทั้ง 6) · custData→bundle.custData
+    //   (customerCoursesForForm/overlay/customerNote/createdISO/backendOptions/setOptions ทั้งก้อน)
+    // ---- Part 2 (ครั้งเดียว): edit hydration — ย้ายบรรทัด 877-1037 เดิมมา VERBATIM ----
+    if (isEdit && treatmentId && bundle.existing && !hydrated) {
+      hydrated = true;
+      const existing = bundle.existing;
+      // ...บรรทัด 879-1036 เดิมทุกบรรทัด (setLoadedTreatmentStatus ... courseItems restore)...
+      // หมายเหตุ: inner awaits (findCouponByCode / getSaleByTreatmentId) คงอยู่ที่เดิมใน block นี้
+      //   — รันครั้งเดียวพร้อม hydration; เติม `if (cancelled) return;` หลังแต่ละ await
+    }
+    // ---- Part 3 (ครั้งเดียว, create): patientData prefill — ย้ายบรรทัด 1040-1057 VERBATIM ----
+    //   ครอบทั้ง block ด้วย if (!hydratedPrefill) { hydratedPrefill = true; ... } (ตัวแปร let ข้าง hydrated)
+    //   กัน server pass ทับค่าที่ user เพิ่งพิมพ์ใน โรคประจำตัว/แพ้ยา window วินาทีเดียว
+    if (!isEdit || hydrated) setLoading(false);   // edit ต้อง hydrate ก่อนถึงปิด spinner
+  };
+
+  (async () => {
+    try {
+      if (saveTarget === 'backend') {
+        const { swrRun } = await import('../lib/swrRead.js');
+        const run = swrRun({
+          cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
+          serverLoad: () => fetchFormData(undefined),
+          apply: (b, meta) => { applyFormData(b, meta); },
+        });
+        serverFreshRef.current = run.catch(() => {});   // save-gate handle — never rejects
+        await run;                                      // server error → catch ล่าง (setError เดิม)
+      }
+    } catch (e) { if (!cancelled) { setError(e.message); setTfpSyncing(false); } }
+    finally { if (!cancelled) setLoading(false); }      // ห้าม clear tfpSyncing ที่นี่ — apply เป็นผู้คุม (offline honesty)
+  })();
+  return () => { cancelled = true; };
+}, [customerId, treatmentId, isEdit, SELECTED_BRANCH_ID]);</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3: chip ใน header</strong> — หา fixed header ของฟอร์ม (grep <code>patientName</code> ใน JSX header bar) → วาง <code>&lt;SyncIndicator show={tfpSyncing} /&gt;</code> ถัดจากชื่อคนไข้</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: verify โครง</strong> — <code>npm run build</code> clean + เปิด local dev (<code>?backend=1&customer=LC-26000182&treatment=BT-1782130311262</code>) เห็นฟอร์มปกติ (server pass ทำงานแม้ cache เย็น)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 5: commit</strong> <code>feat(tfp): SWR 2-pass entry — cache paint + silent server correct (AV208 T3)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 4: save-gate ใน handleSubmit (Q2=A)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/TreatmentFormPage.jsx</code> handleSubmit (~line 2085, หลัง guard กันกดซ้ำตัวแรกสุด)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: implement</strong></div>
+<pre><code>// AV208 save-gate (Q2=A): ฟอร์มอาจ paint จาก cache — ห้าม serialize เขียนเงิน/สต็อค
+// ก่อน server ยืนยัน options. bounded 15s — เกินนั้นปล่อยผ่านให้ tx ฝั่ง server ตัดสิน (Rule T).
+await Promise.race([serverFreshRef.current, new Promise((r) => setTimeout(r, 15000))]);</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 2: verify ตำแหน่ง</strong> — ต้องอยู่ก่อน validation/serialization ทุกตัว และไม่โดน early-return ข้าม; ระวังพารามิเตอร์ <code>submitOpts</code> (V104 — ห้าม shadow <code>options</code>)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: commit</strong> <code>feat(tfp): save-gate awaits server-fresh options, bounded 15s (AV208 T4)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 5: Test bank (Rule K batch) — contract + Rule I flow-simulate</h3>
+  <p><strong>Files:</strong> Create <code>tests/tfp-entry-swr-contract.test.js</code> + <code>tests/tfp-entry-swr-flow-simulate.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Contract (source-grep, AV208.x):</strong> TFP มี <code>fetchFormData('cache')</code>-เทียบเท่า (cacheLoad) + <code>swrRun(</code> + <code>serverFreshRef</code> + no-empty-paint guard 3 จุด (products/courses ว่าง · custData null · edit existing null) + <code>hydrated</code> once-guard + handleSubmit มี <code>Promise.race([serverFreshRef.current</code> + <code>SyncIndicator show={tfpSyncing}</code> + ANTI: ไม่มี <code>setTfpSyncing(false)</code> ใน finally (offline honesty)</div>
+  <div class="step"><input type="checkbox"> <strong>Rule I flow-simulate (REAL swrRun + fake fetch/apply — chain ทั้ง flow):</strong>
+    F1 cache hit → apply(cache) ก่อน apply(server) + paintedFromCache=true ·
+    F2 cache miss (null) → apply เรียกครั้งเดียว (server) — spinner ไม่หลุดก่อน ·
+    F3 server throw → reject ทะลุ (ไม่ swallow) + ไม่มี apply(server) ·
+    F4 hydration-once: apply 2 รอบ → hydrate ครั้งเดียว (fake recorder) ·
+    F5 save-gate: serverFreshRef pending → handleSubmit-mirror รอ; resolve → ผ่าน; 15s timeout → ผ่าน (fake timers) ·
+    F6 offline honesty: server bundle ที่ list มี __fromCache=true → chip ยัง on (ผ่าน _resultFromCache semantics ของ apply meta) ·
+    F7 adversarial: customer ไม่มี courses[] / bundle list ว่างจาก server (ยัง paint — server = truth) / cancelled mid-pass → ไม่ setState</div>
+  <div class="step"><input type="checkbox"> <strong>Run:</strong> ทั้ง 2 ไฟล์ PASS + targeted: <code>grep -rln "TreatmentFormPage" tests/ --include=*.test.*</code> ที่รันได้ใน default suite ต้อง PASS (คาด V21 repoints ที่ effect shape — repoint แบบ family-union ตาม precedent tf2/TF3)</div>
+  <div class="step"><input type="checkbox"> <strong>Commit</strong> <code>test(tfp): AV208 contract + Rule I flow-simulate bank (T5)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 6: idle prefetch (Q3=A)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/tfpPrefetch.js</code> · Modify <code>src/pages/BackendDashboard.jsx</code> + <code>src/pages/AdminDashboard.jsx</code> (mount useEffect) · Test <code>tests/tfp-prefetch.test.js</code></p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: failing test</strong> — fake timers: (a) 4s delay แล้วค่อยยิง (b) เรียกซ้ำ = no-op (once/session) (c) getter reject ทั้ง 4 → ไม่ throw (allSettled) (d) source-grep: ทั้ง 2 dashboards เรียก <code>warmTfpMasterData()</code> ใน useEffect</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: implement</strong></div>
+<pre><code>// src/lib/tfpPrefetch.js — AV208 layer 3 (Q3=A, 2026-07-18): อุ่น TFP master-data
+// หลัง staff shell paint เพื่อให้เครื่อง cache เย็น/โดน evict กลายเป็นอุ่นก่อน
+// เปิด TFP ครั้งแรกของวัน. Server-source ตั้งใจ (populate cache + resume tokens).
+let fired = false;
+export function warmTfpMasterData({ delayMs = 4000 } = {}) {
+  if (fired) return; fired = true;
+  setTimeout(async () => {
+    try {
+      const { listProducts, listCourses, listDfGroups, listDfStaffRates } = await import('./scopedDataLayer.js');
+      await Promise.allSettled([listProducts(), listCourses(), listDfGroups(), listDfStaffRates()]);
+    } catch { /* best-effort warm — never surfaces */ }
+  }, delayMs);
+}
+export function _resetTfpPrefetchForTests() { fired = false; }
+
+// mount (ทั้ง BackendDashboard + AdminDashboard — staff-authed shells เท่านั้น):
+useEffect(() => { import('../lib/tfpPrefetch.js').then(m => m.warmTfpMasterData()).catch(() => {}); }, []);</code></pre>
+  <div class="step"><input type="checkbox"> <strong>Step 3: run PASS → commit</strong> <code>feat(tfp): idle prefetch warms master-data cache at staff shells (AV208 T6)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 7: AV208 institutional lock — classifier full-scan + inventory + SKILL.md</h3>
+  <p><strong>Files:</strong> Modify <code>tests/instant-coldstart-av206-classifier.test.js</code> · <code>docs/perf/swr-inventory.md</code> · SKILL.md ทั้ง 2 copies (<code>.claude/skills/audit-anti-vibe-code/</code> + <code>.agents/skills/audit-anti-vibe-code/</code>)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1: full-scan invariant</strong> — describe block ใหม่: walk <code>src/components/**</code> + <code>src/pages/**</code>; ไฟล์ที่ match <code>/await Promise\.all\(\[[^\]]*?list(Products|Courses|Staff|Doctors|DfGroups|DfStaffRates|OnlineSales|VendorSales|AllSellers)/s</code> ต้องปรากฏใน swr-inventory.md (section ใดก็ได้) — มิฉะนั้น fail พร้อม message บอกให้ classify. (TFP + ทุกไฟล์ปัจจุบันต้องผ่านหลังเติม inventory)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2: inventory</strong> — เพิ่ม TFP เข้า ADOPT table: <code>src/components/TreatmentFormPage.jsx | fetchFormData 2-pass ผ่าน swrRun (AV208 — hydration-once + save-gate)</code> + เพิ่มแถวใดๆ ที่ full-scan เจอเพิ่ม (คาด: ไม่มี)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3: prove-it-catches</strong> — ชั่วคราวลบแถว TFP ออกจาก inventory → รัน classifier → ต้อง RED → ใส่กลับ → GREEN (บันทึกผลใน commit message)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 4: AV208 entry</strong> ใน SKILL.md ทั้ง 2 copies (byte-identical — SY1 <code>tests/skill-av-sync.test.js</code> ต้องเขียว): "AV208 — TFP entry SWR: mount-blocking Promise.all list-loads ทุกไฟล์ต้อง classified ใน swr-inventory; TFP ใช้ swrRun 2-pass + hydration-once + save-gate; cacheSizeBytes ≥200MB. Grep: <code>Promise\.all\(\[.*list</code> ใน src/components+pages vs inventory. Test: tfp-entry-swr-contract + classifier full-scan."</div>
+  <div class="step"><input type="checkbox"> <strong>Step 5: commit</strong> <code>test(av208): classifier full-scan + inventory + SKILL.md both copies (T7)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 8: full gate — vitest ทั้ง suite + build + V21 repoints</h3>
+  <div class="step"><input type="checkbox"> <code>npm test -- --run</code> (คาดฐาน 17,573 + ใหม่) — ทุก fail ต้อง adjudicate: V21 lock-in ของ effect shape เดิม → repoint แบบ family-union (precedent tf2/TF3/K.2 slice windows — <code>_getDocsBySource</code> edits อาจขยับ slice-window tests ของ backendClient) · fail จริง → fix ก่อนไปต่อ</div>
+  <div class="step"><input type="checkbox"> <code>npm run build</code> clean</div>
+  <div class="step"><input type="checkbox"> <strong>Commit</strong> <code>test: full-suite green + V21 repoints (AV208 T8)</code></div>
+</div>
+
+<div class="task">
+  <h3>Task 9: Rule Q L1/L2 — วัดจริง before/after (local build vs REAL prod Firestore)</h3>
+  <p><strong>Files:</strong> ใช้ probes ที่ commit แล้ว: <code>scripts/diag-tfp-cold-timeline.mjs</code> / <code>diag-tfp-idbcold-probe.mjs</code> (ชี้ localhost dev/preview แทน PROD URL ผ่าน env <code>PROBE_BASE</code> — เติม support 3 บรรทัด)</p>
+  <div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>npm run build && npx vite preview</code> (โค้ดใหม่ + prod Firestore จริง) → รัน probes:
+    (a) WARM + throttle 400kbps/500ms → <strong>คาด formReady ≤ ~2s และ paint จาก cache ก่อน server</strong> (เทียบ before 6.2s) ·
+    (b) IDB-cold + HTTP-warm + throttle → server pass ยังทำงาน + prefetch เติม cache (รอ 10s หลัง shell → เปิด TFP → เร็วแบบ warm) ·
+    (c) chip ปรากฏช่วง cache-paint แล้วหาย (screenshot — Q-vis eyeball)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 2 (L1 adversarial):</strong> Playwright บน local build: เปิด TFP → พิมพ์ใน โรคประจำตัว ระหว่าง chip ยังโชว์ → ค่าที่พิมพ์ต้องไม่โดน server pass ทับ · edit mode: แก้ฟิลด์ → server pass มาถึง → ฟิลด์ไม่ถูก reset · กดบันทึกทันทีหลัง paint → save สำเร็จ + doc ถูกต้อง (TEST- fixture, ลบทิ้ง)</div>
+  <div class="step"><input type="checkbox"> <strong>Step 3:</strong> บันทึกตัวเลข before/after ลง checkpoint + commit probe tweaks</div>
+</div>
+
+<div class="task">
+  <h3>Task 10: Bug-hunt loop (user directive — วนจนหมดบั๊ค, ≤5 agents/รอบ)</h3>
+  <div class="step"><input type="checkbox"> <strong>R1:</strong> fan-out ≤5 adversarial agents — lenses: (1) race/cancelled/branch-switch mid-pass (2) edit-hydration overwrite + rowId stability cache-vs-server divergence (3) เงิน/สต็อค: save-gate + AV206.c + serialization กับ options จาก cache (4) offline/half-dead network honesty + iOS/no-IDB fallback (canPersist=false path — swrRun cache leg ต้อง silent-miss) (5) prefetch/classifier/perf side-effects (double-pull, memory, V21 ตกค้าง)</div>
+  <div class="step"><input type="checkbox"> <strong>Adjudicate เอง</strong> (V162 lesson — agent findings ต้อง verify ก่อนเชื่อ) → fix confirmed ทั้งหมด + regression test ต่อบั๊ค (Rule P)</div>
+  <div class="step"><input type="checkbox"> <strong>R2, R3, ...:</strong> fresh hunt รอบใหม่จนรอบล่าสุด = 0 confirmed → converged (precedent V161/mobile-load: 1-2 clean rounds)</div>
+  <div class="step"><input type="checkbox"> <strong>Commit ต่อรอบ</strong> + สรุป refuted-with-evidence รายการที่ปัดตก</div>
+</div>
+
+<div class="task">
+  <h3>Task 11: state + handoff (session-end เมื่อ user สั่ง)</h3>
+  <div class="step"><input type="checkbox"> V-entry (compact 00-session-start.md §2 + verbose ถ้า architectural) + checkpoint <code>.agents/sessions/2026-07-18-tfp-entry-swr.md</code> + active.md + SESSION_HANDOFF (trim มือ — ห้ามรัน trim script) + <code>graphify update .</code></div>
+  <div class="step"><input type="checkbox"> <strong>ไม่ deploy</strong> — รอ user พิมพ์ "deploy" (V18); rules ไม่เปลี่ยน → deploy รอบหน้า = vercel-only, ไม่ต้อง Probe-Deploy-Probe · post-deploy: re-run probes บน PROD + user L1 บนเครื่องคลินิกที่ช้าจริง</div>
+</div>
+
+<h2>Self-review notes</h2>
+<ul>
+  <li>Spec coverage: ชั้น 1→T1/T3/T4/T5 · ชั้น 2→T2 · ชั้น 3→T6 · ชั้น 4→T7 · AC1-2→T9 · AC3-4→T9+post-deploy · AC5→T8 · AC6→T7 Step 3. ครบ.</li>
+  <li>Type consistency: <code>{source}</code> opts รูปเดียวกับ 16 getters เดิม; <code>getCustomer(id, {source})</code> — ผู้เรียกเดิมส่ง arg เดียว ไม่แตก; swrRun contract ตรง swrRead.js เป๊ะ (cacheLoad→{hasData,data}).</li>
+  <li>ความเสี่ยงที่รู้: การย้ายบรรทัด 786-1057 ต้อง VERBATIM (V163-class — ห้ามหลุด identifier); Task 3 Step 4 build+dev-open เป็น gate แรก; Task 9 Step 2 กัน edit-overwrite class โดยตรง.</li>
+</ul>
+
+</body>
+</html>
