@@ -1,7 +1,8 @@
-# Checkpoint 2026-07-19 — "ไล่ทำทั้งหมดอย่าให้เหลือ" — full backlog sweep (9 items) + hunt loop CONVERGED — SHIPPED local, NOT deployed
+# Checkpoint 2026-07-19 — "ไล่ทำทั้งหมดอย่าให้เหลือ" — full backlog sweep (9 items) + hunt loop CONVERGED — SHIPPED + DEPLOYED LIVE
 
-> User (verbatim): "ไล่ทำทั้งหมดอย่าให้เหลือ อย่างรอบคอบห้ามขี้เกียจ และต้องไม่มีบั๊คเพิ่มเติมแล้ว"
-> master = `2a187033`+docs (13 commits ahead of prod `a9719afd`); **firestore.rules UNCHANGED → deploy = vercel-only**.
+> User (verbatim): "ไล่ทำทั้งหมดอย่าให้เหลือ อย่างรอบคอบห้ามขี้เกียจ และต้องไม่มีบั๊คเพิ่มเติมแล้ว" → then "deploy".
+> master `39b23d99` = prod (vercel `lover-clinic-cbq2qwbdq` aliased lover-clinic-app.vercel.app HTTP 200; **firestore.rules UNCHANGED → vercel-only, no Probe-Deploy-Probe**).
+> Post-deploy GREEN: `?ping=1` → 200 `{"ok":true,"ping":true}` LIVE · `vercel crons ls` → 13 crons รวม 2 ใหม่ (`patient-view-warmup` */5 + `opd-session-archive-retention` 20 20 UTC = 03:20 BKK).
 > FINAL gate: full vitest **17,742/17,742 · 0 fail** (definitive json) + extended **4,681/0** (quarantine CLEARED) + build clean.
 
 ## The 9 swept items
@@ -33,6 +34,6 @@
 
 ## Resume Prompt
 Resume LoverClinic — 2026-07-19. Full backlog sweep (9 items) + hunt R1(5)→R2(2)→R3(1 pre-existing)→CONVERGED.
-master 13 commits ahead of prod, NOT deployed (รอ "deploy"; rules UNCHANGED → vercel-only). Full vitest 17,742/0 +
-extended 4,681/0 + L1 10/10 + L2 17/0 บน prod. Read CLAUDE.md → SESSION_HANDOFF.md → .agents/active.md →
-00-session-start.md → this checkpoint.
+master `39b23d99` = prod LIVE (DEPLOYED vercel-only; rules UNCHANGED; ping 200 + 13 crons). Full vitest 17,742/0 +
+extended 4,681/0 + L1 10/10 + L2 17/0 บน prod. Next: user L1 stack + retention cron audit doc คืนแรก.
+Read CLAUDE.md → SESSION_HANDOFF.md → .agents/active.md → 00-session-start.md → this checkpoint.
