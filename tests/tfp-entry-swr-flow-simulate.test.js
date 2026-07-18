@@ -29,7 +29,9 @@ function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId
     }
     let existing = null;
     if (isEdit && treatmentId) {
-      try { existing = await fetchers.getTreatment(treatmentId, opts); }
+      // R1-lens2-#1 fix mirror: treatment fetched SERVER-FRESH on BOTH passes
+      // (no source opt) — hydration/snapshot must never freeze to cache.
+      try { existing = await fetchers.getTreatment(treatmentId); }
       catch (e) { if (source !== 'cache') throw e; existing = null; }
       if (source === 'cache' && !existing) return null;
     }
@@ -49,16 +51,19 @@ function makeTfpOrchestration({ isEdit = false, customerId = 'LC-1', treatmentId
     if (!isEdit || hydrated) state.loading = false;
   };
 
+  // R1-#1 fix mirror: applies serialized into a chain; save-gate + loading
+  // anchored on run AND the chain (the hydration tail).
+  let applyChain = Promise.resolve();
   const run = swrRun({
     cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
     serverLoad: () => fetchFormData(undefined),
-    apply: (b, meta) => { applyFormData(b, meta); },
+    apply: (b, meta) => { applyChain = applyChain.then(() => applyFormData(b, meta)); },
   });
-  state.serverFresh = run.catch(() => {});
-  const done = run
+  state.serverFresh = run.then(() => applyChain).catch(() => {});
+  const done = run.then(() => applyChain)
     .catch((e) => { if (!state.cancelled) { state.error = e.message; state.syncing = false; } })
     .finally(() => { if (!state.cancelled) state.loading = false; });
-  return { state, done };
+  return { state, done, hooks: { onHydrationTail: (fn) => { state._tailHook = fn; } } };
 }
 
 const rows = (n) => Array.from({ length: n }, (_, i) => ({ id: `P${i}` }));
@@ -158,7 +163,9 @@ describe('AV208 F3 — server failure', () => {
       listProducts: async ({ source } = {}) => (source === 'cache' ? [] : rows(5)),
       listCourses: async ({ source } = {}) => (source === 'cache' ? [] : rows(2)),
       getCustomer: async () => ({ courses: [] }),
-      getTreatment: async (id, { source } = {}) => { if (source === 'cache') throw new Error('not in cache'); throw new Error('perm denied'); },
+      // R1-lens2-#1: getTreatment is server-always — a throwing fetch = cache
+      // leg swallows (MISS), server leg rethrows.
+      getTreatment: async () => { throw new Error('perm denied'); },
     };
     const { state, done } = makeTfpOrchestration({ isEdit: true, treatmentId: 'BT-X', fetchers });
     await done;
@@ -182,19 +189,66 @@ describe('AV208 F4 — hydration + prefill run ONCE across both passes', () => {
     expect(state.prefills).toBe(1);
   });
 
-  it('edit-mode gate invariant: loading NEVER clears in edit mode without hydration (cache paint implies existing≠null)', async () => {
+  it('R1-lens2-#1: the treatment is SERVER-fetched even on the cache pass — hydration is never cache-frozen', async () => {
+    const treatmentCalls = [];
     const fetchers = {
       listProducts: async () => rows(5),
       listCourses: async () => rows(3),
       getCustomer: async () => ({ courses: [] }),
-      getTreatment: async (id, { source } = {}) => (source === 'cache' ? null : { detail: {} }),
+      getTreatment: async (...args) => { treatmentCalls.push(args); return { detail: { fresh: true } }; },
     };
     const { state, done } = makeTfpOrchestration({ isEdit: true, treatmentId: 'BT-X', fetchers });
     await done;
-    // cache pass MISSed (treatment not in cache) → only the server pass painted+hydrated
-    expect(state.applies.length).toBe(1);
+    // cache pass hydrates with the SERVER-fresh treatment (1 point-read) —
+    // deliberate: stale-cache hydration caused the stock-snapshot divergence.
+    expect(state.applies.length).toBe(2);
     expect(state.hydrations).toBe(1);
     expect(state.loading).toBe(false);
+    // every getTreatment call carries NO source opt (server-always)
+    for (const args of treatmentCalls) expect(args.length).toBe(1);
+  });
+});
+
+describe('AV208 F8 — R1-#1 fix: save-gate + loading cover the HYDRATION TAIL', () => {
+  it('gate stays pending until the async apply (inner awaits) fully completes', async () => {
+    const tailGate = deferred();
+    let tailDone = false;
+    const fetchers = {
+      listProducts: async () => rows(5),
+      listCourses: async () => rows(3),
+      getCustomer: async () => ({ courses: [] }),
+      getTreatment: async () => null,
+    };
+    const orch = makeTfpOrchestration({ fetchers });
+    // monkey-patch: extend the applyChain with a slow tail (mirrors the
+    // edit-mode getSaleByTreatmentId/coupon restores inside applyFormData)
+    orch.state.serverFresh = orch.state.serverFresh.then(async () => { await tailGate.promise; tailDone = true; });
+    expect(await gate(orch.state.serverFresh)).toBe('pending');   // save would WAIT for the tail
+    tailGate.resolve();
+    await orch.done;
+    expect(await gate(orch.state.serverFresh)).toBe('resolved');
+    expect(tailDone).toBe(true);
+  });
+
+  it('applies are SERIALIZED — apply(server) never starts before apply(cache) finishes (no interleave)', async () => {
+    const order = [];
+    const applyDelay = deferred();
+    // custom orchestration with an apply that suspends mid-flight on the cache pass
+    let applyChain = Promise.resolve();
+    const applyFormData = async (bundle, { fromCache }) => {
+      order.push(`start-${fromCache ? 'cache' : 'server'}`);
+      if (fromCache) await applyDelay.promise;   // cache apply suspends (like the coupon fetch)
+      order.push(`end-${fromCache ? 'cache' : 'server'}`);
+    };
+    const run = swrRun({
+      cacheLoad: async () => ({ hasData: true, data: { x: 1 } }),
+      serverLoad: async () => ({ x: 2 }),
+      apply: (b, meta) => { applyChain = applyChain.then(() => applyFormData(b, { fromCache: !!meta.fromCache })); },
+    });
+    await run;
+    applyDelay.resolve();
+    await applyChain;
+    expect(order).toEqual(['start-cache', 'end-cache', 'start-server', 'end-server']);
   });
 });
 

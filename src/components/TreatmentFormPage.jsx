@@ -814,13 +814,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       }
       let existing = null;
       if (isEdit && treatmentId) {
-        // pre-AV208 fidelity: the SERVER leg's getTreatment error PROPAGATES
-        // (→ outer catch → setError, as before). Only the cache leg swallows
-        // (a cache-absent doc is a MISS, not an error).
-        try { existing = await getBackendTreatment(treatmentId, opts); }
+        // R1-lens2-#1 fix (bug-hunt 2026-07-18): the treatment doc is fetched
+        // SERVER-FRESH on BOTH passes (no {source:'cache'}) — hydration +
+        // existingStockSnapshot must never freeze to a stale cache copy, or a
+        // concurrent edit from another machine (vitals station vs doctor
+        // station) gets silently overwritten on an image-only save AND the
+        // stock diff-on-save false-negatives (treatment doc vs stock ledger
+        // divergence). Edit-mode paint = cache lists (the 630KB win) + ONE
+        // server point-read (~1 RTT) — deliberate, pre-AV208 freshness parity.
+        // pre-AV208 fidelity: the SERVER leg's error PROPAGATES (→ setError);
+        // the cache leg swallows (offline point-read = MISS, not an error).
+        try { existing = await getBackendTreatment(treatmentId); }
         catch (e) { if (source !== 'cache') throw e; existing = null; }
         // edit-mode cache paint must include the treatment — else MISS.
-        if (source === 'cache' && !existing) { debugLog('tfp-swr', 'cache MISS: no existing treatment'); return null; }
+        if (source === 'cache' && !existing) { debugLog('tfp-swr', 'cache MISS: no server treatment (offline)'); return null; }
       }
       return { doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems, custData, existing };
     };
@@ -1127,16 +1134,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         if (saveTarget === 'backend') {
           // AV208 — SWR 2-pass via the canonical swrRun (AV206 contract):
           // instant cache paint on warm machines → silent server correction.
+          //
+          // R1-#1 fix (bug-hunt 2026-07-18): swrRun does NOT await apply, and
+          // applyFormData is async (edit-mode hydration awaits findCouponByCode
+          // + getSaleByTreatmentId). Anchoring the save-gate + loading-clear on
+          // `run` alone opened a network-RTT window where the form was
+          // interactive/saveable BEFORE selectedCourseItems/deposits/wallet
+          // restores landed → a fast save serialized courseItems=[] (V101-class
+          // no-deduct). Fix: SERIALIZE the applies into a chain (also removes
+          // any cache/server apply interleaving) and gate BOTH the save-gate
+          // and the loading-clear on the chain's completion.
+          let applyChain = Promise.resolve();
           const run = swrRun({
             cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
             serverLoad: () => fetchFormData(undefined),
-            apply: (b, meta) => { applyFormData(b, meta); },
+            apply: (b, meta) => { applyChain = applyChain.then(() => applyFormData(b, meta)); },
           });
           // save-gate handle (Q2=A): handleSubmit awaits this (bounded 15s) so
           // money/stock serialization never runs against unconfirmed cache
-          // options. .catch() so an abandoned form can't unhandled-reject.
-          serverFreshRef.current = run.catch(() => {});
-          await run;   // server-leg errors surface via the catch below (Rule Q-honest)
+          // options OR a half-restored hydration. .catch() so an abandoned
+          // form can't unhandled-reject.
+          serverFreshRef.current = run.then(() => applyChain).catch(() => {});
+          await run;        // server-leg errors surface via the catch below (Rule Q-honest)
+          await applyChain; // hydration tail (post-await restores) completes before finally clears loading
         }
       } catch (e) {
         if (!cancelled) { setError(e.message); setTfpSyncing(false); }
@@ -2032,6 +2052,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
    */
   useEffect(() => {
     if (!options) return;
+    // R1-lens3-#1 fix (bug-hunt 2026-07-18): NEVER auto-create dfEntries from
+    // cache-painted dfGroups/dfStaffRates — a rate entered into rows[].value
+    // here is persisted verbatim (no tx re-validation for DF) and the
+    // skip-existing guard below means the server correction can't fix it.
+    // Wait for the server-confirmed pass (chip off); the effect re-fires via
+    // the tfpSyncing dep. Offline (__fromCache keeps the chip on): auto-create
+    // stays off — admin can still add DF manually; writes fail offline anyway.
+    if (tfpSyncing) return;
     if (treatmentCoursesForDf.length === 0) return;
     if (!Array.isArray(dfGroups) || dfGroups.length === 0) return;
     const selectedIds = [doctorId, ...assistantIds].filter(Boolean);
@@ -2070,7 +2098,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doctorId, assistantIds, treatmentCoursesForDf, dfGroups, dfStaffRates, treatmentPeopleForDf]);
+  }, [doctorId, assistantIds, treatmentCoursesForDf, dfGroups, dfStaffRates, treatmentPeopleForDf, tfpSyncing]);
 
   // Group promotion-linked courses by promotionId with promotion name
   const customerPromotionGroups = useMemo(() => {
@@ -2480,7 +2508,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // instead of falling back to the synthetic rowId. Without
           // this, fill-later treatments silently skipped stock and the
           // user reported "ใช้คอร์สเหมาแล้วไม่ตัดสต็อค".
-          treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater, skipStockDeduction: !!t.skipStockDeduction })),
+          // R1-lens3-#2 fix (bug-hunt 2026-07-18, Rule O-style write-time
+          // live-resolve): skipStockDeduction is RE-RESOLVED from the CURRENT
+          // options.customerCourses (post-save-gate = server-fresh + V43
+          // master-overlaid) instead of trusting the tick-time snapshot — a
+          // row ticked during the SWR sync window (or a long form session)
+          // could carry a stale flag into the stock write, which the stock tx
+          // re-validates for QUANTITY but not for skip POLICY. Rows without a
+          // rowId match (manual/legacy existing-N) keep their captured value.
+          treatmentItems: (() => {
+            const skipFlagByRowId = new Map();
+            for (const c of (options?.customerCourses || [])) {
+              for (const p of (c.products || [])) {
+                if (p.rowId) skipFlagByRowId.set(p.rowId, !!p.skipStockDeduction);
+              }
+            }
+            return treatmentItems.filter(t => t.name).map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater, skipStockDeduction: skipFlagByRowId.has(t.id) ? skipFlagByRowId.get(t.id) : !!t.skipStockDeduction }));
+          })(),
           medications: medications.filter(m => m.name).map(m => ({ name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
           consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
           labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64, pdfStoragePath: l.pdfStoragePath || '' })),

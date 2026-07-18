@@ -23,8 +23,15 @@ describe('AV208 C1 — imports', () => {
   });
 });
 
+// bounded extraction: fetchFormData's body ONLY (window-free — ends exactly
+// where applyFormData begins, so setState assertions can't false-positive)
+const fetchBody = tfp.slice(
+  tfp.indexOf('const fetchFormData = async (source)'),
+  tfp.indexOf('const applyFormData'),
+);
+
 describe('AV208 C2 — fetchFormData threads {source} into all 8 fetches', () => {
-  const body = slice('const fetchFormData = async (source)', 3500);
+  const body = fetchBody;
   it('C2.1 six list getters receive opts', () => {
     expect(body).toMatch(/listDoctors\(\{ includeHidden: true, \.\.\.opts \}\)/);
     expect(body).toMatch(/listProducts\(opts\)/);
@@ -33,9 +40,13 @@ describe('AV208 C2 — fetchFormData threads {source} into all 8 fetches', () =>
     expect(body).toMatch(/listDfGroups\(opts\)/);
     expect(body).toMatch(/listDfStaffRates\(opts\)/);
   });
-  it('C2.2 customer + treatment fetches receive opts', () => {
+  it('C2.2 customer fetch receives opts; treatment fetch is SERVER-ALWAYS (R1-lens2-#1)', () => {
     expect(body).toMatch(/getBackendCustomer\(customerId, opts\)/);
-    expect(body).toMatch(/getBackendTreatment\(treatmentId, opts\)/);
+    // the treatment doc must NEVER be cache-sourced — hydration +
+    // existingStockSnapshot freezing to a stale cache copy caused the
+    // concurrent-edit lost-update + stock-diff false-negative (bug-hunt R1).
+    expect(body).toMatch(/getBackendTreatment\(treatmentId\)/);
+    expect(body).not.toMatch(/getBackendTreatment\(treatmentId, opts\)/);
   });
   it('C2.3 fetchFormData is FETCH-ONLY (no setState calls inside)', () => {
     expect(body).not.toMatch(/setOptions\(|setDfGroups\(|setLoading\(|setTfpSyncing\(/);
@@ -43,7 +54,7 @@ describe('AV208 C2 — fetchFormData threads {source} into all 8 fetches', () =>
 });
 
 describe('AV208 C3 — the 3 cache-MISS gates (no false paint)', () => {
-  const body = slice('const fetchFormData = async (source)', 3500);
+  const body = fetchBody;
   it('C3.1 empty product+course lists → MISS', () => {
     expect(body).toMatch(/source === 'cache' && productItems\.length === 0 && courseItems\.length === 0/);
   });
@@ -84,12 +95,20 @@ describe('AV208 C5 — chip honesty + orchestrator', () => {
     expect(fin).not.toMatch(/setTfpSyncing\(false\)/);
   });
   it('C5.4 swrRun wiring: cacheLoad + serverLoad + never-rejecting save-gate handle', () => {
-    const orch = slice('const run = swrRun({', 900);
+    const orch = slice('const run = swrRun({', 1100);
     expect(orch).toMatch(/cacheLoad: async \(\)/);
     expect(orch).toMatch(/fetchFormData\('cache'\)/);
     expect(orch).toMatch(/serverLoad: \(\) => fetchFormData\(undefined\)/);
-    expect(orch).toMatch(/serverFreshRef\.current = run\.catch\(\(\) => \{\}\);/);
+    expect(orch).toMatch(/serverFreshRef\.current = run\.then\(\(\) => applyChain\)\.catch\(\(\) => \{\}\);/);
     expect(orch).toMatch(/await run;/);
+  });
+
+  it('C5.6 R1-#1 fix: applies are SERIALIZED into applyChain and the orchestrator awaits the chain (spinner + save-gate cover the hydration tail)', () => {
+    const orch = slice('let applyChain = Promise.resolve();', 1400);
+    expect(orch).toMatch(/applyChain = applyChain\.then\(\(\) => applyFormData\(b, meta\)\);/);
+    expect(orch).toMatch(/await applyChain;/);
+    // ANTI: the fire-and-forget shape that opened the V101-class window
+    expect(tfp).not.toMatch(/apply: \(b, meta\) => \{ applyFormData\(b, meta\); \}/);
   });
   it('C5.5 effect cleanup cancels + applyFormData guards on cancelled', () => {
     expect(tfp).toMatch(/return \(\) => \{ cancelled = true; \};/);
@@ -106,5 +125,20 @@ describe('AV208 C6 — save-gate (Q2=A)', () => {
   });
   it('C6.2 serverFreshRef initialized resolved (a never-painted form must not block saves)', () => {
     expect(tfp).toMatch(/const serverFreshRef = useRef\(Promise\.resolve\(\)\);/);
+  });
+});
+
+describe('AV208 C7 — bug-hunt R1 fixes (lens 3)', () => {
+  it('C7.1 DF auto-create effect is gated on !tfpSyncing + has tfpSyncing in deps (stale-rate lock)', () => {
+    const eff = slice('R1-lens3-#1 fix', 900);
+    expect(eff).toMatch(/if \(tfpSyncing\) return;/);
+    expect(tfp).toMatch(/treatmentPeopleForDf, tfpSyncing\]\);/);
+  });
+  it('C7.2 skipStockDeduction re-resolved from CURRENT options at serialization (stale-policy lock)', () => {
+    const ser = slice('R1-lens3-#2 fix', 1600);
+    expect(ser).toMatch(/skipFlagByRowId/);
+    expect(ser).toMatch(/skipFlagByRowId\.has\(t\.id\) \? skipFlagByRowId\.get\(t\.id\) : !!t\.skipStockDeduction/);
+    // ANTI: the bare snapshot-only shape must not return
+    expect(tfp).not.toMatch(/fillLater: !!t\.fillLater, skipStockDeduction: !!t\.skipStockDeduction \}\)\),\n/);
   });
 });
