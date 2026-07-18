@@ -22,7 +22,9 @@ describe('A1 — persistentLocalCache (layer 0)', () => {
   });
 
   it('A1.4 multi-tab manager wired INSIDE persistentLocalCache (staff opens frontend + backend tabs together)', () => {
-    expect(fb).toMatch(/persistentLocalCache\(\{\s*tabManager:\s*persistentMultipleTabManager\(\)\s*\}\)/);
+    // AV208 repoint (2026-07-18): the call gained cacheSizeBytes — lock the
+    // INVARIANT (tabManager inside persistentLocalCache), not the full literal.
+    expect(fb).toMatch(/persistentLocalCache\(\{\s*tabManager:\s*persistentMultipleTabManager\(\)/);
   });
 
   it('A1.5 App.jsx requests storage.persist() for staff (non-anonymous) users — best-effort, optional-chained', () => {

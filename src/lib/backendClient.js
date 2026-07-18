@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, auth, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, getDocsFromCache, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp, documentId } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocFromCache, getDocs, getDocsFromCache, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp, documentId } from 'firebase/firestore';
 // (2026-05-26) Feature 3 Unsend — Storage folder sweep for staff-chat message delete.
 import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';
 import { storagePrefixForMessage } from './staffChatRetentionCore.js';
@@ -134,6 +134,14 @@ async function _getDocsBySource(ref, source) {
   return await getDocs(ref);
 }
 
+// AV208 (2026-07-18, TFP entry SWR) — single-doc SWR cache leg for
+// getCustomer/getTreatment. cache-absent → getDocFromCache THROWS → the
+// caller's cache leg treats it as a miss (never a false null-paint).
+async function _getDocBySource(ref, source) {
+  if (source === 'cache') return await getDocFromCache(ref);
+  return await getDoc(ref);
+}
+
 // B1-fix (2026-07-07, caught by the S1 Playwright spec): when the network is
 // down, a "server" getDocs silently FALLS BACK to cache (snap.metadata
 // .fromCache === true) — without surfacing that, the SyncIndicator would clear
@@ -188,8 +196,9 @@ export async function customerExists(proClinicId) {
 }
 
 /** Get single customer from be_customers */
-export async function getCustomer(proClinicId) {
-  const snap = await getDoc(customerDoc(proClinicId));
+export async function getCustomer(proClinicId, { source } = {}) {
+  // AV208: {source:'cache'} = SWR cache leg (TFP entry) — throws when absent.
+  const snap = await _getDocBySource(customerDoc(proClinicId), source);
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
 }
@@ -1410,8 +1419,9 @@ export async function createAssessmentSession({ customerId, types, branchId, ses
 }
 
 /** Get single treatment from be_treatments */
-export async function getTreatment(treatmentId) {
-  const snap = await getDoc(treatmentDoc(treatmentId));
+export async function getTreatment(treatmentId, { source } = {}) {
+  // AV208: {source:'cache'} = SWR cache leg (TFP entry edit mode) — throws when absent.
+  const snap = await _getDocBySource(treatmentDoc(treatmentId), source);
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
 }
@@ -12478,15 +12488,15 @@ export async function getDfGroup(groupId) {
 }
 
 /** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
-export async function listDfGroups({ branchId, allBranches = false } = {}) {
+export async function listDfGroups({ branchId, allBranches = false, source } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(dfGroupsCol(), where('branchId', '==', String(branchId)))
     : dfGroupsCol();
-  const snap = await getDocs(ref);
+  const snap = await _getDocsBySource(ref, source); // AV208: SWR cache leg (TFP entry)
   const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
-  return items;
+  return _tagCache(items, snap);
 }
 
 export async function saveDfGroup(groupId, data) {
@@ -12523,13 +12533,13 @@ export async function getDfStaffRates(staffId) {
 }
 
 /** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
-export async function listDfStaffRates({ branchId, allBranches = false } = {}) {
+export async function listDfStaffRates({ branchId, allBranches = false, source } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(dfStaffRatesCol(), where('branchId', '==', String(branchId)))
     : dfStaffRatesCol();
-  const snap = await getDocs(ref);
-  return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+  const snap = await _getDocsBySource(ref, source); // AV208: SWR cache leg (TFP entry)
+  return _tagCache(snap.docs.map((d) => ({ ...d.data(), id: d.id })), snap);
 }
 
 export async function saveDfStaffRates(staffId, data) {
