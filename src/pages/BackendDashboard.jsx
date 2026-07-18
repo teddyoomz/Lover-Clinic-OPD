@@ -309,6 +309,13 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     }
   }, []);
 
+  // AV208 layer 3 (2026-07-18, Q3=A) — idle-warm the TFP master-data cache
+  // (products/courses/DF) so the first TFP open of the day paints from cache
+  // even on a machine whose Firestore cache was cold or LRU-evicted.
+  useEffect(() => {
+    import('../lib/tfpPrefetch.js').then((m) => m.warmTfpMasterData()).catch(() => {});
+  }, []);
+
   // Phase 13.5.2 — redirect if active tab becomes inaccessible after the
   // permission listener resolves. Idempotent: skips if access is already
   // granted. Runs only after BOTH hydration + perms-loaded so we don't

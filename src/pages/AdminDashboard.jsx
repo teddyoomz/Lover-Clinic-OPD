@@ -467,6 +467,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // listeners + reads can include selectedBranchId in their deps array
   // and auto-resubscribe on branch switch.
   const { branchId: selectedBranchId, branches } = useSelectedBranch();
+  // AV208 layer 3 (2026-07-18, Q3=A) — idle-warm the TFP master-data cache
+  // (products/courses/DF) so the first TFP open of the day paints from cache
+  // even on a machine whose Firestore cache was cold or LRU-evicted.
+  useEffect(() => {
+    import('../lib/tfpPrefetch.js').then((m) => m.warmTfpMasterData()).catch(() => {});
+  }, []);
+
   // Live practitioners — Phase 20.0 Task 2 (2026-05-06): rewired from
   // broker.getLivePractitioners (ProClinic 5-min cache) to be_* parallel
   // listStaff() + listDoctors() reads. listStaff = assistants/staff,
