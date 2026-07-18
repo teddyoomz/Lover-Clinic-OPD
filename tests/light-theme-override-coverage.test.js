@@ -220,7 +220,9 @@ describe('V125 — theme-aware accent helper (light-theme AA for inline accents)
     // counts across the union.
     const family = tfp
       + readFileSync('src/components/treatment-form/TfpFormPrimitives.jsx', 'utf8')
-      + readFileSync('src/components/treatment-form/TfpItemModals.jsx', 'utf8');
+      + readFileSync('src/components/treatment-form/TfpItemModals.jsx', 'utf8')
+      // TFP extraction step 3 (2026-07-19): the buy modal (1 aaAccent header) joined the family
+      + readFileSync('src/components/treatment-form/TfpBuyModal.jsx', 'utf8');
     expect(family).not.toMatch(/style=\{\{ color: '#[0-9a-fA-F]{6}'/); // regression guard (all homes)
     const wraps = (family.match(/aaAccent\('#[0-9a-fA-F]{6}', isDark\)/g) || []).length;
     expect(wraps).toBeGreaterThanOrEqual(12); // the 12 inline callsites we converted

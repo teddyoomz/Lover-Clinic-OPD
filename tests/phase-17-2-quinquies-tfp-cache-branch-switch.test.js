@@ -24,6 +24,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const TFP_SRC = readFileSync('src/components/TreatmentFormPage.jsx', 'utf8');
+// TFP extraction step 3 (2026-07-19): the buy modal JSX (type-select onChange +
+// sidebar type buttons — the Q4 unconditional-refetch contracts) moved verbatim
+// to treatment-form/TfpBuyModal.jsx; those contracts now hold at the new home.
+const BUY_MODAL_SRC = readFileSync('src/components/treatment-form/TfpBuyModal.jsx', 'utf8');
 
 describe('Phase 17.2-quinquies — TFP cache branch-switch regression bank', () => {
   describe('Q1 — BS-9 useEffect covers all caches', () => {
@@ -56,11 +60,13 @@ describe('Phase 17.2-quinquies — TFP cache branch-switch regression bank', () 
   });
 
   describe('Q2 — form-data useEffect deps include SELECTED_BRANCH_ID', () => {
-    it('Q2.1 the form-data useEffect deps end with [customerId, treatmentId, isEdit, SELECTED_BRANCH_ID]', () => {
+    it('Q2.1 the form-data useEffect deps end with [customerId, treatmentId, isEdit, SELECTED_BRANCH_ID, loadRetryNonce]', () => {
       // The form-data load is the long backend-mode useEffect. Locate by its
       // distinctive opening marker + assert the closing dep array contains
       // SELECTED_BRANCH_ID alongside the legacy three deps.
-      expect(TFP_SRC).toMatch(/\}, \[customerId, treatmentId, isEdit, SELECTED_BRANCH_ID\]\);/);
+      // TFP resilient-timeout repoint (2026-07-19): loadRetryNonce joined the
+      // deps so the ลองใหม่ escape re-runs the whole load (RT.3 locks it too).
+      expect(TFP_SRC).toMatch(/\}, \[customerId, treatmentId, isEdit, SELECTED_BRANCH_ID, loadRetryNonce\]\);/);
     });
 
     it('Q2.2 the LEGACY form-data dep array (without SELECTED_BRANCH_ID) is gone', () => {
@@ -97,19 +103,22 @@ describe('Phase 17.2-quinquies — TFP cache branch-switch regression bank', () 
   });
 
   describe('Q4 — inline tab-switch guards always trigger refetch', () => {
-    it('Q4.1 the buyModalType <select> onChange calls openBuyModal unconditionally', () => {
+    it('Q4.1 the buyModalType <select> onChange calls openBuyModal unconditionally (now in TfpBuyModal)', () => {
       // Pattern: setBuyVatMap({}); openBuyModal(e.target.value);
       // The pre-fix shape was: setBuyVatMap({}); if (!buyItems[e.target.value]?.length) openBuyModal(e.target.value);
-      expect(TFP_SRC).toMatch(/setBuyVatMap\(\{\}\);\s*openBuyModal\(e\.target\.value\)/);
+      // TFP extraction step 3 repoint (2026-07-19): the JSX lives in TfpBuyModal.
+      expect(BUY_MODAL_SRC).toMatch(/setBuyVatMap\(\{\}\); openBuyModal\(e\.target\.value\)/);
+      expect(BUY_MODAL_SRC).not.toMatch(/if\s*\(\s*!buyItems\[\s*e\.target\.value\s*\]\?\.length\s*\)\s*openBuyModal/);
       expect(TFP_SRC).not.toMatch(/if\s*\(\s*!buyItems\[\s*e\.target\.value\s*\]\?\.length\s*\)\s*openBuyModal/);
     });
 
-    it('Q4.2 the per-type sidebar button onClick calls openBuyModal unconditionally', () => {
+    it('Q4.2 the per-type sidebar button onClick calls openBuyModal unconditionally (now in TfpBuyModal)', () => {
       // The sidebar buttons iterate ['promotion','course','product'].map and each
       // button's onClick should call openBuyModal(type) without an inverse-guard.
-      // Source has 'setBuyModalType(type)' followed by openBuyModal(type) inline.
-      expect(TFP_SRC).toMatch(/setBuyModalType\(type\);\s*setBuySelectedCat\(''\);\s*openBuyModal\(type\)/);
-      // The pre-fix shape `if (!buyItems[type]?.length) openBuyModal(type)` is gone.
+      // TFP extraction step 3 repoint (2026-07-19): the JSX lives in TfpBuyModal.
+      expect(BUY_MODAL_SRC).toMatch(/setBuyModalType\(type\); setBuySelectedCat\(''\); openBuyModal\(type\)/);
+      // The pre-fix shape `if (!buyItems[type]?.length) openBuyModal(type)` is gone from BOTH homes.
+      expect(BUY_MODAL_SRC).not.toMatch(/if\s*\(\s*!buyItems\[\s*type\s*\]\?\.length\s*\)\s*openBuyModal\(type\)/);
       expect(TFP_SRC).not.toMatch(/if\s*\(\s*!buyItems\[\s*type\s*\]\?\.length\s*\)\s*openBuyModal\(type\)/);
     });
   });

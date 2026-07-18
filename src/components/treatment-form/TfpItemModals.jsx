@@ -7,7 +7,7 @@
 //     (mount model unchanged — V160 lesson: open === mount for these modals)
 //   - AV78 backdrop-no-close + ModalScrollLock (AV205) preserved verbatim
 // The buy modal (ซื้อคอร์ส/โปร/สินค้า) is NOT here — it is money-critical (V13
-// whitelist history) and stays in TFP until its own dedicated extraction step.
+// whitelist history); extracted 2026-07-19 (step 3) to ./TfpBuyModal.jsx.
 
 import { Loader2, Search, Trash2 } from 'lucide-react';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
