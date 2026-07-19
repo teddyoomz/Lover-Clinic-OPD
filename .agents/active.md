@@ -1,31 +1,45 @@
 ---
-updated_at: "2026-07-19 EOD+2 — AV210 push outage fixed + DEPLOYED + verified live (fresh tokens minted, zombies pruned)."
-status: "master `a61ad87a` = prod LIVE (vercel-only; rules UNCHANGED). Push subsystem RESTORED: SW-path CSP fixed → self-heal works again — desktop + iPhone each minted a fresh token within minutes of deploy; 8 zombies pruned (audit push-legacy-token-prune-*); test push sent 2/2 success. Awaiting user confirm iPhone popup."
+updated_at: "2026-07-19 EOD+3 — Infra Health Monitor + Error Beacon + TFP keystroke isolation SHIPPED local (NOT deployed)."
+status: "master `2d6ac980` = 4 commits ahead of prod `a61ad87a`. iPhone push popup USER-CONFIRMED (AV210 fully closed). NEW: observability batch (AV211) + TFP #20 — awaiting explicit 'deploy' (vercel-only; firestore.rules UNCHANGED)."
 branch: "master"
-last_commit: "a61ad87a — fix(push/AV210) + docs commit after"
-tests: "AV210 bank 23/0 + full vitest 17,788/0 (after SY1 sync fix) + build clean. Do NOT re-run at boot."
+last_commit: "2d6ac980 — perf(tfp): buy-modal keystroke isolation (#20)"
+tests: "full vitest 17,887/17,887 · 0 fail (definitive json, post-Spec-B). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "a61ad87a (deployed 2026-07-19 EOD+2)"
-firestore_rules_version: "UNCHANGED → deploy was vercel-only"
+production_commit: "a61ad87a (2026-07-19 EOD+2)"
+firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-19 EOD+2 — AV210 push outage: FIXED + DEPLOYED + LIVE-VERIFIED
+# Active — 2026-07-19 EOD+3 — Observability batch + TFP #20 shipped local
 
-## What happened
-- Push dead fleet-wide + silent 07-07→07-19: WS4 CSP (06-10) lacked gstatic in script-src (latent — installed SWs don't re-evaluate) → AV207 scope-move (07-07) forced fresh registrations → FCM SW evaluation failed everywhere ("NetworkError" on iPhone = WebKit's phrasing). Old subscriptions stranded on handler-less sw.js swallowed every send as "success" → prune never fired, zero errors anywhere.
-- Fix `a61ad87a`: per-path CSP for /firebase-messaging-sw.js (page CSP untouched — gstatic gadget risk) + cleanupLegacyRootPushSubscription() both mint sites + AV210 invariant bank + Rule M prune + test-send diag. V-entry + v-log archive entry landed.
+## State
+- iPhone test-push popup confirmed by user → AV210 push saga 100% closed.
+- Spec A (Infra Health Monitor + Client Error Beacon, AV211) + Spec B (TFP buy-modal
+  keystroke isolation #20) both SHIPPED local + pushed. NOT deployed (V18).
+- Checkpoint: `.agents/sessions/2026-07-19-eod3-observability-tfp20.md`.
 
-## Post-deploy verification (done)
-- curl: SW path = 1 CSP with gstatic ✓ no-cache ✓ · page CSP unchanged ✓ · ping 200.
-- Real Chrome: FCM-scope SW active + NEW subscription; fresh desktop token minted by real self-heal ✓.
-- **iPhone self-healed unprompted** (fresh token 18:33 BKK) — the enable-fail device now has a working token.
-- Prune --apply: 8 zombies removed, audit doc emitted; final state fresh 2 / zombie 0.
-- Test push sent 2/2 FCM success. Desktop display = OS-muted on the dev PC (page-level Notification also invisible — Windows notification settings, NOT app code). iPhone popup = awaiting user confirm.
+## What this session shipped
+- **Health cron** `infra-health-sweep` (07:30 BKK): checks backup/11 crons/recon/push-token
+  freshness/error volume via pure `infraHealthCore.js`; alerts staff-chat card (kind
+  `infra-health`) + LINE OA text (FCM-independent — FCM can't announce its own death).
+- **Error beacon**: onerror/unhandledrejection/AppErrorBoundary (จอดำ→หน้า reload) →
+  `/api/client-error` (cap 500/วัน, PHI-safe URL) → `client_error_log` default-deny →
+  admin viewer. **UI**: การ์ด "🩺 สุขภาพระบบ" ใน SystemSettingsTab (config LINE targets +
+  ทดสอบแจ้งเตือน + ตรวจตอนนี้ + error viewer) + task ใน ScheduledTasksTab (12 tasks).
+- **Anti-drift lock**: classifier test — cron ใหม่ใน vercel.json ต้องประกาศ health coverage.
+- **TFP #20**: buyQuery/cat/limit + filter memo ย้ายเข้า TfpBuyModal — keystroke ไม่ re-render
+  ฟอร์มเงิน 5.3k บรรทัดอีก; money state/handlers อยู่ TFP เดิม 100%.
+- Verified: L2 จริง (diag-infra-health 13/14 ok บน prod + e2e-client-error 10/0 + beacon
+  sendBeacon proof ใน browser จริง) + Playwright L1 10/10 (buy modal, TEST fixture cleaned).
 
 ## Next action
-- **User L1**: confirm test-push popup appeared on iPhone ("🔔 ทดสอบแจ้งเตือน LoverClinic"). If yes → push subsystem fully closed. If no → check iPhone Settings > Notifications > LoverClinic PWA allowed; resend via `node scripts/diag-push-test-send.mjs --send`.
-- Desktop toasts (optional): enable Windows notifications for Chrome / disable Focus Assist on the clinic PC.
-- Retention cron first-night check tomorrow (`node scripts/diag-cron-first-night.mjs`) — logic pre-verified (159 scanned / 0 eligible).
-- Rest of user L1 stack unchanged (wheel guard / VIP sort / AV209 course ops / buy modal / TFP retry / mobile).
+- **User พิมพ์ "deploy"** → vercel-only. Post-deploy: การ์ดสุขภาพระบบ → ตั้ง LINE target →
+  กด "ทดสอบแจ้งเตือน" → ต้องเห็นการ์ดใน staff chat + LINE เด้งจริง (L1 ปิดท้าย) ·
+  health cron รอบแรก 07:30 BKK · beacon full round-trip live.
+- Retention cron คืนแรก: `node scripts/diag-cron-first-night.mjs` (พรุ่งนี้) — health card
+  จะโชว์ 🟡 archive-retention "ไม่เคยรัน" จนกว่ารอบแรกคืนนี้ผ่าน (ถูกต้องตามจริง).
+
+## Outstanding user-triggered actions
+- "deploy" (V18) · desktop toast = Windows notification settings ที่เครื่องคลินิก ·
+  standing L1 stack (wheel guard / VIP sort / AV209 / TFP เครื่องช้า / mobile).
 
 ## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
