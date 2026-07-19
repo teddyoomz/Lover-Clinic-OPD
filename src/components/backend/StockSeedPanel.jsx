@@ -298,7 +298,7 @@ export default function StockSeedPanel({ onClose, onSaved }) {
                       <span className={current > 0 ? 'text-emerald-400' : 'text-[var(--tx-muted)]'}>{fmtQty(current)}</span>
                     </td>
                     <td className="px-2 py-1.5">
-                      <input type="number" min="0" step="0.01" value={r.qty || ''}
+                      <input type="number" data-wheelable min="0" step="0.01" value={r.qty || ''}
                         onChange={e => autoInclude(id, e.target.value)}
                         className={inputCls} placeholder="0" />
                     </td>

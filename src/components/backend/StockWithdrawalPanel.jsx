@@ -432,7 +432,7 @@ function WithdrawalCreateForm({ locations, sellers, sellersLoading, onClose, onS
                         {b?.unit || <span className="text-[var(--tx-muted)]">-</span>}
                       </td>
                       <td className="px-2 py-2">
-                        <input type="number" min="0" step="0.01" value={it.qty} onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
+                        <input type="number" data-wheelable min="0" step="0.01" value={it.qty} onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
                         {b && Number(it.qty) > Number(b.qty.remaining) && <div className="text-[9px] text-red-400 mt-0.5">เกินคงเหลือ</div>}
                       </td>
                       <td className="px-2 py-2 text-center">

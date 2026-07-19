@@ -138,7 +138,7 @@ export function TfpBuyModal({
                             </div>
                           </td>
                           <td className="py-2 px-2">
-                            <input type="number" value={buyQtyMap[item.id] || ''} min="0"
+                            <input type="number" data-wheelable value={buyQtyMap[item.id] || ''} min="0"
                               onChange={e => setBuyQtyMap(prev => ({ ...prev, [item.id]: e.target.value }))}
                               className={`${inputCls} text-center !py-1 !text-xs !w-20`} />
                           </td>

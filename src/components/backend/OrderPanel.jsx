@@ -707,7 +707,7 @@ export function OrderCreateForm({ isDark, products, productsLoading, prefillProd
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">จำนวน *</label>
-                    <input type="number" min="0" step="0.01" value={it.qty}
+                    <input type="number" data-wheelable min="0" step="0.01" value={it.qty}
                       onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
                   </div>
                   <div>
@@ -779,7 +779,7 @@ export function OrderCreateForm({ isDark, products, productsLoading, prefillProd
                       />
                     </td>
                     <td className="px-2 py-2">
-                      <input type="number" min="0" step="0.01" value={it.qty}
+                      <input type="number" data-wheelable min="0" step="0.01" value={it.qty}
                         onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
                     </td>
                     <td className="px-2 py-2">

@@ -390,7 +390,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
               {showMainQty && (
                 <div data-field="mainQty">
                   <label className="block text-[10px] text-[var(--tx-muted)] mb-1">จำนวน</label>
-                  <input type="number" step="0.01" min="0" value={form.mainQty ?? ''}
+                  <input type="number" data-wheelable step="0.01" min="0" value={form.mainQty ?? ''}
                     onChange={(e) => update({ mainQty: e.target.value })}
                     placeholder="กรอกจำนวน"
                     className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)]" />
@@ -399,7 +399,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
               {showQtyPerTime && (
                 <div data-field="qtyPerTime">
                   <label className="block text-[10px] text-[var(--tx-muted)] mb-1">จำนวนที่ใช้ต่อครั้ง</label>
-                  <input type="number" step="0.01" min="0" value={form.qtyPerTime ?? ''}
+                  <input type="number" data-wheelable step="0.01" min="0" value={form.qtyPerTime ?? ''}
                     onChange={(e) => update({ qtyPerTime: e.target.value })}
                     placeholder="ต่อครั้ง"
                     className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)]" />
@@ -409,14 +409,14 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
                 <>
                   <div data-field="minQty">
                     <label className="block text-[10px] text-[var(--tx-muted)] mb-1">ต่ำสุดที่เลือกได้</label>
-                    <input type="number" step="0.01" min="0" value={form.minQty ?? ''}
+                    <input type="number" data-wheelable step="0.01" min="0" value={form.minQty ?? ''}
                       onChange={(e) => update({ minQty: e.target.value })}
                       placeholder="0"
                       className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)]" />
                   </div>
                   <div data-field="maxQty">
                     <label className="block text-[10px] text-[var(--tx-muted)] mb-1">สูงสุดที่เลือกได้</label>
-                    <input type="number" step="0.01" min="0" value={form.maxQty ?? ''}
+                    <input type="number" data-wheelable step="0.01" min="0" value={form.maxQty ?? ''}
                       onChange={(e) => update({ maxQty: e.target.value })}
                       placeholder="ไม่จำกัด"
                       className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)]" />
@@ -548,14 +548,14 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
                 <div className="min-w-0 truncate text-xs font-semibold text-[var(--tx-primary)]">
                   {item.productName || item.productId}
                 </div>
-                <input type="number" step="0.01" min="0" value={item.qty ?? item.qtyPerTime ?? ''}
+                <input type="number" data-wheelable step="0.01" min="0" value={item.qty ?? item.qtyPerTime ?? ''}
                   onChange={(e) => updateSubProduct(item.productId, { qty: Number(e.target.value) || 0 })}
                   className="w-full px-1.5 py-1 rounded text-xs text-right bg-[var(--bg-base)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-                <input type="number" step="0.01" min="0" value={item.minQty ?? ''}
+                <input type="number" data-wheelable step="0.01" min="0" value={item.minQty ?? ''}
                   onChange={(e) => updateSubProduct(item.productId, { minQty: e.target.value })}
                   placeholder="-"
                   className="w-full px-1.5 py-1 rounded text-xs text-right bg-[var(--bg-base)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-                <input type="number" step="0.01" min="0" value={item.maxQty ?? ''}
+                <input type="number" data-wheelable step="0.01" min="0" value={item.maxQty ?? ''}
                   onChange={(e) => updateSubProduct(item.productId, { maxQty: e.target.value })}
                   placeholder="-"
                   className="w-full px-1.5 py-1 rounded text-xs text-right bg-[var(--bg-base)] border border-[var(--bd)] text-[var(--tx-primary)]" />

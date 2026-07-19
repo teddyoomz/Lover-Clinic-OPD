@@ -4,6 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
 import { reconnectFirestore } from './lib/firestoreReconnect.js';
+import { installNumberInputWheelGuard } from './lib/wheelGuard.js';
 import LoadErrorRetry from './components/LoadErrorRetry.jsx';
 import { UserPermissionProvider } from './contexts/UserPermissionContext.jsx';
 import { BranchProvider } from './lib/BranchContext.jsx';
@@ -186,6 +187,12 @@ export default function App() {
       window.removeEventListener('online', onOnline);
     };
   }, []);
+
+  // 2026-07-19 (user directive) — global number-input wheel guard: money
+  // fields ignore mouse-wheel entirely (accidental scroll = wrong amount);
+  // data-wheelable qty fields step by EXACTLY ±1. One listener, app-wide,
+  // safe-by-default for every current + future <input type="number">.
+  useEffect(() => installNumberInputWheelGuard(document), []);
 
   // Auto-reload เมื่อ deploy version ใหม่ (poll ทุก 60 วิ)
   useEffect(() => {

@@ -415,7 +415,7 @@ function TransferCreateForm({ locations, sellers, sellersLoading, onClose, onSav
                         {b?.unit || <span className="text-[var(--tx-muted)]">-</span>}
                       </td>
                       <td className="px-2 py-2">
-                        <input type="number" min="0" step="0.01" value={it.qty} onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls}
+                        <input type="number" data-wheelable min="0" step="0.01" value={it.qty} onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls}
                           max={b ? b.qty.remaining : undefined} />
                         {b && Number(it.qty) > Number(b.qty.remaining) && <div className="text-[9px] text-red-400 mt-0.5">เกินคงเหลือ {b.qty.remaining}</div>}
                       </td>

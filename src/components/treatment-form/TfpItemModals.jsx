@@ -47,7 +47,7 @@ export function LabItemModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>จำนวน</label>
-                <input type="number" step="0.01" min="0.01" value={labModalQty} onChange={e => setLabModalQty(e.target.value)} className={inputCls} />
+                <input type="number" data-wheelable step="0.01" min="0.01" value={labModalQty} onChange={e => setLabModalQty(e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>ราคาต่อหน่วย</label>
@@ -165,7 +165,7 @@ export function MedItemModal({
             <div>
               <label className={labelCls}>จำนวน *</label>
               <div className="flex">
-                <input type="number" value={medModalQty} onChange={e => setMedModalQty(e.target.value)}
+                <input type="number" data-wheelable value={medModalQty} onChange={e => setMedModalQty(e.target.value)}
                   className={`${inputCls} rounded-r-none`} placeholder="กรอกจำนวน" />
                 <span className={`flex items-center px-2 text-xs border border-l-0 rounded-r-lg ${isDark ? 'border-[#333] bg-[#1a1a1a] text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
                   {medModalSelected?.unit || 'หน่วย'}
@@ -411,7 +411,7 @@ export function ConsItemModal({
           </div>
           <div>
             <label className={labelCls}>จำนวน *</label>
-            <input type="number" value={consModalQty} onChange={e => setConsModalQty(e.target.value)}
+            <input type="number" data-wheelable value={consModalQty} onChange={e => setConsModalQty(e.target.value)}
               className={inputCls} placeholder="กรอกจำนวน" />
           </div>
         </div>

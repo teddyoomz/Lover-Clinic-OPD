@@ -493,7 +493,7 @@ export function AdjustCreateForm({ isDark, products, productsLoading, prefillPro
 
         <div>
           <label className={labelCls}>จำนวน *</label>
-          <input type="number" min="0" step="0.01" value={qty} onChange={e => setQty(e.target.value)}
+          <input type="number" data-wheelable min="0" step="0.01" value={qty} onChange={e => setQty(e.target.value)}
             className={inputCls} placeholder="กรอกจำนวนที่ต้องการปรับ" />
           {/* Phase 15.4 item 7 — auto-show unit when batch picked (no confusion) */}
           {selectedBatch && (

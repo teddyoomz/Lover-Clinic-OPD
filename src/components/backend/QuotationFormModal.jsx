@@ -376,7 +376,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                     <label className="text-[11px] text-[var(--tx-muted)]">
                       จำนวน
-                      <input type="number" min="1" step="1" value={item.qty}
+                      <input type="number" data-wheelable min="1" step="1" value={item.qty}
                         onChange={(e) => updateSubItem(key, idx, { qty: Math.max(1, Number(e.target.value) || 1) })}
                         className="w-full px-2 py-1 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] mt-0.5" />
                     </label>
@@ -472,7 +472,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
                       {item.administrationMethod === 'interval' && (
                         <label className="text-[11px] text-[var(--tx-muted)] block">
                           ทุกๆ (ชม.) <RequiredAsterisk />
-                          <input type="number" min="1" step="1" value={item.administrationMethodHour || ''}
+                          <input type="number" data-wheelable min="1" step="1" value={item.administrationMethodHour || ''}
                             onChange={(e) => updateSubItem(key, idx, { administrationMethodHour: Math.max(0, Number(e.target.value) || 0) })}
                             placeholder="เช่น 6"
                             className="w-full sm:w-32 px-2 py-1 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] mt-0.5" />

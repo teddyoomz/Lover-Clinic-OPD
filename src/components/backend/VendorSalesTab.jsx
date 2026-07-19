@@ -415,7 +415,7 @@ function VendorSaleFormModal({ sale, vendors, products, onClose, onSaved, clinic
                 <option value="">— เลือกสินค้า —</option>
                 {products.slice(0, 500).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <input type="number" step="0.01" min="0.01" placeholder="จำนวน" value={it.qty}
+              <input type="number" data-wheelable step="0.01" min="0.01" placeholder="จำนวน" value={it.qty}
                 onChange={(e) => updateItem(i, { qty: e.target.value })}
                 className="col-span-2 px-2 py-1 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
               <input type="number" step="0.01" min="0" placeholder="ราคา/หน่วย" value={it.unitPrice}

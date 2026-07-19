@@ -115,6 +115,7 @@ export default function PickProductsModal({ courseName, availableProducts, onCan
                 </label>
                 <input
                   type="number"
+                  data-wheelable
                   step="0.01"
                   min="0"
                   value={r.qty}

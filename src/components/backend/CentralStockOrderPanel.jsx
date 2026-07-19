@@ -687,7 +687,7 @@ export function CentralOrderCreateForm({ centralWarehouseId, vendors, products, 
                         />
                       </td>
                       <td className="px-2 py-2">
-                        <input type="number" min="0" step="0.01" value={it.qty}
+                        <input type="number" data-wheelable min="0" step="0.01" value={it.qty}
                           onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
                       </td>
                       <td className="px-2 py-2">
