@@ -2223,6 +2223,13 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       || (p.isMainProduct ? masterCourse.mainProductName : '')
       || '';
     courses.push({
+      // AV209 follow-up (2026-07-19): per-ROW unique courseId so
+      // resolveCourseRowIndex path 1 (strongest identity) works on every
+      // future purchase — twins (same name+product bought twice) stay
+      // individually addressable even across concurrent array shifts.
+      // Namespace `crs-` is distinct from pick-/exchange-/purchased-/
+      // be-course- sentinels so no rowId-contract filter can misroute it.
+      courseId: `crs-${Date.now()}-${courses.length}-${Math.random().toString(36).slice(2, 10)}`,
       name: masterCourse.name,
       product: productName,
       // Phase 12.2b follow-up (2026-04-24): capture the master product
@@ -2252,6 +2259,9 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
   // If no products, create one entry with course name
   if (products.length === 0) {
     courses.push({
+      // AV209 follow-up (2026-07-19): same per-row identity as the
+      // per-product branch above.
+      courseId: `crs-${Date.now()}-${courses.length}-${Math.random().toString(36).slice(2, 10)}`,
       name: masterCourse.name,
       product: masterCourse.name,
       qty: buildQtyString(1, 'ครั้ง'),
@@ -2341,6 +2351,10 @@ export async function resolvePickedCourseInCustomer(customerId, courseKey, picks
   const now = new Date().toISOString();
   const resolvedEntries = valid.map((p, i) => ({
     ...basePlaceholder,
+    // AV209 follow-up (2026-07-19): per-ROW unique courseId (placeholder's
+    // pick- id is discarded above and lives on as pickedFromCourseId — each
+    // resolved sibling needs its OWN identity for row-level mutators).
+    courseId: `crs-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 10)}`,
     product: p.name || '',
     productId: p.productId != null ? String(p.productId) : '',
     qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
@@ -2399,12 +2413,17 @@ export async function addPicksToResolvedGroup(customerId, pickedFromCourseId, ad
     status: _stripStatus,
     assignedAt: _stripAssigned,
     _pickGroupOptions: _stripOptions,
+    // AV209 follow-up (2026-07-19): NEVER inherit the template sibling's
+    // courseId — per-row ids must stay unique (a spread-copied id would
+    // make byId resolution ambiguous between sibling and appended entry).
+    courseId: _stripCourseId,
     ...baseTpl
   } = template;
 
   const now = new Date().toISOString();
-  const newEntries = valid.map(p => ({
+  const newEntries = valid.map((p, i) => ({
     ...baseTpl,
+    courseId: `crs-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 10)}`,
     product: p.name || '',
     productId: p.productId != null ? String(p.productId) : '',
     qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
