@@ -12,7 +12,7 @@
 // inside a cron file (dayBeforeHour/dayOfHour) are declared here; a source-grep
 // parity test locks them to the cron-file value.
 //
-// SCOPE: 10 tasks, all Vercel crons. The V73 Firebase staff-chat fn was retired
+// SCOPE: 12 tasks, all Vercel crons. The V73 Firebase staff-chat fn was retired
 // 2026-06-02 (duplicate of staffChatRetention). NO schedule field is editable —
 // Vercel cron timing is deploy-time (vercel.json); the UI shows it read-only.
 
@@ -20,6 +20,7 @@ import { RETENTION_HOURS } from './chatHistoryRetentionCore.js';
 import { RETENTION_DAYS as STAFF_CHAT_DAYS } from './staffChatRetentionCore.js';
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from './stockMovementRetentionCore.js';
 import { ARCHIVE_RETENTION_DAYS } from './opdSessionCleanupCore.js';
+import { DEFAULT_ERROR_THRESHOLD_24H } from './infraHealthCore.js';
 import { SESSION_TIMEOUT_MS } from '../constants.js';
 
 const num = (key, label, def, min, max, unit) =>
@@ -119,6 +120,19 @@ export const SCHEDULED_TASKS = Object.freeze([
     auditOpPrefix: 'opd-session-archive-retention', deletesData: true, safetyCritical: true,
     safetyNote: 'ลบถาวร (มีใน backup รายวันคืนก่อนลบ) — ประวัติ intake ที่ archive เกินอายุจะหายจากแท็บประวัติ',
     params: [num('retentionDays', 'ลบ archive เก่ากว่า', ARCHIVE_RETENTION_DAYS, 30, 3650, 'วัน')],
+  }),
+  Object.freeze({
+    // 2026-07-19 — infra observability: the silent-failure class killer (push
+    // outage 12d / backup NO_MANIFEST 5d / dead retention cron 46 runs — all
+    // invisible until a human stumbled on them). Checks every liveness surface
+    // daily + alerts via staff-chat card + LINE OA. deletesData: purges
+    // client_error_log entries older than 30 days (bounded batch).
+    id: 'infraHealthSweep', category: 'sweep', source: 'vercel',
+    label: 'ตรวจสุขภาพระบบ',
+    description: 'เช็ค backup / push / cron / client error รายวัน + แจ้งเตือน staff chat + LINE เมื่อพบปัญหา',
+    scheduleHuman: 'ทุกวัน 07:30', cronPath: '/api/cron/infra-health-sweep',
+    auditOpPrefix: 'infra-health', deletesData: true, safetyCritical: false,
+    params: [num('errorThreshold24h', 'เตือนเมื่อ error 24 ชม. ≥', DEFAULT_ERROR_THRESHOLD_24H, 1, 500, 'รายการ')],
   }),
 ]);
 

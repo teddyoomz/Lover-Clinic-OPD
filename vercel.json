@@ -63,6 +63,9 @@
     "api/cron/opd-session-archive-retention.js": {
       "maxDuration": 300
     },
+    "api/cron/infra-health-sweep.js": {
+      "maxDuration": 300
+    },
     "api/admin/customer-only-backup-export.js": {
       "maxDuration": 300
     },
@@ -90,7 +93,8 @@
     { "path": "/api/cron/patient-link-cleanup-sweep", "schedule": "30 21 * * *" },
     { "path": "/api/cron/money-reconciliation-sweep", "schedule": "15 21 * * *" },
     { "path": "/api/cron/patient-view-warmup", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/opd-session-archive-retention", "schedule": "20 20 * * *" }
+    { "path": "/api/cron/opd-session-archive-retention", "schedule": "20 20 * * *" },
+    { "path": "/api/cron/infra-health-sweep", "schedule": "30 0 * * *" }
   ],
   "headers": [
     {

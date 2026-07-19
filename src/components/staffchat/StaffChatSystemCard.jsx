@@ -26,6 +26,10 @@ const HEADLINE = {
   followup: 'กรอกแบบประเมินติดตามเสร็จแล้ว',
   'tfp-vitals': '📋 บันทึกซักประวัติเสร็จแล้ว',
   'tfp-doctor': '🩺 แพทย์ลงบันทึกเสร็จแล้ว',
+  // 2026-07-19 infra-health-sweep cron card — plain-text body, NO customer row
+  // (unknown kinds fall back to the intake card shape, which would render a
+  // broken "รอลงทะเบียน" row — this entry + the early branch below prevent that).
+  'infra-health': 'ตรวจสุขภาพระบบ',
 };
 
 // v2-A button classes — red tint on red-accent cards, violet tint on the
@@ -63,6 +67,39 @@ export function StaffChatSystemCard({ message }) {
     if (modalHost) modalHost.open({ type: 'assessment', customerId });
     else setShowAssessment(true);
   };
+
+  // ── infra-health card (2026-07-19) — alternate return AFTER all hooks ran
+  // (hooks-rule safe: every hook above is unconditional). Amber/red accent by
+  // severity; the full alert text renders as the body; no customer machinery.
+  if (kind === 'infra-health') {
+    const infraAccent = sys.overall === 'red' ? '#ef4444' : '#f59e0b';
+    return (
+      <div
+        data-testid="staff-chat-system-card"
+        data-kind="infra-health"
+        className="self-stretch rounded-r-xl border border-l-4 px-3 py-2.5 my-0.5 max-w-[92%]"
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--bd)', borderLeftColor: infraAccent }}
+      >
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full flex-none" style={{ background: infraAccent }}>
+            <Sparkles size={16} color="#fff" />
+          </span>
+          <div className="leading-tight">
+            <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300">ระบบ · LoverClinic</div>
+            <div className="text-[13px] font-bold" style={{ color: 'var(--tx-primary)' }}>🩺 {HEADLINE['infra-health']}</div>
+          </div>
+          {time && <div className="ml-auto text-[9px] flex-none" style={{ color: 'var(--tx-muted)' }}>{time}</div>}
+        </div>
+        <div
+          data-testid="system-card-infra-body"
+          className="text-[12px] whitespace-pre-line"
+          style={{ color: 'var(--tx-primary)' }}
+        >
+          {message.text || ''}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

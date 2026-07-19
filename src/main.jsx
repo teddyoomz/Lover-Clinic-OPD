@@ -1,9 +1,16 @@
+// Infra observability (2026-07-19): install the global error beacon FIRST so
+// it catches failures from every later boot stage (SW register, early fetch,
+// React mount). Beacon is fully try/catch-guarded — cannot break boot.
+import { installErrorBeacon } from './lib/errorBeacon.js'
+installErrorBeacon()
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { startEarlyPatientViewFetch } from './lib/patientViewEarlyFetch.js'
 import SwUpdateToast from './components/SwUpdateToast.jsx'
+import AppErrorBoundary from './components/AppErrorBoundary.jsx'
 import { registerSW } from 'virtual:pwa-register'
 
 // D1 (2026-07-07 instant cold-start, spec Q4=B / AV207) — app-shell SW.
@@ -42,7 +49,11 @@ if (earlyPatientToken) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    {/* Boundary wraps App ONLY — SwUpdateToast stays outside so a toast crash
+        can't unmount the app and an app crash still shows the SW update path. */}
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
     <SwUpdateToast />
   </React.StrictMode>,
 )

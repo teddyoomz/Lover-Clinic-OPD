@@ -61,6 +61,36 @@ export function validateV86Glow(patch) {
   return out;
 }
 
+// ─── Infra Health (2026-07-19) — alert-routing config for the daily
+// infra-health-sweep cron. Enable/threshold live on scheduledTasks
+// .infraHealthSweep (the existing rail); this key holds ONLY routing:
+// LINE targets ({branchId,lineUserId,label} — per-branch OA constraint) +
+// the staff-chat card branch. Cap 5 targets.
+export const INFRA_HEALTH_DEFAULTS = Object.freeze({
+  lineTargets: Object.freeze([]),
+  staffChatBranchId: '',
+});
+const INFRA_MAX_LINE_TARGETS = 5;
+
+/** Normalize an infraHealth slice — drops malformed targets, caps at 5. */
+export function normalizeInfraHealth(raw) {
+  const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const targets = (Array.isArray(r.lineTargets) ? r.lineTargets : [])
+    .filter(t => t && typeof t === 'object'
+      && typeof t.branchId === 'string' && t.branchId
+      && typeof t.lineUserId === 'string' && t.lineUserId)
+    .slice(0, INFRA_MAX_LINE_TARGETS)
+    .map(t => ({
+      branchId: t.branchId,
+      lineUserId: t.lineUserId,
+      label: typeof t.label === 'string' ? t.label.slice(0, 60) : '',
+    }));
+  return {
+    lineTargets: targets,
+    staffChatBranchId: typeof r.staffChatBranchId === 'string' ? r.staffChatBranchId : '',
+  };
+}
+
 export const SYSTEM_CONFIG_DEFAULTS = Object.freeze({
   tabOverrides: {},
   // 2026-06-02 — per-scheduled-task { enabled, params } (Scheduled Tasks tab).
@@ -77,6 +107,7 @@ export const SYSTEM_CONFIG_DEFAULTS = Object.freeze({
     allowNegativeStock: true,
   }),
   v86Glow: V86_GLOW_DEFAULTS,
+  infraHealth: INFRA_HEALTH_DEFAULTS,
 });
 
 function basePath() {
@@ -122,6 +153,8 @@ export function mergeSystemConfigDefaults(raw) {
     },
     // V86-followup-2 — validateV86Glow auto-fills missing/invalid fields
     v86Glow: validateV86Glow(r.v86Glow),
+    // 2026-07-19 — infra-health alert routing (auto-normalized)
+    infraHealth: normalizeInfraHealth(r.infraHealth),
     _updatedBy: r._updatedBy || '',
     _updatedAt: r._updatedAt || null,
     _version: typeof r._version === 'number' ? r._version : 0,
@@ -237,6 +270,34 @@ export function validateSystemConfigPatch(patch) {
       }
     }
   }
+  // 2026-07-19 — infraHealth alert-routing validation
+  if (patch.infraHealth !== undefined) {
+    if (typeof patch.infraHealth !== 'object' || Array.isArray(patch.infraHealth)) {
+      return 'infraHealth must be an object';
+    }
+    if (patch.infraHealth.staffChatBranchId !== undefined
+        && typeof patch.infraHealth.staffChatBranchId !== 'string') {
+      return 'infraHealth.staffChatBranchId must be a string';
+    }
+    if (patch.infraHealth.lineTargets !== undefined) {
+      if (!Array.isArray(patch.infraHealth.lineTargets)) {
+        return 'infraHealth.lineTargets must be an array';
+      }
+      if (patch.infraHealth.lineTargets.length > INFRA_MAX_LINE_TARGETS) {
+        return `infraHealth.lineTargets must have at most ${INFRA_MAX_LINE_TARGETS} entries`;
+      }
+      for (const t of patch.infraHealth.lineTargets) {
+        if (!t || typeof t !== 'object' || Array.isArray(t)
+            || typeof t.branchId !== 'string' || !t.branchId
+            || typeof t.lineUserId !== 'string' || !t.lineUserId) {
+          return 'infraHealth.lineTargets entries must be {branchId, lineUserId} non-empty strings';
+        }
+        if (t.label !== undefined && typeof t.label !== 'string') {
+          return 'infraHealth.lineTargets label must be a string';
+        }
+      }
+    }
+  }
   // 2026-06-02 — scheduledTasks: known-task check + per-param min/max from registry
   if (patch.scheduledTasks !== undefined) {
     if (typeof patch.scheduledTasks !== 'object' || Array.isArray(patch.scheduledTasks)) {
@@ -309,6 +370,13 @@ export function computeChangedFields(before, after) {
     }
   }
 
+  // 2026-07-19 — infraHealth diff (deep-equal per field)
+  for (const k of ['lineTargets', 'staffChatBranchId']) {
+    if (JSON.stringify((b.infraHealth || {})[k] ?? null) !== JSON.stringify((a.infraHealth || {})[k] ?? null)) {
+      out.push(`infraHealth.${k}`);
+    }
+  }
+
   // 2026-06-02 — scheduledTasks per-task diff (deep-equal each task slice)
   const bST = b.scheduledTasks || {}, aST = a.scheduledTasks || {};
   for (const k of new Set([...Object.keys(bST), ...Object.keys(aST)])) {
@@ -367,6 +435,10 @@ export async function saveSystemConfig({ patch, executedBy, reason } = {}) {
     v86Glow: patch.v86Glow !== undefined
       ? validateV86Glow({ ...beforeMerged.v86Glow, ...patch.v86Glow })
       : beforeMerged.v86Glow,
+    // 2026-07-19 — infraHealth (normalized on merge, same pattern as v86Glow)
+    infraHealth: patch.infraHealth !== undefined
+      ? normalizeInfraHealth({ ...beforeMerged.infraHealth, ...patch.infraHealth })
+      : beforeMerged.infraHealth,
   };
   const afterMerged = mergeSystemConfigDefaults(nextRaw);
 

@@ -28,6 +28,7 @@ import { TAB_PERMISSION_MAP } from '../../lib/tabPermissions.js';
 import { ALL_PERMISSION_KEYS } from '../../lib/permissionGroupValidation.js';
 import { useTabAccess, useHasPermission } from '../../hooks/useTabAccess.js';
 import SystemConfigAuditPanel from './SystemConfigAuditPanel.jsx';
+import InfraHealthSection from './InfraHealthSection.jsx';
 import { SectionCard, StatusBanner, SaveButton } from './SettingsPrimitives.jsx';
 import { auth } from '../../firebase.js';
 
@@ -595,6 +596,9 @@ export default function SystemSettingsTab() {
           <p className="text-xs text-[var(--tx-muted)]">Phase 16.3 — admin-only system config (per-tab visibility / defaults / feature flags / audit trail)</p>
         </div>
       </div>
+
+      {/* 2026-07-19 — infra observability (spec: infra-health-monitor-error-beacon) */}
+      <InfraHealthSection config={config} executedBy={executedBy} />
 
       <TabOverridesSection config={config} executedBy={executedBy} />
       <DefaultsSection config={config} executedBy={executedBy} />
