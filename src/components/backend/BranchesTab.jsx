@@ -47,7 +47,10 @@ export default function BranchesTab({ clinicSettings, theme }) {
     const q = query.trim().toLowerCase();
     return items.filter(b => {
       if (q) {
-        const hay = [b.name, b.nameEn, b.phone, b.address, b.addressEn, b.licenseNo, b.taxId, b.note].join(' ').toLowerCase();
+        // V51 follow-up (2026-07-19): canonical contact fields live on
+        // settings.* — fully-migrated branches have empty top-level legacy
+        // fields, so search + card must dual-read (settings first).
+        const hay = [b.name, b.nameEn, b.settings?.phone || b.phone, b.settings?.address || b.address, b.settings?.addressEn || b.addressEn, b.licenseNo, b.taxId, b.note].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (filterStatus && (b.status || 'ใช้งาน') !== filterStatus) return false;
@@ -128,9 +131,11 @@ export default function BranchesTab({ clinicSettings, theme }) {
                   </div>
                 </div>
 
+                {/* V51 follow-up (2026-07-19): dual-read settings.* first —
+                    migrated branches keep contact only on settings.phone/address. */}
                 <div className="text-xs text-[var(--tx-muted)] space-y-1 mb-2">
-                  {b.phone && <div className="flex items-center gap-1.5"><Phone size={11} /> {b.phone}</div>}
-                  {b.address && <div className="flex items-start gap-1.5"><MapPin size={11} className="mt-0.5 flex-shrink-0" /> <span className="line-clamp-2">{b.address}</span></div>}
+                  {(b.settings?.phone || b.phone) && <div className="flex items-center gap-1.5"><Phone size={11} /> {b.settings?.phone || b.phone}</div>}
+                  {(b.settings?.address || b.address) && <div className="flex items-start gap-1.5"><MapPin size={11} className="mt-0.5 flex-shrink-0" /> <span className="line-clamp-2">{b.settings?.address || b.address}</span></div>}
                   {b.taxId && <div><span className="font-semibold">เลขผู้เสียภาษี:</span> {b.taxId}</div>}
                 </div>
 
