@@ -2,7 +2,8 @@
 import { test, expect } from '@playwright/test';
 import { goToCustomer } from './helpers.js';
 
-const CUSTOMER_ID = '2853';
+// 2026-07-20: prod '2853' deleted → overridable (seed via diag-av192-seed-cleanup.mjs)
+const CUSTOMER_ID = process.env.E2E_CUSTOMER_ID || process.env.E2E_BUY_CUSTOMER || '2853';
 
 test.describe('Course Action Modals', () => {
   test.beforeEach(async ({ page }) => {

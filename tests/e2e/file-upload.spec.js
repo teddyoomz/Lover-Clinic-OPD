@@ -17,7 +17,9 @@ const TEST_FILE = {
 
 // Open sale create form (same pattern as sale.spec.js)
 async function openSaleForm(page) {
-  const createBtn = page.locator('button[style*="linear-gradient"]').filter({ hasText: /ขาย/ });
+  // 2026-07-20: subtab pill "การขาย" is also gradient-styled — target the
+  // create button by its EXACT accessible name "ขาย".
+  const createBtn = page.getByRole('button', { name: 'ขาย', exact: true }).first();
   await createBtn.click();
   await page.waitForTimeout(1500);
 }

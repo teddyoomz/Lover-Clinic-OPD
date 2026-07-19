@@ -4,14 +4,16 @@
 import { test, expect } from '@playwright/test';
 import { goToCustomer } from './helpers.js';
 
-const CUSTOMER_ID = '2867'; // Test customer with courses
+// 2026-07-20: prod customer '2867' was deleted → overridable so the runner can
+// seed a TEST- customer (diag-av192-seed-cleanup.mjs seed) — V33.10 discipline.
+const CUSTOMER_ID = process.env.E2E_BUY_CUSTOMER || '2867'; // Test customer with courses
 
 test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('form loads course checkboxes without error', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
     // Click "สร้างการรักษา"
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     // Should see "ข้อมูลการใช้คอร์ส" section
     await expect(page.getByText('ข้อมูลการใช้คอร์ส')).toBeVisible({ timeout: 10000 });
@@ -23,7 +25,7 @@ test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('tick course → appears in รายการรักษา', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     // Find and tick the first course checkbox in the คอร์ส column
     const courseCheckbox = page.locator('.max-h-\\[300px\\] input[type="checkbox"]').first();
@@ -36,7 +38,7 @@ test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('untick course → disappears from รายการรักษา', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     const courseCheckbox = page.locator('.max-h-\\[300px\\] input[type="checkbox"]').first();
     // Check then uncheck
@@ -50,7 +52,7 @@ test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('ซื้อคอร์ส button opens buy modal', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     const buyBtn = page.getByRole('button', { name: /ซื้อคอร์ส/ });
     await expect(buyBtn).toBeVisible();
@@ -62,7 +64,7 @@ test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('ซื้อโปรโมชัน button opens buy modal', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /ซื้อโปรโมชัน/ }).click();
     await page.waitForTimeout(1000);
@@ -71,25 +73,29 @@ test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('validation: no doctor → scrolls to doctor field', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     // Clear doctor if pre-filled — find the select inside data-field="doctor"
     const doctorSelect = page.locator('[data-field="doctor"] select');
     if (await doctorSelect.isVisible()) {
       await doctorSelect.selectOption('');
     }
-    // Click submit
-    page.on('dialog', d => d.accept());
-    // Click the submit button (header one)
-    await page.locator('header button, .sticky button').filter({ hasText: 'ยืนยันการรักษา' }).first().click();
-    await page.waitForTimeout(1000);
-    // Error should be visible in the error banner
-    await expect(page.getByText('กรุณาเลือกแพทย์')).toBeVisible({ timeout: 3000 });
+    // Click submit — validation surfaces as an alert() dialog (scrollToError
+    // pattern) and/or a banner; accept EITHER (2026-07-20).
+    let dialogMsg = '';
+    page.on('dialog', d => { dialogMsg = d.message(); d.accept(); });
+    // 2026-07-20: submit no longer lives in a header/.sticky container —
+    // match the button anywhere (same locator v96 spec uses, proven green).
+    await page.locator('button').filter({ hasText: 'ยืนยันการรักษา' }).first().click();
+    await page.waitForTimeout(1500);
+    const bannerVisible = await page.getByText(/กรุณาเลือกแพทย์|เลือกแพทย์/).first()
+      .isVisible({ timeout: 3000 }).catch(() => false);
+    expect(bannerVisible || /เลือกแพทย์/.test(dialogMsg)).toBeTruthy();
   });
 
   test('data-field attributes exist for scroll targets', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     // Verify key data-field attributes exist for scrollToError
     await expect(page.locator('[data-field="doctor"]')).toBeVisible({ timeout: 5000 });
@@ -98,17 +104,23 @@ test.describe('Treatment Form — Course Deduction Scenarios', () => {
 
   test('buy modal shows max 50 items (performance)', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /ซื้อคอร์ส/ }).click();
     await page.waitForTimeout(2000);
-    // Should show "แสดง 50/" indicating limited render
-    await expect(page.getByText(/แสดง 50\//)).toBeVisible({ timeout: 5000 });
+    // 2026-07-20: shadow-course filtering (V13) can leave <50 items in the
+    // branch list — assert the pagination label + that the rendered count
+    // never exceeds the 50-item performance cap.
+    const label = page.getByText(/แสดง \d+\//).first();
+    await expect(label).toBeVisible({ timeout: 5000 });
+    const text = await label.textContent();
+    const shown = parseInt(text.match(/แสดง (\d+)\//)[1], 10);
+    expect(shown).toBeLessThanOrEqual(50);
   });
 
   test('qty input field is wide enough for 3+ digits', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(2000);
     // Tick a course
     const courseCheckbox = page.locator('.max-h-\\[300px\\] input[type="checkbox"]').first();

@@ -253,26 +253,12 @@ async function gotoFrontendAppointmentToday(page) {
   // uses 2.5s after goto; we use 4s + an explicit wait for the apptBtn.
   await page.waitForTimeout(4000);
 
-  try {
-    await page.locator('button[title="นัดหมาย ProClinic"]').first().waitFor({ state: 'visible', timeout: 25000 });
-  } catch (e) {
-    console.log('PAGE ERRORS BEFORE CLICK:', JSON.stringify(pageErrors, null, 2));
-    const debug = await page.evaluate(() => ({
-      url: location.href,
-      bodyStart: (document.body.innerText || '').slice(0, 800),
-      hasRoot: !!document.getElementById('root')?.firstElementChild,
-    }));
-    console.log('NAV DEBUG (apptBtn not visible):', JSON.stringify(debug, null, 2));
-    await page.screenshot({ path: 'test-results/v71-nav-debug.png', fullPage: false });
-    throw e;
-  }
-
-  // Click "นัดหมาย ProClinic" — switches adminMode='appointment'. apptViewMode
-  // defaults to 'list' (AdminDashboard.jsx:620) so no list-toggle click needed.
-  await page.locator('button[title="นัดหมาย ProClinic"]').first().click();
+  // 2026-07-20: the 'นัดหมาย ProClinic' title-button no longer exists — since
+  // 2026-05-26 adminMode DEFAULTS to 'appointment', so '/' lands on the hub
+  // directly. Wait for the hub itself; no mode-switch click needed.
   // Hub view + today sub-pill bar (loadAll fetches data in parallel — 5-6s budget)
   try {
-    await expect(page.getByTestId('appt-hub-view')).toBeVisible({ timeout: 25000 });
+    await expect(page.getByTestId('appt-hub-view')).toBeVisible({ timeout: 45000 });
   } catch (e) {
     console.log('PAGE ERRORS AFTER CLICK:', JSON.stringify(pageErrors, null, 2));
     const debug = await page.evaluate(() => ({

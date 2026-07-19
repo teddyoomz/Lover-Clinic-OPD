@@ -21,8 +21,9 @@ test.describe('Customer List Tab', () => {
   });
 
   test('แสดง customer cards (มีข้อมูล)', async ({ page }) => {
-    // Wait for cards to load — look for "ดูรายละเอียด" button as indicator
-    await expect(page.getByText('ดูรายละเอียด').first()).toBeVisible({ timeout: 15000 });
+    // 2026-07-20: the 'ดูรายละเอียด' button was removed — the whole card is
+    // clickable now. Use the HN badge (every card renders one) as the marker.
+    await expect(page.getByText(/HN/).first()).toBeVisible({ timeout: 15000 });
   });
 
   test('filter ด้วยชื่อ → จำนวนเปลี่ยน', async ({ page }) => {
@@ -68,8 +69,28 @@ test.describe('Customer List Tab', () => {
     await expect(btn).toBeVisible();
   });
 
-  test('customer card มีปุ่ม "ดูรายละเอียด"', async ({ page }) => {
-    await page.waitForTimeout(2000);
-    await expect(page.getByText('ดูรายละเอียด').first()).toBeVisible({ timeout: 10000 });
+  test('customer card เปิดรายละเอียดได้ (คลิกทั้งใบ)', async ({ page }) => {
+    // 2026-07-20: card-level click replaced the 'ดูรายละเอียด' button —
+    // click the first card (stable testid) and assert the detail view opens.
+    // 2026-07-20: wait for the list to SETTLE before interacting — the AV206
+    // SWR cache→server double-emit re-renders the list shortly after paint,
+    // and a click/Enter issued mid-churn lands on a node that React replaces
+    // (flaky: worked in attempt-1 of some runs, not others). The N/N counter
+    // renders when the data pass lands; +1.5s absorbs the re-render.
+    await expect(page.getByText(/\d+ \/ \d+ รายการ/)).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(1500);
+    const card = page.locator('[data-testid^="customer-card-"]').first();
+    // 2026-07-20: onViewCustomer opens the detail in a NEW TAB by design
+    // (BackendDashboard: window.open('?backend=1&customer=X', '_blank')) —
+    // the click was working in every earlier run; the assert was looking at
+    // the wrong page. Catch the popup and assert the detail shell there.
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup', { timeout: 15000 }),
+      card.click({ position: { x: 10, y: 10 } }),
+    ]);
+    await popup.waitForLoadState('domcontentloaded');
+    // Shell marker: 'คอร์สของฉัน' course tab renders with the detail view
+    // ('ประวัติการรักษา' is data-gated behind the treatments fetch).
+    await expect(popup.getByText('คอร์สของฉัน').first()).toBeVisible({ timeout: 30000 });
   });
 });

@@ -6,7 +6,8 @@
 import { test, expect } from '@playwright/test';
 import { goToCustomer } from './helpers.js';
 
-const CUSTOMER_ID = '2853';
+// 2026-07-20: prod '2853' deleted → overridable (seed via diag-av192-seed-cleanup.mjs)
+const CUSTOMER_ID = process.env.E2E_CUSTOMER_ID || process.env.E2E_BUY_CUSTOMER || '2853';
 
 test.describe('Customer Detail — Course Buttons', () => {
   test.beforeEach(async ({ page }) => {
@@ -19,8 +20,9 @@ test.describe('Customer Detail — Course Buttons', () => {
     await page.waitForTimeout(1000);
   });
 
-  test('"เพิ่มคงเหลือ" button ACTUALLY clickable → modal opens', async ({ page }) => {
-    const addBtn = page.getByText('เพิ่มคงเหลือ').first();
+  // 2026-06-09 unified add/reduce renamed the button 'เพิ่มคงเหลือ' → 'แก้คงเหลือ'
+  test('"แก้คงเหลือ" button ACTUALLY clickable → modal opens', async ({ page }) => {
+    const addBtn = page.getByText('แก้คงเหลือ').first();
     await expect(addBtn).toBeVisible({ timeout: 5000 });
     await addBtn.click();
     // Modal must open — not silently fail
@@ -38,8 +40,8 @@ test.describe('Customer Detail — Course Buttons', () => {
     await expect(page.getByPlaceholder(/ค้นหาสินค้า/)).toBeVisible();
   });
 
-  test('"เพิ่มคงเหลือ" modal cancel button works', async ({ page }) => {
-    await page.getByText('เพิ่มคงเหลือ').first().click();
+  test('"แก้คงเหลือ" modal cancel button works', async ({ page }) => {
+    await page.getByText('แก้คงเหลือ').first().click();
     await expect(page.getByPlaceholder('จำนวน')).toBeVisible({ timeout: 3000 });
     await page.getByRole('button', { name: 'ยกเลิก' }).click();
     // Modal should close
@@ -65,14 +67,18 @@ test.describe('Customer Detail — Course Buttons', () => {
   });
 
   test('click "ประวัติการซื้อ" tab → content changes', async ({ page }) => {
-    await page.getByText('ประวัติการซื้อ').click();
+    // 2026-07-20: assert the tab actually SWITCHES (aria-selected) instead of
+    // guessing at row copy — row/empty-state text drifted across redesigns.
+    const tab = page.getByRole('tab', { name: 'ประวัติการซื้อ' });
+    await tab.click();
     await page.waitForTimeout(500);
-    const hasContent = await page.getByText('ไม่มีประวัติการซื้อ').or(page.getByText('ชำระแล้ว')).first().isVisible();
-    expect(hasContent).toBeTruthy();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
   });
 
   test('treatment timeline section is visible', async ({ page }) => {
-    await expect(page.getByText('ประวัติการรักษา')).toBeVisible();
+    // .first() — 'ประวัติการรักษา' now appears in multiple surfaces (card header
+    // + document templates) → bare getByText is a strict-mode violation.
+    await expect(page.getByText('ประวัติการรักษา').first()).toBeVisible();
   });
 
   test('profile section shows patient info fields', async ({ page }) => {

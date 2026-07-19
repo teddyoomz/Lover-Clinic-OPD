@@ -41,9 +41,11 @@ test.describe('Appointment Tab', () => {
 
   // ── Week Strip ──
   test('week strip: แสดง 7 วัน', async ({ page }) => {
-    // Week strip shows day boxes — check for at least Thai day characters
-    const weekContainer = page.getByText(/วัน/).first();
-    await expect(weekContainer).toBeVisible({ timeout: 5000 });
+    // 2026-07-20: /วัน/ was too loose — it matched the HIDDEN sidebar label
+    // 'รายรับประจำวัน'. The week strip renders d/m day boxes (e.g. "20/7");
+    // assert a visible date-box instead.
+    const dayBox = page.getByText(/^\d{1,2}\/\d{1,2}$/).first();
+    await expect(dayBox).toBeVisible({ timeout: 5000 });
   });
 
   // ── Form Modal ──

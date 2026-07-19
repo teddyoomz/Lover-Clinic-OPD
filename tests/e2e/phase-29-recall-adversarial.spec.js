@@ -157,22 +157,23 @@ test.describe('Phase 29 — Recall adversarial real-prod (Frontend pill Bug A sy
 
     // Navigate to frontend root
     await page.goto('/');
-    await page.waitForTimeout(2500);
-    // Click "นัดหมาย ProClinic" button to switch adminMode='appointment'
-    const apptBtn = page.locator('button[title="นัดหมาย ProClinic"]').first();
-    await apptBtn.waitFor({ state: 'visible', timeout: 10000 });
-    await apptBtn.click();
-    await page.waitForTimeout(1500);
+    // 2026-07-20: the 'นัดหมาย ProClinic' title-button no longer exists — since
+    // 2026-05-26 adminMode DEFAULTS to 'appointment', so '/' lands on the
+    // appointment hub directly. Just wait for the hub to render.
+    await expect(page.getByTestId('appt-hub-view')).toBeVisible({ timeout: 45000 });
+    await page.waitForTimeout(1000);
   });
 
   test('F1: Frontend Recall toggle pill exists with badge', async ({ page }) => {
+    // 2026-07-20: 10s missed by a hair on a cold dev-server load (failure
+    // screenshot showed the pill fully rendered) — 30s gives load headroom.
     const pill = page.getByTestId('appt-view-toggle-recall');
-    await expect(pill).toBeVisible({ timeout: 10000 });
+    await expect(pill).toBeVisible({ timeout: 30000 });
   });
 
   test('F2: Click Recall pill → Recall view renders + create button shows customer search', async ({ page }) => {
     const pill = page.getByTestId('appt-view-toggle-recall');
-    await pill.waitFor({ state: 'visible', timeout: 10000 });
+    await pill.waitFor({ state: 'visible', timeout: 30000 });
     await pill.click();
     await page.waitForTimeout(2500); // Recall chunk lazy-load
 

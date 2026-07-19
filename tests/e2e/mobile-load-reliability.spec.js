@@ -48,12 +48,15 @@ test.describe('mobile-load reliability (real mobile browser)', () => {
     await context.route(/firestore\.googleapis\.com/, () => { /* hang — never abort/continue */ });
 
     await page.goto(SESSION);
-    // Without the fix this hangs on "กำลังโหลด..." forever. With it:
-    // useResilientLoad's 8s soft-timeout → reconnectFirestore (disableNetwork→
-    // enableNetwork) → the SDK fires its fromCache snapshot → markReady → the
-    // page RESOLVES (here: "ลิงก์ไม่ถูกต้อง" for a non-existent id) — no refresh,
-    // no permanent spinner.
-    await expect(page.getByText(/ลิงก์ไม่ถูกต้อง|Invalid Link/)).toBeVisible({ timeout: 25000 });
+    // Without the fix this hangs on "กำลังโหลด..." forever.
+    // 2026-07-20 semantic update (AV206): PatientForm is a CUSTOMER surface and
+    // now reads through the fresh-gate (`onSnapshotFresh` DROPS fromCache
+    // snapshots — customers must never see cache). So on a truly half-dead
+    // connection the page no longer "resolves" to ลิงก์ไม่ถูกต้อง off an EMPTY
+    // cache snapshot (that would be a FALSE claim — the link may be valid);
+    // instead the resilient path surfaces the honest "ลองใหม่" escape card.
+    // The invariant this test protects is unchanged: NO permanent spinner.
+    await expect(page.locator(RETRY_CARD)).toBeVisible({ timeout: 40000 });
   });
 
   test('C. normal load resolves — no false error card, gate clears', async ({ page }) => {

@@ -2,7 +2,8 @@
 import { test, expect } from '@playwright/test';
 import { goToCustomer } from './helpers.js';
 
-const CUSTOMER_ID = '2853';
+// 2026-07-20: prod '2853' deleted → overridable (seed via diag-av192-seed-cleanup.mjs)
+const CUSTOMER_ID = process.env.E2E_CUSTOMER_ID || process.env.E2E_BUY_CUSTOMER || '2853';
 
 test.describe('Customer Detail — Profile & Timeline', () => {
   test.beforeEach(async ({ page }) => {
@@ -42,7 +43,7 @@ test.describe('Customer Detail — Profile & Timeline', () => {
 
   // ── Treatment Section ──
   test('แสดงปุ่ม "สร้างการรักษา"', async ({ page }) => {
-    await expect(page.getByRole('button', { name: 'สร้างการรักษา' })).toBeVisible();
+    await expect(page.getByTestId('create-treatment-btn')).toBeVisible();
   });
 
   test('treatment timeline: มี entry อย่างน้อย 1 รายการ', async ({ page }) => {

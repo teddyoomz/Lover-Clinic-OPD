@@ -27,8 +27,9 @@ test.describe('Backend Dashboard — All Tabs Smoke', () => {
   // src/components/backend/nav/navConfig.js (2026-04-26).
   const TABS = [
     // Pinned / customer / sale
-    ['appointments',         'นัดหมาย'],
-    ['clone',                'Clone ลูกค้า'],
+    // 2026-07-20 repoints: Phase 21.0 removed the pinned 'appointments' item
+    // (the leaf is 'นัดหมายทุกประเภท'); V50 deleted CloneTab + MasterDataTab.
+    ['appointment-all',      'นัดหมายทุกประเภท'],
     ['customers-list',       'ข้อมูลลูกค้า'],
     ['sales-invoice',        'ขาย / ใบเสร็จ'],
     ['quotations',           'ใบเสนอราคา'],
@@ -54,8 +55,7 @@ test.describe('Backend Dashboard — All Tabs Smoke', () => {
     ['reports-pnl',          'กำไรขาดทุน (P&L)'],
     ['reports-payment',      'สรุปบัญชีรับชำระ'],
     ['reports-df',           'ค่ามือแพทย์ (DF)'],
-    // Master data — ALL 15
-    ['masterdata-sync',      'Sync ProClinic'],
+    // Master data (V50 removed 'Sync ProClinic')
     ['product-groups',       'กลุ่มสินค้า'],
     ['product-units',        'หน่วยสินค้า'],
     ['medical-instruments',  'เครื่องหัตถการ'],
@@ -63,7 +63,7 @@ test.describe('Backend Dashboard — All Tabs Smoke', () => {
     ['branches',             'สาขา'],
     ['permission-groups',    'สิทธิ์การใช้งาน'],
     ['staff',                'พนักงาน'],
-    ['staff-schedules',      'ตารางงานพนักงาน'],
+    ['staff-schedules',      'ตารางพนักงาน'],
     ['doctors',              'แพทย์ & ผู้ช่วย'],
     ['products',             'สินค้า'],
     ['courses',              'คอร์ส'],

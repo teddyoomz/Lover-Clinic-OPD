@@ -24,7 +24,8 @@ import { goToCustomer } from './helpers.js';
 // deleteField error + verify the save button is enabled (which proves the
 // v26StatusPatch construction in handleSubmit doesn't crash at patch-build
 // time).
-const CUSTOMER_ID = '2867';
+// 2026-07-20: prod '2867' deleted → overridable (seed via diag-av192-seed-cleanup.mjs)
+const CUSTOMER_ID = process.env.E2E_BUY_CUSTOMER || '2867';
 
 test.describe('V96 — TFP create-mode does NOT surface deleteField error', () => {
   test.setTimeout(60000);
@@ -38,7 +39,7 @@ test.describe('V96 — TFP create-mode does NOT surface deleteField error', () =
     });
 
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(3000);
 
     // TFP renders the section header "ข้อมูลการใช้คอร์ส" on successful open
@@ -58,7 +59,7 @@ test.describe('V96 — TFP create-mode does NOT surface deleteField error', () =
 
   test('V96.2 — V96 fix shape verified in deployed client bundle (no setDoc-with-deleteField bug)', async ({ page }) => {
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(3000);
 
     // Wait for TFP load + verify NO error banner exists on render
@@ -84,7 +85,7 @@ test.describe('V96 — TFP create-mode does NOT surface deleteField error', () =
     });
 
     await goToCustomer(page, CUSTOMER_ID);
-    await page.getByRole('button', { name: 'สร้างการรักษา' }).click();
+    await page.getByTestId('create-treatment-btn').click();
     await page.waitForTimeout(3000);
     await expect(page.getByText('ข้อมูลการใช้คอร์ส')).toBeVisible({ timeout: 15000 });
 

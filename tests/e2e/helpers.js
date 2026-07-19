@@ -58,6 +58,15 @@ async function injectAuth(page) {
  */
 export async function goToBackend(page) {
   await injectAuth(page);
+  // 2026-07-20 — the backend menu DEFAULT is ArcBloom ('new'); a fresh
+  // Playwright profile therefore lands on the bloom home, where the legacy
+  // role="tab" / nav-sidebar selectors (goToTab, expandAllNavSections,
+  // clickLeafTab) hang until timeout. Force the classic sidebar for helper
+  // consumers — the menu is only TRANSPORT for tab-content specs; ArcBloom
+  // itself is covered by backend-menu-d.spec.js (own auth, no helper).
+  await page.addInitScript(() => {
+    localStorage.setItem('lover.backendMenuMode', 'classic');
+  });
   await page.goto('/?backend=1');
   // 2026-07-07 — the ArcBloom "new menu" mode no longer renders "ระบบหลังบ้าน";
   // accept either menu mode: old sidebar heading OR the new-menu top-bar
@@ -126,18 +135,28 @@ export async function goToCustomer(page, customerId) {
  * @param {'clone'|'customers'|'masterdata'|'appointments'|'sales'} tab
  */
 export async function goToTab(page, tab) {
-  await goToBackend(page);
+  // 2026-07-20 — the sidebar no longer exposes role="tab" (dropped across the
+  // V83/ArcBloom redesigns), so the old getByRole('tab').click() hung until
+  // test timeout. Use the `?backend=1&tab=X` whitelist deep-link instead
+  // (AV209 ships it; same transport wheel-guard.spec.js already uses) —
+  // one page load, no menu coupling.
   const tabMap = {
-    clone: null, // default tab — no click needed
-    customers: 'ข้อมูลลูกค้า',
-    masterdata: 'ข้อมูลพื้นฐาน',
-    appointments: 'นัดหมาย',
-    sales: /ขาย/,
+    clone: null,        // V50 removed CloneTab — land on the default tab
+    masterdata: null,   // V50 removed MasterDataTab — land on the default tab
+    customers: 'customers',
+    appointments: 'appointment-all', // Phase 21.0: pinned 'appointments' removed
+    sales: 'sales',
   };
-  const name = tabMap[tab];
-  if (name) {
-    // Backend tabs now use role="tab" (added in audit fix b15109b)
-    await page.getByRole('tab', { name }).click();
-    await page.waitForTimeout(1500);
-  }
+  const id = tabMap[tab];
+  if (!id) return goToBackend(page);
+  await injectAuth(page);
+  await page.addInitScript(() => {
+    localStorage.setItem('lover.backendMenuMode', 'classic');
+  });
+  await page.goto(`/?backend=1&tab=${id}`);
+  await page.locator('text=ระบบหลังบ้าน')
+    .or(page.getByRole('button', { name: 'กลับ Frontend' }))
+    .first()
+    .waitFor({ state: 'visible', timeout: 30000 });
+  await page.waitForTimeout(1500);
 }
