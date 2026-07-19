@@ -2461,3 +2461,49 @@ Two distinct bugs, one class:
 - (c) **White-on-color vs dark-on-color is a per-color decision** — violet → white-restore (5.2 AA); teal/LINE-green → keep DARK (7.7 AA; white would FAIL). Never blanket-restore white on every colored bg.
 - (d) **Verify the REAL deployed build, not just inject-simulate** (V124-fix2 lesson — partial inject-preview missed a stock regression). The post-deploy LIVE re-scan is the gold standard.
 - (e) **PatientForm deferred** — its bespoke `isDark?dark:light` brand colors (pink/rose) need a DESIGN pass, not a mechanical aaAccent wrap → closed in the V126 follow-up (brainstorm Q1=B curated / Q2=B-i rose-harmonized / Q3=Selective; reuse aaAccent + NEW `.pf-req` asterisk class + `acLight = aaAccent(ac,isDark)` for the dynamic clinic accent).
+
+---
+
+### Push outage (AV210) — 2026-07-19 EOD+2 — Fleet-wide silent push death: WS4 CSP killed FCM SW evaluation; AV207 scope-move was the trigger; handler-less sw.js swallowed every send
+
+User report (with iPhone PWA screenshot): "ตอนนี้ไม่มีการส่ง push มาที่มือถือ และในมือถือก็เปิด push ไม่ได้" — the notification-settings modal showed "กำลังตั้งค่า..." + alert "เกิดข้อผิดพลาด: NetworkError: A network error occurred." `/systematic-debugging` full 4-phase.
+
+#### Root cause (two-commit chain, proven with live evidence)
+
+1. **WS4 `d48f79b6` (2026-06-10)** added the site-wide CSP: `script-src 'self' + 2 inline-script hashes` — NO `https://www.gstatic.com`. The FCM SW's first line is `importScripts('https://www.gstatic.com/firebasejs/10.14.1/...')`, and a service worker's evaluation obeys the CSP delivered WITH ITS OWN response. **Latent for 27 days**: already-installed SW registrations never re-evaluate, so every device's existing FCM SW kept running.
+2. **AV207 `d922c8e4` (2026-07-07)** replaced the scope-'/' registration with the Workbox app-shell sw.js and moved the FCM SW to `/firebase-cloud-messaging-push-scope` → every device now needed a FRESH registration → fresh script evaluation → CSP blocks importScripts → **"ServiceWorker script evaluation failed"** (Chrome) / **"NetworkError: A network error occurred."** (WebKit's exact importScripts-failure DOMException string — the iPhone alert; airplane mode in the screenshot was a red herring, `connect-src` even already had gstatic — only `script-src` was missed).
+
+**Compound damage (why it was 100% silent)**: the app-shell sw.js INHERITED the old registration's live push subscription but has no push handler → FCM sends to all 8 legacy tokens returned SUCCESS while displaying nothing → the sender's `registration-token-not-registered` prune never fired → tokens sat "valid" forever; the self-heal failed every load with only a `console.warn`. Zero errors in any log, function metrics showed successful sends.
+
+#### Evidence chain (Phase 1-2)
+
+- `scripts/diag-push-config.mjs`: 8 tokens, newest **2026-05-26** — ZERO minted after the 07-07 migration = self-heal dead on every device (not just iOS). `globalPushMuted=false`.
+- Chrome MCP on the user's REAL Chrome (Rule S): only ONE SW registration — sw.js at '/' **holding a live FCM push subscription** (`fcm.googleapis.com/fcm/send/...`); the FCM-scope registration absent entirely.
+- Console (real device): `[push self-heal] failed: Failed to register a ServiceWorker for scope ('…/firebase-cloud-messaging-push-scope') … ServiceWorker script evaluation failed` — the smoking gun.
+- `curl -I /firebase-messaging-sw.js`: CSP header present, script-src without gstatic; both gstatic imports 200 OK.
+- Counterfactuals: SW file **unchanged since the initial commit 2026-03-23** (innocent — push worked for months); class-sweep grep = the FCM SW is the ONLY cross-origin script load in the entire app (index.html has only preconnects).
+
+#### Fix (4 layers)
+
+1. **vercel.json**: dedicated headers rule for `/firebase-messaging-sw.js` placed AFTER the global `/(.*)` rule (Vercel later-wins on duplicate keys) — CSP with `script-src 'self' https://www.gstatic.com` (no hashes — a SW can't run inline scripts) + `Cache-Control: no-cache` (mirror of the sw.js rule). **Deliberately NOT added to the page-global script-src**: www.gstatic.com hosts known CSP-bypass gadgets (old AngularJS builds) — the per-path rule keeps WS4's page hardening intact.
+2. **AdminDashboard `cleanupLegacyRootPushSubscription()`**: after a new token is minted+saved (both `enablePushNotifications` AND the self-heal effect — the self-heal's dedup early-return became a fall-through so cleanup always runs), unsubscribe any push subscription stranded on the root-scope registration → the zombie token invalidates → the Cloud Function's existing prune removes it. Fleet self-healing without a data op.
+3. **Rule M `scripts/prune-legacy-push-tokens.mjs`**: two-phase prune of all pre-fix tokens (cutoff 2026-07-19T08:00Z) + audit doc — run AFTER deploy (devices re-mint via the fixed self-heal on next app open).
+4. **`scripts/diag-push-test-send.mjs`**: post-deploy verifier — lists tokens fresh-vs-zombie; `--send` fires a REAL push (exact sendPushOnSubmit message shape) to fresh tokens; display on the device = Rule Q L1 proof.
+
+#### Artifacts
+
+- `tests/av210-push-csp-sw-consistency.test.js` (C1-C7): dedicated rule exists + positioned after global · every importScripts origin ⊆ SW-path script-src (universal — a future CDN import without a CSP entry fails the build) · page-global script-src must NOT contain gstatic · cleanup helper shape + both call sites + ordering (after token save; self-heal unconditional) · SW notificationclick + messaging-compat locks.
+- AV210 in audit-anti-vibe-code SKILL.md (both copies, SY1).
+- Verified: AV210 bank 23/0 + 112 adjacent lock tests + full vitest green + build clean.
+
+#### Post-deploy gate (pending user "deploy")
+
+curl the SW path (exactly one CSP, gstatic in script-src; page CSP unchanged) → reload app in real Chrome → console clean + FCM-scope registration exists → new token in push_config/tokens → `diag-push-test-send.mjs --send` → notification VISIBLY pops (desktop + iPhone re-enable) → `prune-legacy-push-tokens.mjs --apply`.
+
+#### Lessons (locked permanent)
+
+- (a) **A response-header policy change must be audited against every NON-page consumer** — service workers (importScripts runs under the CSP of the SW script's own response), web workers, manifest. WS4 audited the page perfectly and never looked at the worker layer.
+- (b) **CSP bugs against SWs are time bombs** — installed workers don't re-evaluate, so the break surfaces only when something forces fresh registrations (scope move, script change), and then it hits the whole fleet at once, far from the causing commit.
+- (c) **"FCM send success" ≠ notification displayed** — a live subscription owned by a handler-less SW is an invisible sinkhole: it counts as delivered, defeats FCM's own token pruning, and produces zero errors. Display verification requires a real device (Rule Q L1).
+- (d) **The same root cause wears different error masks per engine** — Chrome: "script evaluation failed" (accurate); WebKit: "NetworkError: A network error occurred." (reads as connectivity — sent the user chasing airplane mode). Repro on a desktop console before believing any mobile error string.
+- (e) **Silent-warn self-heal is how 12 days of outage hid** — `console.warn('[push self-heal] failed')` on every load of every device, seen by no one. Critical-path self-heals deserve a surfaced signal when they fail repeatedly (future candidate: a status chip in the notification settings modal).

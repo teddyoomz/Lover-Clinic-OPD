@@ -1,34 +1,31 @@
 ---
-updated_at: "2026-07-19 EOD+1 — Tail sweep (cron check + courseId backfill + BranchesTab + VIP sort) + /audit-all final + wheel guard — DEPLOYED LIVE."
-status: "master `2610a1a6` = prod LIVE (vercel `lover-clinic-kbqgmhp8h` aliased lover-clinic-app.vercel.app 200; rules UNCHANGED ทั้ง session → vercel-only, no Probe-Deploy-Probe). Post-deploy: ping 200 + backfill straggler re-run = 0 (idempotent). Awaiting user L1 stack."
+updated_at: "2026-07-19 EOD+2 — AV210 push outage root-caused + fixed (CSP killed FCM SW) — LOCAL, awaiting deploy."
+status: "master = prod `2610a1a6` + AV210 fix commits LOCAL (not deployed). Push has been silently dead fleet-wide 07-07→07-19; fix ready; deploy = vercel-only (rules UNCHANGED)."
 branch: "master"
-last_commit: "2610a1a6 — feat(inputs): global wheel guard (deployed at this commit)"
-tests: "full vitest 17,777/17,777 · 0 fail (this session, after 14-file wheel sweep) + Playwright wheel-guard 2/2 trusted-wheel + vip-sort RTL 8/0 + av209-stamp 13/0 + audit-all: 238 invariants 0 CRITICAL/HIGH/MEDIUM. Extended 4,681/0 (yesterday — not re-run). Do NOT re-run at boot."
+last_commit: "(AV210 fix — see git log)"
+tests: "AV210 bank 23/0 + adjacent 112/0 + build clean + full vitest re-run this session (see SESSION_HANDOFF). Prior baseline 17,777/0."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "= master 2610a1a6 (deployed 2026-07-19 EOD+1 vercel-only)"
-firestore_rules_version: "UNCHANGED ทั้ง session → deploy = vercel-only"
+production_commit: "2610a1a6 (pre-AV210 — push STILL BROKEN on prod until next deploy)"
+firestore_rules_version: "UNCHANGED → deploy = vercel-only"
 ---
 
-# Active — 2026-07-19 EOD+1 — Tail + audit-all + wheel guard — DEPLOYED LIVE
+# Active — 2026-07-19 EOD+2 — AV210: fleet-wide silent push outage FIXED (local)
 
 ## State
-- ทำ backlog tail ครบ + /audit-all รอบสุดท้าย (238 invariants — 0 CRITICAL/HIGH/MEDIUM; 1 LOW fixed + 6 stale skill docs refreshed) + feature ใหม่ 2 ตัว (VIP sort + wheel guard) — ทุกอย่าง DEPLOYED.
-- **AV209 tail ปิดถาวร**: writer ทุกตัว stamp per-row `crs-` courseId + Rule M backfill `crsbf-` 523 rows/123 docs บน prod (idempotent 0 ทั้งก่อน-หลัง deploy; L2 e2e 17/0 re-run; real rows byId exact).
-- Checkpoint `.agents/sessions/2026-07-19-eod1-tail-audit-wheelguard.md`.
+- **User reported**: no push on mobile + iPhone can't enable push (`NetworkError`). `/systematic-debugging` found the full chain:
+  WS4 CSP (06-10, `script-src` without gstatic) + AV207 scope-move (07-07, forced fresh SW evaluation) →
+  FCM SW `importScripts(gstatic)` blocked → registration dead fleet-wide → zero tokens minted since 05-26;
+  old subscriptions stranded on handler-less app-shell sw.js → FCM sends "succeed" but display NOTHING → prune never fires. 12 days silent.
+- **Fix (local)**: vercel.json dedicated `/firebase-messaging-sw.js` CSP rule (script-src +gstatic; page CSP UNCHANGED — gadget risk) + `cleanupLegacyRootPushSubscription()` at both mint sites + Rule M prune script + test-send verifier + AV210 (both SKILL copies) + V-entry.
 
-## What this session shipped (6 commits — deployed at `2610a1a6`)
-- `915e79f4` AV209 tail: crs- stamps (assign/resolve-pick/add-picks; add-picks strips template id กัน duplicate) + backfill script + diag ×2 + AV209 SKILL.md follow-up (SY1).
-- `191a56ee` BranchesTab dual-read `settings.phone/address` (V51) — สาขา migrate โชว์เบอร์.
-- `6e29dcbf` VIP sort: chip "👑 VIP ก่อน" ใน CustomerListTab + `useVipIds()` (stable-sort จาก set เดียวกับ badge; L1 Chrome จริง 9/9 VIP first + Q-vis).
-- `a3328c10` audit-all fixes: fb webhook verify_token masked (A4) + 6 stale audit-skill docs (C3 rescoped/C5 exists/F3 V144/UC2 gold/AN4 V78 regex/clone-sync RETIRED + api-layer RESCOPED) both copies.
-- `2610a1a6` **wheel guard**: global capture listener (App.jsx) — untagged number input = blur-on-wheel (เงินปลอดภัย default รวม TFP ทุกช่อง); `data-wheelable` 22 qty inputs/12 files = ±1 เสมอ. Playwright trusted-wheel 2/2 (Chrome-MCP scroll = gesture ไม่ยิง wheel — ใช้ page.mouse.wheel เท่านั้น).
-- Cron คืนแรก: retention ยังไม่มี audit doc = ถูกต้อง (รอบแรกคืนนี้ 03:20) · warmup ttfb 0.66-1.24s ✓.
+## Next action (ordered)
+1. **User types "deploy"** → vercel-only (rules unchanged).
+2. Post-deploy gate: `curl -I .../firebase-messaging-sw.js` (CSP has gstatic; page CSP unchanged) → reload app in Chrome → self-heal mints token → `node scripts/diag-push-test-send.mjs --send` → **noti must VISIBLY pop** (Rule Q L1) → `node scripts/prune-legacy-push-tokens.mjs --apply` (kills 8 zombies).
+3. iPhone: user re-enables push in the PWA (airplane mode OFF first attempt) → test-send to phone.
+4. Retention cron first-night audit doc check tomorrow (`node scripts/diag-cron-first-night.mjs`) — logic already dry-run-verified (159 scanned / 0 eligible).
 
-## Next action
-- **พรุ่งนี้เช้า**: `node scripts/diag-cron-first-night.mjs` — เช็ค audit doc `opd-session-archive-retention-*` คืนแรก (คาด eligible 0).
-- **User L1 stack**: ช่องเงิน scroll ไม่ขยับ + qty ±1 · VIP sort · AV209 course ops · buy modal · TFP retry escape · ของเดิม (TFP เครื่องช้า / mobile / AV205 / push / reports-home).
+## Outstanding user-triggered
+- "deploy" for the AV210 push fix (prod push stays DEAD until deployed).
+- User L1 stack (wheel guard เครื่องจริง / VIP sort / AV209 course ops / buy modal / TFP retry / mobile / push-after-fix).
 
-## Outstanding user-triggered actions
-- (none — deployed ครบ). Cosmetic tail: none known.
-
-## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น — วันนี้ trim มือแล้ว)
+## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)

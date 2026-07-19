@@ -2267,6 +2267,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setSchedGenLoading(false);
   };
 
+  // AV210 (2026-07-19): unsubscribe the legacy pre-AV207 push subscription
+  // stranded on the app-shell registration at scope '/'. When sw.js replaced
+  // the old FCM SW there (2026-07-07), it INHERITED the push subscription but
+  // has no push handler — FCM "delivers" into a void, so the sender's prune
+  // never fires and the token lives forever. Killing the subscription makes
+  // FCM return registration-token-not-registered on the next send → the
+  // Cloud Function prunes it from push_config/tokens. Runs only AFTER a new
+  // token is minted on the dedicated FCM scope (device never left push-less).
+  const cleanupLegacyRootPushSubscription = async () => {
+    try {
+      const rootReg = await navigator.serviceWorker.getRegistration('/');
+      if (!rootReg || rootReg.scope.includes('firebase-cloud-messaging-push-scope')) return;
+      const legacySub = await rootReg.pushManager.getSubscription();
+      if (legacySub) await legacySub.unsubscribe();
+    } catch (e) { console.warn('[push legacy-cleanup] failed:', e?.message); }
+  };
+
   const enablePushNotifications = async () => {
     setPushLoading(true);
     try {
@@ -2298,6 +2315,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           tokens: [...existing, { token, userAgent: navigator.userAgent.substring(0, 120), createdAt: new Date().toISOString() }]
         });
       }
+      await cleanupLegacyRootPushSubscription(); // AV210 — after new token minted+saved
       setPushEnabled(true);
       localStorage.setItem('lc_push_enabled', 'true');
       showToast('เปิดการแจ้งเตือนมือถือสำเร็จ! 📱');
@@ -2346,8 +2364,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const tokensRef = doc(db, 'artifacts', appId, 'public', 'data', 'push_config', 'tokens');
         const tokensSnap = await getDoc(tokensRef);
         const existing = tokensSnap.exists() ? (tokensSnap.data().tokens || []) : [];
-        if (existing.some(t => (typeof t === 'string' ? t : t.token) === token)) return;
-        await setDoc(tokensRef, { tokens: [...existing, { token, userAgent: navigator.userAgent.substring(0, 120), createdAt: new Date().toISOString() }] });
+        if (!existing.some(t => (typeof t === 'string' ? t : t.token) === token)) {
+          await setDoc(tokensRef, { tokens: [...existing, { token, userAgent: navigator.userAgent.substring(0, 120), createdAt: new Date().toISOString() }] });
+        }
+        await cleanupLegacyRootPushSubscription(); // AV210 — always, even when token already registered
       } catch (e) { console.warn('[push self-heal] failed:', e?.message); }
     })();
     return () => { cancelled = true; };
