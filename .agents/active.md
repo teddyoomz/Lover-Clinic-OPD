@@ -1,42 +1,34 @@
 ---
-updated_at: "2026-07-19 — Full backlog sweep (9 items) + AV209 + hunt loop CONVERGED — DEPLOYED LIVE."
-status: "master = prod LIVE (vercel `lover-clinic-cbq2qwbdq` aliased lover-clinic-app.vercel.app HTTP 200; rules UNCHANGED → vercel-only, no Probe-Deploy-Probe). Post-deploy: ping 200 {ok,ping} + 13 crons registered (2 ใหม่). Awaiting user L1 stack."
+updated_at: "2026-07-19 EOD+1 — Tail sweep (cron check + courseId backfill + BranchesTab + VIP sort) + /audit-all final + wheel guard — DEPLOYED LIVE."
+status: "master `2610a1a6` = prod LIVE (vercel `lover-clinic-kbqgmhp8h` aliased lover-clinic-app.vercel.app 200; rules UNCHANGED ทั้ง session → vercel-only, no Probe-Deploy-Probe). Post-deploy: ping 200 + backfill straggler re-run = 0 (idempotent). Awaiting user L1 stack."
 branch: "master"
-last_commit: "39b23d99 — docs(audit): AV209 hunt-loop hardenings synced (deployed at this commit)"
-tests: "full vitest 17,742/17,742 · 0 fail (definitive json, this session) + extended 4,681/0 (quarantine CLEARED) + build clean + Rule Q L2 AV209 e2e 17/0 real prod (re-run ทุก hunt round) + L1 Playwright buy-deduct 10/10 real prod. Do NOT re-run at boot."
+last_commit: "2610a1a6 — feat(inputs): global wheel guard (deployed at this commit)"
+tests: "full vitest 17,777/17,777 · 0 fail (this session, after 14-file wheel sweep) + Playwright wheel-guard 2/2 trusted-wheel + vip-sort RTL 8/0 + av209-stamp 13/0 + audit-all: 238 invariants 0 CRITICAL/HIGH/MEDIUM. Extended 4,681/0 (yesterday — not re-run). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "= master 39b23d99 (deployed 2026-07-19 vercel-only; firestore.rules UNCHANGED)"
-firestore_rules_version: "UNCHANGED ทั้ง session (ทุกอย่าง = frontend/cron/scripts) → deploy = vercel-only"
+production_commit: "= master 2610a1a6 (deployed 2026-07-19 EOD+1 vercel-only)"
+firestore_rules_version: "UNCHANGED ทั้ง session → deploy = vercel-only"
 ---
 
-# Active — 2026-07-19 — Backlog sweep (9/9) + AV209 — DEPLOYED LIVE
+# Active — 2026-07-19 EOD+1 — Tail + audit-all + wheel guard — DEPLOYED LIVE
 
 ## State
-- User: "ไล่ทำทั้งหมดอย่าให้เหลือ อย่างรอบคอบห้ามขี้เกียจ และต้องไม่มีบั๊คเพิ่มเติมแล้ว" → sweep ครบ 9 items +
-  bug-hunt loop จน 0: R1(5 fixed)→R2(1 fixed — R1 เอง redirect ไป twin, A13 rewrite)→R3(1 pre-existing)→CONVERGED.
-- Checkpoint `.agents/sessions/2026-07-19-sweep-all-backlog.md` · V-entry "Backlog Sweep (AV209)" ใน 00-session-start.md § 2.
+- ทำ backlog tail ครบ + /audit-all รอบสุดท้าย (238 invariants — 0 CRITICAL/HIGH/MEDIUM; 1 LOW fixed + 6 stale skill docs refreshed) + feature ใหม่ 2 ตัว (VIP sort + wheel guard) — ทุกอย่าง DEPLOYED.
+- **AV209 tail ปิดถาวร**: writer ทุกตัว stamp per-row `crs-` courseId + Rule M backfill `crsbf-` 523 rows/123 docs บน prod (idempotent 0 ทั้งก่อน-หลัง deploy; L2 e2e 17/0 re-run; real rows byId exact).
+- Checkpoint `.agents/sessions/2026-07-19-eod1-tail-audit-wheelguard.md`.
 
-## What this session shipped (13 commits — local only)
-- **AV209 (เงิน)**: `resolveCourseRowIndex` identity-first ทุก courses[] mutator + `removeCustomerCourseRowAtomic`
-  (Rule T) + 6 UI callsites + terminal SPLIT semantics. โบนัสจับ 3 บั๊คแฝง: reduce-audit whitelist (เงียบตั้งแต่ 06-09) ·
-  PermissionGroupsTab Loader2 จอดำ (V163; lucide classifier) · refund-on-cancelled double-reimbursement (16.5-era).
-- doctorName-edge · TFP resilient-timeout (15s ลองใหม่; run-seq invalidate ก่อน reconnect) · ArcBloom deep-link ·
-  TFP buy-modal extraction step 3 (L1 10/10 prod) · opd_sessions retention cron 03:20 (dry-run prod: 0 eligible) ·
-  ws1-probe-vandal ลบ · patient-view `?ping=1` + warm cron */5 · extended quarantine CLEARED (49 ไฟล์ → 4,681/0).
-
-## Deployed 2026-07-19 (post-deploy checks GREEN)
-- `vercel --prod` → `lover-clinic-cbq2qwbdq` aliased lover-clinic-app.vercel.app (HTTP 200).
-- `?ping=1` → **200 `{"ok":true,"ping":true}`** บน LIVE prod · `vercel crons ls` → **13 crons** รวม 2 ใหม่
-  (`patient-view-warmup` */5 + `opd-session-archive-retention` 20 20 UTC = 03:20 BKK).
-- retention คืนแรก → audit doc `opd-session-archive-retention-*` (eligible 0 ช่วงแรก — drain เมื่อ archive >180d).
+## What this session shipped (6 commits — deployed at `2610a1a6`)
+- `915e79f4` AV209 tail: crs- stamps (assign/resolve-pick/add-picks; add-picks strips template id กัน duplicate) + backfill script + diag ×2 + AV209 SKILL.md follow-up (SY1).
+- `191a56ee` BranchesTab dual-read `settings.phone/address` (V51) — สาขา migrate โชว์เบอร์.
+- `6e29dcbf` VIP sort: chip "👑 VIP ก่อน" ใน CustomerListTab + `useVipIds()` (stable-sort จาก set เดียวกับ badge; L1 Chrome จริง 9/9 VIP first + Q-vis).
+- `a3328c10` audit-all fixes: fb webhook verify_token masked (A4) + 6 stale audit-skill docs (C3 rescoped/C5 exists/F3 V144/UC2 gold/AN4 V78 regex/clone-sync RETIRED + api-layer RESCOPED) both copies.
+- `2610a1a6` **wheel guard**: global capture listener (App.jsx) — untagged number input = blur-on-wheel (เงินปลอดภัย default รวม TFP ทุกช่อง); `data-wheelable` 22 qty inputs/12 files = ±1 เสมอ. Playwright trusted-wheel 2/2 (Chrome-MCP scroll = gesture ไม่ยิง wheel — ใช้ page.mouse.wheel เท่านั้น).
+- Cron คืนแรก: retention ยังไม่มี audit doc = ถูกต้อง (รอบแรกคืนนี้ 03:20) · warmup ttfb 0.66-1.24s ✓.
 
 ## Next action
-- **User L1 stack**: buy modal บนเครื่องจริง + TFP retry escape (15s → ลองใหม่) + deep link `?backend=1&tab=X`
-  + คอร์ส แก้คงเหลือ/แลก/คืน/ยกเลิก (AV209) + ของเดิม (TFP เครื่องช้า / mobile cold-start / AV205 / push / reports-home).
-- ลิงก์ลูกค้าควรเปิดเร็วขึ้นชัดเจนหลัง warmup cron ทำงาน ~5-10 นาที.
+- **พรุ่งนี้เช้า**: `node scripts/diag-cron-first-night.mjs` — เช็ค audit doc `opd-session-archive-retention-*` คืนแรก (คาด eligible 0).
+- **User L1 stack**: ช่องเงิน scroll ไม่ขยับ + qty ±1 · VIP sort · AV209 course ops · buy modal · TFP retry escape · ของเดิม (TFP เครื่องช้า / mobile / AV205 / push / reports-home).
 
 ## Outstanding user-triggered actions
-- (none — deployed). Irreducible tail: legacy course row ไม่มี courseId + twin เดียว → resolve ไป twin
-  (แก้ขาด = Rule M backfill courseId ~1384 rows ถ้าเคยกัดจริง). Cosmetic: BranchesTab อ่าน b.phone legacy (V51).
+- (none — deployed ครบ). Cosmetic tail: none known.
 
-## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น — วันนี้ trim มือแล้ว 10+10)
+## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น — วันนี้ trim มือแล้ว)
