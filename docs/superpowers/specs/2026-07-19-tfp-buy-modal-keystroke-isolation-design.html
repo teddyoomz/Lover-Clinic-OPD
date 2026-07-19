@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>TFP Buy-Modal Keystroke Isolation (#20) — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --tx-muted: #666; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; font-size: 0.9em; }
+    th { background: var(--bg-meta); }
+    .flow-box { background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: .45em .8em; display: inline-block; margin: .2em; font-size: .85em; }
+    .flow-arrow { color: #64748b; font-weight: 700; margin: 0 .3em; }
+    .bad { color: #dc2626; font-weight: 700; } .good { color: #059669; font-weight: 700; }
+    code { font-family: Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+
+<h1>TFP Buy-Modal Keystroke Isolation (#20) — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-19 EOD+2 · <strong>Status:</strong> Approved (user "ทำหมดเลย แต่ห้ามเพิ่มบั๊ค" — batch scope) ·
+  <strong>Origin:</strong> perf punchlist #20 (deferred: "money-critical 5.9k-line form — needs its own session") ·
+  <strong>Plan:</strong> <a href="../plans/2026-07-19-tfp-buy-modal-keystroke-isolation.html">plan</a>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+พิมพ์ค้นหาใน buy modal (ช่อง "ค้นหาด้วยชื่อ") → <code>setBuyQuery</code> อยู่บน <strong>TreatmentFormPage ทั้งใบ (~5.3k บรรทัด)</strong>
+→ ทุก keystroke re-render ทั้งฟอร์มเงิน (จุดเดียวที่เหลือจาก P2 ที่ user อาจยังรู้สึกบนเครื่องช้า)
+การ extraction step 3 (2026-07-19) ย้าย JSX ของ modal ไป <code>TfpBuyModal.jsx</code> แล้ว แต่ view-filter state ยังอยู่ที่ parent
+Fix = ย้าย <strong>view-filter state เท่านั้น</strong> (query / category / show-limit + derived filter) เข้า modal —
+<strong>เงินทุก state (checked / qty / disc / vat) + handlers (openBuyModal / toggleBuyCheck / confirmBuyModal) อยู่ที่ TFP เหมือนเดิม 100%</strong> (V13/V42/V162 gates)
+</p>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">State-ownership map (data shape — ไม่มี UI เปลี่ยนแม้ pixel เดียว)</div>
+  <table>
+    <tr><th>State</th><th>ก่อน</th><th>หลัง</th><th>เหตุผล</th></tr>
+    <tr><td><code>buyQuery</code> · <code>buySelectedCat</code> · <code>buyShowLimit</code></td><td class="bad">TFP</td><td class="good">TfpBuyModal</td><td>view-filter ล้วน — consumer เดียวคือ modal (grep พิสูจน์แล้ว: ไม่มีที่อื่นอ่าน)</td></tr>
+    <tr><td><code>buyFilteredItems</code> memo + <code>buyVisibleItems</code></td><td class="bad">TFP</td><td class="good">TfpBuyModal (ย้าย verbatim)</td><td>derived จาก 3 ตัวบน + <code>buyItems</code>/<code>buyModalType</code> (เป็น prop)</td></tr>
+    <tr><td><code>buyChecked / buyQtyMap / buyDiscMap / buyVatMap</code></td><td>TFP</td><td>TFP (ไม่แตะ)</td><td>เงิน — confirmBuyModal อ่าน</td></tr>
+    <tr><td><code>buyModalOpen / buyModalType / buyItems / buyCategories / buyLoading</code></td><td>TFP</td><td>TFP (ไม่แตะ)</td><td>fetch + mount-conditional (V160) อยู่ที่ callsite เดิม</td></tr>
+    <tr><td>handlers ทั้งหมด</td><td>TFP</td><td>TFP (ไม่แตะ)</td><td>money logic V13/V42/V162</td></tr>
+  </table>
+  <div class="mockup-label" style="margin-top:.8em">Props diff ของ TfpBuyModal</div>
+  <table>
+    <tr><th>ออก (8)</th><th>เข้า (1)</th></tr>
+    <tr><td><code>buyQuery, setBuyQuery, buySelectedCat, setBuySelectedCat, buyFilteredItems, buyVisibleItems, buyShowLimit, setBuyShowLimit</code></td><td><code>buyItems</code> (ก้อน {course,promotion,product} จาก TFP — อ่านอย่างเดียว)</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Keystroke render path — ก่อน → หลัง</div>
+  <div>
+    <span class="bad">ก่อน:</span>
+    <span class="flow-box">พิมพ์ 1 ตัวอักษร</span><span class="flow-arrow">→</span>
+    <span class="flow-box">setBuyQuery (TFP state)</span><span class="flow-arrow">→</span>
+    <span class="flow-box bad">TFP ~5.3k บรรทัด re-render ทั้งใบ</span><span class="flow-arrow">→</span>
+    <span class="flow-box">modal re-render</span>
+  </div>
+  <div style="margin-top:.5em">
+    <span class="good">หลัง:</span>
+    <span class="flow-box">พิมพ์ 1 ตัวอักษร</span><span class="flow-arrow">→</span>
+    <span class="flow-box">setBuyQuery (modal state)</span><span class="flow-arrow">→</span>
+    <span class="flow-box good">TfpBuyModal re-render เท่านั้น (TFP นิ่ง)</span>
+  </div>
+  <div style="margin-top:.8em" class="mockup-label">Reset semantics (ต้องเหมือนเดิม byte-for-byte)</div>
+  <div>
+    <span class="flow-box">เปิด modal (ปุ่มนอก)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">mount ใหม่ (<code>{buyModalOpen && ...}</code>) → state สด อัตโนมัติ<br>(แทน setBuyQuery('')ฯลฯ ใน openBuyModal ที่ถูกถอด)</span>
+  </div>
+  <div style="margin-top:.4em">
+    <span class="flow-box">สลับ type ขณะเปิด (select/sidebar)</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>useEffect([buyModalType])</code> ใน modal → reset query/cat/limit<br>(แทน reset เดิมใน openBuyModal — พฤติกรรมเดิมเป๊ะ)</span>
+  </div>
+  <div style="margin-top:.4em">
+    <span class="flow-box">ติ๊ก/จำนวน/ส่วนลด/VAT/ยืนยัน</span><span class="flow-arrow">→</span>
+    <span class="flow-box">TFP state + handler เดิมทุกอย่าง (per-click ไม่ใช่ per-keystroke — นอก scope)</span>
+  </div>
+</div>
+
+<h2>Decisions</h2>
+<ul>
+  <li>ย้ายเฉพาะ view-filter — <strong>ศูนย์การแตะ money state/handlers</strong> (แนวเดียวกับ extraction step 3 verbatim discipline)</li>
+  <li>Reset ผ่าน mount-fresh + effect-on-type — ไม่แก้ handler ใดใน TFP นอกจากลบ 3 บรรทัด reset ที่ตายแล้ว</li>
+  <li>ไม่ memo TfpBuyModal เพิ่ม (YAGNI — keystroke ไม่แตะ TFP แล้ว; ของอื่นเป็น per-click)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Source-grep: <code>buyQuery|buySelectedCat|buyShowLimit|buyFilteredItems</code> หายจาก TreatmentFormPage.jsx ทั้งหมด (0 match) และอยู่ใน TfpBuyModal</li>
+  <li>RTL: พิมพ์ใน modal → list กรองถูก · สลับ type → query/cat/limit reset · โหลดเพิ่ม +50 ทำงาน</li>
+  <li>เทสเดิมทั้ง buy family (V162 qty-multiply / extraction locks / L1 Playwright spec) เขียวหมด — พฤติกรรมเงิน byte-เดิม</li>
+  <li>Full vitest 0 fail + build clean</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li>เทสเดิมที่ล็อค props ของ TfpBuyModal หรือ openBuyModal resets = V21 repoints ที่คาดไว้</li>
+  <li>L1 บน prod จริง (Playwright buy-modal spec 10/10 เดิม) รันซ้ำเป็น gate — ห้ามกดยืนยันด้วย data จริงนอก TEST fixture</li>
+</ul>
+
+</body>
+</html>

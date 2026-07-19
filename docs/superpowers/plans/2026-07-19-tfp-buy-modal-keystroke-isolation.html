@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>TFP Buy-Modal Keystroke Isolation — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; } .step input { margin-right: 0.6em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .flow-box { background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: .45em .8em; display: inline-block; margin: .2em; font-size: .85em; }
+    .flow-arrow { color: #64748b; font-weight: 700; margin: 0 .3em; }
+    code { font-family: Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+
+<h1>TFP Buy-Modal Keystroke Isolation — Implementation Plan</h1>
+<blockquote>Inline execution (money-critical file — no subagents). Spec: <a href="../specs/2026-07-19-tfp-buy-modal-keystroke-isolation-design.html">design</a>. Verbatim-move discipline (extraction step 3 precedent). Full state map + flow: ดูใน spec (single source — ไม่ซ้ำที่นี่)</blockquote>
+
+<h2>Mockup Design</h2>
+<div class="mockup"><div class="mockup-label">Props signature หลังแก้ (the one data-shape change)</div>
+<pre><code>export function TfpBuyModal({
+  isDark, inputCls, selectCls,
+  buyModalType, setBuyModalType,
+  buyItems,                          // NEW — {course:[],promotion:[],product:[]} read-only
+  buyCategories, buyLoading,
+  buyChecked, setBuyChecked, buyQtyMap, setBuyQtyMap,
+  buyDiscMap, setBuyDiscMap, buyVatMap, setBuyVatMap,
+  toggleBuyCheck, openBuyModal, confirmBuyModal, setBuyModalOpen,
+}) // ออก: buyQuery/set, buySelectedCat/set, buyShowLimit/set, buyFilteredItems, buyVisibleItems</code></pre></div>
+
+<h2>Flow</h2>
+<div class="mockup"><div class="mockup-label">ลำดับแก้ (กันสถานะครึ่งทาง)</div>
+<span class="flow-box">1. TfpBuyModal: +state×3 +memo (verbatim จาก TFP:1773-1782) +reset effect</span><span class="flow-arrow">→</span>
+<span class="flow-box">2. TFP: ลบ state/memo/reset + เปลี่ยน callsite props</span><span class="flow-arrow">→</span>
+<span class="flow-box">3. เทสใหม่ + V21 repoints</span><span class="flow-arrow">→</span>
+<span class="flow-box">4. targeted → full vitest → build → L1</span>
+</div>
+
+<h2>Tasks</h2>
+<div class="task"><h3>Task 1: TfpBuyModal.jsx</h3>
+<div class="step"><input type="checkbox"> import useState/useMemo/useEffect · state 3 ตัว (''/''/50) · memo ย้าย verbatim (<code>buyItems[buyModalType]</code> → cat filter → query filter) · <code>buyVisibleItems = buyFilteredItems.slice(0, buyShowLimit)</code> · <code>useEffect(() =&gt; { setBuyQuery(''); setBuySelectedCat(''); setBuyShowLimit(50); }, [buyModalType])</code> (แทน reset เดิมใน openBuyModal — fire ตอน mount ด้วย = no-op harmless) · header comment อัพเดท (state-ownership เปลี่ยนจาก "ALL state stays in TFP" → "view-filter state owned HERE (2026-07-19 #20)")</div></div>
+<div class="task"><h3>Task 2: TreatmentFormPage.jsx</h3>
+<div class="step"><input type="checkbox"> ลบ useState buyQuery/buySelectedCat (643-644) + buyShowLimit (1772) + memo block (1773-1782) · ลบ 3 reset lines ใน openBuyModal (1635-1637) · callsite: ลบ 8 props + เพิ่ม <code>buyItems={buyItems}</code> · คอมเมนต์ extraction (13-14, 4881-4884) อัพเดทตาม</div></div>
+<div class="task"><h3>Task 3: Tests</h3>
+<div class="step"><input type="checkbox"> NEW <code>tests/tfp-buy-modal-keystroke-isolation.test.jsx</code>: K1 source-grep (TFP 0-match ทั้ง 4 token + modal มี state+effect) · K2 RTL modal เดี่ยว (type→filter · type-switch→reset · load-more · 50-cap) · K3 anti-regression (confirm disabled เมื่อ checked ว่าง + toggleBuyCheck ยังเป็น prop-call ไป TFP)</div>
+<div class="step"><input type="checkbox"> V21 repoints ที่คาด: เทสที่ล็อค TfpBuyModal props / openBuyModal reset lines / TFP state list</div></div>
+<div class="task"><h3>Task 4: Verify</h3>
+<div class="step"><input type="checkbox"> targeted: ไฟล์ใหม่ + buy family (course-buy-qty-multiply / tfp extraction locks / treatmentBuyHelpers-importers) → <code>npm run build</code> → full vitest (signature change = Rule N full) → L1: dev server พิมพ์กรอง/สลับ/ติ๊ก/ยกเลิก (ห้ามยืนยัน data จริง) + Playwright buy-modal spec เดิม (TEST fixture) ถ้ารันได้</div></div>
+
+</body>
+</html>

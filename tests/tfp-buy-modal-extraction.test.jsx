@@ -14,20 +14,19 @@ import { TfpBuyModal } from '../src/components/treatment-form/TfpBuyModal.jsx';
 const TFP = readFileSync(path.resolve(process.cwd(), 'src/components/TreatmentFormPage.jsx'), 'utf8');
 const MODAL = readFileSync(path.resolve(process.cwd(), 'src/components/treatment-form/TfpBuyModal.jsx'), 'utf8');
 
+// #20 keystroke isolation (2026-07-19 EOD+2): view-filter state (query/cat/
+// limit + filter memo) moved INTO the modal — props became buyItems (raw map);
+// the modal derives filtered/visible itself.
 const baseProps = () => ({
   isDark: true, inputCls: 'in', selectCls: 'sel',
   buyModalType: 'course', setBuyModalType: vi.fn(),
-  buyQuery: '', setBuyQuery: vi.fn(),
-  buySelectedCat: '', setBuySelectedCat: vi.fn(),
+  buyItems: { course: [{ id: 'c1', name: 'คอร์ส ทดสอบ', price: 1000, unit: '' }], promotion: [], product: [] },
   buyCategories: { course: ['หมวด A'], promotion: [], product: [] },
   buyLoading: false,
   buyChecked: new Set(), setBuyChecked: vi.fn(),
   buyQtyMap: {}, setBuyQtyMap: vi.fn(),
   buyDiscMap: {}, setBuyDiscMap: vi.fn(),
   buyVatMap: {}, setBuyVatMap: vi.fn(),
-  buyFilteredItems: [{ id: 'c1', name: 'คอร์ส ทดสอบ', price: 1000, unit: '' }],
-  buyVisibleItems: [{ id: 'c1', name: 'คอร์ส ทดสอบ', price: 1000, unit: '' }],
-  buyShowLimit: 50, setBuyShowLimit: vi.fn(),
   toggleBuyCheck: vi.fn(), openBuyModal: vi.fn(),
   confirmBuyModal: vi.fn(), setBuyModalOpen: vi.fn(),
 });
@@ -90,11 +89,13 @@ describe('BM1 — TfpBuyModal RTL execution (real render, real handlers)', () =>
   });
 
   it('BM1.7 load-more appears only when buyShowLimit < filtered length + bumps by 50', () => {
+    // #20: buyShowLimit is modal-internal now — assert the UI outcome instead
     const many = Array.from({ length: 60 }, (_, i) => ({ id: `x${i}`, name: `รายการ ${i}`, price: 1 }));
-    const p = { ...baseProps(), buyFilteredItems: many, buyVisibleItems: many.slice(0, 50), buyShowLimit: 50 };
+    const p = { ...baseProps(), buyItems: { course: many, promotion: [], product: [] } };
     render(<TfpBuyModal {...p} />);
+    expect(screen.getByText(/แสดง 50\/60/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('โหลดเพิ่ม +50'));
-    expect(p.setBuyShowLimit).toHaveBeenCalled();
+    expect(screen.getByText(/แสดง 60\/60/)).toBeInTheDocument();
   });
 });
 
@@ -109,15 +110,19 @@ describe('BM2 — extraction source-grep locks', () => {
     expect(i).toBeGreaterThan(-1);
     const w = TFP.slice(i, i + 1400);
     expect(w).toMatch(/<TfpBuyModal/);
+    // #20 keystroke isolation: view-filter props (buyQuery/cat/limit/filtered/
+    // visible) no longer threaded — the modal owns them; buyItems replaces them.
     for (const prop of [
-      'buyModalType', 'setBuyModalType', 'buyQuery', 'setBuyQuery',
-      'buySelectedCat', 'setBuySelectedCat', 'buyCategories', 'buyLoading',
+      'buyModalType', 'setBuyModalType', 'buyItems',
+      'buyCategories', 'buyLoading',
       'buyChecked', 'setBuyChecked', 'buyQtyMap', 'setBuyQtyMap',
       'buyDiscMap', 'setBuyDiscMap', 'buyVatMap', 'setBuyVatMap',
-      'buyFilteredItems', 'buyVisibleItems', 'buyShowLimit', 'setBuyShowLimit',
       'toggleBuyCheck', 'openBuyModal', 'confirmBuyModal', 'setBuyModalOpen',
     ]) {
       expect(w, `callsite must thread ${prop}`).toMatch(new RegExp(`${prop}=\\{${prop}\\}`));
+    }
+    for (const gone of ['buyQuery=', 'buyFilteredItems=', 'buyVisibleItems=', 'buyShowLimit=']) {
+      expect(w, `callsite must NOT thread ${gone} (modal-internal since #20)`).not.toContain(gone);
     }
   });
 

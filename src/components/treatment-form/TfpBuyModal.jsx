@@ -2,15 +2,23 @@
 // TFP extraction step 3 (2026-07-19, extraction-only refactor): the buy modal
 // JSX moved VERBATIM out of TreatmentFormPage.jsx. This is the MONEY-CRITICAL
 // modal (V13 whitelist history · V42 qty multiplier · V162 purchaseUid) — the
-// strictest extraction gates apply. Zero behavior change:
-//   - ALL state + handlers stay in TreatmentFormPage (threaded as explicit
-//     props): openBuyModal (fetch + whitelist), toggleBuyCheck, confirmBuyModal
-//     (buildPurchasedCourseEntry / purchaseUid path) are TFP closures — this
-//     file contains ZERO buy logic, only the moved JSX.
+// strictest extraction gates apply:
+//   - MONEY state + handlers stay in TreatmentFormPage (threaded as explicit
+//     props): buyChecked/qty/disc/vat maps + openBuyModal (fetch + whitelist),
+//     toggleBuyCheck, confirmBuyModal (buildPurchasedCourseEntry / purchaseUid
+//     path) are TFP closures — this file contains ZERO buy MONEY logic.
+//   - keystroke isolation (2026-07-19 EOD+2, perf punchlist #20): the
+//     VIEW-FILTER state (buyQuery / buySelectedCat / buyShowLimit + the
+//     buyFilteredItems memo, moved verbatim from TFP:1773-1782) is owned HERE
+//     so a search keystroke re-renders THIS modal only — not the 5.3k-line
+//     money form. Reset semantics preserved: fresh state per open (the TFP
+//     callsite mount-conditional unmounts us) + reset-on-type-switch via the
+//     [buyModalType] effect (replaces the resets openBuyModal used to do).
 //   - the `{buyModalOpen && (...)}` mount-conditional stays at the TFP
 //     callsite (mount model unchanged — V160 lesson).
 //   - AV78 backdrop-no-close + ModalScrollLock (AV205) preserved verbatim.
 
+import { useState, useMemo, useEffect } from 'react';
 import { Loader2, Search } from 'lucide-react';
 import { ModalScrollLock } from '../../lib/useModalScrollLock.js';
 import { aaAccent } from '../../lib/themeAccent.js';
@@ -18,17 +26,37 @@ import { aaAccent } from '../../lib/themeAccent.js';
 export function TfpBuyModal({
   isDark, inputCls, selectCls,
   buyModalType, setBuyModalType,
-  buyQuery, setBuyQuery,
-  buySelectedCat, setBuySelectedCat,
+  buyItems,
   buyCategories, buyLoading,
   buyChecked, setBuyChecked,
   buyQtyMap, setBuyQtyMap,
   buyDiscMap, setBuyDiscMap,
   buyVatMap, setBuyVatMap,
-  buyFilteredItems, buyVisibleItems,
-  buyShowLimit, setBuyShowLimit,
   toggleBuyCheck, openBuyModal, confirmBuyModal, setBuyModalOpen,
 }) {
+  // View-filter state (keystroke isolation #20) — see header comment.
+  const [buyQuery, setBuyQuery] = useState('');
+  const [buySelectedCat, setBuySelectedCat] = useState('');
+  const [buyShowLimit, setBuyShowLimit] = useState(50);
+  // Type switch (select / sidebar) resets the view filters — byte-identical to
+  // the resets openBuyModal performed pre-isolation. Also fires on mount (no-op).
+  useEffect(() => {
+    setBuyQuery('');
+    setBuySelectedCat('');
+    setBuyShowLimit(50);
+  }, [buyModalType]);
+  // Moved verbatim from TreatmentFormPage (pre-isolation lines 1773-1782).
+  const buyFilteredItems = useMemo(() => {
+    let items = buyItems[buyModalType] || [];
+    if (buySelectedCat) items = items.filter(i => i.category === buySelectedCat);
+    if (buyQuery) {
+      const q = buyQuery.toLowerCase();
+      items = items.filter(i => i.name.toLowerCase().includes(q));
+    }
+    return items;
+  }, [buyItems, buyModalType, buySelectedCat, buyQuery]);
+  const buyVisibleItems = buyFilteredItems.slice(0, buyShowLimit);
+
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-labelledby="modal-title-treat-buy" onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>

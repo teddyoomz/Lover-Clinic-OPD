@@ -11,7 +11,8 @@ import { SectionHeader, FormSection, ActionBtn, VitalsGrid, OPDFieldWithPrev } f
 import { LabItemModal, MedItemModal, MedGroupModal, RemedPanel, ConsItemModal, ConsGroupModal } from './treatment-form/TfpItemModals.jsx';
 // TFP extraction step 3 (2026-07-19) — the buy modal (money-critical: V13/V42/
 // V162 history) moved verbatim to ./treatment-form/TfpBuyModal.jsx. openBuyModal /
-// toggleBuyCheck / confirmBuyModal + ALL buy state stay here as explicit props.
+// toggleBuyCheck / confirmBuyModal + all buy MONEY state stay here as explicit
+// props; view-filter state (query/cat/limit) lives in the modal (#20, 2026-07-19).
 import { TfpBuyModal } from './treatment-form/TfpBuyModal.jsx';
 import DepositPicker from './backend/DepositPicker.jsx';
 import WalletPicker from './backend/WalletPicker.jsx';
@@ -640,8 +641,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [buyItems, setBuyItems] = useState({ course: [], promotion: [], product: [] });
   const [buyCategories, setBuyCategories] = useState({ course: [], promotion: [], product: [] });
   const [buyLoading, setBuyLoading] = useState(false);
-  const [buyQuery, setBuyQuery] = useState('');
-  const [buySelectedCat, setBuySelectedCat] = useState('');
+  // buyQuery / buySelectedCat / buyShowLimit + the filter memo moved INTO
+  // TfpBuyModal (2026-07-19 EOD+2 keystroke isolation, perf punchlist #20) —
+  // a search keystroke re-renders the modal only, not this money form.
   const [buyChecked, setBuyChecked] = useState(new Set()); // checked item IDs
   const [buyQtyMap, setBuyQtyMap] = useState({}); // id → qty
   const [buyDiscMap, setBuyDiscMap] = useState({}); // id → discount
@@ -1632,9 +1634,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const openBuyModal = async (type = 'course') => {
     setBuyModalOpen(true);
     setBuyModalType(type);
-    setBuyQuery('');
-    setBuySelectedCat('');
-    setBuyShowLimit(50);
+    // view-filter resets (query/cat/limit) now live in TfpBuyModal (#20):
+    // fresh mount per open + [buyModalType] effect on type switch.
     setBuyChecked(new Set());
     setBuyQtyMap({});
     setBuyDiscMap({});
@@ -1769,17 +1770,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     } catch (e) { debugLog('tfp-buy-load', 'unexpected error opening buy-modal', e); }
     setBuyLoading(false);
   };
-  const [buyShowLimit, setBuyShowLimit] = useState(50);
-  const buyFilteredItems = useMemo(() => {
-    let items = buyItems[buyModalType] || [];
-    if (buySelectedCat) items = items.filter(i => i.category === buySelectedCat);
-    if (buyQuery) {
-      const q = buyQuery.toLowerCase();
-      items = items.filter(i => i.name.toLowerCase().includes(q));
-    }
-    return items;
-  }, [buyItems, buyModalType, buySelectedCat, buyQuery]);
-  const buyVisibleItems = buyFilteredItems.slice(0, buyShowLimit);
+  // buyShowLimit + buyFilteredItems/buyVisibleItems moved verbatim into
+  // TfpBuyModal (2026-07-19 EOD+2 keystroke isolation #20).
   const toggleBuyCheck = (id) => {
     setBuyChecked(prev => {
       const next = new Set(prev);
@@ -4879,22 +4871,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             {/* Buy modal — ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน */}
             {/* TFP extraction step 3 (2026-07-19): the buy modal JSX moved
                 VERBATIM to treatment-form/TfpBuyModal.jsx (money-critical —
-                V13/V42/V162 history). State + handlers (openBuyModal /
+                V13/V42/V162 history). MONEY state + handlers (openBuyModal /
                 toggleBuyCheck / confirmBuyModal) stay HERE as explicit props;
+                view-filter state (query/cat/limit) lives in the modal so a
+                search keystroke doesn't re-render this form (#20, 2026-07-19);
                 the mount-conditional stays at this callsite (V160). */}
             {buyModalOpen && (
               <TfpBuyModal
                 isDark={isDark} inputCls={inputCls} selectCls={selectCls}
                 buyModalType={buyModalType} setBuyModalType={setBuyModalType}
-                buyQuery={buyQuery} setBuyQuery={setBuyQuery}
-                buySelectedCat={buySelectedCat} setBuySelectedCat={setBuySelectedCat}
+                buyItems={buyItems}
                 buyCategories={buyCategories} buyLoading={buyLoading}
                 buyChecked={buyChecked} setBuyChecked={setBuyChecked}
                 buyQtyMap={buyQtyMap} setBuyQtyMap={setBuyQtyMap}
                 buyDiscMap={buyDiscMap} setBuyDiscMap={setBuyDiscMap}
                 buyVatMap={buyVatMap} setBuyVatMap={setBuyVatMap}
-                buyFilteredItems={buyFilteredItems} buyVisibleItems={buyVisibleItems}
-                buyShowLimit={buyShowLimit} setBuyShowLimit={setBuyShowLimit}
                 toggleBuyCheck={toggleBuyCheck} openBuyModal={openBuyModal}
                 confirmBuyModal={confirmBuyModal} setBuyModalOpen={setBuyModalOpen}
               />
