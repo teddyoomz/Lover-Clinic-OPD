@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Infra Health Monitor + Client Error Beacon — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding: 0.5em 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; font-size: 0.9em; }
+    th { background: var(--bg-meta); }
+    .flow-box { background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: .45em .8em; display: inline-block; margin: .2em; font-size: .85em; }
+    .flow-arrow { color: #64748b; font-weight: 700; margin: 0 .3em; }
+  </style>
+</head>
+<body>
+
+<h1>Infra Health Monitor + Client Error Beacon — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute INLINE (executing-plans) — subagents thrash on this baseline (V81/V86 precedent + <code>feedback_no_large_agent_fanout</code>).
+  <strong>Rule K applies</strong>: build ALL source structure first (Tasks 1–8) → review → single test-bank pass (Task 9) → verify (Task 10-11) → commit per logical unit, push every commit.
+  Spec: <a href="../specs/2026-07-19-infra-health-monitor-error-beacon-design.html">2026-07-19-infra-health-monitor-error-beacon-design.html</a>
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ทำให้ infra ตายเงียบไม่ได้อีก (health cron + staff-chat/LINE alert + status card) และ client error มองเห็นได้ (beacon → endpoint → viewer) — ศูนย์การแตะ CSP/SW/push/firestore.rules</p>
+  <p><strong>Architecture:</strong> ต่อรางเดิมทั้งหมด: scheduled_task_status (SSOT liveness ที่มีอยู่) + pushLineMessage + staffChatNotify pattern + system_config + patient-view endpoint pattern. Pure core ใน src/lib ให้ cron/UI/test ใช้ร่วม</p>
+  <p><strong>Tech Stack:</strong> Vercel serverless (ESM + firebase-admin) · React 19 · Vitest · ไม่มี dependency ใหม่</p>
+  <p><strong>คำสั่ง user (เหล็ก):</strong> "ทำหมดเลย แต่ห้ามเพิ่มบั๊ค" → AV210 blast-radius audit ฝังใน Task 10</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">ดู mockup เต็ม 5 state ใน spec — สรุป data shapes ที่สร้างใหม่</div>
+  <table>
+    <tr><th>ที่</th><th>Shape</th></tr>
+    <tr><td><code>be_admin_audit/infra-health-latest</code> (+ <code>infra-health-{YYYYMMDD}</code> history)</td>
+        <td><code>{ type:'infra-health', overall:'ok'|'warn'|'red', checks:[{id,label,status,detail}], alerted:{staffChat:bool, line:[{lineUserId,statusCode}]}, dateKey, performedAt }</code></td></tr>
+    <tr><td><code>client_error_log/CE-{ts}-{hex}</code></td>
+        <td><code>{ message≤500, stack≤4000, url (path+param NAMES only), ua≤300, surface:'staff'|'patient'|'unknown', hash, clientTs, createdAtMs, createdAt }</code></td></tr>
+    <tr><td><code>client_error_log_meta/daily</code> (1 doc เดียวทั้ง collection)</td>
+        <td><code>{ dateKey:'YYYYMMDD', count }</code> — tx-increment, cap 500/วัน</td></tr>
+    <tr><td><code>system_config.infraHealth</code> (key ใหม่ additive)</td>
+        <td><code>{ lineTargets:[{branchId,lineUserId,label}], staffChatBranchId }</code> — เปิด/ปิด+threshold อยู่ที่ scheduledTasks.infraHealthSweep (รางเดิม)</td></tr>
+    <tr><td>staff-chat card <code>CHAT-SYS-INFRA-{YYYYMMDD}</code></td>
+        <td><code>{ id, branchId, deviceId:'system', displayName:'ระบบ', text:'🩺 …', system:{kind:'infra-health', overall, issueCount, dateKey}, createdAt }</code></td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Cron sweep (07:30 BKK) — อ่าน 5 แหล่ง → evaluate (pure) → เขียนสถานะ → alert เมื่อไม่ ok → purge error เก่า</div>
+  <div>
+    <span class="flow-box">cron 00:30 UTC (CRON_SECRET)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">reads: scheduled_task_status · recon-daily-{y} · push_config/tokens+settings · error count 24h · system_config</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>evaluateInfraHealth()</code> pure</span><span class="flow-arrow">→</span>
+    <span class="flow-box">write infra-health-latest + history + task status</span><span class="flow-arrow">→</span>
+    <span class="flow-box">warn/red → staff card + LINE push</span><span class="flow-arrow">→</span>
+    <span class="flow-box">purge client_error_log &gt;30d</span>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Beacon — capture → sanitize → gate → POST → validate+cap → store → viewer/health-count</div>
+  <div>
+    <span class="flow-box">onerror / unhandledrejection / ErrorBoundary</span><span class="flow-arrow">→</span>
+    <span class="flow-box">sanitize (PHI-safe URL) + dedupe 1/5min/hash + max 20/session</span><span class="flow-arrow">→</span>
+    <span class="flow-box">POST /api/client-error (sendBeacon→fetch keepalive)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">validate + truncate + tx daily-cap 500</span><span class="flow-arrow">→</span>
+    <span class="flow-box">client_error_log (default-deny)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">admin list endpoint → viewer · health cron count()</span>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>ไฟล์</th><th>สถานะ</th><th>หน้าที่เดียว</th></tr>
+  <tr><td><code>src/lib/infraHealthCore.js</code></td><td>NEW</td><td>Pure SSOT: EXPECTED_MAX_AGE_HOURS + UNMONITORED + evaluateInfraHealth + buildInfraAlertText + buildInfraChatCardDoc</td></tr>
+  <tr><td><code>src/lib/clientErrorCore.js</code></td><td>NEW</td><td>Pure shared: sanitizeErrorPayload (client) + validateClientErrorBody (server) + hashError + LIMITS</td></tr>
+  <tr><td><code>src/lib/errorBeacon.js</code></td><td>NEW</td><td>Client runtime: install handlers, gate (dedupe/session-cap), transport; ทุกอย่าง try/catch</td></tr>
+  <tr><td><code>src/components/AppErrorBoundary.jsx</code></td><td>NEW</td><td>React boundary: report + หน้า "โหลดหน้าใหม่" (แทนจอดำ)</td></tr>
+  <tr><td><code>src/main.jsx</code></td><td>MOD</td><td>install beacon บรรทัดแรก + wrap &lt;App/&gt; ด้วย boundary</td></tr>
+  <tr><td><code>api/cron/infra-health-sweep.js</code></td><td>NEW</td><td>Cron: reads → evaluate → write status → alert → purge (skeleton = money-reconciliation-sweep)</td></tr>
+  <tr><td><code>api/client-error.js</code></td><td>NEW</td><td>Anon POST beacon sink (pattern = patient-view: CORS/cached getDb/validate/generic 500) + tx daily cap</td></tr>
+  <tr><td><code>api/admin/client-errors-list.js</code></td><td>NEW</td><td>verifyAdminToken → latest 100 errors</td></tr>
+  <tr><td><code>api/admin/infra-health-test-alert.js</code></td><td>NEW</td><td>admin → ยิง test alert ทั้ง 2 ช่อง → ผลต่อช่อง</td></tr>
+  <tr><td><code>src/lib/systemConfigClient.js</code></td><td>MOD</td><td>+key infraHealth (defaults/merge/validate/diff) — additive</td></tr>
+  <tr><td><code>src/lib/scheduledTasksRegistry.js</code></td><td>MOD</td><td>+task infraHealthSweep (category 'sweep', params: errorThreshold24h)</td></tr>
+  <tr><td><code>vercel.json</code></td><td>MOD</td><td>+crons entry + functions maxDuration — <strong>headers ห้ามแตะ</strong></td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatSystemCard.jsx</code></td><td>MOD</td><td>+HEADLINE['infra-health'] + early plain-text branch (kind ไม่รู้จัก fallback intake เพี้ยน)</td></tr>
+  <tr><td><code>src/components/backend/InfraHealthSection.jsx</code></td><td>NEW</td><td>SectionCard: status + LINE targets config + test button + error viewer</td></tr>
+  <tr><td><code>src/components/backend/SystemSettingsTab.jsx</code></td><td>MOD</td><td>ประกอบ InfraHealthSection (1 import + 1 render)</td></tr>
+  <tr><td><code>scripts/diag-infra-health.mjs</code></td><td>NEW</td><td>Rule R read-only: รัน evaluate กับ prod จริง → print</td></tr>
+  <tr><td>tests ×5 ไฟล์ (Task 9)</td><td>NEW</td><td>core matrix + classifier + beacon + RTL + flow-simulate</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>src/lib/infraHealthCore.js</code> — pure SSOT</h3>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1:</strong> เขียนไฟล์ตามโครงนี้ (pure, ไม่ import firebase)</label></div>
+<pre><code>export const INFRA_UNMONITORED_CRON_PATHS = Object.freeze(['/api/cron/patient-view-warmup']); // stateless, ไม่เขียน Firestore
+export const INFRA_SELF_CRON_PATH = '/api/cron/infra-health-sweep';
+export const INFRA_SPECIAL_CRON_PATHS = Object.freeze({ '/api/cron/money-reconciliation-sweep': 'reconDaily' });
+// keyed by taskId (scheduled_task_status) — maxAgeHours + severity เมื่อเกิน
+export const INFRA_TASK_EXPECTATIONS = Object.freeze({
+  lineReminderFire:        { cronPath: '/api/cron/line-reminder-fire',            maxAgeHours: 6,  sev: 'warn', label: 'LINE เตือนนัด' },
+  lineReminderRetry:       { cronPath: '/api/cron/line-reminder-retry',           maxAgeHours: 2,  sev: 'warn', label: 'LINE retry' },
+  wholeSystemBackup:       { cronPath: '/api/cron/whole-system-backup-daily',     maxAgeHours: 36, sev: 'red',  label: 'Backup ทั้งระบบ' },
+  chatHistoryRetention:    { cronPath: '/api/cron/chat-history-retention-sweep',  maxAgeHours: 36, sev: 'warn', label: 'ลบประวัติแชท' },
+  staffChatRetention:      { cronPath: '/api/cron/staff-chat-retention-sweep',    maxAgeHours: 36, sev: 'warn', label: 'ลบไฟล์แชทพนักงาน' },
+  stockMovementRetention:  { cronPath: '/api/cron/stock-movement-retention',      maxAgeHours: 36, sev: 'warn', label: 'ลบ movement เก่า' },
+  stockLotCleanup:         { cronPath: '/api/cron/stock-lot-cleanup',             maxAgeHours: 36, sev: 'warn', label: 'ลบ lot ว่าง' },
+  patientLinkCleanup:      { cronPath: '/api/cron/patient-link-cleanup-sweep',    maxAgeHours: 36, sev: 'warn', label: 'ลบลิงก์คนไข้' },
+  chartEditSessionSweep:   { cronPath: '/api/cron/chart-edit-session-sweep',      maxAgeHours: 2,  sev: 'warn', label: 'กวาด chart session' },
+  opdSessionCleanup:       { cronPath: '/api/cron/opd-session-cleanup-sweep',     maxAgeHours: 3,  sev: 'warn', label: 'กวาด OPD session' },
+  opdSessionArchiveRetention:{ cronPath: '/api/cron/opd-session-archive-retention', maxAgeHours: 36, sev: 'warn', label: 'ลบ archive เก่า' },
+});
+export const PUSH_TOKEN_FRESH_DAYS = 45;
+export const CLIENT_ERROR_RETENTION_DAYS = 30;
+export const DEFAULT_ERROR_THRESHOLD_24H = 5;
+export const INFRA_FALLBACK_STAFF_CHAT_BRANCH = 'BR-1777873556815-26df6480'; // V77-bis hardcoded-fallback precedent
+
+export function evaluateInfraHealth({ statusMap, taskConfigMap, reconDoc, reconExpected, pushTokens, pushSettings, errorCount24h, errorThreshold24h, errorSamples, nowMs }) → { overall, checks }
+//  - ต่อ task: disabled → {status:'skip'}; skipped:true ล่าสุด → skip; lastRunAt เกิน maxAgeHours → sev; ok===false → sev; ปกติ → ok
+//  - recon: reconExpected && !reconDoc → warn; reconDoc.discrepancyCount>0 → warn
+//  - push: freshCount(createdAt ≥ now-45d)===0 → red; globalPushMuted → info
+//  - errors: errorCount24h ≥ threshold → warn (detail มี samples ≤3)
+//  - overall = red > warn > ok (info/skip ไม่นับ)
+export function buildInfraAlertText(result, { dateLabel }) → string  // ไทย, ≤900 chars, เรียง red ก่อน warn
+export function buildInfraChatCardDoc(result, { dateKey, branchId }) → doc  // id CHAT-SYS-INFRA-{dateKey}, text ≤500, ไม่มี undefined leaf (V14)
+export function freshPushTokenCount(tokens, nowMs, freshDays) → number  // string-form legacy = stale เสมอ</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2:</strong> ทุก builder เดินผลลัพธ์กัน undefined leaf (V14 lock — ใช้ null/ค่า default เท่านั้น)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 2: <code>src/lib/clientErrorCore.js</code> — pure shared client/server</h3>
+<pre><code>export const CLIENT_ERROR_LIMITS = Object.freeze({ message: 500, stack: 4000, url: 300, ua: 300, bodyBytes: 10240, dailyCap: 500 });
+export function sanitizeUrlForBeacon(href) → string
+//  เก็บ pathname + "?" + ชื่อ param เรียงตามเดิม (เช่น "/?patient=&tab=") — ค่า STRIP ทิ้งหมด (token/PHI ไม่หลุด)
+export function hashError({ message, stack }) → string   // djb2 ของ message + first stack line — deterministic, no crypto dep
+export function sanitizeErrorPayload({ message, stack, href, ua, surface, now }) → payload | null  // truncate ทุก field + hash + clientTs
+export function validateClientErrorBody(body) → { ok:true, doc } | { ok:false, reason }
+//  server-side: type-check ทุก field, truncate ซ้ำ (server ไม่เชื่อ client), field allowlist เท่านั้น, reject non-object
+export function groupClientErrors(rows) → [{hash, message, surface, count, lastMs, sampleUrl}]  // viewer ใช้</code></pre>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step:</strong> เขียนไฟล์ — surface derive: path เริ่ม '/?patient='|'?session='|'?schedule='|'?ed=' → 'patient'; อื่น → 'staff'</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 3: <code>src/lib/errorBeacon.js</code> + <code>AppErrorBoundary.jsx</code> + <code>main.jsx</code></h3>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1:</strong> errorBeacon.js — <code>installErrorBeacon()</code> (idempotent guard), handlers onerror + unhandledrejection, gate: per-hash 1/5min + 20/session (memory only), transport sendBeacon → fetch keepalive fallback, <code>reportErrorToBeacon(err, extra)</code> export ให้ boundary ใช้; <strong>ห่อ try/catch ทุกชั้น + error จาก beacon เอง = เงียบ (กัน loop)</strong></label></div>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2:</strong> AppErrorBoundary.jsx — componentDidCatch → reportErrorToBeacon; fallback UI ไทยกลางจอ + ปุ่ม "โหลดหน้าใหม่" (<code>window.location.reload()</code>); ไม่มีสีแดงบนชื่อคน (ไม่มีชื่อคนใน UI นี้)</label></div>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3:</strong> main.jsx — <code>installErrorBeacon()</code> เป็น import+call แรกสุด (ก่อน SW/earlyFetch เพื่อจับ error ของทุกชั้น) + wrap <code>&lt;AppErrorBoundary&gt;&lt;App/&gt;&lt;/AppErrorBoundary&gt;</code> (SwUpdateToast อยู่นอก boundary — อย่าให้ toast crash ดึงแอปล่ม และกลับกัน)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 4: <code>api/client-error.js</code> — anon sink</h3>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step:</strong> Copy pattern จาก <code>api/patient-view.js</code> (อ่านไฟล์จริงก่อน): CORS *, OPTIONS→204, POST only→405, cached getDb, try/catch→generic 500. Body: <code>validateClientErrorBody</code> → tx บน <code>client_error_log_meta/daily</code> ({dateKey,count}; วันใหม่ reset; ≥500 → return 200 {ok:true,dropped:true} — <strong>ตอบ 200 เสมอเมื่อ valid กัน retry storm</strong>) → เขียน <code>client_error_log/CE-{Date.now()}-{randomBytes(4).hex}</code> + createdAtMs + createdAt serverTimestamp</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 5: <code>api/cron/infra-health-sweep.js</code></h3>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1:</strong> Skeleton จาก money-reconciliation-sweep (initAdmin/PREFIX เหมือนกัน) + auth bearer-or-x-cron-secret (variant ใหม่กว่า) + <code>readScheduledTaskConfig(db,'infraHealthSweep')</code> (disabled → 200 skipped + writeScheduledTaskStatus skipped:true — เว้นแต่ <code>?force=1</code> จาก run-now)</label></div>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2:</strong> Reads: <code>clinic_settings/scheduled_task_status</code> · <code>clinic_settings/system_config</code> (scheduledTasks enabled-map + infraHealth targets + params.errorThreshold24h ผ่าน <code>resolveParam</code>) · <code>be_admin_audit/recon-daily-{bangkokYesterdayISO}</code> · <code>push_config/tokens</code> + <code>push_config/settings</code> · <code>client_error_log</code>.where(createdAtMs&gt;now-24h).count() + ตัวอย่าง 3 แถวล่าสุดเมื่อเกิน threshold</label></div>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3:</strong> <code>evaluateInfraHealth</code> → เขียน <code>be_admin_audit/infra-health-latest</code> (set merge:false — สถานะเต็มทุกครั้ง) + <code>infra-health-{YYYYMMDD}</code> history + <code>writeScheduledTaskStatus('infraHealthSweep',{ok:true,summary:overall})</code></label></div>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4:</strong> overall≠ok → (a) staff card: <code>buildInfraChatCardDoc</code> branch = config.staffChatBranchId || INFRA_FALLBACK_STAFF_CHAT_BRANCH → <code>db.doc(PREFIX/be_staff_chat_messages/{id}).set({...doc, createdAt: FieldValue.serverTimestamp()})</code>; (b) LINE: ต่อ target → getLineConfigForBranch → <code>pushLineMessage({channelAccessToken, lineUserId, flexJson:{type:'text',text}})</code> เช็ค statusCode!==200 → จดใน alerted.line[]; target ว่าง → alerted.line=[] + detail 'ยังไม่ได้ตั้ง LINE target'. Alert fail ทุกแบบ = non-fatal (สถานะ doc เขียนไปแล้ว)</label></div>
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5:</strong> Purge: <code>client_error_log</code>.where(createdAtMs&lt;now-30d).limit(500) → batch delete (AV141: bounded; ใช้ loop เดียว ไม่ sequential ต่อ doc — batch.commit ครั้งเดียว)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 6: admin endpoints ×2</h3>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1:</strong> <code>api/admin/client-errors-list.js</code> — <code>verifyAdminOrPermissionToken(req,res,'system_config_management')</code> (ตาม run-scheduled-task precedent) → GET → query client_error_log orderBy createdAtMs desc limit 100 → {ok, rows}</label></div>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2:</strong> <code>api/admin/infra-health-test-alert.js</code> — POST → อ่าน config → ยิง staff card id <code>CHAT-SYS-INFRA-TEST-{Date.now()}</code> text "🩺 ทดสอบแจ้งเตือนสุขภาพระบบ …" + LINE text ทดสอบ ต่อ target → return {staffChat:{ok,branchId}, line:[{lineUserId,statusCode}]} — ให้ปุ่มในการ์ดแสดงผลต่อช่อง</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 7: config + registry + vercel.json + StaffChatSystemCard</h3>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1:</strong> systemConfigClient.js — <code>INFRA_HEALTH_DEFAULTS = {lineTargets:[], staffChatBranchId:''}</code> + merge (array-of-objects filter รูปร่าง {branchId,lineUserId,label} string ทั้งหมด, cap 5 targets) + validate patch + diff (ตาม v86Glow precedent ทุกจุด)</label></div>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2:</strong> scheduledTasksRegistry.js — task ใหม่ category:'sweep': <code>{id:'infraHealthSweep', label:'ตรวจสุขภาพระบบ', description:'เช็ค backup/push/cron/error รายวัน + แจ้งเตือน staff chat + LINE', scheduleHuman:'ทุกวัน 07:30', cronPath:'/api/cron/infra-health-sweep', auditOpPrefix:'infra-health', deletesData:true (purge error log), safetyCritical:false, params:[num('errorThreshold24h','เตือนเมื่อ error 24 ชม. ≥', DEFAULT_ERROR_THRESHOLD_24H, 1, 500, 'รายการ')]}</code> — import DEFAULT_ERROR_THRESHOLD_24H จาก infraHealthCore (single-source ตาม registry convention)</label></div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3:</strong> vercel.json — functions: <code>"api/cron/infra-health-sweep.js": {"maxDuration": 300}</code> + crons: <code>{"path":"/api/cron/infra-health-sweep","schedule":"30 0 * * *"}</code> — <strong>ห้ามแตะ headers block เด็ดขาด (AV210)</strong></label></div>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4:</strong> StaffChatSystemCard.jsx — <code>HEADLINE['infra-health'] = '🩺 ตรวจสุขภาพระบบ'</code> + early branch ก่อน customer-row logic: <code>if (kind === 'infra-health') return (การ์ด amber/red accent + message.text แบบ multiline + เวลา)</code> — ไม่เรียก useSystemCardCustomer... <strong>ระวัง hooks rule</strong>: hook ถูกเรียกก่อน branch อยู่แล้ว (บรรทัด 47) — คง call ไว้ (customerId null = pending/missing เฉยๆ) แล้ว branch ที่ JSX เท่านั้น — ห้าม early-return ก่อน hook</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 8: <code>InfraHealthSection.jsx</code> + ประกอบใน SystemSettingsTab</h3>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1:</strong> อ่าน SystemSettingsTab.jsx + SettingsPrimitives.jsx ก่อน แล้วสร้าง InfraHealthSection: SectionCard "🩺 สุขภาพระบบ" — (a) status rows จาก <code>getAdminAuditDoc('infra-health-latest')</code> (โหลดตอน mount + ปุ่มรีเฟรช; ไม่มี doc = "ยังไม่เคยตรวจ — จะรันอัตโนมัติ 07:30"), chip สี ok/warn/red ตาม status; (b) config: lineTargets editor (แถว branchId dropdown จาก useBranches ถ้ามี hook เดิม/text input + lineUserId input + label) + staffChatBranchId + Save ผ่าน <code>saveSystemConfig({patch:{infraHealth}, executedBy, reason:'infra-health-config'})</code>; (c) ปุ่ม "ทดสอบแจ้งเตือน" → POST test-alert endpoint → แสดงผลต่อช่อง; (d) ปุ่ม "ตรวจตอนนี้" → POST run-scheduled-task {taskId:'infraHealthSweep'} → reload status; (e) error viewer: fetch client-errors-list → groupClientErrors → รายการ + count + เวลาล่าสุด</label></div>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2:</strong> SystemSettingsTab.jsx — 1 import + 1 <code>&lt;InfraHealthSection config executedBy/&gt;</code> วางบนสุดของ section stack</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 9: Test bank (Rule K — ครั้งเดียวหลังโครงเสร็จ + review)</h3>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><code>tests/infra-health-core.test.js</code> — H1 evaluate matrix (fixture จาก shape จริงของ scheduled_task_status: backup stale 3 วัน→red · ok:false→sev · disabled→skip · skipped→skip · recon หาย→warn · discrepancy 2→warn · token สด 0→red (repro AV210: 8 token เก่า 05-26) · muted→info · error 7≥5→warn+samples · ทุกอย่างดี→ok) · H2 alertText ไทย เรียง red ก่อน ≤900 · H3 card doc: id ต่อวัน + no-undefined-leaf (V14 walker) + text ≤500 · H4 <strong>classifier: อ่าน vercel.json จริง — ทุก crons[].path ∈ EXPECTATIONS.cronPath ∪ SPECIAL ∪ UNMONITORED ∪ SELF (cron ใหม่ไม่ประกาศ = แดง)</strong> · H5 freshPushTokenCount (legacy string = stale)</label></div>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><code>tests/client-error-core.test.js</code> — sanitizeUrl (ค่า ?patient=SECRET หาย เหลือชื่อ param · Thai path · ว่าง · malformed) · sanitize/validate round-trip · truncation ทุก field · validate ปฏิเสธ non-object/extra-field-strip · hash deterministic · group</label></div>
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><code>tests/error-beacon.test.js</code> — install idempotent · dedupe 1/5min ต่อ hash · session cap 20 · beacon-เอง-throw → เงียบไม่ loop · transport fallback (mock sendBeacon undefined → fetch keepalive)</label></div>
+  <div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><code>tests/infra-health-ui.test.jsx</code> — RTL: SystemCard kind infra-health render text (ไม่มี customer row/ไม่มี "รอลงทะเบียน") + kinds เดิม 4 ตัว render เหมือนเดิม · InfraHealthSection: status rows จาก doc fixture + ปุ่มครบ + no-doc state</label></div>
+  <div class="step"><input type="checkbox" id="t9s5"> <label for="t9s5"><code>tests/infra-health-flow-simulate.test.js</code> — Rule I: (F1) status-doc จริง (สำเนา shape จาก writeScheduledTaskStatus) → evaluate → alertText → cardDoc → validate ผ่าน server-side text rule (≤500) · (F2) beacon: throw จริงใน jsdom → handler → sanitize → validateClientErrorBody → doc shape → groupClientErrors · (F3) repro 3 เหตุการณ์ประวัติศาสตร์: AV210 (token เก่าล้วน) / V122 (backup ok:false + stale) / dead-cron (lastRunAt 5 วัน) — ทุกอันต้อง alert · (F4) systemConfig merge/validate infraHealth · (F5) vercel.json headers block byte-เดิม (อ่านไฟล์ เทียบว่าไม่มี rule ใหม่ใน headers)</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 10: Verify (targeted → build → AV210 → full)</h3>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1">รัน 5 ไฟล์เทสใหม่ + เทสข้างเคียง: <code>npx vitest run tests/infra-health-*.test.* tests/client-error-core.test.js tests/error-beacon.test.js tests/av210-push-csp-sw-consistency.test.js tests/staffchat-*.test.* tests/phase16.3-*.test.js</code> (+ grep -rln touched modules ใน tests/)</label></div>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><code>npm run build</code> clean + <code>git diff vercel.json</code> = เฉพาะ functions/crons (ไม่มีบรรทัด headers)</label></div>
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3">Full <code>npm test -- --run</code> (Rule P batch-end) — V21 repoints ถ้าเทสเดิม lock จำนวน task/section</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 11: Rule Q — L2 real prod + L1 dev</h3>
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><code>scripts/diag-infra-health.mjs</code> (Rule R read-only, invocation guard): อ่าน 5 แหล่งจริงจาก prod → evaluateInfraHealth → print checks — คาด: ทุก cron ok (เพิ่งรันคืนนี้/วันนี้) + push ok (token สด 2) + recon ok</label></div>
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2">L2 endpoint handler: invoke <code>api/client-error.js</code> handler ตรงๆ ด้วย mock req/res + env จริง → เขียน TEST error → อ่านกลับ → ลบ (TEST- fixture discipline) + ยิงเกิน cap จำลอง (set meta count=500 → dropped:true → restore)</label></div>
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3">L1 dev server (Chrome/Playwright): เปิด SystemSettings → การ์ดขึ้น + โยน error ใน console จริง → beacon จับ + payload ถูก (network tab; endpoint 404 บน dev = expected, จับ payload พอ) + ErrorBoundary: force throw ใน component → เห็นหน้า "โหลดหน้าใหม่" ไม่ใช่จอดำ + StaffChatSystemCard kind ใหม่ render จริง — <strong>honest gap: full beacon round-trip + cron จริง + LINE จริง = post-deploy (ต้องรอ "deploy" + user ตั้ง LINE target แล้วกดปุ่มทดสอบ)</strong></label></div>
+</div>
+
+<div class="task">
+  <h3>Task 12: Commit/push ต่อหน่วยงาน + docs + session state</h3>
+  <div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1">Commits: core+beacon lib → endpoints+cron → config/registry/vercel → UI → tests → docs. Push ทุก commit. ไม่ deploy (V18)</label></div>
+  <div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2">อัพเดท active.md + SESSION_HANDOFF (session-end ตอนจบ) + AVxx invariant ถ้าเข้าเกณฑ์ (candidate: "ทุก cron ใหม่ต้องประกาศใน INFRA_TASK_EXPECTATIONS ∪ UNMONITORED" = classifier test อยู่แล้ว — จด SKILL.md audit-anti-vibe-code ทั้ง 2 copies SY1)</label></div>
+</div>
+
+<h2>Self-review notes</h2>
+<ul>
+  <li>Spec coverage: monitor (T1,5,7,8) · beacon (T2,3,4,6) · alerts (T5,6,7) · UI (T7,8) · anti-drift classifier (T9 H4) · blast-radius (T10) · L1/L2 (T11) — ครบ</li>
+  <li>Type consistency: evaluateInfraHealth ↔ cron ↔ diag ใช้ signature เดียว; validateClientErrorBody ใช้ทั้ง T4+T11; DEFAULT_ERROR_THRESHOLD_24H single-source T1→T7</li>
+  <li>hooks-rule กับดักใน T7 Step 4 ระบุแล้ว (ห้าม early-return ก่อน hook)</li>
+</ul>
+
+</body>
+</html>

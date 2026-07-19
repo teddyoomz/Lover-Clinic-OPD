@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Infra Health Monitor + Client Error Beacon — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    /* dark-card mockup mimicking backend theme */
+    .dk { background: #0f0f0f; color: #e5e5e5; border-radius: 12px; padding: 1em 1.2em; border: 1px solid #262626; font-size: 0.9em; }
+    .dk .hd { font-weight: 700; margin-bottom: .5em; }
+    .chip { display: inline-block; padding: .1em .6em; border-radius: 999px; font-size: .78em; margin-right: .4em; }
+    .ok { background: rgba(16,185,129,.15); color: #34d399; border: 1px solid rgba(16,185,129,.4); }
+    .warn { background: rgba(245,158,11,.15); color: #fbbf24; border: 1px solid rgba(245,158,11,.4); }
+    .red { background: rgba(220,38,38,.18); color: #f87171; border: 1px solid rgba(220,38,38,.5); }
+    .row { display: flex; justify-content: space-between; border-bottom: 1px dashed #262626; padding: .35em 0; }
+    .muted { color: #8a8a8a; font-size: .85em; }
+    .btn { display: inline-block; background: #1f1f1f; border: 1px solid #3f3f3f; color: #e5e5e5; padding: .3em .9em; border-radius: 8px; font-size: .85em; margin-right: .5em; }
+    .btn.primary { background: rgba(220,38,38,.85); border-color: #dc2626; color: #fff; }
+    .flow-box { background: #fff; border: 1.5px solid #94a3b8; border-radius: 8px; padding: .45em .8em; display: inline-block; margin: .2em; font-size: .85em; }
+    .flow-arrow { color: #64748b; font-weight: 700; margin: 0 .3em; }
+    .linebubble { background: #06C755; color: #fff; border-radius: 14px 14px 14px 4px; padding: .6em .9em; max-width: 420px; font-size: .88em; }
+  </style>
+</head>
+<body>
+
+<h1>Infra Health Monitor + Client Error Beacon — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-19 (EOD+2 evening) · <strong>Status:</strong> Approved by user ("ลุยต่อเลย") ·
+  <strong>Constraint (user, verbatim):</strong> "ทำหมดเลย แต่ห้ามเพิ่มบั๊ค อย่างเช่นที่ noti หายไป เพราะนายไปทำอะไรสักอย่าง" ·
+  <strong>Implementation plan:</strong> <a href="../plans/2026-07-19-infra-health-monitor-error-beacon.html">2026-07-19-infra-health-monitor-error-beacon.html</a>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+สองเดือนที่ผ่านมาระบบเบื้องหลัง <strong>ตายเงียบ</strong> 3 ครั้ง: push outage เงียบ 12 วัน (AV210) ·
+whole-system backup NO_MANIFEST เงียบ 5 วัน (V122) · chat-history retention cron ตาย 46 รอบรัน (type mismatch)
+ทุกครั้ง user เป็นคนเจอเอง ปัจจุบันมี 13 crons + push + backup ที่ fail ได้โดยไม่มีใครเห็น และ error
+ฝั่งเครื่อง user (จอดำ V163-class ฯลฯ) มองไม่เห็นเลยจนกว่า user จะรายงาน
+Spec นี้ทำให้ "ความพังมองเห็นได้" ภายใน 24 ชั่วโมง (infra) / ภายในนาที (client error) โดย
+<strong>ไม่แตะ CSP / SW / push path / firestore.rules เลย</strong> (blast-radius = ศูนย์ต่อระบบเดิม — บทเรียน AV210)
+</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Backend · SystemSettingsTab · SectionCard "🩺 สุขภาพระบบ" — สถานะ RED (มีปัญหา)</div>
+  <div class="dk">
+    <div class="hd">🩺 สุขภาพระบบ <span class="chip red">มีปัญหา 2 รายการ</span> <span class="muted">ตรวจล่าสุด: วันนี้ 07:30</span></div>
+    <div class="row"><span>💾 Backup ทั้งระบบ</span><span class="chip red">ล้มเหลว — รันล่าสุด 3 วันก่อน</span></div>
+    <div class="row"><span>🔔 Push tokens</span><span class="chip red">ไม่มี token สดเลย (fleet-dead)</span></div>
+    <div class="row"><span>⏰ Crons (11 ตัว)</span><span class="chip ok">ปกติทั้งหมด</span></div>
+    <div class="row"><span>💰 Recon เมื่อวาน</span><span class="chip ok">ตรง 0 discrepancy</span></div>
+    <div class="row"><span>🐞 Client errors 24h</span><span class="chip warn">7 รายการ (เกิน 5)</span></div>
+    <div style="margin-top:.7em">
+      <span class="btn primary">ทดสอบแจ้งเตือน</span>
+      <span class="btn">ตรวจตอนนี้</span>
+    </div>
+    <div class="muted" style="margin-top:.8em">— การตั้งค่า —</div>
+    <div class="row"><span>เปิดใช้งานแจ้งเตือน</span><span>[✓]</span></div>
+    <div class="row"><span>LINE targets</span><span>นครราชสีมา · Uxxxx…f3 (เจ้าของ) <span class="btn">เลือกจากแชท</span></span></div>
+    <div class="row"><span>สาขา staff-chat card</span><span>นครราชสีมา ▾</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Backend · การ์ดเดียวกัน — สถานะ OK + error viewer (ล่าง)</div>
+  <div class="dk">
+    <div class="hd">🩺 สุขภาพระบบ <span class="chip ok">ปกติทุกจุด</span> <span class="muted">ตรวจล่าสุด: วันนี้ 07:30</span></div>
+    <div class="muted" style="margin-top:.6em">🐞 Client errors ล่าสุด (group ตามชนิด · 30 วัน)</div>
+    <div class="row"><span>TypeError: x is not a function<br><span class="muted">/backend · tab=stock · Chrome Win</span></span><span class="chip warn">×4 · ล่าสุด 2 ชม.ก่อน</span></div>
+    <div class="row"><span>ChunkLoadError: Loading chunk …<br><span class="muted">/?patient=… (ค่า token ถูก strip) · Safari iOS</span></span><span class="chip warn">×2 · เมื่อวาน</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Staff chat · system card kind "infra-health" (id ต่อวัน = idempotent)</div>
+  <div class="dk" style="max-width:420px">
+    <div class="hd">🩺 ระบบมีปัญหา — ตรวจสุขภาพประจำวัน</div>
+    <div>🔴 Backup ทั้งระบบ: ล้มเหลว (รันล่าสุด 3 วันก่อน)<br>
+    🔴 Push: ไม่มี token สด<br>
+    🟡 Client errors 24h: 7 รายการ</div>
+    <div class="muted" style="margin-top:.4em">ดูรายละเอียด: Backend → ตั้งค่าระบบ → สุขภาพระบบ · 19/07/2569 07:30</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">LINE OA push (text message ไปยัง lineUserId เจ้าของ)</div>
+  <div class="linebubble">⚠️ LoverClinic ระบบผิดปกติ (19/07/2569 07:30)<br>🔴 Backup ทั้งระบบล้มเหลว — รันล่าสุด 3 วันก่อน<br>🔴 Push ไม่มี token สด<br>🟡 Client errors 24h: 7 รายการ<br>เปิด Backend → ตั้งค่าระบบ → สุขภาพระบบ</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">หน้าลูกค้า/แอป · AppErrorBoundary fallback (แทนจอดำ V163-class — โผล่เฉพาะตอน React crash)</div>
+  <div class="dk" style="text-align:center; padding:2em">
+    <div style="font-size:1.6em">😥</div>
+    <div class="hd">เกิดข้อผิดพลาดในการแสดงผล</div>
+    <div class="muted">ระบบบันทึกปัญหาไว้แล้ว กรุณาลองใหม่อีกครั้ง</div>
+    <div style="margin-top:.8em"><span class="btn primary">โหลดหน้าใหม่</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 — Infra Health sweep (cron วันละครั้ง 07:30 BKK = 00:30 UTC หลัง night crons ทั้งหมดจบ)</div>
+  <div>
+    <span class="flow-box">vercel cron 00:30 UTC<br><code>/api/cron/infra-health-sweep</code><br>(CRON_SECRET gate)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">อ่าน 5 แหล่ง (อ่านอย่างเดียว):<br>1. <code>clinic_settings/scheduled_task_status</code> (11 crons + backup)<br>2. <code>be_admin_audit/recon-daily-{เมื่อวาน}</code><br>3. <code>push_config/tokens</code> + <code>push_config/settings</code><br>4. <code>client_error_log</code> count 24h<br>5. config จาก <code>system_config.infraHealth</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">pure <code>evaluateInfraHealth()</code><br>→ {overall: ok|warn|red, checks[], alertText}</span>
+  </div>
+  <div style="margin-top:.6em">
+    <span class="flow-box">เขียนเสมอ:<br><code>be_admin_audit/infra-health-latest</code> (merge)<br>+ <code>infra-health-{YYYYMMDD}</code> (history)<br>+ <code>writeScheduledTaskStatus('infraHealthSweep')</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">ถ้า warn/red เท่านั้น:<br>① staff-chat card <code>CHAT-SYS-INFRA-{YYYYMMDD}</code> (admin SDK, idempotent/วัน)<br>② <code>pushLineMessage({type:'text'})</code> ต่อ target (เช็ค statusCode; 410 = จดใน run doc)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">งานแถมท้าย run:<br>purge <code>client_error_log</code> &gt; 30 วัน (batch ≤500)</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 — Client Error Beacon (จับ → ส่ง → เก็บ → ดู)</div>
+  <div>
+    <span class="flow-box">window.onerror /<br>unhandledrejection /<br>ErrorBoundary catch</span><span class="flow-arrow">→</span>
+    <span class="flow-box">sanitize:<br>message≤500 · stack≤4000<br>URL: path + <em>ชื่อ</em> query params เท่านั้น (ค่า token ถูกทิ้ง)<br>ไม่มี form data / PHI เด็ดขาด</span><span class="flow-arrow">→</span>
+    <span class="flow-box">gate ฝั่ง client:<br>dedupe ต่อ hash 1/5นาที<br>max 20/session · try/catch ทุกชั้น (beacon พังเอง = เงียบ ไม่ loop)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">sendBeacon/fetch keepalive<br>POST <code>/api/client-error</code></span>
+  </div>
+  <div style="margin-top:.6em">
+    <span class="flow-box">endpoint (anon, CORS, admin SDK):<br>validate + truncate + size cap 10KB<br>daily cap 500 (tx counter <code>client_error_log_meta/{YYYYMMDD}</code>; เกิน = drop เงียบ)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เขียน <code>client_error_log/CE-{ts}-{hex}</code><br>(default-deny — client SDK แตะไม่ได้เลย)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">viewer: admin endpoint<br><code>/api/admin/client-errors-list</code> (verifyAdminToken)<br>→ group ตาม hash ในการ์ดสุขภาพระบบ</span><span class="flow-arrow">→</span>
+    <span class="flow-box">health cron นับ 24h<br>≥ threshold → alert Flow 1</span>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<p><strong>หลักการ: ต่อรางเดิมทั้งหมด ไม่สร้างรางใหม่</strong> (แนวทาง 1 ที่ user เลือก)</p>
+<ul>
+  <li><strong>Pure SSOT</strong> — <code>src/lib/infraHealthCore.js</code>: ตาราง <code>EXPECTED_MAX_AGE_HOURS</code> ต่อ cron (ครบ 13 + รายการ <code>UNMONITORED</code> ที่ประกาศชัด) + <code>evaluateInfraHealth()</code> (pure, รับ doc snapshots ที่อ่านมาแล้ว) + <code>buildInfraAlertText()</code> (ไทย) + <code>buildInfraChatCardDoc()</code>. Cron / UI / test ใช้ตัวเดียวกัน — ไม่มี drift</li>
+  <li><strong>Cron</strong> — <code>api/cron/infra-health-sweep.js</code>: copy skeleton จาก <code>money-reconciliation-sweep.js</code> + auth แบบ bearer-or-x-cron-secret + <code>writeScheduledTaskStatus</code> + ลงทะเบียนใน <code>scheduledTasksRegistry.js</code> + <code>run-scheduled-task.js</code> (ปุ่ม "ตรวจตอนนี้" ได้ฟรีจาก ScheduledTasksTab)</li>
+  <li><strong>Alert ช่อง 1: staff chat</strong> — เขียนผ่าน admin SDK (bypass rules — pattern เดียวกับ intake/followup ใน <code>functions/staffChatNotify.js</code>) · kind ใหม่ <code>'infra-health'</code> · <code>StaffChatSystemCard.jsx</code> เพิ่ม <code>HEADLINE['infra-health']</code> + early branch แบบ plain-text (ไม่มี customer row) — <em>จำเป็น</em> เพราะ kind ที่ไม่รู้จักจะ fallback เป็น intake card เพี้ยน</li>
+  <li><strong>Alert ช่อง 2: LINE OA</strong> — reuse <code>pushLineMessage</code> (รับ <code>{type:'text',text}</code> ตรงๆ ไม่ผูก flex) + <code>getLineConfigForBranch</code> · target = <code>{branchId, lineUserId}[]</code> (ต้องเป็น OA ของสาขาที่ผู้รับแอดเป็นเพื่อน — ข้อจำกัด per-branch OA, ไม่มี global token) · เช็ค <code>statusCode===200</code> เอง; 410 = unfollowed → จดผลใน run doc + โชว์ในการ์ด</li>
+  <li><strong>Config</strong> — key ใหม่ <code>infraHealth</code> ใน <code>clinic_settings/system_config</code> (ตาม precedent v86Glow/scheduledTasks): <code>{enabled, lineTargets:[], staffChatBranchId, errorThreshold24h}</code> — ได้ validated+audited write + live listener ฟรี · <strong>run-state แยก</strong> ไปอยู่ <code>be_admin_audit/infra-health-latest</code> (doc ตายตัว อ่านด้วย <code>getAdminAuditDoc</code> แบบ recon-banner — be_admin_audit อ่านได้ด้วย isClinicStaff อยู่แล้ว ไม่ต้องแก้ rules)</li>
+  <li><strong>Beacon client</strong> — <code>src/lib/errorBeacon.js</code> (helpers เป็น pure exports เพื่อเทส) ติดตั้งบรรทัดแรกๆ ของ <code>main.jsx</code> + <code>AppErrorBoundary.jsx</code> ครอบ <code>&lt;App/&gt;</code> (จอดำ → หน้า "โหลดหน้าใหม่")</li>
+  <li><strong>Beacon server</strong> — <code>api/client-error.js</code> (anon POST — mirror <code>api/patient-view.js</code>: CORS, cached getDb, validate, generic 500) + <code>api/admin/client-errors-list.js</code> (verifyAdminToken) · collection <code>client_error_log</code> <strong>default-deny</strong> (ไม่มี rule ใหม่ = client SDK แตะไม่ได้ = ปลอดภัยสุด) · Rule C3 ครบ: writer=endpoint, reader=admin endpoint, ขนาดถูก cap 500/วัน + retention 30 วัน</li>
+  <li><strong>UI</strong> — <code>src/components/backend/InfraHealthSection.jsx</code> (ไฟล์แยก กัน SystemSettingsTab บวม) ประกอบใน SystemSettingsTab: status rows + config form (saveSystemConfig) + LINE-target picker (list จาก <code>chat_conversations</code> ล่าสุด — staff อ่านได้อยู่แล้ว) + error viewer + ปุ่มทดสอบแจ้งเตือน (<code>api/admin/infra-health-test-alert.js</code>)</li>
+</ul>
+</div>
+
+<h2>ตาราง liveness ต่อ cron (จาก integration map จริง)</h2>
+<table>
+  <tr><th>แหล่ง</th><th>วิธีเช็ค</th><th>เกณฑ์</th></tr>
+  <tr><td>Backup ทั้งระบบ</td><td><code>scheduled_task_status.wholeSystemBackup</code></td><td>&gt;36h หรือ ok=false → 🔴</td></tr>
+  <tr><td>Daily crons ×9 (retention/sweep/reminder)</td><td><code>scheduled_task_status.{taskId}</code></td><td>&gt;36h หรือ ok=false → 🟡 (enabled=false = ข้าม)</td></tr>
+  <tr><td>chart-edit-session-sweep (*/15)</td><td><code>scheduled_task_status.chartEditSessionSweep</code></td><td>&gt;2h → 🟡</td></tr>
+  <tr><td>money-reconciliation (04:15)</td><td><code>be_admin_audit/recon-daily-{เมื่อวาน}</code> (doc id ตายตัว)</td><td>หาย → 🟡 · discrepancies&gt;0 → 🟡+จำนวน</td></tr>
+  <tr><td>patient-view-warmup (*/5)</td><td><strong>UNMONITORED (ประกาศชัด)</strong></td><td>ไม่เขียน Firestore เลย (stateless) + stakes ต่ำ — จะ monitor ต้องเพิ่ม write 288 ครั้ง/วัน ไม่คุ้ม</td></tr>
+  <tr><td>Push subsystem</td><td><code>push_config/tokens</code> + <code>settings</code></td><td>token ที่ createdAt ≤45 วัน = 0 ตัว → 🔴 (สัญญาณ AV210) · muted → ℹ️</td></tr>
+  <tr><td>Client errors</td><td>count <code>client_error_log</code> 24h</td><td>≥ threshold (default 5) → 🟡 + ตัวอย่าง 3</td></tr>
+</table>
+<p><strong>Anti-drift lock (บทเรียน AV142)</strong>: classifier test บังคับ <em>ทุก path ใน <code>vercel.json crons[]</code> ⊆ ตารางตรวจ ∪ UNMONITORED</em> — cron ใหม่ในอนาคตที่ไม่ประกาศฝั่ง health = test แดงทันที</p>
+
+<h2>Blast-radius audit (กัน AV210-class — ตรวจ consumer ที่ไม่ใช่หน้าเพจทุกตัว)</h2>
+<table>
+  <tr><th>ไฟล์ที่แตะ</th><th>ลักษณะ</th><th>พิสูจน์ว่าไม่กระทบของเดิม</th></tr>
+  <tr><td><code>vercel.json</code></td><td>แตะเฉพาะ <code>crons[]</code> append 1 — headers/CSP/SW <strong>ไม่แตะ</strong></td><td>AV210 bank 23 เทส re-run + git diff เฉพาะ crons block</td></tr>
+  <tr><td><code>src/main.jsx</code></td><td>+install beacon (บรรทัดแรก) + ErrorBoundary wrap</td><td>probe: patientViewEarlyFetch ยังยิงลำดับเดิม · entry chunk โตเล็กน้อยเท่านั้น</td></tr>
+  <tr><td><code>StaffChatSystemCard.jsx</code></td><td>additive branch kind ใหม่</td><td>เทส kinds เดิมทั้งหมด green + RTL kind ใหม่</td></tr>
+  <tr><td><code>systemConfigClient.js</code></td><td>additive key <code>infraHealth</code></td><td>schema tests เดิม green + validator ใหม่</td></tr>
+  <tr><td><code>scheduledTasksRegistry.js</code> + <code>run-scheduled-task.js</code></td><td>+1 task entry</td><td>เทส registry เดิม (นับจำนวน = V21 repoint ถ้ามี)</td></tr>
+  <tr><td>firestore.rules / storage.rules / SW / push code / CSP</td><td><strong>ไม่แตะ 0 ไฟล์</strong></td><td>git diff ยืนยัน — deploy รอบนี้จะเป็น vercel-only</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = Staff chat + LINE OA:</strong> ช่องแจ้งเตือนคู่ — อิสระจาก FCM ทั้งสองช่อง (FCM แจ้ง "FCM ตาย" ไม่ได้)</li>
+  <li><strong>Q2 = ทุกหน้า:</strong> beacon ครอบ staff app + หน้าลิ้งลูกค้าทั้งหมด (PatientForm / ดูนัด / ดูข้อมูล / ED scoring)</li>
+  <li><strong>Approach = 1 "ต่อรางเดิม":</strong> ปฏิเสธ tab ใหม่+listener (ต้องแก้ rules) และ alerts-only (เสีย history)</li>
+  <li><strong>ไม่แก้ firestore.rules เลย:</strong> error log อ่าน/เขียนผ่าน endpoint (admin SDK) — collection default-deny</li>
+  <li><strong>แจ้งเตือนวันละ ≤1 ครั้ง/ปัญหา</strong> (doc id ต่อวัน) — ไม่มี recovery-spam, สถานะดูได้ในการ์ดตลอด</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>จำลองเหตุการณ์จริง 3 แบบ (backup stale &gt;36h / push token สด 0 / cron ok=false) ผ่าน fixture → <code>evaluateInfraHealth</code> ให้ RED/WARN ถูกต้อง + alertText ไทยครบทุกปัญหา</li>
+  <li>กด "ทดสอบแจ้งเตือน" → การ์ดขึ้น staff chat จริง + LINE เด้งเข้ามือถือ user จริง (Rule Q L1/L3)</li>
+  <li>โยน error ใน browser จริง (dev) → ผ่าน sanitizer → ค่า query param ถูก strip → โผล่ใน viewer (L1 เท่าที่ทำได้ pre-deploy; full round-trip = post-deploy)</li>
+  <li>cron ใหม่ที่เพิ่มใน vercel.json โดยไม่ประกาศฝั่ง health → classifier test แดง</li>
+  <li>AV210 bank green + git diff ยืนยัน 0 การเปลี่ยนแปลงใน headers/CSP/SW/rules/push</li>
+  <li>เขียน error เกิน cap → doc ที่ 501 ของวันถูก drop เงียบ (cost bounded)</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>LINE target ยังว่างตอน ship</strong> — จนกว่า user จะเลือก lineUserId ในการ์ด → LINE channel เงียบ (staff-chat card ยังทำงาน) การ์ดจะโชว์คำเตือน "ยังไม่ได้ตั้ง LINE target"</li>
+  <li><strong>ผู้รับต้องเป็นเพื่อนกับ OA ของสาขานั้น</strong> (ข้อจำกัด per-branch token) — 410 จะถูกจดและโชว์ในการ์ด</li>
+  <li><strong>Beacon endpoint บน prod จะมีจริงหลัง deploy เท่านั้น</strong> — pre-deploy L1 ทำได้แค่ฝั่ง capture+payload; full round-trip verify post-deploy (จดเป็น honest gap)</li>
+  <li><strong>Anon endpoint = spam vector</strong> — ไม่มี shared rate-limiter ใน repo; ป้องกันด้วย size cap + field truncation + daily cap 500 (โกงสุด = 500 junk doc/วัน, bounded, ยอมรับ)</li>
+  <li><strong>ErrorBoundary เปลี่ยน UX ตอน crash</strong> (จอดำ → หน้า reload) — ตั้งใจ และโผล่เฉพาะกรณีที่เดิมคือจอดำอยู่แล้ว</li>
+</ul>
+
+</body>
+</html>
