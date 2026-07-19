@@ -3,8 +3,9 @@
 // Client-side search filtering by name, HN, phone.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
+import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus, Crown } from 'lucide-react';
 import { getAllCustomers, listBranches } from '../../lib/scopedDataLayer.js';
+import { useVipIds } from '../../lib/VipContext.jsx'; // VIP sort (2026-07-19) — same real-time set as the gold badges
 import { swrRun } from '../../lib/swrRead.js';
 import SyncIndicator from '../SyncIndicator.jsx';
 import { hexToRgb } from '../../utils.js';
@@ -122,6 +123,18 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
     });
   }, [customers, filterQuery]);
 
+  // VIP sort (2026-07-19) — toggle "👑 VIP ก่อน": stable VIP-first ordering.
+  // Membership comes from the SAME real-time VipProvider set the gold badges
+  // render from (id derivation mirrors CustomerCard: proClinicId || id), so
+  // the order can never disagree with the badges. Off = original order.
+  const vipIds = useVipIds();
+  const [vipFirst, setVipFirst] = useState(false);
+  const displayed = useMemo(() => {
+    if (!vipFirst) return filtered;
+    const isVip = (c) => vipIds.has(String(c.proClinicId || c.id || ''));
+    return [...filtered].sort((a, b) => Number(isVip(b)) - Number(isVip(a))); // stable sort keeps in-group order
+  }, [filtered, vipFirst, vipIds]);
+
   return (
     <div className="space-y-4">
 
@@ -179,13 +192,33 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
             )}
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
-            <Info size={12} /> ลูกค้าที่ Clone มาจาก ProClinic จะแสดงที่นี่
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5 min-w-0">
+            <Info size={12} /> <span className="truncate">ลูกค้าที่ Clone มาจาก ProClinic จะแสดงที่นี่</span>
           </p>
-          <span className="text-xs text-[var(--tx-muted)] font-bold">
-            {filtered.length} / {customers.length} รายการ {syncing && <SyncIndicator show />}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* VIP sort (2026-07-19) — VIP-first toggle. Amber per VipBadge
+                palette (amber-700 in light for AA — V125 lesson); gold on
+                names is sanctioned (2026-07-04), red never. */}
+            <button
+              type="button"
+              onClick={() => setVipFirst(v => !v)}
+              disabled={loading || customers.length === 0}
+              data-testid="vip-sort-toggle"
+              data-active={vipFirst ? 'true' : undefined}
+              aria-pressed={vipFirst}
+              className={`px-2.5 py-1 rounded-full border text-[11px] font-bold inline-flex items-center gap-1 transition-all disabled:opacity-40 ${
+                vipFirst
+                  ? (isDark ? 'bg-amber-400/15 border-amber-400/60 text-amber-400' : 'bg-amber-700/10 border-amber-700/60 text-amber-700')
+                  : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)] hover:border-amber-500/50'
+              }`}
+            >
+              <Crown size={11} /> VIP ก่อน
+            </button>
+            <span className="text-xs text-[var(--tx-muted)] font-bold">
+              {filtered.length} / {customers.length} รายการ {syncing && <SyncIndicator show />}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -292,7 +325,8 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {filtered.map(customer => {
+            {/* VIP sort (2026-07-19): `displayed` = filtered + optional VIP-first order */}
+            {displayed.map(customer => {
               const selected = selectedIds.has(customer.id);
               return (
                 <div

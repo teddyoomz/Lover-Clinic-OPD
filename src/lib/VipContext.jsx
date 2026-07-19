@@ -45,4 +45,14 @@ export function useIsVip(customerId) {
   return vipIds.has(String(customerId));
 }
 
+// VIP sort (2026-07-19) — whole-set accessor for list-level operations
+// (CustomerListTab VIP-first sort). Same real-time source as useIsVip so
+// the sort order always agrees with the rendered gold badges. Stable
+// EMPTY_VIP_SET reference outside a provider keeps useMemo deps quiet
+// (and preserves the AV202 guarantee: no provider ⇒ empty ⇒ inert).
+const EMPTY_VIP_SET = new Set();
+export function useVipIds() {
+  return useContext(VipCtx) || EMPTY_VIP_SET;
+}
+
 export default VipProvider;
