@@ -7,12 +7,20 @@ allowed-tools: "Read, Grep, Glob"
 
 # Audit API Layer
 
+> **⚠️ RESCOPED (V50, 2026-05-08 — noted at audit-all 2026-07-19)**: `api/proclinic/**` was
+> DELETED in the V50 strip; webhooks migrated from unauth Firestore REST to the firebase-admin
+> SDK (V32-tris-ter-fix). The LIVE api surface is now `api/webhook/**` + `api/admin/**` +
+> `api/cron/**` + `api/patient-view`. A1/A2/A3/A5/A6/A7 (proclinic REST/updateMask/429) pass
+> vacuously; the still-live invariants are A4 (credential hygiene in logs — verify_token masked
+> 2026-07-19), A8 (CORS/method gates), A9 (no hardcoded secrets). `api/admin/**` depth is covered
+> by /audit-firebase-admin-security (FA1-FA12).
+
 Vercel serverless endpoints that proxy ProClinic + Facebook/LINE webhooks. Subtle bugs here can wipe Firestore fields, double-create records, or leak credentials.
 
 ## Invariants (A1–A9)
 
 ### A1 — Every `firestorePatch` includes `updateMask.fieldPaths`
-**Why**: AGENTS.md rule 7 — without mask, PATCH overwrites entire doc, silently wiping other fields. Catastrophic.
+**Why**: CLAUDE.md rule 7 — without mask, PATCH overwrites entire doc, silently wiping other fields. Catastrophic.
 **Where**: `api/proclinic/_lib/session.js`, `api/webhook/*.js`
 **Grep**: `firestorePatch\\(|PATCH.*documents` in api/
 **Expected count**: every call has `updateMask=X&updateMask=Y` in URL.
@@ -23,7 +31,7 @@ Vercel serverless endpoints that proxy ProClinic + Facebook/LINE webhooks. Subtl
 **Check**: either client passes `Idempotency-Key` header, or server dedupes by natural key (HN+timestamp).
 
 ### A3 — 429 rate-limit retry with exponential backoff
-**Why**: AGENTS.md rule 5 — ProClinic/Vercel rate limit. Client must back off.
+**Why**: CLAUDE.md rule 5 — ProClinic/Vercel rate limit. Client must back off.
 **Grep**: `429|rate[-_ ]?limit|Retry-After` handling in `brokerClient.js` + `api/_lib/`.
 
 ### A4 — Credentials never logged

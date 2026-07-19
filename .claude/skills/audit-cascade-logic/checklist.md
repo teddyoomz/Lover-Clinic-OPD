@@ -20,12 +20,17 @@ Plus cancelBackendSale marks the sale doc as 'cancelled'.
 **What**: Delete is a superset of cancel — calls all 5 reversals then `deleteBackendSale` instead of `cancelBackendSale`.
 **Where**: `src/components/backend/SaleTab.jsx:600+` (handleDelete)
 
-### C3 — Treatment delete reverses stock deductions
-**What**: `deleteBackendTreatment` must call `reverseStockForTreatment(treatmentId)` before deleting the treatment doc. Otherwise orphaned stock deduction.
-**Why**: Treatment's `deductStockForTreatment` deducted meds/consumables/treatmentItems batches. If treatment is deleted without reversal, those batches stay deducted forever.
-**Where**: `src/lib/backendClient.js:106–111` (deleteBackendTreatment)
-**How**: Read deleteBackendTreatment. Check for reverseStockForTreatment call. If not present → VIOLATION.
-**CURRENTLY KNOWN VIOLATION** per Explore agent — this is the flagship C3 bug.
+### C3 — Treatment delete: COURSE deductions reverse; physical stock intentionally does NOT
+**What (RESCOPED — sanctioned design, no longer a violation)**: treatment delete reverses
+COURSE deductions but deliberately does NOT reverse physical stock. Explicit user directive
+(quoted at `src/pages/BackendDashboard.jsx:~556`): "สินค้าที่เป็นชิ้นๆ จะไม่คืนกลับสต็อค
+จะต้องไปยกเลิกที่หน้าการขายเท่านั้น" — stock returns happen through the SALE cancel cascade
+(reverseStockForSale), never through treatment delete.
+**How**: verify the delete path reverses course deductions + the sale-cancel path owns the
+stock reversal. A treatment-delete that silently reversed STOCK would now be the violation
+(double-return when the sale is also cancelled).
+**History**: pre-2026 this checklist flagged "treatment delete doesn't reverse stock" as the
+flagship CRITICAL — superseded by the explicit business rule above (audit-all 2026-07-19).
 
 ---
 
@@ -40,8 +45,8 @@ Plus cancelBackendSale marks the sale doc as 'cancelled'.
 ### C5 — Sale cancel updates linked treatments' hasSale flag to false
 **What**: When a sale is cancelled, any treatment with `linkedSaleId === cancelledSaleId` should have `hasSale=false` (or linkedSaleId cleared).
 **Why**: Otherwise the next treatment edit still thinks there's a sale → skips medication deduction → ghost medication stock.
-**Where**: `src/components/TreatmentFormPage.jsx` + `src/lib/backendClient.js`
-**How**: Grep for `hasSale` assignment. Confirm it updates on sale cancel. This may not exist today — potential VIOLATION.
+**Where**: `src/lib/backendClient.js:4066` `_clearLinkedTreatmentsHasSale(saleId)` — called from BOTH the cancel path (~4055) and the delete path (~4507).
+**How**: confirm both call sites still invoke `_clearLinkedTreatmentsHasSale`. IMPLEMENTED (verified audit-all 2026-07-19) — a missing call site is the violation now, not a missing function.
 
 ### C6 — Medication hasSale split consistency
 **What**: In treatment form, if `hasSale=true`, medications NOT deducted by treatment (linked sale handles it). If `hasSale=false`, treatment deducts.

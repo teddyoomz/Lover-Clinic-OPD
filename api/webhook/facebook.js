@@ -341,7 +341,10 @@ export default async function handler(req, res) {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    console.log(`[fb-webhook] Verify: mode=${mode} token=${token}`);
+    // audit-api-layer A4 (2026-07-19): mask the incoming verify_token — a
+    // successful subscribe would otherwise write the real shared secret to
+    // Vercel logs (mirror the page-access-token masking at getChatConfig).
+    console.log(`[fb-webhook] Verify: mode=${mode} token=${token ? `${String(token).slice(0, 4)}***` : '(none)'}`);
 
     const fbConfig = await getChatConfig();
     if (mode === 'subscribe' && fbConfig?.verifyToken && token === fbConfig.verifyToken) {

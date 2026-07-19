@@ -46,7 +46,9 @@ grep -n "updateDoc.*unreadCount.*0" src/components/ChatPanel.jsx
 
 ### AN4 — `api/webhook/send.js` zeros `unreadCount` on every admin reply
 ```bash
-grep -nE "unreadCount.*integerValue.*['\"]0['\"]" api/webhook/send.js
+grep -nE "unreadCount:\s*0" api/webhook/send.js
+# Pattern updated audit-all 2026-07-19: V78 migrated send.js from REST integerValue
+# strings to the firebase-admin SDK plain-object write.
 ```
 **Expected**: one match inside the `firestorePatch(convPath, …)` call. Reply without reset = badge lingers after a silent API-only reply path.
 

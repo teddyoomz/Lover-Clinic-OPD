@@ -23,8 +23,12 @@ Firestore has its own sharp edges. This skill covers the 10 highest-impact patte
 **Read**: the rules file; confirm each immutable collection blocks mutation after create.
 
 ### F3 — Soft-delete-only collections have `allow delete: if false`
-**Collections**: `be_stock_orders`, `be_stock_batches`, `be_central_stock_warehouses`
-**Where**: `firestore.rules`
+**Collections**: `be_stock_orders`, `be_central_stock_warehouses`
+**SANCTIONED EXCEPTION (V144/AV172, 2026-06-02)**: `be_stock_batches` allows a NARROW
+client delete — `isClinicStaff() && resource.data.qty.remaining == 0` (real-time
+redundant-0-lot auto-clear). Live/negative lots stay undeletable; be_stock_movements
+audit chain remains fully immutable. A widening beyond `remaining == 0` IS a violation.
+**Where**: `firestore.rules` (be_stock_batches ~line 634)
 
 ### F4 — All `be_*` collections require authenticated clinic staff
 **Where**: `firestore.rules` — should have `request.auth != null` + staff check

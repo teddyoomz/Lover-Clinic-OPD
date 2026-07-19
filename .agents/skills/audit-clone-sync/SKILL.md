@@ -7,6 +7,12 @@ allowed-tools: "Read, Grep, Glob"
 
 # Audit Clone + Master Sync
 
+> **⚠️ RETIRED (V50, 2026-05-08 — noted at audit-all 2026-07-19)**: `src/lib/cloneOrchestrator.js`,
+> `CloneTab.jsx`, `MasterDataTab.jsx`, and the entire ProClinic sync bridge were DELETED in the
+> V50 strip (Rule H-bis executed). CL1-CL9 pass VACUOUSLY — grep-finding-nothing on a
+> legitimately-deleted file is a PASS. Keep this skill only as the checklist to resurrect IF a
+> future external-system sync is ever built; any NEW clone/sync code must re-satisfy CL1-CL9.
+
 Clone orchestrator coordinates 5-step clone across ~7 Firestore collections. Master sync pulls products/doctors/staff/courses from ProClinic. Both are Phase 1-2 code — oldest in the codebase, never systematically audited.
 
 ## Invariants (CL1–CL9)
@@ -31,7 +37,7 @@ Clone orchestrator coordinates 5-step clone across ~7 Firestore collections. Mas
 **Where**: master data sync paths.
 
 ### CL6 — Course name+product key uniqueness post-sync
-**Why**: AGENTS.md bug #2 — course dedup by name+product.
+**Why**: CLAUDE.md bug #2 — course dedup by name+product.
 
 ### CL7 — Orphan detection post-sync
 **Check**: after sync, query sales/treatments for `productId` refs that no longer exist in master.
