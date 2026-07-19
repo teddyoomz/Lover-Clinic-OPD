@@ -6,9 +6,9 @@ import { RETENTION_DAYS as STAFF_CHAT_DAYS } from '../src/lib/staffChatRetention
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from '../src/lib/stockMovementRetentionCore.js';
 
 describe('scheduledTasksRegistry', () => {
-  it('has exactly 11 tasks, all source=vercel (Firebase fn retired)', () => {
-    // 10 → 11 (2026-07-19): + opdSessionArchiveRetention (punchlist #22)
-    expect(SCHEDULED_TASKS.length).toBe(11);
+  it('has exactly 12 tasks, all source=vercel (Firebase fn retired)', () => {
+    // 11 → 12 (2026-07-19 EOD+2): + infraHealthSweep (infra observability)
+    expect(SCHEDULED_TASKS.length).toBe(12);
     expect(SCHEDULED_TASKS.every(t => t.source === 'vercel')).toBe(true);
   });
 
@@ -43,7 +43,7 @@ describe('scheduledTasksRegistry', () => {
   });
 
   it('ids unique; every param has key/default/min/max', () => {
-    expect(new Set(SCHEDULED_TASKS.map(t => t.id)).size).toBe(11); // 10 → 11 (2026-07-19)
+    expect(new Set(SCHEDULED_TASKS.map(t => t.id)).size).toBe(12); // 11 → 12 (2026-07-19 EOD+2 infraHealthSweep)
     for (const t of SCHEDULED_TASKS) {
       for (const p of t.params) {
         expect(p.key && typeof p.default === 'number').toBeTruthy();

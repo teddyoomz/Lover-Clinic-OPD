@@ -15,6 +15,7 @@ import { RETENTION_HOURS } from '../src/lib/chatHistoryRetentionCore.js';
 import { RETENTION_DAYS as STAFF_CHAT_DAYS } from '../src/lib/staffChatRetentionCore.js';
 import { RETENTION_DAYS as STOCK_MOVE_DAYS } from '../src/lib/stockMovementRetentionCore.js';
 import { ARCHIVE_RETENTION_DAYS } from '../src/lib/opdSessionCleanupCore.js';
+import { DEFAULT_ERROR_THRESHOLD_24H } from '../src/lib/infraHealthCore.js';
 import { SESSION_TIMEOUT_MS } from '../src/constants.js';
 
 const PARAM_TASKS = SCHEDULED_TASKS.filter((t) => t.params.length > 0);
@@ -107,6 +108,7 @@ describe('G3 · param default parity (UI default == cron fallback default)', () 
     opdSessionCleanup: { sessionTimeoutHours: Math.round(SESSION_TIMEOUT_MS / 3600000) },
     patientLinkCleanup: { graceDays: 30 }, // literal in both registry + cron
     opdSessionArchiveRetention: { retentionDays: ARCHIVE_RETENTION_DAYS }, // 2026-07-19
+    infraHealthSweep: { errorThreshold24h: DEFAULT_ERROR_THRESHOLD_24H }, // 2026-07-19 EOD+2
   };
   for (const t of PARAM_TASKS) {
     for (const p of t.params) {
@@ -207,6 +209,7 @@ describe('G7 · destructive param-crons import resolveParam', () => {
     patientLinkCleanup: 'patient-link-cleanup-sweep.js',
     opdSessionCleanup: 'opd-session-cleanup-sweep.js',
     opdSessionArchiveRetention: 'opd-session-archive-retention.js', // 2026-07-19
+    infraHealthSweep: 'infra-health-sweep.js', // 2026-07-19 EOD+2
   };
   for (const t of PARAM_TASKS) {
     it(`${t.id} imports resolveParam from the registry`, () => {

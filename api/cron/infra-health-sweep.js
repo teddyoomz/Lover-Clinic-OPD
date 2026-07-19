@@ -197,8 +197,9 @@ export default async function handler(req, res) {
     const force = String(req.query?.force || '') === '1'; // run-scheduled-task "run now"
     const cfg = await readScheduledTaskConfig(db, TASK_ID);
     if (!cfg.enabled && !force) {
+      // disabled-by-config — skip (guard convention shared by every cron)
       await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: true, summary: 'ปิดใช้งาน' });
-      return res.status(200).json({ ok: true, skipped: true });
+      return res.status(200).json({ ok: true, skipped: true, reason: 'disabled-by-config' });
     }
 
     const { result, alerted, errorCount24h } = await sweepInfraHealth({ db });

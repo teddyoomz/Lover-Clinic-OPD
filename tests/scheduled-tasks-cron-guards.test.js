@@ -18,9 +18,9 @@ describe('Scheduled Tasks · all 10 crons have the runtime guard', () => {
     });
   }
 
-  it('exactly the 11 registry crons exist (no orphan cron file un-wired)', () => {
+  it('exactly the 12 registry crons exist (no orphan cron file un-wired)', () => {
     // Cross-check: every cron file referenced by the registry is wired. (A new
     // scheduled cron MUST be added to the registry + get the guard — AV.)
-    expect(SCHEDULED_TASKS.length).toBe(11); // 10 → 11 (2026-07-19): + opdSessionArchiveRetention
+    expect(SCHEDULED_TASKS.length).toBe(12); // 11 → 12 (2026-07-19 EOD+2): + infraHealthSweep
   });
 });
