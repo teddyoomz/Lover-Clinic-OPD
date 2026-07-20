@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-07-20 NIGHT — LINE Friend Picker (hybrid+real-time, AV213) + done-tab sort DEPLOYED LIVE (COMBINED deploy: vercel + firestore:rules + Probe-Deploy-Probe)."
-status: "master = prod LIVE (`lover-clinic-gc5hpnt2t` aliased lover-clinic-app.vercel.app 200). firestore.rules CHANGED+DEPLOYED (be_line_friends read=staff/write=deny; probe #20 added; full probe set green pre+post — probe5 403 blip = harness token artifact, disproven with body-level rerun 200/200). Korat roster PRE-SEEDED 2,087/2,087 followers (OA = VERIFIED; names 100%, pics 97%)."
+updated_at: "2026-07-20 NIGHT+1 — mobile wedged-client escalation fix (AV214) DEPLOYED (vercel-only) หลัง LINE Friend Picker (AV213) + done-sort + rules deploy รอบค่ำ."
+status: "master = prod LIVE (`lover-clinic-o1abzsdk8` aliased lover-clinic-app.vercel.app 200; post-deploy L1 wedge-ladder PASS on the LIVE bundle). ค่ำ: combined deploy (rules: be_line_friends + probe #20, probes green). AV214: timeboxed reconnect + ลองใหม่ escalates to hard reload (มือถือค้าง = กดไม่เกิน 2 ครั้งจบ; [conn-wedge] telemetry เข้าการ์ดสุขภาพ). Korat roster PRE-SEEDED 2,087/2,087 (OA VERIFIED)."
 branch: "master"
 tests: "Full vitest exit-0 (319s) + 107 new tests 0 fail + L2 --full 20/0 vs redeployed prod (client listener realtime 173ms · guard live) + L1 Playwright 2/2 vs LIVE URL (both realtime legs, Q-vis eyeballed). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
