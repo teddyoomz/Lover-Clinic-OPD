@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-07-19 EOD+3 — Infra Health Monitor + Error Beacon + TFP keystroke isolation SHIPPED local (NOT deployed)."
-status: "master `2d6ac980` = 4 commits ahead of prod `a61ad87a`. iPhone push popup USER-CONFIRMED (AV210 fully closed). NEW: observability batch (AV211) + TFP #20 — awaiting explicit 'deploy' (vercel-only; firestore.rules UNCHANGED)."
+updated_at: "2026-07-20 — AV211 observability + TFP #20 DEPLOYED LIVE + final whole-system verification campaign COMPLETE (0 app bugs)."
+status: "master `e67b6d51` = prod (vercel `lover-clinic-ln84axjlk` aliased lover-clinic-app.vercel.app 200; rules UNCHANGED → vercel-only). Post-deploy verified: ping 200 · 14 crons (infra-health-sweep 07:30 BKK, gate 401 ✓) · LIVE beacon round-trip PASS (POST 200 → stored → token stripped → zero-orphan cleanup)."
 branch: "master"
-last_commit: "2d6ac980 — perf(tfp): buy-modal keystroke isolation (#20)"
-tests: "full vitest 17,887/17,887 · 0 fail (definitive json, post-Spec-B). Do NOT re-run at boot."
+last_commit: "e67b6d51 — test(e2e): modernize Playwright L1 stack — 150 stale fails → full green, 0 app bugs"
+tests: "full vitest 17,887/17,887 · 0 + extended 4,681/0 + build clean + L2 e2e stack ~160/0 real prod + L1 Playwright ALL GREEN (2026-07-20 final campaign). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "a61ad87a (2026-07-19 EOD+2)"
+production_commit: "e67b6d51 (2026-07-20 — AV211 + TFP #20 + e2e harness)"
 firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
 ---
 
@@ -32,11 +32,10 @@ firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Depl
   sendBeacon proof ใน browser จริง) + Playwright L1 10/10 (buy modal, TEST fixture cleaned).
 
 ## Next action
-- **User พิมพ์ "deploy"** → vercel-only. Post-deploy: การ์ดสุขภาพระบบ → ตั้ง LINE target →
-  กด "ทดสอบแจ้งเตือน" → ต้องเห็นการ์ดใน staff chat + LINE เด้งจริง (L1 ปิดท้าย) ·
-  health cron รอบแรก 07:30 BKK · beacon full round-trip live.
-- Retention cron คืนแรก: `node scripts/diag-cron-first-night.mjs` (พรุ่งนี้) — health card
-  จะโชว์ 🟡 archive-retention "ไม่เคยรัน" จนกว่ารอบแรกคืนนี้ผ่าน (ถูกต้องตามจริง).
+- ✅ DEPLOYED 2026-07-20. เหลือ USER L1 ปิดท้าย: การ์ดสุขภาพระบบ (SystemSettingsTab) →
+  ตั้ง LINE target → กด "ทดสอบแจ้งเตือน" → ต้องเห็นการ์ดใน staff chat + LINE เด้งจริง.
+- Health cron รอบแรก 07:30 BKK เช้านี้ · retention cron รอบแรก 03:20 คืนนี้ →
+  เช็ค `node scripts/diag-cron-first-night.mjs` + `diag-infra-health.mjs` (🟡 จะหายเอง).
 
 ## Outstanding user-triggered actions
 - "deploy" (V18) · desktop toast = Windows notification settings ที่เครื่องคลินิก ·
