@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-07-21 ~03:50 — worry-list sweep (12/12) + fx-perf adaptive visuals (iOS white-scroll fix) — BOTH DEPLOYED LIVE"
-status: "master `19830a91` = prod LIVE (`lover-clinic-8phoxe8tg` aliased; ping 200). rules UNCHANGED → vercel-only. fx-perf: control plane ยืนยันใน LIVE CSS 4/4 + L1 บน LIVE bundle (scroll→paused→resume + tier full auto). Worry-list prove-green: FB webhook 200→401 + health 13/14 + heartbeat dedup docs live. FULL vitest 18,134/0."
+updated_at: "2026-07-21 ~04:20 — worry-list 12/12 + fx-perf + hub pagination 20/หน้า — ALL DEPLOYED LIVE"
+status: "master `32f772b6` = prod LIVE (`lover-clinic-ge9igmdg1` aliased; ping 200). rules UNCHANGED → vercel-only. Hub pagination L1 บน LIVE: past-30 = 20 การ์ด/หน้า 1/14, DOM 3,000 vs 21,359 บน bundle เก่า (7×). fx-perf L1 LIVE (scroll→paused→resume). FB prove-green 200→401. FULL vitest 18,147/0. หมายเหตุ: SW เก่าถือ cache — เครื่อง user reload 1-2 ครั้ง/รอ auto-update toast."
 branch: "master"
 last_commit: "2c277f7f — test(repoint): 5 stale V21 locks from 2026-07-20 AV212-R2 + probe-20"
 tests: "FULL 18,120/0 exit-0 (326s) + ~100 new tests + build clean. 5 stale repoints = yesterday's AV212-R2/probe-20 drift, NOT this batch."
