@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-07-21 ~03:20 — whole-app worry-list sweep (12/12) DEPLOYED LIVE"
-status: "master `3cdcbeb2` = prod LIVE (`lover-clinic-ev9p8bccm` aliased lover-clinic-app.vercel.app; ping 200). rules UNCHANGED → vercel-only. POST-DEPLOY PROVE-GREEN: FB webhook unsigned POST 200→401 บน LIVE + health diag 13/14 (🟡 = recon timing เดิม) + zero false-warn. FULL vitest 18,120/0 + build clean."
+updated_at: "2026-07-21 ~03:50 — worry-list sweep (12/12) + fx-perf adaptive visuals (iOS white-scroll fix) — BOTH DEPLOYED LIVE"
+status: "master `19830a91` = prod LIVE (`lover-clinic-8phoxe8tg` aliased; ping 200). rules UNCHANGED → vercel-only. fx-perf: control plane ยืนยันใน LIVE CSS 4/4 + L1 บน LIVE bundle (scroll→paused→resume + tier full auto). Worry-list prove-green: FB webhook 200→401 + health 13/14 + heartbeat dedup docs live. FULL vitest 18,134/0."
 branch: "master"
 last_commit: "2c277f7f — test(repoint): 5 stale V21 locks from 2026-07-20 AV212-R2 + probe-20"
 tests: "FULL 18,120/0 exit-0 (326s) + ~100 new tests + build clean. 5 stale repoints = yesterday's AV212-R2/probe-20 drift, NOT this batch."
@@ -9,7 +9,17 @@ production_commit: "3cdcbeb2 (worry-list sweep) — deployed 2026-07-21 ~03:15"
 firestore_rules_version: "2026-07-20 NIGHT (be_line_friends + probe #20) — UNCHANGED this batch"
 ---
 
-# Active — 2026-07-21 — worry-list sweep เสร็จทั้ง 12 · รอ "deploy"
+# Active — 2026-07-21 — worry-list 12/12 + fx-perf (AV215-class) DEPLOYED
+
+## fx-perf — iOS white-scroll root fix + visual tier (2026-07-21 ~03:50)
+- Root (วัดจริง): 10 การ์ด TFP เต็มกว้าง breathe box-shadow infinite (v86 auto-glow) →
+  ทั้งหน้า invalidate 60fps → iOS tile cache ไม่ได้ → เลื่อนเร็ว = ขาวครึ่งจอ (17 Pro Max ก็โดน)
+- Fix: `--fx-anim` plane บน 19 rules → html.is-scrolling หยุด breath ตอนเลื่อน (ทุก tier) ·
+  html[data-visual-tier=eco] หยุดถาวร+หรี่ (0.25 !important — ชนะ useV86GlowApply inline;
+  จับสดใน L1) · tier = override > hw floor > jank 2/3 > full · toggle ในการ์ดสุขภาพ
+- src/lib/fxPerf.js + App wiring + FP1-FP5 (14 เทส, classifier กัน glow ใหม่หลุด plane)
+- **User L1 pending: เลื่อน TFP เร็วๆ บน iPhone อีกครั้ง — ขาวต้องหาย/ลดมาก + breath นิ่งขึ้น;
+  ถ้ายังกระตุกตอนอยู่นิ่ง → escalate compositor-layer breath (เตรียมแนวไว้แล้ว)**
 
 ## Shipped this batch (จาก whole-app 5-dimension audit)
 1. 💣 Rule M backfill APPLIED: 3 legacy inline-blob be_treatments (1021KB=100% cap!) → Storage, docs เหลือ 5/8/3KB
