@@ -277,6 +277,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // "กำลังโหลดต่อ" info; stage 2 (30s) = the retry button (half-dead escape).
   const [loadStuck, setLoadStuck] = useState(false);
   const [loadRetryNonce, setLoadRetryNonce] = useState(0);
+  // AV212 hunt R1 fix (2026-07-20) — money-action gate. The fast-paint
+  // pre-stage makes the form interactive with a MINIMAL options subset
+  // (products=[], no masterCourses/dfGroups, customerCourses without the V43
+  // skip-flag overlay). A save/buy during that window would serialize money/
+  // stock/DF from the minimal subset (V43-V46 saga precondition). This flag is
+  // set TRUE only by the FULL applyFormData (never by fast-paint) → the save +
+  // buy buttons stay disabled until the complete data lands. The form still
+  // paints ≤5s so staff can read/type/enter vitals; only the money buttons
+  // wait for enrichment (a few seconds — far less than a vitals entry takes).
+  const [optionsEnriched, setOptionsEnriched] = useState(false);
   // Hunt R1-#1 (2026-07-19): run-sequence — the retry button bumps this
   // SYNCHRONOUSLY to invalidate the hung run BEFORE the network toggle.
   const loadRunSeqRef = useRef(0);
@@ -815,6 +825,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // no-recovery end-state strictly worse than the spinner).
     setLoadTimedOut(false);
     setLoadStuck(false);
+    setOptionsEnriched(false);   // AV212 hunt R1: re-arm the money-action gate for THIS run
     const myRunSeq = ++loadRunSeqRef.current;
     const stale = () => cancelled || loadRunSeqRef.current !== myRunSeq;
     const loadT0 = Date.now();       // degradation telemetry — entry duration
@@ -1014,6 +1025,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             healthInfo: {}, vitalsDefaults: {},
           };
           setOptions(backendOptions);
+          // AV212 hunt R1: the FULL options are now present (cache OR server
+          // pass of applyFormData — both carry the complete lists + V43 overlay
+          // + dfGroups). Lift the money-action gate. Fast-paint never sets this.
+          setOptionsEnriched(true);
           // Edit mode: hydrate from the fetched treatment — ONCE across both
           // passes (AV208: a server re-apply must never clobber user edits).
           if (isEdit && treatmentId && existing && !hydrated) {
@@ -1774,6 +1789,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   // ── Buy items modal (ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน) ──
   const openBuyModal = async (type = 'course') => {
+    // AV212 hunt R1 (2026-07-20) — money-action gate. A buy during the
+    // fast-paint window appends to the MINIMAL options.customerCourses, which
+    // the full applyFormData then wholesale-replaces (setOptions) → the
+    // in-session purchase row vanishes while its bill line + tick survive →
+    // buildCourseItemsForSave mis-targets an older course or drops the
+    // deduction (Finding-2, V101-class). Block buying until the full data
+    // lands; the ACTION buttons are also disabled on !optionsEnriched.
+    if (!isEdit && !optionsEnriched) {
+      setError('กำลังโหลดรายการคอร์ส/สินค้า — กรุณารอสักครู่แล้วลองอีกครั้ง');
+      return;
+    }
     setBuyModalOpen(true);
     setBuyModalType(type);
     // view-filter resets (query/cat/limit) now live in TfpBuyModal (#20):
@@ -2502,6 +2528,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       // saveMode stays 'staff' default
     }
     // else: handleSubmit() with no arg → saveMode = 'staff', editorContext = null
+    // AV212 hunt R1 (2026-07-20) — money-action gate. CREATE-mode only (edit
+    // never runs the fast-paint pre-stage). If the full options haven't landed
+    // yet, the visible `options` is the minimal fast-paint subset (no V43 skip
+    // overlay, no dfGroups, products=[]) and the awaited save-gate can't fix a
+    // stale render closure — so refuse the save until enrichment completes.
+    // Defense-in-depth: the save buttons are also disabled on !optionsEnriched;
+    // this covers keyboard/programmatic submits. The chip already tells the
+    // user data is loading; re-clicking after it clears serializes full data.
+    if (!isEdit && !optionsEnriched) {
+      setError('กำลังโหลดข้อมูลคอร์ส/สินค้า/ค่ามือ — กรุณารอสักครู่แล้วกดบันทึกอีกครั้ง');
+      return;
+    }
     // TF3 a11y polish — clear stale per-field errors at submit start so
     // re-submit doesn't surface yesterday's aria-invalid on inputs the
     // user has since corrected.
@@ -4107,7 +4145,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 type="button"
                 onClick={() => handleSubmit('vitals')}
                 data-testid="tfp-vitals-save-btn"
-                disabled={saving}
+                disabled={saving || (!isEdit && !optionsEnriched)}
                 className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <Activity size={16} />
@@ -4202,7 +4240,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               <button
                 type="button"
                 onClick={() => handleSubmit('doctor')}
-                disabled={saving}
+                disabled={saving || (!isEdit && !optionsEnriched)}
                 data-testid="tfp-doctor-save-btn"
                 data-save-mode="doctor"
                 className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#7c3aed] hover:bg-[#6d28d9] active:bg-[#5b21b6] shadow-[0_0_18px_rgba(124,58,237,0.3)] disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -4694,7 +4732,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               {/* Phase 26.0c (V26.0, 2026-05-13) — gate on canAddNewItems so admin
                   can ADD course/product/promotion purchases when finalizing a
                   doctor-recorded treatment. */}
-              {canAddNewItems && (
+              {/* AV212 hunt R1: hide buy triggers until full data lands (create
+                  mode) — a buy during the fast-paint window would be wiped by
+                  the enrichment setOptions (Finding-2). openBuyModal also guards. */}
+              {canAddNewItems && (isEdit || optionsEnriched) && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                   <ActionBtn color="#14b8a6" isDark={isDark} onClick={() => openBuyModal('course')}>
                     <Plus size={10} /> ซื้อคอร์ส
