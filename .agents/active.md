@@ -1,38 +1,30 @@
 ---
-updated_at: "2026-07-20 EOD+2 — AV212 FULL STACK DEPLOYED LIVE: degradation matrix + fast-paint ≤5s + money-gate (hunt R1/R2) + rules 8+9 (adaptive persistence + /api/tfp-options)."
-status: "master `811c6662` = prod LIVE (`a1ef64ff` bundle → vercel `lover-clinic-d64gekhpl` aliased lover-clinic-app.vercel.app 200; rules UNCHANGED → vercel-only). Post-deploy verified: endpoint L2 11/0 + matrix LIVE M0 1.07s / M5 0.54s / M12 13.7s / M14 0.82s."
+updated_at: "2026-07-20 NIGHT — LINE Friend Picker (hybrid+real-time, AV213) + done-tab sort DEPLOYED LIVE (COMBINED deploy: vercel + firestore:rules + Probe-Deploy-Probe)."
+status: "master = prod LIVE (`lover-clinic-gc5hpnt2t` aliased lover-clinic-app.vercel.app 200). firestore.rules CHANGED+DEPLOYED (be_line_friends read=staff/write=deny; probe #20 added; full probe set green pre+post — probe5 403 blip = harness token artifact, disproven with body-level rerun 200/200). Korat roster PRE-SEEDED 2,087/2,087 followers (OA = VERIFIED; names 100%, pics 97%)."
 branch: "master"
-last_commit: "811c6662 — docs(agents): fix stale production_commit (code head = a1ef64ff rules 8+9)"
-tests: "full vitest 17,911+ green ×4 runs today (definitive json + exit-0 confirms) + matrix e2e 15 cells (E2E_DEGRADE opt-in) + hardening 30/0 + ratchet 14/0 + mega-l1 2/2 + build + verify:filler clean. Do NOT re-run at boot."
+tests: "Full vitest exit-0 (319s) + 107 new tests 0 fail + L2 --full 20/0 vs redeployed prod (client listener realtime 173ms · guard live) + L1 Playwright 2/2 vs LIVE URL (both realtime legs, Q-vis eyeballed). Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "a1ef64ff (2026-07-20 เย็น — AV212 full stack)"
-firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
+firestore_rules_version: "2026-07-20 NIGHT — be_line_friends added (probe #20). Next deploy: vercel-only unless rules touched again."
 ---
 
-# Active — 2026-07-20 EOD+2 — AV212 full stack DEPLOYED (สิบปี load path)
+# Active — 2026-07-20 NIGHT — LINE Friend Picker + done-sort DEPLOYED
 
 ## State
-- User report กลางวัน: mini PC ชนการ์ด TFP → 14-cell degradation matrix → เจอ+ปิด 2 crash class
-  (M7 IDB-throw assertion b815 / M10 offline lazy-chunk boundary) + fast-paint ≤5s ทุกเครื่องจริง.
-- Hunt R1 (5-lens) + R2 (inline): money-gate `optionsEnriched` (vitals exempt) + stuck-banner escape.
-- User report เย็น: 3/4 เครื่องเร็วแล้ว เหลือ laptop 10 ปี ("สมัยแรกเคยเร็ว") → **rules 8+9**:
-  machinePerf ratchet (cache-probe วัดจริง → `lover.noPersist` → memory-cache boot; M14 = 0.82s)
-  + `/api/tfp-options` (4 heavy lists ~80KB → applyFormData ตัวเดิม; O(payload) ไม่ใช่ O(IDB)).
-
-## What this session shipped
-- Commits: `57347648` matrix+fast-paint · `53103321`+`00ad1766` money-gate R1/R2 · `7e0f12d0`
-  R1 batch · `a1ef64ff` rules 8+9 — ทั้งหมด DEPLOYED + post-deploy verified.
-- Checkpoint (detail ทั้งหมด): `.agents/sessions/2026-07-20-degradation-matrix.md` ·
-  V-entry "Degradation Matrix (AV212)" ใน 00-session-start.md § 2 · AV212 rules 1-9 both SKILL copies (SY1).
-- Health card ใหม่: กล่อง "เครื่องนี้" (โหมดเครื่องช้า + ล้างแคช) + telemetry [tfp-slow]/[client-env]/auto-nopersist.
+- Feature ①: picker เลือก LINE userId จากรายชื่อ real-time (แอด/ทักปุ๊ปโผล่ปั๊บ) ใช้ 2 ที่ —
+  การ์ดสุขภาพ (เติม lineTargets) + modal ผูก LINE ลูกค้า (bind mirror approve + audit + collision guard).
+  Webhook เก็บ follow/unfollow → be_line_friends. Endpoint /api/admin/line-friends (list backfill + bind).
+- Feature ②: วันนี้·เสร็จแล้ว เรียง serviceCompletedAt desc (กดล่าสุดบนสุด) — L1 บน prod จริงผ่าน.
+- **บั๊คที่ post-deploy e2e จับสด**: legacy-token fallback ทำ backfill ติด branchId ผิด (300 docs) →
+  guard `source==='be_line_configs' OR fallback-branch-only` + sweep แล้ว + E1.3 lock → redeploy → 20/0.
+- AV213 both SKILL copies (SY1) · spec+plan HTML committed · checkpoint ยังไม่เขียน (รอ /session-end).
 
 ## Next action
-- **laptop 10 ปี**: เปิด TFP 1-3 ครั้ง (ratchet flip เอง) หรือกด "โหมดเครื่องช้า" ในการ์ดสุขภาพระบบ
-  → คาด ~1-3s; ดู telemetry ในการ์ดหลังใช้ 1-2 วัน.
-- พรุ่งนี้หลัง 07:30: health cron รอบแรกของ sweep ใหม่ → `node scripts/diag-infra-health.mjs`.
+- User L1: เปิด picker จริง → ค้นชื่อเจ้าของจาก 2,087 คน → ผูก target → กด "ทดสอบแจ้งเตือน" (ปิด backlog เดิมด้วย).
+- แอดเพื่อนใหม่จริงจากมือถือ → ดูโผล่ใน picker (พิสูจน์ follow-event webhook เต็มทาง — ชิ้นเดียวที่เหลือ).
+- สาขาอื่นเปิด picker ครั้งแรก = backfill อัตโนมัติ (ถ้าสาขานั้นมี be_line_configs ของตัวเอง).
 
 ## Outstanding user-triggered actions
-- User L1: การ์ด 🩺 สุขภาพระบบ → ตั้ง LINE target → กด "ทดสอบแจ้งเตือน" (ค้างจากเช้า).
-- Desktop toast (Windows notification settings เครื่องคลินิก) + standing L1 stack (มือถือ/iPad).
+- (ค้างเดิม) Desktop toast Windows + standing L1 stack (มือถือ/iPad) + laptop 10 ปี เปิด TFP เช็ค ratchet.
+- พรุ่งนี้หลัง 07:30: `node scripts/diag-infra-health.mjs` (health cron sweep ใหม่รอบแรก).
 
 ## ⚠️ Landmine — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
