@@ -188,8 +188,11 @@ async function main() {
       body: JSON.stringify({ action: 'list', branchId: TEST_BR }),
     });
     const body = await res.json().catch(() => null);
-    ok(res.status === 200 && (body?.followersApi === 'unavailable' || body?.followersApi === 'ok'),
-      `live endpoint list → 200 followersApi=${body?.followersApi} (TEST branch has no LINE token → unavailable expected)`);
+    // TIGHTENED (2026-07-20 post-deploy catch): the TEST branch has no
+    // be_line_configs doc — the legacy-token fallback must NOT be used for
+    // backfill (cross-branch pollution guard) → exactly 'unavailable'.
+    ok(res.status === 200 && body?.followersApi === 'unavailable',
+      `live endpoint list → 200 followersApi=${body?.followersApi} (TEST branch: MUST be unavailable — no-branch-config guard)`);
     const anonRes = await fetch('https://lover-clinic-app.vercel.app/api/admin/line-friends', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'list', branchId: TEST_BR }),
@@ -224,6 +227,10 @@ async function main() {
     `${P}/be_admin_audit/${bindRes.auditId}`,
   ];
   for (const p of deletions) await adb.doc(p).delete();
+  // Sweep any stray docs on the TEST branch (robust even if a backfill ran)
+  const straySnap = await adb.collection(`${P}/be_line_friends`).where('branchId', '==', TEST_BR).get();
+  for (const d of straySnap.docs) await d.ref.delete();
+  if (straySnap.size) console.log(`    swept ${straySnap.size} stray TEST-branch roster docs`);
   const orphanFriends = await adb.collection(`${P}/be_line_friends`).where('branchId', '==', TEST_BR).get();
   const orphanCust = await Promise.all([CUST_A, CUST_B].map(id => adb.doc(`${P}/be_customers/${id}`).get()));
   ok(orphanFriends.empty && orphanCust.every(s => !s.exists), 'zero TEST- orphans remain');

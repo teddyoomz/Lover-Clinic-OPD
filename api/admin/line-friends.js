@@ -31,6 +31,11 @@ import { resolveLineConfigForAdmin } from './_lib/lineConfigAdmin.js';
 import { apiFetch } from '../_lib/apiFetch.js';
 import { formatLinkRequestApprovedReply } from '../../src/lib/lineBotResponder.js';
 import { mapWithConcurrency } from '../../src/lib/wholeSystemBackupCore.js';
+// Backfill branch-attribution guard (post-deploy e2e catch, 2026-07-20): the
+// legacy chat_config fallback belongs to ONE branch (นครราชสีมา) — a branch
+// WITHOUT its own be_line_configs doc must NOT backfill followers under its
+// branchId via the legacy token (cross-branch roster pollution).
+import { resolveChatFallbackBranchId } from '../webhook/_lib/chatBranchDefaults.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || 'loverclinic-opd-4c39b';
 
@@ -122,6 +127,15 @@ export async function handleListBackfill({ db, branchId }) {
   const resolved = await resolveLineConfigForAdmin(db, { branchId });
   const token = resolved?.config?.channelAccessToken || null;
   if (!token) return finish({ followersApi: 'unavailable', totalFollowers: 0, backfilled: 0, reason: 'no-token' });
+  // Guard: the token must belong to THIS branch. `source:'chat_config'` is the
+  // single-branch legacy channel — valid ONLY for the fallback branch itself.
+  const FALLBACK_BR = resolveChatFallbackBranchId(process.env.LOVER_DEFAULT_BRANCH_ID);
+  const configIsForThisBranch =
+    resolved.source === 'be_line_configs' ||
+    (resolved.source === 'chat_config' && String(branchId) === FALLBACK_BR);
+  if (!configIsForThisBranch) {
+    return finish({ followersApi: 'unavailable', totalFollowers: 0, backfilled: 0, reason: 'no-branch-config' });
+  }
 
   const { available, ids } = await fetchFollowerIds(token);
   if (!available) return finish({ followersApi: 'unavailable', totalFollowers: 0, backfilled: 0 });

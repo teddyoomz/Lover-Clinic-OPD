@@ -60,7 +60,9 @@ beforeEach(() => {
   dbState.batchOps = [];
   dbState.committed = 0;
   mockVerifyAdminToken.mockResolvedValue(admin);
-  mockResolveLineConfigForAdmin.mockResolvedValue({ config: { channelAccessToken: 'tok-x' } });
+  // Guard (2026-07-20 post-deploy catch): backfill honors the token ONLY when
+  // source==='be_line_configs' (the branch's own OA) — default mock reflects that.
+  mockResolveLineConfigForAdmin.mockResolvedValue({ config: { channelAccessToken: 'tok-x' }, source: 'be_line_configs', branchId: 'BR-any' });
 });
 
 async function loadHandler() {
@@ -103,6 +105,17 @@ describe('E1 — list: followers API unavailable (unverified OA)', () => {
     await handler({ method: 'POST', headers: {}, body: { action: 'list', branchId: 'BR-e1b' } }, res);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ followersApi: 'unavailable' }));
     expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+  it('E1.3 legacy chat_config fallback on a NON-fallback branch → unavailable no-branch-config (cross-branch pollution guard)', async () => {
+    // A branch WITHOUT be_line_configs resolves the LEGACY token (Korat's
+    // channel) — backfilling under this branchId would mislabel Korat
+    // followers. Caught live by e2e-line-friends-realtime --full Phase C2.
+    mockResolveLineConfigForAdmin.mockResolvedValueOnce({ config: { channelAccessToken: 'legacy-tok' }, source: 'chat_config', branchId: null });
+    const handler = await loadHandler();
+    const res = makeRes();
+    await handler({ method: 'POST', headers: {}, body: { action: 'list', branchId: 'BR-e1c-no-own-config' } }, res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ followersApi: 'unavailable', reason: 'no-branch-config' }));
+    expect(mockApiFetch).not.toHaveBeenCalled(); // no followers call with a foreign token
   });
 });
 
