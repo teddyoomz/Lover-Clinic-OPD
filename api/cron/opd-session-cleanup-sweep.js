@@ -16,7 +16,6 @@
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { randomBytes } from 'node:crypto';
 import {
   SESSION_TIMEOUT_MS,
   decideCleanupAction,
@@ -156,12 +155,22 @@ export default async function handler(req, res) {
   try {
     const timeoutMs = resolveParam(TASK_ID, 'sessionTimeoutHours', cfg.params?.sessionTimeoutHours) * 3600000;
     const result = await sweepOpdSessionCleanup({ db, now: Date.now(), timeoutMs });
-    const auditId = `opd-session-cleanup-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
-    await db.collection(AUDIT_COL).doc(auditId).set({
+    // 2026-07-21 — deterministic per-day heartbeat doc (mirrors recon-daily /
+    // infra-health; same fix as chart-edit-session-sweep). Pre-fix: random-ID
+    // doc per */30 run = 48 docs/day of cron noise with no retention. Numeric
+    // result fields accumulate via increment — zero information loss.
+    const dayKey = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, '');
+    const inc = {};
+    for (const [k, v] of Object.entries(result)) {
+      if (typeof v === 'number' && Number.isFinite(v)) inc[k] = FieldValue.increment(v);
+    }
+    await db.collection(AUDIT_COL).doc(`opd-session-cleanup-sweep-${dayKey}`).set({
       op: 'opd-session-cleanup-sweep',
-      ...result,
-      ranAt: new Date().toISOString(),
-    });
+      dateKey: dayKey,
+      runsToday: FieldValue.increment(1),
+      ...inc,
+      lastRanAt: new Date().toISOString(),
+    }, { merge: true });
     await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ลบ ${result.deleted} / ซ่อน ${result.hidden}` });
     return res.status(200).json(result);
   } catch (e) {

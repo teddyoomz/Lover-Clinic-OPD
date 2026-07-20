@@ -5,9 +5,8 @@
 // watchdog handles the live UX; this cron just garbage-collects orphans.
 // Cron-only · CRON_SECRET-gated · idempotent. Mirrors stock-movement-retention.
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { randomBytes } from 'node:crypto';
 import { shouldReap, isTerminal } from '../../src/lib/chartEditSessionCore.js';
 import { readScheduledTaskConfig, writeScheduledTaskStatus } from '../_lib/scheduledTaskRuntime.js';
 
@@ -85,12 +84,22 @@ export default async function handler(req, res) {
       }
     }
 
-    const auditId = `chart-edit-session-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
-    await db.collection(AUDIT_COL).doc(auditId).set({
+    // 2026-07-21 — deterministic per-day heartbeat doc (mirrors recon-daily /
+    // infra-health). Pre-fix: a random-ID doc per */15 run = 96 docs/day of
+    // pure cron noise with NO retention → ~35k docs/year, each re-read by the
+    // nightly whole-system backup (V122 headroom-erosion class). One doc/day,
+    // counters accumulate via increment — zero information loss.
+    const dayKey = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, '');
+    await db.collection(AUDIT_COL).doc(`chart-edit-session-sweep-${dayKey}`).set({
       op: 'chart-edit-session-sweep',
-      scanned, cancelled, deleted, freed,
-      ranAt: new Date().toISOString(),
-    });
+      dateKey: dayKey,
+      runsToday: FieldValue.increment(1),
+      scanned: FieldValue.increment(scanned),
+      cancelled: FieldValue.increment(cancelled),
+      deleted: FieldValue.increment(deleted),
+      freed: FieldValue.increment(freed),
+      lastRanAt: new Date().toISOString(),
+    }, { merge: true });
 
     await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `คืน ${freed} / ลบ ${deleted}` });
     return res.status(200).json({ scanned, cancelled, deleted, freed });
