@@ -14,7 +14,13 @@
 // On the FIRST auto-retry the hook fires one shared reconnectFirestore()
 // (heals a half-dead connection a bare re-subscribe can't recover).
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { reconnectFirestore } from '../lib/firestoreReconnect.js';
+// 2026-07-20 (mobile stuck-retry) — the retry ladder escalates to
+// hardReloadApp() when the client is provably wedged (reconnect toggle timed
+// out) OR a previous manual retry already failed. The automated
+// "ปิดแอปเข้าใหม่" — the only heal that works for a frozen-primary-lease /
+// wedged-async-queue client (iOS PWA tab switching; beacon log was EMPTY =
+// silent hang, nothing a re-subscribe can fix).
+import { reconnectFirestore, isConnectionWedged, hardReloadApp } from '../lib/firestoreReconnect.js';
 
 const DEFAULT_SOFT_TIMEOUT_MS = 8000;
 const DEFAULT_MAX_AUTO_RETRIES = 1;
@@ -40,10 +46,19 @@ export function useResilientLoad(opts = {}) {
   // arrived. A synchronous ref is true the instant a snapshot calls markReady,
   // so any later timeout/error is correctly ignored (contract: ready = no retry).
   const settledRef = useRef(false);
+  // Escalation ladder state (2026-07-20 mobile stuck-retry):
+  // manualRetryRef  — a manual retry's load is currently in flight
+  // retryFailedRef  — a manual retry already ended in error → next press reloads
+  const manualRetryRef = useRef(false);
+  const retryFailedRef = useRef(false);
 
   const markReady = useCallback(() => {
     settledRef.current = true;
     attemptsRef.current = 0;
+    // A successful load resets the escalation ladder — a LATER fresh failure
+    // starts over at press#1 (no stale reload).
+    manualRetryRef.current = false;
+    retryFailedRef.current = false;
     setLoadStatus((prev) => (prev === 'ready' ? prev : 'ready'));
   }, []);
 
@@ -56,6 +71,13 @@ export function useResilientLoad(opts = {}) {
       if (isFirst) reconnectFirestore(); // heal half-dead conn before re-subscribe
       setRetryKey((k) => k + 1);         // re-run consumer load effect; stays 'loading' → timer restarts
     } else {
+      // If this dead-end followed a MANUAL retry, remember it — the next press
+      // escalates to a hard reload (the automated app-kill the user otherwise
+      // performs by hand).
+      if (manualRetryRef.current) {
+        manualRetryRef.current = false;
+        retryFailedRef.current = true;
+      }
       setLoadStatus('error');
     }
   }, [maxAutoRetries]);
@@ -63,8 +85,20 @@ export function useResilientLoad(opts = {}) {
   const markError = useCallback(() => { handleFail(); }, [handleFail]);
 
   const retry = useCallback(() => {
+    // ESCALATE when a bare re-subscribe provably cannot help: the shared
+    // reconnect timed out (wedged client — frozen primary lease / dead async
+    // queue) OR the previous manual retry already failed. Reload = the only
+    // heal that clears every wedge flavor. User-initiated → no loop risk.
+    if (isConnectionWedged() || retryFailedRef.current) {
+      hardReloadApp('resilient-retry-escalation');
+      return;
+    }
+    manualRetryRef.current = true;
     settledRef.current = false;
     attemptsRef.current = 0;
+    // Heal NOW — don't make the user wait for the 8s soft-timeout's auto-retry
+    // to fire the reconnect (the button press IS the "it's broken" signal).
+    reconnectFirestore();
     setLoadStatus('loading');
     setRetryKey((k) => k + 1);
   }, []);

@@ -5,6 +5,11 @@ import { renderHook, act } from '@testing-library/react';
 const reconnectFirestore = vi.fn();
 vi.mock('../src/lib/firestoreReconnect.js', () => ({
   reconnectFirestore: (...a) => reconnectFirestore(...a),
+  // 2026-07-20 (mobile stuck-retry escalation) — the hook now also imports the
+  // wedge API. Behavior-preserving stubs: not-wedged + no-op reload so every
+  // pre-existing contract in this bank runs the press#1 path unchanged.
+  isConnectionWedged: () => false,
+  hardReloadApp: () => {},
 }));
 
 import { useResilientLoad } from '../src/hooks/useResilientLoad.js';
