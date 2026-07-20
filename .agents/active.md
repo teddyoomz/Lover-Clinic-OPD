@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-07-21 ~03:00 — whole-app risk-audit worry list CLOSED (12/12 tasks) — SHIPPED local, NOT deployed"
-status: "master `2c277f7f`+ = 6 commits ahead of prod `31f87210`. rules UNCHANGED → next deploy = vercel-only. FULL vitest 18,120/18,120 · 0 fail (exit-0) + build clean + L1 QR/banner on real surfaces + Rule M backfill APPLIED on prod."
+updated_at: "2026-07-21 ~03:20 — whole-app worry-list sweep (12/12) DEPLOYED LIVE"
+status: "master `3cdcbeb2` = prod LIVE (`lover-clinic-ev9p8bccm` aliased lover-clinic-app.vercel.app; ping 200). rules UNCHANGED → vercel-only. POST-DEPLOY PROVE-GREEN: FB webhook unsigned POST 200→401 บน LIVE + health diag 13/14 (🟡 = recon timing เดิม) + zero false-warn. FULL vitest 18,120/0 + build clean."
 branch: "master"
 last_commit: "2c277f7f — test(repoint): 5 stale V21 locks from 2026-07-20 AV212-R2 + probe-20"
 tests: "FULL 18,120/0 exit-0 (326s) + ~100 new tests + build clean. 5 stale repoints = yesterday's AV212-R2/probe-20 drift, NOT this batch."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "31f87210 (AV214) — pre-batch"
+production_commit: "3cdcbeb2 (worry-list sweep) — deployed 2026-07-21 ~03:15"
 firestore_rules_version: "2026-07-20 NIGHT (be_line_friends + probe #20) — UNCHANGED this batch"
 ---
 
@@ -23,8 +23,8 @@ firestore_rules_version: "2026-07-20 NIGHT (be_line_friends + probe #20) — UNC
 
 ## Next action
 - ⏰ background waiter จะเช็ค infra-health sweep รอบแรกหลัง 07:35 อัตโนมัติ (งานปิดท้าย per user)
-- รอ user สั่ง "deploy" → vercel-only → post-deploy: `node scripts/diag-webhook-signature-probe.mjs`
-  (FB ต้อง 401 = prove-green) + `diag-infra-health.mjs`
+- ⏰ waiter #2 (~20 นาที): ยืนยัน heartbeat daily docs โผล่หลัง cron tick แรกบน build ใหม่
+- DEPLOYED แล้ว — prove-green ผ่าน (FB 401) · LINE-reminder tick หน้าจะเขียน summary shape ใหม่ (ส่ง/ข้าม/ล้มเหลว)
 
 ## Outstanding user-triggered
 - สมัคร healthchecks.io (ฟรี) → ใส่ HEALTHCHECK_PING_URL ใน Vercel env
