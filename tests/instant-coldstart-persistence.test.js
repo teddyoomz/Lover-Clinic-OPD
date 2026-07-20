@@ -19,7 +19,8 @@ describe('A1 — persistentLocalCache (layer 0)', () => {
     // sync-THROWING IndexedDB that tripped a Firestore internal assertion and
     // crashed the app). node/vitest still → false → memory cache.
     expect(fb).toMatch(/typeof indexedDB === 'undefined'\) return false/);
-    expect(fb).toMatch(/const canPersist = idbHealthy\(\);/);
+    // AV212 rule-8 repoint (2026-07-20): + the slow-machine no-persist ratchet
+    expect(fb).toMatch(/const canPersist = idbHealthy\(\) && !slowMachineNoPersist;/);
   });
 
   it('A1.3 keeps experimentalAutoDetectLongPolling (Mobile-Load Reliability 2026-06-16 — must survive A1)', () => {

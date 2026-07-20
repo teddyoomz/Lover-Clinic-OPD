@@ -38,7 +38,8 @@ describe('firebase.js — connection layer (Task 4)', () => {
     // catches a sync-THROWING IndexedDB that tripped Firestore internal
     // assertion b815 and crashed the whole app). node/private → false → memory.
     expect(src).toMatch(/typeof indexedDB === 'undefined'\) return false/);
-    expect(src).toMatch(/const canPersist = idbHealthy\(\);/);
+    // AV212 rule-8 repoint (2026-07-20): + the slow-machine no-persist ratchet
+    expect(src).toMatch(/const canPersist = idbHealthy\(\) && !slowMachineNoPersist;/);
   });
 });
 

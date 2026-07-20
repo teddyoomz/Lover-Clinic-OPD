@@ -101,7 +101,9 @@ describe('AV208 C5 — chip honesty + orchestrator', () => {
     expect(fin).not.toMatch(/setTfpSyncing\(false\)/);
   });
   it('C5.4 swrRun wiring: cacheLoad + serverLoad + never-rejecting save-gate handle', () => {
-    const orch = slice('const run = swrRun({', 1700);
+    // AV212 rule-9 repoint (2026-07-20): the heavy-lists bundle block (~3.5KB)
+    // now sits between swrRun and the save-gate assignment — window widened.
+    const orch = slice('const run = swrRun({', 6000);
     expect(orch).toMatch(/cacheLoad: async \(\)/);
     expect(orch).toMatch(/fetchFormData\('cache'\)/);
     expect(orch).toMatch(/serverLoad: \(\) => fetchFormData\(undefined\)/);
@@ -113,7 +115,8 @@ describe('AV208 C5 — chip honesty + orchestrator', () => {
   });
 
   it('C5.6 R1-#1 + R2-#1a: applies SERIALIZED into applyChain with PER-LINK catch; orchestrator awaits the chain', () => {
-    const orch = slice('let applyChain = Promise.resolve();', 1700);
+    // AV212 rule-9 repoint: bundle block widened the orchestrator — see C5.4
+    const orch = slice('let applyChain = Promise.resolve();', 6000);
     expect(orch).toMatch(/applyChain = applyChain\s*\.then\(\(\) => applyFormData\(b, meta\)\)\s*\.catch\(\(e\) => \{ debugLog\('tfp-swr', 'applyFormData failed', e\); \}\);/);
     expect(orch).toMatch(/await applyChain;/);
     // ANTI: the fire-and-forget shape that opened the V101-class window

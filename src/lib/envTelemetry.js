@@ -14,7 +14,7 @@
 // clinic machine is the slow one and WHY (no cache / weak CPU / bad WiFi).
 // SAFETY: every path try/catch — telemetry must never make anything worse.
 import { reportTelemetryToBeacon } from './errorBeacon.js';
-import { firestorePersistenceEnabled } from '../firebase.js';
+import { firestorePersistenceEnabled, firestoreNoPersistMode } from '../firebase.js';
 
 let envReported = false;
 
@@ -47,6 +47,9 @@ export async function reportDegradedEnvOnce() {
     const idbAbsent = typeof indexedDB === 'undefined';
     let reason = '';
     if (idbAbsent) reason = 'idb-absent';
+    // AV212 rule 8: distinguish the slow-machine ratchet (deliberate, healthy
+    // IDB but grinding) from a broken/flagged IDB — different admin actions.
+    else if (firestoreNoPersistMode) reason = 'slow-machine-nopersist';
     else if (!firestorePersistenceEnabled) reason = 'idb-broken-or-flagged';
     let quotaNote = '';
     try {

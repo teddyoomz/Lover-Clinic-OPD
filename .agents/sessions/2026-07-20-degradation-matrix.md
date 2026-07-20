@@ -131,10 +131,31 @@ cache ใน mock เพื่อคง intent "cache paints first") + hardening
   (reconnect contract เดิม) — ปุ่มเงินไม่มีทางเทาค้างถาวร. Fix `00ad1766`. F7/F8 locks;
   full vitest เขียว; mega-l1 2/2.
 
+## AV212 rules 8+9 — the 10-year-laptop path (2026-07-20 เย็น; user: "สร้างระบบใหม่
+## ให้เร็วปรื๊ดไปอีกสิบปี" + รายงาน 3/4 เครื่องเร็วแล้ว เหลือ laptop 10 ปี ที่สมัยแรกๆ เคยเร็ว)
+Root cause คลาสนี้: IDB โตตามข้อมูล (สมัยแรก IDB เล็ก = เร็วทุกเครื่อง) จน "อ่านแคชตัวเอง
+แพงกว่าดึงเน็ต" บนเครื่องอ่อน (M6 no-IDB 1.2s vs M12 warm-IDB ×20 = 14-35s). สองระบบใหม่:
+- **Rule 8 — adaptive persistence (measured)**: fast-paint จับเวลา cache-attempt (network-
+  free IDB probe) → ≥2/3 ครั้ง >1500ms → `machinePerf` stamp `lover.noPersist` (TTL 14 วัน)
+  → boot ถัดไป memory-cache. Manual toggle + ล้างแคช ใน health card (`infra-machine-box`).
+  + CustomerDetailView warm TFP chunk (idle 2.5s — parse ออกจาก click path).
+  **M14 (โหมด laptop) = 0.81s paint** (เทียบ M0 0.59s / M12 15.7s).
+- **Rule 9 — server-side read model**: NEW `/api/tfp-options` (pattern /api/patient-view) —
+  1 request authed (isClinicStaff/admin claims; `private, no-store` — CDN cache จะหลุด auth;
+  module-cache 30s แทน) คืน 4 heavy lists หน้าตาเดียวกับ listers เป๊ะ → client แต่งงานกับ
+  doctors/staff/customer ของ fast-paint → ป้อน **applyFormData ตัวเดิม** (single mapper,
+  V43 overlay รัน, optionsEnriched flip, save-gate คุมผ่าน applyChain, `serverConfirmed`
+  guard กัน bundle ทับ server data) → เครื่องอ่อนได้ข้อมูลครบ ~1-2s; cost curve = O(payload)
+  ไม่ใช่ O(IDB) = คำตอบสิบปี. ทุก failure = silent no-op (SWR เดิม carry).
+- Locks: machine-perf-ratchet 14/0 · hardening F7-F10 30/0 · matrix M0/M12/M14 PASS ·
+  mega-l1 2/2 · repoints (canPersist chain ×3 ไฟล์, contract windows ×2). Post-deploy L2 =
+  `scripts/diag-tfp-options-endpoint.mjs`.
+
 ## Next
-1. **⚠️ DEPLOY PENDING — prod ตอนนี้ = `57347648` (fast-paint ไม่มี money-gate!)**
-   → hazard R1 ยัง live บน prod (window เล็กบนเครื่องเร็ว แต่เป็น money-class);
-   3 commits fix (`53103321`+`7e0f12d0`+`00ad1766`) รอ user สั่ง "deploy".
-2. หลัง deploy: เปิด TFP บน mini PC จริง 1 ครั้ง → ดู health card → [tfp-slow]/[client-env]
-   ระบุสาเหตุเครื่องนั้น.
+1. **⚠️ DEPLOY PENDING — prod = `57347648` (fast-paint ไม่มี money-gate + ไม่มี rule 8/9)**
+   → รอ user สั่ง "deploy" (vercel-only) แล้วรัน `diag-tfp-options-endpoint.mjs` (L2)
+   + re-run matrix vs LIVE prod → laptop จะ: (a) โดน ratchet flip เป็น no-persist เองใน
+   ~3 ครั้งที่เปิด TFP, (b) ได้ bundle 80KB แทน IDB grind, (c) มีปุ่ม "โหมดเครื่องช้า" กดได้ทันที.
+2. หลัง deploy: เปิด TFP บน laptop 1-3 ครั้ง → ดู health card → [tfp-slow]/[client-env]/
+   auto-nopersist telemetry ระบุสาเหตุเครื่องนั้น.
 3. (ค้างจากเช้า) user L1 การ์ดสุขภาพระบบ: LINE target + ทดสอบแจ้งเตือน.

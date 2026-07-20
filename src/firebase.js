@@ -77,9 +77,23 @@ function idbHealthy() {
     return false;
   }
 }
-const canPersist = idbHealthy();
+// AV212 rule 8 (2026-07-20) — the 10-year-laptop class: adaptive persistence.
+// Firestore's local cache has no indexes; as the working set grew (~45MB IDB)
+// the weakest machine crossed the cliff where READING ITS OWN CACHE costs more
+// than re-pulling over clinic WiFi (matrix: M6 no-IDB 1.2s vs M12 warm-IDB
+// ×20 = 14-35s — and "สมัยแรกๆ เครื่องนี้เร็วปกติ" because the IDB was tiny
+// then). The TFP fast-paint MEASURES this machine's cache-read speed; when the
+// probe says the IDB is the bottleneck, machinePerf stamps lover.noPersist and
+// this boot path runs memory-cache (14d TTL → persistence retried). Manual
+// override + cache-wipe live in the 🩺 health card.
+import { isNoPersistActive } from './lib/machinePerf.js';
+let slowMachineNoPersist = false;
+try { slowMachineNoPersist = isNoPersistActive(); } catch { slowMachineNoPersist = false; }
+const canPersist = idbHealthy() && !slowMachineNoPersist;
 // exposed for the client-env beacon (degradation telemetry) — NOT for app logic
 export const firestorePersistenceEnabled = canPersist;
+// distinguishes "off because slow-machine ratchet" from "off because IDB broken"
+export const firestoreNoPersistMode = slowMachineNoPersist;
 export const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
   ...(canPersist ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager(), cacheSizeBytes: 200 * 1024 * 1024 }) } : {}),

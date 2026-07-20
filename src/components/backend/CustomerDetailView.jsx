@@ -206,6 +206,19 @@ export default function CustomerDetailView({
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
+  // AV212 rule 8 (2026-07-20) — warm the TFP chunk on idle. On a 10-year
+  // laptop the TFP chunk parse+compile alone costs seconds; warming it here
+  // (2.5s after the customer detail mounts — the staff is reading the page)
+  // moves that cost OFF the "บันทึกการรักษา" click path. Same module specifier
+  // as the lazy host → shared module map → React.lazy resolves instantly.
+  // Failure-safe: a failed warm fetch is swallowed; the real click goes
+  // through lazyRetry (M10) which retries + degrades gracefully. Staff-only
+  // surface — the main.jsx customer-link warm-import caveat does not apply.
+  useEffect(() => {
+    const t = setTimeout(() => { import('../TreatmentFormPage.jsx').catch(() => {}); }, 2500);
+    return () => clearTimeout(t);
+  }, []);
+
   // Phase 24.0 — dual gate: explicit perm OR admin (auto-bypass).
   const hasDeletePerm = useHasPermission('customer_delete');
   const tabAccess = useTabAccess();

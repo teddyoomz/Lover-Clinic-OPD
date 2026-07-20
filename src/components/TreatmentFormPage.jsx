@@ -110,7 +110,7 @@ import { LayoutSwapButton } from './LayoutSwapButton.jsx';
 // treatment (status='doctor-recorded'). See spec
 // docs/superpowers/specs/2026-05-13-doctor-save-and-admin-finalize-mode-design.md
 // section 5.1 (TFP changes) and v-log V26.0 entry.
-import { auth } from '../firebase.js';
+import { auth, firestorePersistenceEnabled } from '../firebase.js';
 // V105 (2026-05-19 LATE+3 NIGHT+2) — canonical customer-name resolver.
 // Pre-V105 used parent-prop `patientName` directly which only read top-level
 // firstname/lastname (lowercase). Customers from FB/LINE/kiosk only have
@@ -1268,10 +1268,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             getCustomer: getBackendCustomer,
             listStaff, listDoctors,
           } = await import('../lib/scopedDataLayer.js');
-          // cache-first per read, server fallback — both are tiny (~15 docs)
+          // cache-first per read, server fallback — both are tiny (~15 docs).
+          // AV212 rule 8: the CACHE attempts are timed (network-free — they
+          // only touch IndexedDB+CPU). maxCacheAttemptMs is this machine's
+          // direct IDB-health probe: a cold cache answers fast-empty (small
+          // number), a GRINDING cache answers slowly (the 10-year-laptop
+          // signature) → machinePerf ratchets the next boot to memory-cache.
+          let maxCacheAttemptMs = 0;
+          const timedCacheAttempt = async (attempt) => {
+            const t0 = Date.now();
+            try { return await attempt(); }
+            finally { maxCacheAttemptMs = Math.max(maxCacheAttemptMs, Date.now() - t0); }
+          };
           const readListFast = async (fn, baseOpts) => {
             try {
-              const r = await fn({ ...baseOpts, source: 'cache' });
+              const r = await timedCacheAttempt(() => fn({ ...baseOpts, source: 'cache' }));
               if (Array.isArray(r) && r.length) return r;
             } catch { /* cold cache */ }
             return fn(baseOpts).catch(() => []);
@@ -1279,7 +1290,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           const readCustomerFast = async () => {
             if (!customerId) return null;
             try {
-              const c = await getBackendCustomer(customerId, { source: 'cache' });
+              const c = await timedCacheAttempt(() => getBackendCustomer(customerId, { source: 'cache' }));
               if (c) return c;
             } catch { /* cold cache */ }
             return getBackendCustomer(customerId).catch(() => null);
@@ -1289,6 +1300,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             readListFast(listStaff, { includeHidden: true }),
             readCustomerFast(),
           ]);
+          // fire-and-forget — the ratchet decides for the NEXT boot, never this one
+          import('../lib/machinePerf.js')
+            .then((m) => m.recordCacheProbe(maxCacheAttemptMs, { persistOn: firestorePersistenceEnabled }))
+            .catch(() => {});
           if (stale() || fullApplied) return;           // full apply won the race
           if (!fpDoctors.length) return;                 // mirror the doctors MISS gate
           if (customerId && !fpCust) return;             // mirror the custData MISS gate
@@ -1350,7 +1365,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // possibly behind a painted form — the telemetry reads it as a slow
           // signal, not a literal card sighting.)
           setLoading(false);     // ← PAINT (the ≤5s moment)
+          // AV212 rule 9: hand the small lists to the bundle path — it marries
+          // them with the endpoint's heavy lists into a FULL applyFormData call.
+          return { fpDoctors, fpStaff, fpCust };
         } catch { /* fast-paint is best-effort — the full pipeline is the truth */ }
+        return null;
       })();
     }
 
@@ -1392,15 +1411,69 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // this is defense-in-depth; failures are logged, not swallowed
           // silently (debugLog).
           let applyChain = Promise.resolve();
+          // AV212 rule 9: once genuine SERVER data has been enqueued, the
+          // endpoint bundle (≤30s-stale) must never overwrite it.
+          let serverConfirmed = false;
           const run = swrRun({
             cacheLoad: async () => { const b = await fetchFormData('cache'); return { hasData: !!b, data: b }; },
             serverLoad: () => fetchFormData(undefined),
             apply: (b, meta) => {
+              if (!meta?.fromCache) serverConfirmed = true;  // AV212 r9 (network-down leg is __fromCache-tagged → stays false)
               applyChain = applyChain
                 .then(() => applyFormData(b, meta))
                 .catch((e) => { debugLog('tfp-swr', 'applyFormData failed', e); });
             },
           });
+          // ── AV212 rule 9 — heavy-lists BUNDLE (the ten-year path) ──────────
+          // CREATE mode: one authed /api/tfp-options request returns the 4
+          // heavy lists (~80KB gzip) lister-shaped; married with the fast-
+          // paint's real doctors/staff/customer it forms a COMPLETE bundle fed
+          // to the UNCHANGED applyFormData (single mapper — zero drift; V43
+          // overlay runs; optionsEnriched flips; save-gate covers it via the
+          // chain). On weak machines this lands FULL data in ~1-2s while the
+          // Firestore SDK grinds behind as the truth. Every failure path is a
+          // silent no-op — the existing SWR pipeline carries as before.
+          if (!isEdit) {
+            (async () => {
+              try {
+                const idToken = await auth.currentUser?.getIdToken?.();
+                if (!idToken || stale()) return;
+                const ctrl = new AbortController();
+                const tt = setTimeout(() => { try { ctrl.abort(); } catch {} }, 6000);
+                const resp = await fetch(`/api/tfp-options?branchId=${encodeURIComponent(SELECTED_BRANCH_ID || '')}`, {
+                  headers: { Authorization: `Bearer ${idToken}` },
+                  signal: ctrl.signal,
+                });
+                clearTimeout(tt);
+                if (!resp.ok) return;             // dev server / auth issue → SWR pipeline carries
+                const b = await resp.json();
+                if (!b?.ok || stale() || serverConfirmed) return;
+                const fp = await fastPaintPromise; // real-lister doctors/staff/customer
+                if (!fp || stale() || serverConfirmed) return;
+                if (!Array.isArray(fp.fpDoctors) || !fp.fpDoctors.length) return; // MISS-gated → Firestore carries
+                if (customerId && !fp.fpCust) return;
+                const productItems = Array.isArray(b.productItems) ? b.productItems : [];
+                const courseItems = Array.isArray(b.courseItems) ? b.courseItems : [];
+                // no-empty-paint (AV206): an empty/wrong-branch bundle never blanks pickers
+                if (!productItems.length && !courseItems.length) return;
+                const bundle = {
+                  doctorItems: fp.fpDoctors,
+                  staffItems: Array.isArray(fp.fpStaff) ? fp.fpStaff : [],
+                  custData: fp.fpCust || null,
+                  productItems,
+                  courseItems,
+                  dfGroupItems: Array.isArray(b.dfGroupItems) ? b.dfGroupItems : [],
+                  dfStaffRatesItems: Array.isArray(b.dfStaffRatesItems) ? b.dfStaffRatesItems : [],
+                  existing: null,
+                };
+                if (stale() || serverConfirmed) return;
+                // fromCache:true — the chip stays ON until Firestore confirms (B1.4-bis honesty)
+                applyChain = applyChain
+                  .then(() => applyFormData(bundle, { fromCache: true }))
+                  .catch((e) => { debugLog('tfp-swr', 'bundle apply failed', e); });
+              } catch { /* bundle is an accelerator — the Firestore pipeline is the truth */ }
+            })();
+          }
           // save-gate handle (Q2=A): handleSubmit awaits this (bounded 15s) so
           // money/stock serialization never runs against unconfirmed cache
           // options OR a half-restored hydration. .catch() so an abandoned

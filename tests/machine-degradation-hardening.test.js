@@ -116,8 +116,11 @@ describe('B — firebase.js IDB pre-flight probe (M7: sync-throwing IDB crashed 
     expect(FIREBASE).toMatch(/localStorage\.removeItem\(IDB_BROKEN_FLAG\)/);
   });
 
-  it('B2 canPersist derives from the PROBE, not a bare typeof check', () => {
-    expect(FIREBASE).toMatch(/const canPersist = idbHealthy\(\);/);
+  it('B2 canPersist derives from the PROBE + the slow-machine ratchet (AV212 rule 8)', () => {
+    // rule-8 repoint (2026-07-20): the chain gained the measured no-persist
+    // ratchet — a machine whose cache probe says the IDB is the bottleneck
+    // boots memory-cache (matrix: M6 no-IDB 1.2s vs M12 warm-IDB ×20 14-35s).
+    expect(FIREBASE).toMatch(/const canPersist = idbHealthy\(\) && !slowMachineNoPersist;/);
     expect(FIREBASE).not.toMatch(/const canPersist = typeof indexedDB !== 'undefined';/);
   });
 
@@ -310,6 +313,32 @@ describe('F — TFP fast-paint pre-stage (≤5s-เมื่อเน็ตโ�
     const fpEnd = TFP.indexOf('(async () => {', fpStart);
     const fpBlock = TFP.slice(fpStart, fpEnd);
     expect(fpBlock).not.toMatch(/clearTimeout\(stuckTimer\)/);
+  });
+
+  it('F10 rule-9 heavy-lists bundle: authed endpoint + single-mapper reuse + never-overwrite-server', () => {
+    // The ten-year path: /api/tfp-options returns the 4 heavy lists lister-
+    // shaped; the client marries them with the fast-paint's real doctors/
+    // staff/customer and feeds the UNCHANGED applyFormData (zero V12 drift).
+    const api = read('api/tfp-options.js');
+    expect(api).toMatch(/verifyIdToken/);
+    expect(api).toMatch(/decoded\.isClinicStaff !== true && decoded\.admin !== true/);
+    // NEVER shared-cacheable (authed master data — CDN hit would bypass auth)
+    expect(api).toMatch(/'Cache-Control', 'private, no-store'/);
+    expect(api).toMatch(/where\('branchId', '==', String\(branchId\)\)/);
+    // lister-shape + verbatim sort mirrors
+    expect(api).toMatch(/\(\{ \.\.\.d\.data\(\), id: d\.id \}\)/);
+    expect(api).toMatch(/localeCompare\(nb, 'th'\)/);
+    // client wiring: bundle rides the SAME applyChain + applyFormData, tagged
+    // fromCache (chip honesty) + guarded so it never overwrites server data
+    const i = TFP.indexOf('AV212 rule 9 — heavy-lists BUNDLE');
+    expect(i).toBeGreaterThan(-1);
+    const w = TFP.slice(i, i + 4200);
+    expect(w).toMatch(/\/api\/tfp-options\?branchId=/);
+    expect(w).toMatch(/applyFormData\(bundle, \{ fromCache: true \}\)/);
+    const guards = w.match(/serverConfirmed\) return;/g) || [];
+    expect(guards.length).toBeGreaterThanOrEqual(3);
+    expect(w).toMatch(/if \(!productItems\.length && !courseItems\.length\) return;/); // no-empty-paint
+    expect(TFP).toMatch(/if \(!meta\?\.fromCache\) serverConfirmed = true;/);
   });
 
   it('F6 fast-paint fetches ONLY the small reads (never products/courses/df — those are enrichment)', () => {

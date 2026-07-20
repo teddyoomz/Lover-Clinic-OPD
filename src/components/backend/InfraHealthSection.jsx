@@ -59,6 +59,41 @@ export default function InfraHealthSection({ config, executedBy }) {
   const [running, setRunning] = useState(false);
   const [errorGroups, setErrorGroups] = useState(null);
   const [errorsLoading, setErrorsLoading] = useState(false);
+  // AV212 rule 8 — per-machine slow-mode state (localStorage, this device only)
+  const [machinePerf, setMachinePerf] = useState(null);
+  const [wiping, setWiping] = useState(false);
+
+  useEffect(() => {
+    import('../../lib/machinePerf.js')
+      .then((m) => setMachinePerf(m.getMachinePerfState()))
+      .catch(() => setMachinePerf({ noPersist: false, probeHist: [] }));
+  }, []);
+
+  const toggleSlowMachineMode = useCallback(async () => {
+    try {
+      const next = !(machinePerf?.noPersist);
+      if (!window.confirm(next
+        ? 'เปิดโหมดเครื่องช้า (ปิดแคชเครื่องนี้) แล้วรีโหลดหน้า?'
+        : 'เปิดแคชเครื่องนี้กลับ แล้วรีโหลดหน้า?')) return;
+      const m = await import('../../lib/machinePerf.js');
+      m.setNoPersist(next);
+    } catch { /* best-effort */ }
+    try { window.location.reload(); } catch { /* noop */ }
+  }, [machinePerf]);
+
+  const wipeLocalCache = useCallback(async () => {
+    if (!window.confirm('ล้างแคชข้อมูลของเครื่องนี้ (ข้อมูลจริงอยู่บนเซิร์ฟเวอร์ ไม่หาย) แล้วรีโหลดหน้า?')) return;
+    setWiping(true);
+    try {
+      const [{ terminate, clearIndexedDbPersistence }, { db }] = await Promise.all([
+        import('firebase/firestore'),
+        import('../../firebase.js'),
+      ]);
+      await terminate(db);                    // required before clear
+      await clearIndexedDbPersistence(db);    // wipes the local Firestore IDB
+    } catch { /* best-effort — reload regardless (terminate leaves SDK unusable) */ }
+    try { window.location.reload(); } catch { /* noop */ }
+  }, []);
 
   const loadStatus = useCallback(async () => {
     setStatusLoading(true);
@@ -281,6 +316,37 @@ export default function InfraHealthSection({ config, executedBy }) {
 
         <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--bd)]">
           <SaveButton onClick={handleSave} saving={saving} success={saveOk} />
+        </div>
+
+        {/* AV212 rule 8 (2026-07-20) — per-MACHINE performance controls. The
+            10-year-laptop class: Firestore's indexless local cache grew until
+            reading it costs more than re-pulling over WiFi on weak hardware.
+            The TFP fast-paint probe auto-flips such machines to memory-cache
+            (lover.noPersist, 14d TTL); these buttons are the manual override +
+            a local-cache wipe (server data untouched — safe, reload required). */}
+        <div className="mt-4 pt-3 border-t border-[var(--bd)]" data-testid="infra-machine-box">
+          <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-1.5">เครื่องนี้ (ตั้งค่าเฉพาะเครื่องที่เปิดหน้านี้)</p>
+          <p className="text-xs mb-2 text-[var(--tx-primary)]">
+            แคชข้อมูลในเครื่อง:{' '}
+            {machinePerf === null ? '…' : machinePerf.noPersist
+              ? '⛔ ปิดอยู่ — โหมดเครื่องช้า (ดึงข้อมูลสดจากเซิร์ฟเวอร์ เร็วกว่าสำหรับเครื่องเก่า)'
+              : '✅ เปิดปกติ'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" data-testid="infra-slow-machine-toggle"
+              onClick={toggleSlowMachineMode}
+              className="px-3 py-1.5 rounded-lg text-xs border border-[var(--bd)] text-[var(--tx-primary)] hover:bg-[var(--bg-hover)]">
+              {machinePerf?.noPersist ? 'เปิดแคชกลับ (เครื่องนี้เร็วแล้ว)' : 'โหมดเครื่องช้า — ปิดแคชเครื่องนี้'}
+            </button>
+            <button type="button" data-testid="infra-wipe-local-cache"
+              onClick={wipeLocalCache} disabled={wiping}
+              className="px-3 py-1.5 rounded-lg text-xs border border-[var(--bd)] text-[var(--tx-muted)] hover:bg-[var(--bg-hover)] inline-flex items-center gap-1">
+              {wiping ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} ล้างแคชเครื่องนี้
+            </button>
+          </div>
+          <p className="text-[10px] text-[var(--tx-muted)] mt-1.5">
+            เครื่องเก่าที่เปิดฟอร์มช้า ระบบจะวัดแล้วสลับโหมดให้อัตโนมัติ — ปุ่มนี้ใช้บังคับเอง/ย้อนกลับได้ (กดแล้วหน้าจะรีโหลด; ข้อมูลจริงอยู่บนเซิร์ฟเวอร์ ไม่หายไปไหน)
+          </p>
         </div>
       </div>
     </SectionCard>

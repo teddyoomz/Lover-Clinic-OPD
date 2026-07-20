@@ -473,6 +473,27 @@ test.describe('machine-degradation matrix (TFP entry survival)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('M14 slow-machine no-persist mode (AV212 rule 8) — memory-cache boot works + is fast', async ({ page }) => {
+    // The 10-year-laptop ratchet: lover.noPersist stamped → firebase boots
+    // memory cache → TFP entry = small server reads (M6 band) instead of
+    // grinding a 45MB indexless IDB. This cell proves the flagged boot path
+    // end-to-end (paint + interactive + no crash) — the flip DECISION is
+    // unit-tested (tests/machine-perf-ratchet.test.js).
+    test.setTimeout(240000);
+    const errors = collectErrors(page);
+    await prepPage(page);
+    await page.addInitScript(() => {
+      try { localStorage.setItem('lover.noPersist', String(Date.now())); } catch {}
+    });
+    await openCustomerDetail(page);
+    const r = await enterTfpAndWait(page, { budgetMs: 90000 });
+    record('M14_noPersistMode', r);
+    expect(r.painted, 'M14: no-persist boot must paint the form').toBe(true);
+    expect(r.ms, 'M14: memory-cache entry should sit in the fast band (≤15s even with headroom)').toBeLessThan(15000);
+    await assertInteractive(page);
+    expect(errors).toEqual([]);
+  });
+
   test('M11 typing latency at CPU ×20 after paint', async ({ page }) => {
     test.setTimeout(360000);
     const errors = collectErrors(page);
