@@ -31,6 +31,7 @@ import {
   sortApptsByDateTimeDesc,   // ③ (2026-06-14) — ย้อนหลัง 30 วัน = newest first
   sortApptsConfirmedFirst,   // ① (2026-05-31)
   sortApptsByServiceCompletedDesc, // (2026-07-20) — เสร็จแล้ว: เพิ่งกดเสร็จบนสุด
+  paginateAppts,             // (2026-07-21) — 20 rows/page on EVERY tab
 } from '../../lib/appointmentHubFilters.js';
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
 // B2 (2026-07-07 instant cold-start) — stale-while-revalidate one-shot orchestrator
@@ -56,6 +57,7 @@ import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
 import AppointmentHubRowCard from './AppointmentHubRowCard.jsx';
+import AppointmentHubPagination from './AppointmentHubPagination.jsx';
 import AppointmentHubTodaySubPillBar from './AppointmentHubTodaySubPillBar.jsx';
 import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
 import DepositAwareCancelDialog from './DepositAwareCancelDialog.jsx';
@@ -107,6 +109,12 @@ export default function AppointmentHubView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('__all__');
   const [typeFilter, setTypeFilter] = useState('');
+  // (2026-07-21) — hub list pagination: 20 rows/page on EVERY tab (past-30
+  // rendered 270 glow cards at once on prod = RAM/paint worst case). Page
+  // resets on any context change; paginateAppts self-clamps when the
+  // filtered list shrinks mid-page (silent refresh / cancel).
+  const [apptPage, setApptPage] = useState(1);
+  const listTopRef = useRef(null);
   // V71 (2026-05-15) — today sub-pill state. Resets to 'waiting' on tab change.
   const [todaySubPill, setTodaySubPill] = useState('waiting');
 
@@ -163,6 +171,13 @@ export default function AppointmentHubView({
   useEffect(() => {
     setTodaySubPill('waiting');
   }, [activeTab]);
+
+  // (2026-07-21) — back to page 1 whenever the visible context changes:
+  // tab / sub-pill / search / filters / branch. Clamping for list-shrink is
+  // handled inside paginateAppts (safePage) — no effect needed there.
+  useEffect(() => {
+    setApptPage(1);
+  }, [activeTab, todaySubPill, search, typeFilter, statusFilter, selectedBranchId]);
 
   // V64-fix2 (Issue 6): wide-range fetch [today-30 .. today+30] in ONE shot;
   // per-tab counts + filtering done client-side from the same dataset so all
@@ -495,6 +510,16 @@ export default function AppointmentHubView({
           : sortApptsByDateTimeAsc(scoped);
   }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill, resolveLinkedSession]);
 
+  // (2026-07-21) — RENDER pagination (20/page, every tab). Counts, print and
+  // the filter-bar resultCount all keep reading the FULL filteredAppts; only
+  // the row-card map consumes pagedAppts.pageItems. safePage self-clamps.
+  const pagedAppts = useMemo(() => paginateAppts(filteredAppts, apptPage), [filteredAppts, apptPage]);
+  const handleApptPageChange = useCallback((p) => {
+    setApptPage(p);
+    // pager sits at the BOTTOM — jump back to the list top on page change
+    try { listTopRef.current?.scrollIntoView({ block: 'start' }); } catch { /* jsdom */ }
+  }, []);
+
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.
   // Counts ignore search/type/status filters (default-status-per-tab only)
   // so admin always sees the "actionable rows per tab" number.
@@ -781,6 +806,8 @@ export default function AppointmentHubView({
           <span className="italic">กำลังโหลด…</span>
         </div>
       )}
+      {/* (2026-07-21) — scroll anchor: the bottom pager jumps back here */}
+      <div ref={listTopRef} aria-hidden="true" />
       {!loading && filteredAppts.length === 0 && (
         <div
           className="text-center py-10 border border-dashed border-[var(--bd)] rounded-xl bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)]"
@@ -794,7 +821,7 @@ export default function AppointmentHubView({
       {/* V71 (2026-05-15) — absolute-positioned LINE badge wrapper REMOVED.
           LINE badge now renders INLINE inside AppointmentHubRowCard (next to
           status chip) — closes the V68→V71 transient double-badge state. */}
-      {!loading && filteredAppts.map(a => {
+      {!loading && pagedAppts.pageItems.map(a => {
         // V118 (2026-05-23) — derive card-level OPD lifecycle per row.
         // Hidden entirely on the ยกเลิก sub-tab (cancelled appts have no
         // follow-through). State resolved via AV118 helpers.
@@ -864,6 +891,17 @@ export default function AppointmentHubView({
           />
         );
       })}
+      {/* (2026-07-21) — bottom pager: 20 rows/page on every tab */}
+      {!loading && (
+        <AppointmentHubPagination
+          page={pagedAppts.safePage}
+          totalPages={pagedAppts.totalPages}
+          total={pagedAppts.total}
+          start={pagedAppts.start}
+          end={pagedAppts.end}
+          onPageChange={handleApptPageChange}
+        />
+      )}
       {/* V64-fix3 (Issue 1): full edit modal — same component used by
           backend tab=appointment-all + CustomerDetailView. */}
       {editingAppt && (

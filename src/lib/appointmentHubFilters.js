@@ -207,3 +207,30 @@ export function sortApptsConfirmedFirst(appts) {
     ...sortApptsByDateTimeAsc(list.filter((a) => !isConfirmedActive(a))),
   ];
 }
+
+// ─── Hub list pagination (2026-07-21) ────────────────────────────────────────
+// User report: the "ย้อนหลัง 30 วัน" tab rendered ALL its rows at once (270 on
+// prod) — a huge DOM of glow-carrying cards that costs RAM + paint on every
+// device, and was the worst-case surface for the iOS white-scroll class the
+// same day's fx-perf fix addressed. Directive extended to EVERY hub tab:
+// "ควรแสดง 20 คนทุกหน้าไปเลย มันประหยัดทุกอย่างกว่ามาก". Pagination is
+// RENDER-side by design: the wide [today-30 .. today+30] fetch is ONE shared
+// SWR query feeding all tab counts/badges (delta-only after AV206) — slicing
+// the QUERY would break the badges without saving meaningful network.
+export const HUB_PAGE_SIZE = 20;
+
+/**
+ * Pure page slicer with self-clamping: an out-of-range page (list shrank on a
+ * refresh, filters changed) resolves to the nearest valid page instead of
+ * rendering an empty screen. 1-indexed.
+ * @returns {{pageItems:Array, safePage:number, totalPages:number, total:number, start:number, end:number}}
+ */
+export function paginateAppts(list, page, pageSize = HUB_PAGE_SIZE) {
+  const items = Array.isArray(list) ? list : [];
+  const size = Number(pageSize) > 0 ? Number(pageSize) : HUB_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(items.length / size));
+  const safePage = Math.min(Math.max(1, Math.floor(Number(page) || 1)), totalPages);
+  const start = (safePage - 1) * size;
+  const end = Math.min(start + size, items.length);
+  return { pageItems: items.slice(start, end), safePage, totalPages, total: items.length, start, end };
+}
