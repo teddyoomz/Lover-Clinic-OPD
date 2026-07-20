@@ -365,6 +365,19 @@ export const listenToChatConversationsByBranch = (opts = {}, onChange, onError) 
   return raw.listenToChatConversationsByBranch(resolved, onChange, onError);
 };
 
+// LINE Friend Picker (2026-07-20) — listenToLineFriendsByBranch wrapper.
+// Auto-injects resolveSelectedBranchId() when caller passes {} (BSA Layer 2,
+// mirror of the BS-16 chat wrapper above). Explicit branchId OR
+// allBranches:true bypasses auto-inject.
+export const listenToLineFriendsByBranch = (opts = {}, onChange, onError) => {
+  const hasExplicitBranchId = typeof opts.branchId === 'string' && opts.branchId.length > 0;
+  const isAllBranches = opts.allBranches === true;
+  const resolved = (hasExplicitBranchId || isAllBranches)
+    ? opts
+    : { ...opts, branchId: resolveSelectedBranchId() };
+  return raw.listenToLineFriendsByBranch(resolved, onChange, onError);
+};
+
 // V76 (2026-05-16 EOD+1) — listenToChatHistoryByBranch wrapper (BS-17 extension).
 // V75 missed this SIBLING reader → chat_history view leaked across branches
 // (3,281 legacy docs unstamped). Mirror of chat_conversations BSA Layer 2.

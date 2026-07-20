@@ -3558,6 +3558,38 @@ export function listenToChatConversationsByBranch({ branchId, allBranches = fals
   );
 }
 
+// ─── LINE Friend Picker (2026-07-20) — per-branch follower roster listener ──
+// be_line_friends is written by admin SDK ONLY (webhook follow/unfollow +
+// /api/admin/line-friends Followers-API backfill); staff READ powers the
+// real-time picker (แอดปุ๊ป/ทักปุ๊ป โผล่ปั๊บ). BS-13 safe-by-default (mirror
+// listenToChatConversationsByBranch). Equality-only query — deliberately NO
+// orderBy (would require a composite index); sort is client-side in
+// mergeFriendRoster (src/lib/lineFriendRoster.js).
+export function listenToLineFriendsByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : '');
+  if (!effectiveBranchId && !allBranches) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  const col = collection(db, `artifacts/${appId}/public/data/be_line_friends`);
+  const constraints = [];
+  if (!allBranches && effectiveBranchId) {
+    constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  }
+  const q = query(col, ...constraints);
+  return onSnapshot(
+    q,
+    (snap) => {
+      // V38 spread-order safe: doc.id wins over any stray data.id field.
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (typeof onChange === 'function') onChange(list);
+    },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
 // ─── Tablet Chart Editor (2026-05-20) — pairing presence + session relay ───
 // Branch-scoped, BS-13 safe-by-default (mirror listenToChatConversationsByBranch).
 // Both PC + tablet are clinic staff (Q2) → collections gated by isClinicStaff
