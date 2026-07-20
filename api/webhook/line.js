@@ -46,6 +46,9 @@ import { apiFetch } from '../_lib/apiFetch.js';
 // buttons (✓ ยืนยัน / เลื่อน / ติดต่อ) on a reminder bubble → LINE delivers a
 // `postback` event with `data=action=<a>&appt=<id>&br=<branchId>`.
 import { parsePostbackData } from '../../src/lib/lineReminderTemplate.js';
+// LINE Friend Picker (2026-07-20) — follow/unfollow roster capture into
+// be_line_friends (pure decision fn shared with the client picker UI).
+import { decideFollowEventUpdate } from '../../src/lib/lineFriendRoster.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 // WS1 (2026-06-10): FIRESTORE_BASE removed — all chat reads/writes now go via the admin
@@ -738,9 +741,10 @@ async function maybeEmitBotReply(event, config, branchId) {
 
 async function processEvent(event, fallbackConfig) {
   // LINE Reminder (2026-05-15) Task 7 — accept postback events alongside
-  // messages. Other event types (follow, unfollow, join, leave, etc.) are
-  // silently ignored as before.
-  if (event.type !== 'message' && event.type !== 'postback') return;
+  // messages. LINE Friend Picker (2026-07-20) — also accept follow/unfollow
+  // for the be_line_friends roster. Other event types (join, leave, etc.)
+  // are silently ignored as before.
+  if (!['message', 'postback', 'follow', 'unfollow'].includes(event.type)) return;
 
   const userId = event.source?.userId;
   if (!userId) return;
@@ -780,6 +784,40 @@ async function processEvent(event, fallbackConfig) {
       await handlePostback(event, db, config, branchId);
     } catch (err) {
       console.warn('[line-webhook] postback handler failed:', err?.message || err);
+    }
+    return;
+  }
+
+  // LINE Friend Picker (2026-07-20) — follow/unfollow roster capture.
+  // Best-effort: a throw here must NEVER touch the message pipeline (this
+  // branch always returns before the chat path). Fallback-branch discipline
+  // mirrors the message path exactly (V78 BUG-XR-24 class — always route
+  // through resolveChatFallbackBranchId, never a raw `|| ''`).
+  if (event.type === 'follow' || event.type === 'unfollow') {
+    try {
+      const db = getAdminFirestore();
+      const FALLBACK = resolveChatFallbackBranchId(process.env.LOVER_DEFAULT_BRANCH_ID);
+      const friendBranchId = branchId || FALLBACK;
+      const friendBranchIdSource = branchId
+        ? 'webhook-line'
+        : (process.env.LOVER_DEFAULT_BRANCH_ID
+            ? 'webhook-line-fallback-nakhonratchasima'
+            : 'webhook-line-fallback-hardcoded-nakhonratchasima');
+      const ref = db.doc(`artifacts/${APP_ID}/public/data/be_line_friends/${friendBranchId}_${userId}`);
+      const existingSnap = await ref.get();
+      const profile = event.type === 'follow' ? await getLineProfile(userId, config.channelAccessToken) : null;
+      const { fields } = decideFollowEventUpdate({
+        eventType: event.type,
+        userId,
+        existing: existingSnap.exists ? existingSnap.data() : null,
+        profile,
+        branchId: friendBranchId,
+        branchIdSource: friendBranchIdSource,
+        nowIso: new Date().toISOString(),
+      });
+      await ref.set({ lineUserId: userId, ...fields }, { merge: true });
+    } catch (err) {
+      console.warn('[line-webhook] follow handler failed:', err?.message || err);
     }
     return;
   }
