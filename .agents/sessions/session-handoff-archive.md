@@ -1,5 +1,23 @@
 # SESSION_HANDOFF — Overflow Archive
 
+## Archived 2026-07-20 (SESSION_HANDOFF trim 10+10)
+
+### Current-State bullet
+
+- **NEW (2026-07-07 cont.) — link-patient LCP fix (AV204) + customer-link header strip + configurable LINE id-link keywords — ALL SHIPPED + DEPLOYED LIVE**: master `92b9ba15` = prod (vercel `lover-clinic-y5fpano5s` aliased lover-clinic-app.vercel.app HTTP 200; **firestore.rules UNCHANGED → no Probe-Deploy-Probe**). Full vitest **17,336/17,336 · 0 fail** (definitive json run); build clean. **① LCP fix**: /api/patient-view needed NO auth/settings but waited behind anon-auth gate → lazy chunk → clinicSettingsLoaded (~1.2-1.8s dead serial) — NEW `patientViewEarlyFetch.js` entry-time consume-once fetch + endpoint branch-gets Promise.all (L2 payload-identical) + NARROW `/api/patient-view` vite preview/dev proxy. **Local 3780→2040ms (−46%) · LIVE prod 3472→2212ms (−36%)**. 2-agent adversarial review: warm-import module-map poisoning REMOVED + B6 proxy lock structural. Probe 24/24 + parity 0.000% + DISABLED-branch live lifecycle 11/11. **② Header strip**: การ์ด ?patient= = ชื่อ+เบอร์กึ่งกลาง, `hn` STRIPPED from anon payload — LIVE L1 5/5. **③ Keywords** (AMENDED → NEW doc `clinic_settings/link_id_keywords`): pure interpret layer + validator + webhook 60s-TTL read + `KeywordSettingsCard` — LIVE round-trip 22/22 on real prod. +51 tests · 3 V21 repoints. Checkpoint `.agents/sessions/2026-07-07-lcpfix-header-keywords.md`.
+
+### Session block
+
+### Session 2026-07-07 — Whole-app perf campaign (P0-P3) — SHIPPED + DEPLOYED LIVE
+
+master = prod (`lover-clinic-lh9waq3po` aliased lover-clinic-app.vercel.app; frontend-only, rules unchanged). Final full vitest **17,287/0**; build clean.
+- **P0**: reusable perf harness (`scripts/perf-*.mjs` + `npm run perf:*`) — full-surface metrics (median-of-3, dom-quiet+spinner-aware settle), bundle manifest, sharp pixel-parity gate, compare report, Rule R link discovery. Baselines local+prod + 51-finding audit → `docs/perf/punchlist.md` (29 items, verdicts).
+- **P1 bundle (−44% backend JS)**: recall-chunk 903KB dissolved (had absorbed Firebase+backendClient, preloaded everywhere) · ~30 lazy conversions across both dashboards + App.jsx · preconnect · immutable cache · FOUC fade removed.
+- **P2 render**: chat/presence re-render storms killed via equality guards (renderHook identity proofs) · CustomerCard/RecallRow memo · Intl hoist. 4 V21 repoints.
+- **P3 data**: hub refetch debounce · chat_history client-delete → cron · **dead retention cron fixed** (Timestamp-vs-ISO-string type mismatch; V67 class) → verified live + drained 4,265→137 docs.
+- Incidents (transparent): junction rm hazard nuked part of node_modules (recovered `npm ci`; memory locked) · rtk grep false-0 on prod HTML (PowerShell arbiter) · workflow fan-out halted mid-audit per user rate-limit directive (memory locked; findings salvaged).
+- User L1 pending: เร็ว/ลื่นขึ้นจริง + หน้าตาเหมือนเดิม 100% + realtime ปกติ. Checkpoint `.agents/sessions/2026-07-07-perf-campaign.md`.
+
 ## Archived 2026-07-19 EOD+3 (SESSION_HANDOFF trim 10+10)
 
 ### Current-State bullet

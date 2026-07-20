@@ -9,27 +9,23 @@ production_commit: "e67b6d51 (2026-07-20 — AV211 + TFP #20 + e2e harness)"
 firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-19 EOD+3 — Observability batch + TFP #20 shipped local
+# Active — 2026-07-20 — Final verification campaign + DEPLOY (AV211+TFP#20 live)
 
 ## State
-- iPhone test-push popup confirmed by user → AV210 push saga 100% closed.
-- Spec A (Infra Health Monitor + Client Error Beacon, AV211) + Spec B (TFP buy-modal
-  keystroke isolation #20) both SHIPPED local + pushed. NOT deployed (V18).
-- Checkpoint: `.agents/sessions/2026-07-19-eod3-observability-tfp20.md`.
+- prod = `e67b6d51` LIVE (AV211 observability + TFP #20 + e2e harness) — post-deploy verified.
+- Final whole-system campaign COMPLETE: ทุก gate ที่ automate ได้เขียวหมด, **บั๊คแอปจริง = 0**.
+- Checkpoint: `.agents/sessions/2026-07-20-final-verification-deploy.md` (L1-excavation taxonomy).
 
 ## What this session shipped
-- **Health cron** `infra-health-sweep` (07:30 BKK): checks backup/11 crons/recon/push-token
-  freshness/error volume via pure `infraHealthCore.js`; alerts staff-chat card (kind
-  `infra-health`) + LINE OA text (FCM-independent — FCM can't announce its own death).
-- **Error beacon**: onerror/unhandledrejection/AppErrorBoundary (จอดำ→หน้า reload) →
-  `/api/client-error` (cap 500/วัน, PHI-safe URL) → `client_error_log` default-deny →
-  admin viewer. **UI**: การ์ด "🩺 สุขภาพระบบ" ใน SystemSettingsTab (config LINE targets +
-  ทดสอบแจ้งเตือน + ตรวจตอนนี้ + error viewer) + task ใน ScheduledTasksTab (12 tasks).
-- **Anti-drift lock**: classifier test — cron ใหม่ใน vercel.json ต้องประกาศ health coverage.
-- **TFP #20**: buyQuery/cat/limit + filter memo ย้ายเข้า TfpBuyModal — keystroke ไม่ re-render
-  ฟอร์มเงิน 5.3k บรรทัดอีก; money state/handlers อยู่ TFP เดิม 100%.
-- Verified: L2 จริง (diag-infra-health 13/14 ok บน prod + e2e-client-error 10/0 + beacon
-  sendBeacon proof ใน browser จริง) + Playwright L1 10/10 (buy modal, TEST fixture cleaned).
+- **All-layer verification**: full vitest 17,887/0 · extended 4,681/0 · build clean ·
+  L2 e2e ~160 asserts/0 บน prod จริง (เงิน/คอร์ส/สต็อค/นัด/TFP/backup/observability).
+- **L1 Playwright bank ฟื้น 150 stale fails → 36 ไฟล์เขียวหมด** — ทุก failure = harness stale
+  (3 รุ่น redesign); adjudicated ด้วย screenshot + live browser. ไฮไลท์: customer-card =
+  `onViewCustomer` เปิด popup by design (assert มองผิดหน้ามาตลอด 7 รอบ).
+- Harness modernized 16 ไฟล์ test-only (`e67b6d51`) + backend-tabs.spec DELETED (V50 world).
+- **DEPLOYED** `lover-clinic-ln84axjlk` → alias 200 · 14 crons (infra-health 07:30, gate 401 ✓) ·
+  **LIVE beacon round-trip PASS** (POST→stored→token stripped→zero-orphan cleanup).
+- Health diag วันนี้: 13/14 ok + 1 true-🟡 (archive-retention รอบแรก 03:20 คืนนี้) · recon ตรง 8 ใบ.
 
 ## Next action
 - ✅ DEPLOYED 2026-07-20. เหลือ USER L1 ปิดท้าย: การ์ดสุขภาพระบบ (SystemSettingsTab) →
@@ -38,7 +34,7 @@ firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Depl
   เช็ค `node scripts/diag-cron-first-night.mjs` + `diag-infra-health.mjs` (🟡 จะหายเอง).
 
 ## Outstanding user-triggered actions
-- "deploy" (V18) · desktop toast = Windows notification settings ที่เครื่องคลินิก ·
-  standing L1 stack (wheel guard / VIP sort / AV209 / TFP เครื่องช้า / mobile).
+- L1 ปิดท้าย alert: LINE target + "ทดสอบแจ้งเตือน" · desktop toast = Windows settings
+  ที่เครื่องคลินิก · standing L1 stack (wheel guard / VIP sort / AV209 / TFP เครื่องช้า / mobile).
 
 ## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
