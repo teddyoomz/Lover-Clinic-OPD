@@ -107,7 +107,9 @@ const LIST_CACHE_MS = 60_000;
 const RESOLVE_CAP = 300;
 const _listCache = new Map(); // branchId → { at, result }
 
-async function handleListBackfill({ db, branchId }) {
+// Named export — scripts/diag-line-friends-backfill.mjs drives the REAL
+// backfill against a real branch OA (Rule R env; user-triggered).
+export async function handleListBackfill({ db, branchId }) {
   const cached = _listCache.get(branchId);
   if (cached && Date.now() - cached.at < LIST_CACHE_MS) {
     return { ...cached.result, cached: true };
