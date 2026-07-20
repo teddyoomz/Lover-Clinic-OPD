@@ -1339,14 +1339,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             if (fpHistory) setTreatmentHistory(fpHistory);
           }
           setTfpSyncing(true);   // chip ON — enrichment (products/courses/DF) still loading
-          // AV212 hunt R1: the escape card + its 15s/30s timers are meaningful
-          // ONLY while `loading` (the card renders under `if (loading)`). Once
-          // fast-paint clears loading the card can never show, so cancel the
-          // timers here — otherwise sawTimeout/loadTimedOut fire behind the
-          // painted form and the slow-entry telemetry falsely reports
-          // "the escape card showed" on every slow-enrichment machine.
-          clearTimeout(timeoutTimer);
-          clearTimeout(stuckTimer);
+          // AV212 hunt R2: do NOT clear the escape timers here. After a
+          // fast-paint the full-screen escape card can't render (it's under
+          // `if (loading)`), but the money buttons stay disabled until
+          // enrichment lands (optionsEnriched) — if the server leg stalls that
+          // would strand the user with greyed buttons and no recovery. The
+          // stuckTimer (30s) → loadStuck still fires so the INLINE painted-form
+          // escape (rendered on `!optionsEnriched && loadStuck`) offers a
+          // reconnect+retry. (loadTimedOut/sawTimeout now mean "enrichment >15s",
+          // possibly behind a painted form — the telemetry reads it as a slow
+          // signal, not a literal card sighting.)
           setLoading(false);     // ← PAINT (the ≤5s moment)
         } catch { /* fast-paint is best-effort — the full pipeline is the truth */ }
       })();
@@ -2549,7 +2551,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // Defense-in-depth: the save buttons are also disabled on !optionsEnriched;
     // this covers keyboard/programmatic submits. The chip already tells the
     // user data is loading; re-clicking after it clears serializes full data.
-    if (!isEdit && !optionsEnriched) {
+    // Hunt R2 refinement: saveMode='vitals' is EXEMPT — the vitals path skips
+    // every money block (2717/2919/3079/3141/3175/3362/3640: no billing, no
+    // course/stock deduction, no auto-sale, no DF) so the minimal subset can't
+    // harm it, and the vitals station is the fast-paint's primary audience.
+    // Doctor-save stays gated (it records DF — dfEntries=[] in the window).
+    if (!isEdit && !optionsEnriched && saveMode !== 'vitals') {
       setError('กำลังโหลดข้อมูลคอร์ส/สินค้า/ค่ามือ — กรุณารอสักครู่แล้วกดบันทึกอีกครั้ง');
       return;
     }
@@ -3816,6 +3823,34 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   return (
     <div className={`fixed inset-0 z-[80] overflow-y-auto overscroll-contain ${isDark ? 'bg-[#0a0a0a] text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
       <ModalScrollLock />
+      {/* AV212 hunt R2 — painted-form enrichment escape. After a fast-paint the
+          full-screen escape card can't render (it lives under `if (loading)`),
+          but the money buttons stay disabled until optionsEnriched. If the
+          enrichment leg stalls (half-dead socket) the stuckTimer (30s) flips
+          loadStuck → this banner offers the SAME reconnect+retry as the card,
+          so staff are never stranded with greyed save/buy buttons. */}
+      {!isEdit && !optionsEnriched && loadStuck && (
+        <div data-testid="tfp-enrich-stuck-banner" className={`sticky top-0 z-20 px-4 py-2 flex items-center justify-center gap-3 text-xs font-bold ${isDark ? 'bg-amber-950/90 text-amber-300' : 'bg-amber-100 text-amber-800'}`}>
+          <span>โหลดข้อมูลคอร์ส/สินค้าไม่สำเร็จ — ปุ่มบันทึก/ซื้อจะใช้ได้เมื่อข้อมูลครบ</span>
+          <button
+            type="button"
+            data-testid="tfp-enrich-retry-btn"
+            onClick={() => {
+              setLoadTimedOut(false);
+              setLoadStuck(false);
+              setError('');
+              // same contract as the loading-card retry (Hunt R1-#1): invalidate
+              // the hung run FIRST, heal the socket, THEN start the fresh run.
+              loadRunSeqRef.current++;
+              import('../lib/firestoreReconnect.js')
+                .then(m => m.reconnectFirestore())
+                .catch(() => {})
+                .finally(() => setLoadRetryNonce(n => n + 1));
+            }}
+            className="px-3 py-1 rounded-lg text-white bg-teal-700 hover:bg-teal-600 transition-all"
+          >ลองใหม่</button>
+        </div>
+      )}
       {/* ── Header ──────────────────────────────────────────────────────────
           Phase 27.1-quater (2026-05-14, user iteration 3) — unified header
           per user directive: "เอา badge แสดงสาขาในหน้า TFP รวมถึง Tab ประวัติ
@@ -4158,7 +4193,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 type="button"
                 onClick={() => handleSubmit('vitals')}
                 data-testid="tfp-vitals-save-btn"
-                disabled={saving || (!isEdit && !optionsEnriched)}
+                disabled={saving}
                 className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <Activity size={16} />
@@ -5493,7 +5528,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 staff save (SyntheticEvent → saveMode='staff'). */}
             <button
               onClick={canEditCourseUsageRetro ? () => handleSubmit('course') : handleSubmit}
-              disabled={saving}
+              disabled={saving || (!isEdit && !optionsEnriched)}
               data-testid={canEditCourseUsageRetro ? 'tfp-save-course-retro' : 'tfp-save'}
               className="px-8 py-2.5 rounded-xl text-sm font-black bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-all flex items-center gap-2 shadow-lg shadow-purple-600/20">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
