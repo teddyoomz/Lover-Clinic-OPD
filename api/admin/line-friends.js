@@ -169,7 +169,9 @@ async function handleListBackfill({ db, branchId }) {
   });
 }
 
-async function handleBind({ db, customerId, lineUserId, branchId, displayName, callerUid }) {
+// Named export — Rule Q L2 e2e (scripts/e2e-line-friends-realtime.mjs) drives
+// the REAL bind code against real prod Firestore with TEST- fixtures.
+export async function handleBind({ db, customerId, lineUserId, branchId, displayName, callerUid }) {
   const cid = String(customerId || '').trim();
   const uid = String(lineUserId || '').trim();
   const bid = String(branchId || '').trim();
@@ -234,7 +236,7 @@ async function handleBind({ db, customerId, lineUserId, branchId, displayName, c
     await pushLineMessage(token, uid, formatLinkRequestApprovedReply(customerName));
   } catch { /* best-effort */ }
 
-  return { customerId: cid, lineUserId: uid, branchId: bid, status: 'bound' };
+  return { customerId: cid, lineUserId: uid, branchId: bid, status: 'bound', auditId };
 }
 
 export default async function handler(req, res) {
