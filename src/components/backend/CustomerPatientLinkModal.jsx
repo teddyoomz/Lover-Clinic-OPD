@@ -9,9 +9,10 @@ import { useState } from 'react';
 import { Link, Loader2, X, ClipboardList, ExternalLink, Unlink, Check } from 'lucide-react';
 import { generateCustomerPatientLink, setCustomerPatientLinkEnabled, revokeCustomerPatientLink } from '../../lib/scopedDataLayer.js';
 import { useModalScrollLock } from '../../lib/useModalScrollLock.js';
+import QrImage from '../QrImage.jsx';
 
+// 2026-07-21 — QR renders locally via <QrImage> (no api.qrserver.com dependency)
 const linkUrl = (token) => `${window.location.origin}${window.location.pathname}?patient=${token}`;
-const qrUrl = (token) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(linkUrl(token))}&margin=10&color=000000&ecc=Q`;
 
 export default function CustomerPatientLinkModal({ customer, onClose, onUpdated, isDark }) {
   useModalScrollLock(true); // AV205 — renders only while open
@@ -69,7 +70,7 @@ export default function CustomerPatientLinkModal({ customer, onClose, onUpdated,
                   <a href={linkUrl(token)} target="_blank" rel="noopener noreferrer" aria-label="เปิดลิงก์" title="เปิด" className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-purple-400 transition-colors shrink-0"><ExternalLink size={14} /></a>
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-3 flex justify-center"><img src={qrUrl(token)} alt="QR ลิงก์ดูข้อมูล" className="w-40 h-40" /></div>
+              <div className="bg-white rounded-xl p-3 flex justify-center"><QrImage value={linkUrl(token)} size={500} alt="QR ลิงก์ดูข้อมูล" className="w-40 h-40" /></div>
               <div className="flex gap-2">
                 <button onClick={doToggle} disabled={loading} className="flex-1 py-2.5 rounded-lg border border-[var(--bd)] text-xs font-bold text-gray-300 hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center gap-1.5">
                   <Unlink size={13} /> {enabled ? 'ปิดใช้งานลิงก์' : 'เปิดใช้งานลิงก์'}

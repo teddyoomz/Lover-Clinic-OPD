@@ -422,11 +422,11 @@ export function printDocument({ template, clinic, customer, values, language, to
 // @param {string} text — payload to encode (URL, ID, etc.)
 // @param {Object} [opts] — { width: 100, margin: 2 }
 // @returns {Promise<string>} data:image/png;base64,...
-export async function generateQrDataUrl(text, { width = 120, margin = 2 } = {}) {
+export async function generateQrDataUrl(text, { width = 120, margin = 2, errorCorrectionLevel = 'M' } = {}) {
   if (!text || typeof text !== 'string') return '';
   const qrcodeModule = await import('qrcode');
   const QRCode = qrcodeModule.default || qrcodeModule;
-  const url = await QRCode.toDataURL(String(text), { width, margin, errorCorrectionLevel: 'M' });
+  const url = await QRCode.toDataURL(String(text), { width, margin, errorCorrectionLevel });
   // toDataURL returns 'data:image/png;base64,...' — buildPrintContext will
   // auto-wrap in safeImgTag for templates using {{{key}}}.
   return url;

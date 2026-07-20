@@ -125,6 +125,8 @@ import {
   bangkokNow as bangkokNowUtil, thaiTodayISO, thaiYearMonth, genShortId
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import InfraHealthStaleBanner from '../components/InfraHealthStaleBanner.jsx';
+import QrImage from '../components/QrImage.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import PhoneLink from '../components/PhoneLink.jsx';
 import { VISIT_REASON_VALUES } from '../lib/visitReasonOptions.js'; // Rule C1 single source (2026-05-25)
@@ -2224,11 +2226,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       // 5b. Prefs are already saved on every toggle — no need to save again
 
-      // 6. Build URL + QR
+      // 6. Build URL (QR renders locally via <QrImage> — 2026-07-21, no
+      // api.qrserver.com dependency in the customer-facing flows)
       const baseUrl = window.location.origin;
       const url = `${baseUrl}/?schedule=${token}`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
-      setSchedGenResult({ token, url, qrUrl });
+      setSchedGenResult({ token, url });
       showToast('สร้างลิงก์ตารางสำเร็จ', 3000);
 
       // Phase 20.0 Task 1 — background resync simplified: no ProClinic pull
@@ -3619,10 +3621,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
   };
 
+  // 2026-07-21 — QR images render locally via the shared QrImage component
+  // (qrcode lib). The old getQRUrl/getPatientLinkQRUrl api.qrserver.com
+  // helpers are GONE: the kiosk-intake + patient-link QRs must never depend
+  // on an unmonitored free third-party image service.
   const getSessionUrl = (sessionId) => `${window.location.origin}${window.location.pathname}?session=${sessionId}`;
-  const getQRUrl = (sessionId) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(getSessionUrl(sessionId))}&margin=10&color=000000&ecc=Q`;
   const getPatientLinkUrl = (token) => `${window.location.origin}${window.location.pathname}?patient=${token}`;
-  const getPatientLinkQRUrl = (token) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(getPatientLinkUrl(token))}&margin=10&color=000000&ecc=Q`;
 
   const handleCopyToClipboard = (text, isUrl = false) => {
     const textArea = document.createElement("textarea");
@@ -5263,7 +5267,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
           {schedGenResult ? (
             <div className="p-6 flex flex-col items-center gap-4">
-              <img src={schedGenResult.qrUrl} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
+              <QrImage value={schedGenResult.url} size={300} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
               <div className="w-full">
                 <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">URL</label>
                 <div className="flex gap-2">
@@ -5994,12 +5998,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // call sites is only the token-text color (`tokenColor` arg).
   const renderQrCard = (qrSession, tokenColor) => {
     const plToken = qrSession?.patientLinkToken;
-    const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
     const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
     return (
       <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
         <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-xl">
-          <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
+          <QrImage value={linkUrl} size={500} alt="QR" className="w-full h-full object-contain"/>
         </div>
         <div className="w-full text-center">
           <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{qrSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
@@ -6249,6 +6252,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
         </div>
       </header>
+
+      {/* 2026-07-21 — watcher-of-the-watcher chip (fixed position; renders only
+          when the infra-health sweep is missing/stale >36h) */}
+      <InfraHealthStaleBanner />
 
       {adminMode === 'chat' ? (
         <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-4 sm:p-6 fx-glow-u3">
@@ -7510,7 +7517,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const plToken = activeSessionInfo?.patientLinkToken;
                 const plEnabled = activeSessionInfo?.patientLinkEnabled;
                 const isPlMode = qrDisplayMode === 'patientLink' && !!plToken;
-                const qrSrc = isPlMode ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
                 const linkUrl = isPlMode ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
                 const tokenLabel = isPlMode ? 'Patient Link Token' : 'รหัสคิว (Token)';
                 const tokenValue = isPlMode ? plToken : selectedQR;
@@ -7526,7 +7532,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                   )}
                   <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden" style={{boxShadow: `0 0 40px rgba(${acRgb},0.25)`}}>
-                    <img src={qrSrc} alt="QR" className="w-full h-full object-contain" />
+                    <QrImage value={linkUrl} size={500} alt="QR" className="w-full h-full object-contain" />
                   </div>
                   <div className="w-full text-center">
                     <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{activeSessionInfo?.sessionName || 'ไม่มีชื่อคิว'}</h3>

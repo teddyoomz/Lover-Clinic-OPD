@@ -24,6 +24,7 @@ import { useTheme } from '../hooks/useTheme.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ProfileDropdown from '../components/backend/ProfileDropdown.jsx';
 import BackendNav from '../components/backend/nav/BackendNav.jsx';
+import InfraHealthStaleBanner from '../components/InfraHealthStaleBanner.jsx';
 import BackendShellNew from '../components/backend/shell/BackendShellNew.jsx';
 import BackendMenuModeToggle from '../components/backend/shell/BackendMenuModeToggle.jsx';
 import { useBackendMenuMode } from '../components/backend/shell/backendMenuMode.js';
@@ -881,7 +882,12 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   // Backend Menu D — conditional shell. Both branches receive byte-identical
   // props; mainContent is the same children block. Mode toggle swaps shells
   // via React state — no route change, no re-mount of child tabs.
-  return menuMode === 'new' ? (
+  // 2026-07-21: InfraHealthStaleBanner = watcher-of-the-watcher chip (fixed
+  // position — mounts once regardless of menu mode).
+  return (
+    <>
+      <InfraHealthStaleBanner />
+      {menuMode === 'new' ? (
     <BackendShellNew
       activeTabId={activeTab}
       onNavigate={handleNavigate}
@@ -905,6 +911,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     >
       {mainContent}
     </BackendNav>
+      )}
+    </>
   );
 }
 
