@@ -66,6 +66,16 @@ const COLLECTION_MATRIX = {
   'be_staff_chat_messages':{ scope: 'branch',         source: 'V73 (2026-05-16) — staff in-branch chat. addStaffChatMessage stamps branchId from useStaffChat hook bound to selectedBranchId. listenToStaffChatMessages safe-by-default (BS-13).' },
   'be_chart_tablet_presence':{ scope: 'branch',       source: 'Tablet Chart Editor (2026-05-20) — standby presence; upsertChartTabletPresence stamps branchId; listenToChartTabletPresenceByBranch safe-by-default (BS-13).' },
   'be_chart_edit_sessions':{ scope: 'branch',         source: 'Tablet Chart Editor (2026-05-20) — PC↔tablet session relay; createChartEditSession stamps branchId; listenToRequestedSessionForTablet branch-filtered.' },
+  // LINE Friend Picker (2026-07-20) — per-branch follower roster. Writers are
+  // admin SDK ONLY (webhook follow/unfollow handler + /api/admin/line-friends
+  // Followers-API backfill) so there is NO backendClient writer for BC2.direct
+  // to check — classified `global` mirroring be_line_reminder_log /
+  // be_line_configs precedent. Branch attribution = `branchId` payload field
+  // (stamped by decideFollowEventUpdate) + STRUCTURAL doc-id prefix
+  // `${branchId}_${lineUserId}`. Client read = listenToLineFriendsByBranch
+  // (BS-13 safe-by-default, where branchId ==). Rules: read isClinicStaff /
+  // write false (Rule B probe #20).
+  'be_line_friends':       { scope: 'global', reason: 'LINE Friend Picker (2026-07-20) — admin-SDK-only follower roster (webhook + backfill endpoint); branchId payload field + doc-id prefix carry branch attribution; BS-13 listener filters per branch.' },
   // EOD+1 chart-templates rewrite (2026-05-22): per-doc clinic-wide chart-annotation
   // template store. Image bytes in Storage at chart-templates/{id}.{ext}; doc =
   // {id, name, category, imageUrl, storagePath, builtIn, locked, _seedOrder, createdAt, updatedAt}.

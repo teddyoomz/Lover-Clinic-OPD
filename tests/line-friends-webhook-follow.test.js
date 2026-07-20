@@ -62,6 +62,29 @@ describe('W4 — profile API economy', () => {
   });
 });
 
+describe('W6 — firestore.rules + COLLECTION_MATRIX (Task 4 locks)', () => {
+  const rules = readFileSync('firestore.rules', 'utf8');
+  const matrix = readFileSync('tests/branch-collection-coverage.test.js', 'utf8');
+  it('W6.1 be_line_friends: read isClinicStaff / write false (real-time listener + admin-SDK-only writers)', () => {
+    const block = rules.slice(rules.indexOf('match /be_line_friends/'));
+    expect(block).toMatch(/allow read: if isClinicStaff\(\);/);
+    expect(block).toMatch(/allow write: if false;/);
+  });
+  it('W6.2 rules must NOT open client write (anti-regression — probe #20 contract)', () => {
+    const start = rules.indexOf('match /be_line_friends/');
+    const block = rules.slice(start, rules.indexOf('}', rules.indexOf('allow write', start)) + 1);
+    expect(block).not.toMatch(/allow (create|update|delete|write): if isClinicStaff/);
+    expect(block).not.toMatch(/allow write: if true/);
+  });
+  it('W6.3 COLLECTION_MATRIX classifies be_line_friends (BC1.1 — global per admin-SDK-only precedent)', () => {
+    expect(matrix).toMatch(/'be_line_friends':\s*\{ scope: 'global'/);
+  });
+  it('W6.4 Rule B probe #20 documented in 01-iron-clad.md', () => {
+    const ironclad = readFileSync('.claude/rules/01-iron-clad.md', 'utf8');
+    expect(ironclad).toMatch(/be_line_friends/);
+  });
+});
+
 describe('W5 — message pipeline untouched (silent-regression anchors)', () => {
   it('W5.1 chat conversation write path intact', () => {
     expect(src).toMatch(/chat_conversations\/line_\$\{userId\}/);

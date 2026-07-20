@@ -524,6 +524,17 @@ service cloud.firestore {
         allow delete: if isSignedIn() && request.auth.token.admin == true;
       }
 
+      // LINE Friend Picker (2026-07-20) — per-branch follower roster
+      // (docId = `${branchId}_${lineUserId}`). Writers are admin SDK ONLY:
+      // the LINE webhook follow/unfollow handler + the /api/admin/line-friends
+      // Followers-API backfill. Staff READ powers the real-time picker
+      // listener (แอดปุ๊ป/ทักปุ๊ป โผล่ปั๊บ). Client write DENIED — Rule B
+      // probe #20: anon read/write → denied.
+      match /be_line_friends/{friendId} {
+        allow read: if isClinicStaff();
+        allow write: if false;
+      }
+
       // ── Backend: Phase 15.6 (2026-04-28) Admin cleanup audit log ──
       // Written ONLY by /api/admin/cleanup-* endpoints (firebase-admin SDK
       // bypasses rules). Lists deleted batch / product / sale IDs + caller

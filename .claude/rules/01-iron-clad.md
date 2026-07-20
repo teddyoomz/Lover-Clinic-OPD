@@ -245,8 +245,13 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
    ```
    curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_opd_note_templates?documentId=test-probe-opdt-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'   # → 403 (anon; staff-only)
    ```
+20. **LINE Friend Picker (2026-07-20)** — anon READ + WRITE `be_line_friends` → expect denied ทั้งคู่ (staff-only read สำหรับ real-time picker listener; write = admin SDK only จาก webhook follow handler + /api/admin/line-friends backfill). Primary verification = Rule Q L2 `scripts/e2e-line-friends-realtime.mjs` (client-SDK staff read ALLOWED + client write DENIED). Curl regression:
+   ```
+   curl -s -o /dev/null -w "%{http_code}\n" "$BASE/$PREFIX/be_line_friends/PROBE_U0"   # → 403 (anon read)
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_line_friends?documentId=test-probe-linefriend-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'   # → 403 (anon write; client write ทุก auth → denied)
+   ```
 13. `firebase deploy --only firestore:rules,storage` (⚠ firebase CLI 15.x: `storage`, NOT `storage:rules`)
-14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15, 18, 19) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy) — probe 18 เต็มรูปแบบ (staff-allow + forge-deny) ใช้ `scripts/diag-tfp-chat-card-l2.mjs`; probe 19 เต็มรูปแบบ (staff CRUD + isolation) ใช้ `scripts/diag-opd-note-templates-l2.mjs`
+14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19, 20 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15, 18, 19) หรือ ≠ 403 (เฉพาะ 12) หรือ ผิด-expected (เฉพาะ 16: 0-lot delete ≠ 200 หรือ live-lot delete ≠ 403) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy) — probe 18 เต็มรูปแบบ (staff-allow + forge-deny) ใช้ `scripts/diag-tfp-chat-card-l2.mjs`; probe 19 เต็มรูปแบบ (staff CRUD + isolation) ใช้ `scripts/diag-opd-note-templates-l2.mjs`
 13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
