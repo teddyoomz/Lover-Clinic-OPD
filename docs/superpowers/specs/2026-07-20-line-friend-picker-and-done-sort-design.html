@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>LINE Friend Picker (Hybrid + Real-time) + Done-tab Sort — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .dark { background: #0f0f0f; border-radius: 10px; padding: 14px; }
+    .flow-box { display: inline-block; background: #f0f4f8; border: 1px solid #b5d4f4; border-radius: 6px; padding: 6px 12px; font-size: 0.85em; margin: 2px; }
+    .flow-arrow { color: #dc2626; font-weight: bold; padding: 0 4px; }
+  </style>
+</head>
+<body>
+
+<h1>LINE Friend Picker (Hybrid + Real-time) + Done-tab Sort — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-20 · <strong>Status:</strong> Approved by user ("โอเค") · <strong>Implementation plan:</strong> 2026-07-20-line-friend-picker-and-done-sort.html (writing-plans next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><strong>Feature ① — LINE Friend Picker.</strong> ปัจจุบันผูก LINE target สำหรับ noti สุขภาพระบบไม่ได้เพราะ admin หา
+LINE User ID ไม่ได้ (ต้องพิมพ์ <code>Uxxxx…</code> มือ) และการผูกลูกค้าเข้ากับ LINE ต้องให้ลูกค้าพิมพ์
+<code>ผูก &lt;ID&gt;</code> + เลขบัตรประชาชนเอง ต้องการ: ดึงรายชื่อ + userId + รูปของคนที่แอด LINE OA
+แต่ละสาขามาแสดงเป็นลิสต์ให้ <em>กดเลือก</em> ได้ ทั้งสำหรับ (ก) ผูกเจ้าของรับ noti สุขภาพระบบ และ
+(ข) ผูกลูกค้าเข้าข้อมูลลูกค้าโดย admin โดยตรง — และลิสต์ต้อง <strong>real-time</strong>:
+ลูกค้าแอดหรือทักหน้างานปุ๊ป ชื่อโผล่ในลิสต์ปั๊บ แม้เปิด modal ค้างไว้ ไม่ต้อง refresh.</p>
+<p><strong>ข้อจำกัด LINE ที่ตรวจแล้ว:</strong> <code>GET /v2/bot/followers/ids</code> (รายชื่อผู้ติดตามทั้งหมด)
+ใช้ได้เฉพาะ OA แบบ <em>verified / premium</em> เท่านั้น (โล่น้ำเงิน/เขียว) — บัญชี unverified เรียกแล้วได้ 403.
+ส่วน <code>GET /v2/bot/profile/{userId}</code> (ชื่อ+รูปจาก userId) ใช้ได้ทุกบัญชี.
+OA ของคลินิกยังไม่แน่ใจว่าเป็นแบบไหน → สถาปัตยกรรมแบบ Hybrid ที่ตรวจเองอัตโนมัติ.</p>
+<p><strong>Feature ② — Done-tab sort.</strong> แท็บ "วันนี้" sub-pill "เสร็จแล้ว" ปัจจุบันเรียงตามเวลานัด
+(<code>sortApptsByDateTimeAsc</code>) — ต้องการเรียงตาม "คนที่เพิ่งกดรับบริการเรียบร้อยล่าสุดอยู่บนสุด"
+(<code>serviceCompletedAt</code> desc). กำลังรอ + แท็บอื่นเรียงแบบเดิม.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">① การ์ดสุขภาพระบบ · LINE targets — ก่อน (บน: พิมพ์ userId มือ) → หลัง (ล่าง: ปุ่มเลือกจากรายชื่อ)</div>
+  <div class="dark">
+    <div style="font-size:11px;color:#8a8a8a;margin-bottom:6px">ก่อน</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
+      <span style="padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#ddd">นครราชสีมา ▾</span>
+      <span style="flex:1;min-width:180px;padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#666;font-family:monospace">LINE User ID (Uxxxx…)</span>
+      <span style="width:100px;padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#666">ป้าย (เช่น เจ้าของ)</span>
+      <span style="color:#8a8a8a">🗑</span>
+    </div>
+    <div style="font-size:11px;color:#f0997b;margin-bottom:6px">หลัง</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <span style="padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#ddd">นครราชสีมา ▾</span>
+      <span style="flex:1;min-width:150px;padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#ddd;font-family:monospace">U4af4980629…</span>
+      <span style="width:100px;padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#ddd">เจ้าของ</span>
+      <span style="padding:6px 10px;border-radius:8px;font-size:12px;background:#2a1215;border:1px solid #dc2626;color:#fca5a5">👥 เลือกจากรายชื่อ</span>
+      <span style="color:#8a8a8a">🗑</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">② LineFriendPickerModal — shared component, real-time list (dark theme จริงของแอป)</div>
+  <div class="dark" style="max-width:460px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:13px;color:#eee;font-weight:500">เลือกจากรายชื่อเพื่อน LINE — นครราชสีมา</span>
+      <span style="color:#8a8a8a">✕</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <span style="flex:1;padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#666">🔍 ค้นหาชื่อ…</span>
+      <span style="padding:6px 10px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#ddd">ทุกแหล่ง ▾</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:#1a1a1a;margin-bottom:6px">
+      <span style="width:34px;height:34px;border-radius:50%;background:#3b2a1a;display:inline-flex;align-items:center;justify-content:center;color:#fac775;font-size:13px">อ</span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-size:13px;color:#eee">Oomz Peerapat</span><span style="display:block;font-size:11px;color:#777;font-family:monospace">U4af49806…c9d2</span></span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:#0f2419;color:#5dcaa5;border:1px solid #1d9e75">เคยทัก</span>
+      <span style="padding:5px 12px;border-radius:8px;font-size:12px;background:#dc2626;color:#fff">เลือก</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:#1a1a1a;margin-bottom:6px">
+      <span style="width:34px;height:34px;border-radius:50%;background:#1a2a3b;display:inline-flex;align-items:center;justify-content:center;color:#85b7eb;font-size:13px">ม</span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-size:13px;color:#eee">มายด์ 🤍</span><span style="display:block;font-size:11px;color:#777;font-family:monospace">U8bb21f44…77aa</span></span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:#2a1a2e;color:#d4a5e8;border:1px solid #7c3aed">เพื่อนใหม่</span>
+      <span style="padding:5px 12px;border-radius:8px;font-size:12px;background:#dc2626;color:#fff">เลือก</span>
+    </div>
+    <div style="font-size:10.5px;color:#777;margin-top:8px">ℹ แหล่ง: แชทที่เคยทัก (live) + คนแอดใหม่ (live) + รายชื่อเต็มจาก LINE (ครั้งเดียวตอนเปิด — เฉพาะ OA verified)</div>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">States: <strong>loading</strong> (skeleton แถว 3 อัน) · <strong>loaded</strong> (ตามภาพ) · <strong>empty</strong> ("ยังไม่มีรายชื่อ — ให้ลูกค้าแอด/ทัก LINE OA สาขานี้ แล้วชื่อจะโผล่ที่นี่ทันที") · <strong>error</strong> (Thai error + ปุ่มลองใหม่; Followers API 403 = ไม่ใช่ error — ข้ามเงียบ). Real-time: แถวใหม่แทรกเข้าลิสต์ทันทีที่ listener ยิง (ไม่มีปุ่ม refresh).</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">③ หน้าข้อมูลลูกค้า · modal ผูก LINE — เพิ่มแท็บใหม่ข้าง QR เดิม + confirm ก่อนผูก</div>
+  <div class="dark" style="max-width:460px">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <span style="flex:1;text-align:center;padding:7px;border-radius:8px;font-size:12px;background:#1e1e1e;border:1px solid #3a3a3a;color:#999">QR ให้ลูกค้าสแกน (เดิม)</span>
+      <span style="flex:1;text-align:center;padding:7px;border-radius:8px;font-size:12px;background:#2a1215;border:1px solid #dc2626;color:#fca5a5">เลือกจากรายชื่อเพื่อน (ใหม่)</span>
+    </div>
+    <div style="background:#1a1a1a;border:1px solid #3a3a3a;border-radius:8px;padding:10px;font-size:12px;color:#ddd">
+      ผูก <span style="color:#5dcaa5">Oomz Peerapat</span> (U4af49806…) กับลูกค้า <span style="color:#fac775">แพรพร พรแพร · HN 000004</span> ?
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <span style="padding:5px 14px;border-radius:8px;background:#dc2626;color:#fff">ยืนยันผูก</span>
+        <span style="padding:5px 14px;border-radius:8px;border:1px solid #3a3a3a;color:#999">ยกเลิก</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">④ แท็บวันนี้ · เสร็จแล้ว — ก่อน (เรียงเวลานัด) → หลัง (กดเสร็จล่าสุดบนสุด)</div>
+  <div class="dark">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <div style="font-size:11px;color:#8a8a8a;margin-bottom:8px">ก่อน — เรียงตามเวลานัด</div>
+        <div style="font-size:12px;color:#ddd;padding:6px 8px;background:#1a1a1a;border-radius:6px;margin-bottom:4px">09:00 คุณเอ <span style="color:#666;font-size:10.5px">· กดเสร็จ 14:02</span></div>
+        <div style="font-size:12px;color:#ddd;padding:6px 8px;background:#1a1a1a;border-radius:6px;margin-bottom:4px">10:30 คุณบี <span style="color:#666;font-size:10.5px">· กดเสร็จ 11:15</span></div>
+        <div style="font-size:12px;color:#ddd;padding:6px 8px;background:#1a1a1a;border-radius:6px">13:00 คุณซี <span style="color:#666;font-size:10.5px">· กดเสร็จ 14:40</span></div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#f0997b;margin-bottom:8px">หลัง — เพิ่งกดเสร็จอยู่บนสุด</div>
+        <div style="font-size:12px;color:#ddd;padding:6px 8px;background:#1a1a1a;border-radius:6px;margin-bottom:4px;border-left:2px solid #dc2626">13:00 คุณซี <span style="color:#5dcaa5;font-size:10.5px">· กดเสร็จ 14:40 ↑</span></div>
+        <div style="font-size:12px;color:#ddd;padding:6px 8px;background:#1a1a1a;border-radius:6px;margin-bottom:4px">09:00 คุณเอ <span style="color:#666;font-size:10.5px">· กดเสร็จ 14:02</span></div>
+        <div style="font-size:12px;color:#ddd;padding:6px 8px;background:#1a1a1a;border-radius:6px">10:30 คุณบี <span style="color:#666;font-size:10.5px">· กดเสร็จ 11:15</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow A — Real-time roster: แอด/ทักปุ๊ป → โผล่ในลิสต์ปั๊บ (ไม่มี refresh)</div>
+  <p>
+    <span class="flow-box">ลูกค้าแอดเพื่อน LINE OA</span><span class="flow-arrow">→</span>
+    <span class="flow-box">LINE ส่ง <code>follow</code> event → webhook</span><span class="flow-arrow">→</span>
+    <span class="flow-box">resolver หาสาขา (V75 เดิม) + profile API (ชื่อ+รูป)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">admin SDK เขียน <code>be_line_friends/{branchId}_{userId}</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">client onSnapshot listener ยิง</span><span class="flow-arrow">→</span>
+    <span class="flow-box">แถวใหม่โผล่ใน picker ทันที (badge "เพื่อนใหม่")</span>
+  </p>
+  <p>
+    <span class="flow-box">ลูกค้าทักแชท</span><span class="flow-arrow">→</span>
+    <span class="flow-box">webhook สร้าง/อัพเดท <code>chat_conversations</code> (pipeline เดิม — ไม่แตะ)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">listener ตัวที่สองยิง</span><span class="flow-arrow">→</span>
+    <span class="flow-box">โผล่ใน picker (badge "เคยทัก")</span>
+  </p>
+  <p>
+    <span class="flow-box">เปิด modal</span><span class="flow-arrow">→</span>
+    <span class="flow-box">one-shot <code>/api/admin/line-friends?action=list</code> (Followers API backfill — verified OA เท่านั้น; 403 = ข้ามเงียบ)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">merge 3 แหล่ง dedupe ด้วย lineUserId</span>
+  </p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow B — ผูกลูกค้า (mirror link-requests approve — canonical V32-tris-quater)</div>
+  <table>
+    <tr><th>#</th><th>ขั้น</th><th>รายละเอียด</th></tr>
+    <tr><td>1</td><td>admin กด "เลือก" ใน picker (โหมดผูกลูกค้า)</td><td>โชว์ confirm: ชื่อไลน์ + userId vs ชื่อลูกค้า + HN</td></tr>
+    <tr><td>2</td><td>ยืนยัน → POST <code>/api/admin/line-friends action=bind</code></td><td>{customerId, lineUserId, branchId, displayName}</td></tr>
+    <tr><td>3</td><td>server: dedup guard</td><td>query be_customers where lineUserId == X → ถ้ามีลูกค้าอื่นผูกอยู่ → Thai error "userId นี้ผูกกับลูกค้า … อยู่แล้ว" (ไม่เขียนอะไร)</td></tr>
+    <tr><td>4</td><td>batch atomic (admin SDK)</td><td><code>lineUserId</code> + <code>lineLinkedAt</code> + <code>lineUserId_byBranch.{branchId}</code> (dotted-path) + audit doc be_admin_audit</td></tr>
+    <tr><td>5</td><td>push แจ้งลูกค้าใน LINE (best-effort)</td><td>ข้อความเดียวกับ approve flow เดิม; fail = ไม่ block</td></tr>
+    <tr><td>6</td><td>client: live customer listener (V36-quinquies) สะท้อนผล</td><td>ปุ่ม "ผูก LINE" → "LINE ✓" เอง ไม่ต้อง refresh</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow C — Done-tab sort (Feature ②)</div>
+  <p>
+    <span class="flow-box">กด "รับบริการเรียบร้อย" ใน กำลังรอ</span><span class="flow-arrow">→</span>
+    <span class="flow-box"><code>markAppointmentServiceCompleted</code> stamp <code>serviceCompletedAt</code> (V71 เดิม + optimistic stamp ใน HubView)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">แถวย้ายเข้า sub-pill "เสร็จแล้ว"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">NEW <code>sortApptsByServiceCompletedDesc</code> → แถวนั้นอยู่บนสุดทันที</span>
+  </p>
+  <p style="font-size:0.85em;color:var(--tx-muted)">ใช้เฉพาะ done sub-pill ของแท็บวันนี้ — กำลังรอ / พรุ่งนี้ / ล่วงหน้า / ย้อนหลัง ใช้ comparator เดิม (V64-fix9 / 2026-06-14 desc-past) ไม่แตะ. Comparator ต้อง timestamp-safe: Firestore Timestamp (<code>.toMillis()</code>) + optimistic <code>Date</code> + <code>{seconds}</code> shape + null → 0 (ลงล่างสุด).</p>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<p><strong>1. Webhook follow/unfollow capture</strong> — <code>api/webhook/line.js</code>: เพิ่ม handler สำหรับ event
+<code>follow</code>/<code>unfollow</code> (ปัจจุบันถูก ignore). <code>follow</code>: resolve branchId ด้วย
+<code>resolveChatBranchIdFromLineEvent</code> (V75 เดิม) → ดึง profile (ชื่อ+รูป) → เขียน
+<code>be_line_friends/{branchId}_{userId}</code> ผ่าน admin SDK: <code>{lineUserId, displayName, pictureUrl,
+branchId, branchIdSource, followedAt, unfollowedAt: null, updatedAt}</code>. <code>unfollow</code>: merge
+<code>{unfollowedAt: ts}</code> (soft — ไม่ลบ doc). ทั้งหมด best-effort try/catch แยกจาก message pipeline
+(ห้ามกระทบ chat เดิมแม้ throw). ห้าม downgrade doc ที่มีอยู่ (re-follow → เคลียร์ unfollowedAt + refresh ชื่อ/รูป).</p>
+
+<p><strong>2. firestore.rules</strong> — NEW match:
+<code>be_line_friends { allow read: if isClinicStaff(); allow write: if false; }</code>
+(client อ่านเพื่อ real-time listener; เขียนได้เฉพาะ admin SDK จาก webhook). Deploy = combined
+vercel + firestore:rules พร้อม Probe-Deploy-Probe (Rule B) + probe ใหม่: anon read/write → denied.</p>
+
+<p><strong>3. Client listeners (BSA เต็มรูป)</strong> — NEW <code>listenToLineFriendsByBranch(opts, onChange, onError)</code>
+ใน backendClient.js (Layer 1 safe-by-default ตาม BS-13: branchId ว่าง + ไม่ allBranches → resolveSelectedBranchId
+→ ยัง ว่าง → onChange([]) + noop) + Layer 2 wrapper ใน scopedDataLayer.js. reuse
+<code>listenToChatConversationsByBranch</code> (V75 เดิม) เป็น listener ตัวที่สอง. Merge client-side ใน modal:
+dedupe ด้วย lineUserId (คนเดียวกันทั้งแอด+ทัก = แถวเดียว, badge "เคยทัก" ชนะ, ชื่อ/รูปใช้ตัวที่ใหม่กว่า).
+<code>be_line_friends</code> ลงทะเบียน COLLECTION_MATRIX (BC1.1) scope=branch.</p>
+
+<p><strong>4. NEW <code>/api/admin/line-friends</code></strong> — auth gate เดียวกับ
+<code>api/admin/link-requests.js</code> (แบบเดียวกัน byte-for-byte pattern):</p>
+<ul>
+  <li><code>action=list {branchId}</code> — Followers API backfill: อ่าน token จาก be_line_configs
+  (fallback legacy chat_config นครราชสีมา — pattern V75) → <code>GET /v2/bot/followers/ids</code> (paginate) →
+  ถ้า 403/ไม่มีสิทธิ์ → คืน <code>{followersApi: 'unavailable', rows: []}</code> (ไม่ error) → resolve profile
+  เฉพาะ id ที่ client ยังไม่รู้จัก (ส่ง knownIds มา) แบบ bounded-parallel (concurrency 10, cap 300/ครั้ง)
+  → module-cache 60s ต่อ branch (pattern /api/tfp-options)</li>
+  <li><code>action=bind {customerId, lineUserId, branchId, displayName}</code> — mirror
+  handleApprove ใน link-requests.js: dedup guard → batch atomic customer update (dotted-path
+  <code>lineUserId</code> + <code>lineLinkedAt</code> + <code>lineUserId_byBranch.{branchId}</code>) + audit doc
+  + LINE push แจ้งลูกค้า (best-effort). แหล่งผูกระบุใน audit: <code>source: 'friend-picker'</code></li>
+</ul>
+
+<p><strong>5. <code>LineFriendPickerModal.jsx</code></strong> (NEW, shared — กัน V12 sibling-drift):
+props <code>{open, branchId, mode: 'pick' | 'bind', customer?, onPick, onClose}</code>.
+ข้างใน: 2 listeners + one-shot backfill fetch + search + source filter + AV78 explicit-close +
+useModalScrollLock (AV205). unfollowed rows = จางลง + badge "เลิกติดตาม" (ยังเลือกได้ — userId ยัง valid
+สำหรับ push ไม่ได้ แต่โชว์ตรงๆ ให้ admin รู้).</p>
+
+<p><strong>6. จุดใช้ 2 ที่</strong> — (ก) <code>InfraHealthSection.jsx</code>: ปุ่ม "เลือกจากรายชื่อ" ต่อแถว
+lineTargets → picker (mode=pick, branchId จากแถว) → เติม lineUserId + label(=displayName) ลง draft —
+client-side ล้วน, save path เดิม. (ข) <code>LinkLineQrModal.jsx</code> (หน้าข้อมูลลูกค้า): เพิ่มแท็บ
+"เลือกจากรายชื่อเพื่อน" ข้าง QR เดิม → picker (mode=bind) → confirm → bind action → live listener สะท้อนผล.
+Flow เดิม (QR + ผูก &lt;ID&gt; + LinkRequestsTab) คงไว้ทั้งหมด.</p>
+
+<p><strong>7. Feature ②</strong> — NEW <code>sortApptsByServiceCompletedDesc</code> ใน
+<code>appointmentHubFilters.js</code> (pure, timestamp-safe helper <code>svcCompletedMs</code>) — ใช้ใน
+AppointmentHubView เฉพาะ (แท็บวันนี้ + sub-pill เสร็จแล้ว); จุดอื่นทั้งหมดใช้ comparator เดิม.</p>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = C (Hybrid):</strong> Followers API ก่อน (verified OA = รายชื่อครบ) → 403 → fallback webhook roster อัตโนมัติ — ไม่ต้องรู้ประเภท OA ล่วงหน้า</li>
+  <li><strong>Q2 = ไม่แน่ใจ (ประเภท OA):</strong> hybrid ตรวจเองตอนเรียก; UI ไม่ error เมื่อ unavailable</li>
+  <li><strong>Q3 = ทั้ง 2 ที่:</strong> การ์ดสุขภาพระบบ (เติม target) + หน้าข้อมูลลูกค้า (ผูกตรงโดย admin, mirror approve semantics + audit); flow เดิมคงไว้เป็นช่องทางสำรอง</li>
+  <li><strong>Q4 = เก็บ follow/unfollow:</strong> webhook เริ่มเก็บตั้งแต่ deploy — จำเป็นสำหรับ OA unverified + real-time "แอดปุ๊ปโผล่ปั๊บ"</li>
+  <li><strong>Q5 (follow-up) = Real-time:</strong> ลิสต์เป็น onSnapshot listeners (ไม่ใช่ endpoint fetch) — แอด/ทักหน้างานโผล่ทันทีแม้เปิด modal ค้าง → ต้องเปิด read rule <code>be_line_friends</code> ให้ isClinicStaff → deploy รอบนี้ = combined + Probe-Deploy-Probe (user รับทราบ "โอเค")</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>เปิด picker ค้างไว้ → ลูกค้า<strong>ทัก</strong> LINE OA สาขานั้น → แถวใหม่โผล่ในลิสต์เอง ≤ ~3 วิ ไม่ต้อง refresh (badge "เคยทัก")</li>
+  <li>เปิด picker ค้างไว้ → ลูกค้า<strong>แอดเพื่อน</strong> (follow) → แถวโผล่เอง (badge "เพื่อนใหม่") — ได้ผลกับคนที่แอดหลัง deploy</li>
+  <li>OA verified → เปิด modal เห็นรายชื่อผู้ติดตามทั้งหมด (backfill); OA unverified → ไม่มี error ใดๆ ลิสต์ = เคยทัก + แอดใหม่</li>
+  <li>การ์ดสุขภาพ: กดเลือก → lineUserId + ป้าย ถูกเติม → save → "ทดสอบแจ้งเตือน" ส่งถึงคนนั้นจริง</li>
+  <li>ผูกลูกค้า: confirm → be_customers ได้ <code>lineUserId</code> + <code>lineUserId_byBranch.{branchId}</code> + audit doc; userId ที่ผูกกับลูกค้าอื่นอยู่แล้ว → Thai error, ศูนย์ write</li>
+  <li>Flow เดิมทั้งหมดไม่แตก: QR/ผูก &lt;ID&gt;/LinkRequestsTab + chat pipeline (follow handler เป็น best-effort — throw ไม่กระทบข้อความ)</li>
+  <li>แท็บวันนี้·เสร็จแล้ว: กด "รับบริการเรียบร้อย" → แถวขึ้นบนสุดของเสร็จแล้วทันที (optimistic); เรียง serviceCompletedAt ใหม่→เก่า; กำลังรอ + แท็บอื่นเรียงเดิมเป๊ะ</li>
+  <li>Security: anon อ่าน/เขียน <code>be_line_friends</code> → denied; staff อ่านได้; write client → denied (Rule B probe ใหม่)</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li>Followers API อาจคืนผู้ติดตามหลักพัน → profile-resolve ถูก cap (300/ครั้ง + concurrency 10 + cache 60s) — รายชื่อ backfill ที่เกิน cap จะทยอยครบเมื่อเปิดซ้ำ; รายชื่อ live (ทัก/แอด) ไม่ถูก cap</li>
+  <li>คนที่แอดไว้ก่อน deploy และไม่เคยทัก: มองไม่เห็นจนกว่าจะทัก หรือ OA เป็น verified (ข้อจำกัด LINE — แจ้ง user แล้ว)</li>
+  <li>LINE rate limit ต่อ profile API — bounded-parallel + cache ป้องกัน; follow event = 1 call/คน ไม่มีปัญหา</li>
+  <li>ชื่อ/รูปใน chat_conversations vs be_line_friends อาจต่างเวอร์ชัน (ลูกค้าเปลี่ยนชื่อ) → merge ใช้ตัวที่ updatedAt ใหม่กว่า — display เท่านั้น ไม่กระทบ identity (lineUserId คือ key เสมอ)</li>
+  <li>rules deploy = Probe-Deploy-Probe เต็มขั้น (Rule B) — probe list เดิม + probe ใหม่ #20 be_line_friends</li>
+</ul>
+
+</body>
+</html>
