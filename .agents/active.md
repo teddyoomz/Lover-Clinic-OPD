@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-07-20 PM — Degradation Matrix (AV212): 2 latent crash classes closed + TFP fast-paint ≤5s — SHIPPED local, NOT deployed."
-status: "master = prod `e67b6d51` + AV212 commits local (rules UNCHANGED → next deploy = vercel-only). Matrix 14/14 PASS on LOCAL PROD BUNDLE; full vitest 17,911 green (1 V21 repoint in-run)."
+updated_at: "2026-07-20 PM — Degradation Matrix (AV212): 2 latent crash classes closed + TFP fast-paint ≤5s — DEPLOYED LIVE (a1ef64ff → lover-clinic-d64gekhpl, post-deploy verified)."
+status: "master a1ef64ff = prod LIVE (rules UNCHANGED, vercel-only done). Post-deploy: endpoint L2 11/0 + matrix LIVE M0 1.07s/M5 0.54s/M12 13.7s/M14 0.82s ทั้งหมด PASS."
 branch: "master"
 last_commit: "(AV212 degradation-matrix commit — see git log)"
 tests: "full vitest 17,911/17,911 (2026-07-20 PM definitive json + repoint isolated) + matrix e2e 14/14 (E2E_DEGRADE opt-in) + hardening 24/0 + build + verify:filler clean. Do NOT re-run at boot."
