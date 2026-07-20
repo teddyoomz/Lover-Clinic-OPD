@@ -1,33 +1,38 @@
 ---
-updated_at: "2026-07-20 PM — Degradation Matrix (AV212): 2 latent crash classes closed + TFP fast-paint ≤5s — DEPLOYED LIVE (a1ef64ff → lover-clinic-d64gekhpl, post-deploy verified)."
-status: "master a1ef64ff = prod LIVE (rules UNCHANGED, vercel-only done). Post-deploy: endpoint L2 11/0 + matrix LIVE M0 1.07s/M5 0.54s/M12 13.7s/M14 0.82s ทั้งหมด PASS."
+updated_at: "2026-07-20 EOD+2 — AV212 FULL STACK DEPLOYED LIVE: degradation matrix + fast-paint ≤5s + money-gate (hunt R1/R2) + rules 8+9 (adaptive persistence + /api/tfp-options)."
+status: "master `811c6662` = prod LIVE (`a1ef64ff` bundle → vercel `lover-clinic-d64gekhpl` aliased lover-clinic-app.vercel.app 200; rules UNCHANGED → vercel-only). Post-deploy verified: endpoint L2 11/0 + matrix LIVE M0 1.07s / M5 0.54s / M12 13.7s / M14 0.82s."
 branch: "master"
-last_commit: "(AV212 degradation-matrix commit — see git log)"
-tests: "full vitest 17,911/17,911 (2026-07-20 PM definitive json + repoint isolated) + matrix e2e 14/14 (E2E_DEGRADE opt-in) + hardening 24/0 + build + verify:filler clean. Do NOT re-run at boot."
+last_commit: "811c6662 — docs(agents): fix stale production_commit (code head = a1ef64ff rules 8+9)"
+tests: "full vitest 17,911+ green ×4 runs today (definitive json + exit-0 confirms) + matrix e2e 15 cells (E2E_DEGRADE opt-in) + hardening 30/0 + ratchet 14/0 + mega-l1 2/2 + build + verify:filler clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "a1ef64ff (2026-07-20 เย็น — AV212 full stack: fast-paint + money-gate + rules 8+9)"
+production_commit: "a1ef64ff (2026-07-20 เย็น — AV212 full stack)"
 firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-20 PM — Degradation Matrix (AV212) + TFP fast-paint ≤5s
+# Active — 2026-07-20 EOD+2 — AV212 full stack DEPLOYED (สิบปี load path)
 
 ## State
-- User report: mini PC (BMAX B6 i5-8257U/16GB — ไม่ใช่เครื่องอ่อน) ยังชนการ์ด TFP 15 วิ →
-  `/systematic-debugging` + 14-cell degradation matrix (CPU/net/IDB/quota/offline) vs LIVE bundle.
-- **พบ + ปิด 2 crash class แฝง**: M7 IDB-throw → Firestore assertion b815 ฆ่าทั้งแอป
-  (fix: idbHealthy probe + self-heal flag) · M10 offline lazy-chunk → boundary กลืนทั้งแอป
-  (fix: lazyRetry chokepoint, 79 callsites via alias).
-- **≤5s directive เข้าเป้า**: TFP fast-paint pre-stage (paint จาก ~15 docs; enrichment 595 docs
-  ตามหลัง chip; save-gate เดิม 100%) → M1 ×6 6.6s→1.26s · M4 cold+400k→2.6-3.7s ·
-  M12 warm+×20 35s→14.3s. เครื่องระดับจริงทุกเงื่อนไข ≤5s; ×20 synthetic = survive+honest.
-- Telemetry `kind:'telemetry'` ([tfp-slow]+[client-env]) → health-card viewer โชว์ แต่ไม่นับ
-  errorCount → หลัง deploy เครื่องช้าจะรายงานสาเหตุตัวเอง.
-- Checkpoint: `.agents/sessions/2026-07-20-degradation-matrix.md` (ตาราง before/after เต็ม).
+- User report กลางวัน: mini PC ชนการ์ด TFP → 14-cell degradation matrix → เจอ+ปิด 2 crash class
+  (M7 IDB-throw assertion b815 / M10 offline lazy-chunk boundary) + fast-paint ≤5s ทุกเครื่องจริง.
+- Hunt R1 (5-lens) + R2 (inline): money-gate `optionsEnriched` (vitals exempt) + stuck-banner escape.
+- User report เย็น: 3/4 เครื่องเร็วแล้ว เหลือ laptop 10 ปี ("สมัยแรกเคยเร็ว") → **rules 8+9**:
+  machinePerf ratchet (cache-probe วัดจริง → `lover.noPersist` → memory-cache boot; M14 = 0.82s)
+  + `/api/tfp-options` (4 heavy lists ~80KB → applyFormData ตัวเดิม; O(payload) ไม่ใช่ O(IDB)).
+
+## What this session shipped
+- Commits: `57347648` matrix+fast-paint · `53103321`+`00ad1766` money-gate R1/R2 · `7e0f12d0`
+  R1 batch · `a1ef64ff` rules 8+9 — ทั้งหมด DEPLOYED + post-deploy verified.
+- Checkpoint (detail ทั้งหมด): `.agents/sessions/2026-07-20-degradation-matrix.md` ·
+  V-entry "Degradation Matrix (AV212)" ใน 00-session-start.md § 2 · AV212 rules 1-9 both SKILL copies (SY1).
+- Health card ใหม่: กล่อง "เครื่องนี้" (โหมดเครื่องช้า + ล้างแคช) + telemetry [tfp-slow]/[client-env]/auto-nopersist.
 
 ## Next action
-- **user สั่ง "deploy"** → vercel-only → หลัง deploy: เปิด TFP บน mini PC จริง 1 ครั้ง →
-  ดูการ์ดสุขภาพระบบ → [tfp-slow]/[client-env] จะระบุสาเหตุเครื่องนั้น (คำตอบ "เครื่องหรือระบบ").
-- ค้างจากเช้า: user L1 การ์ดสุขภาพระบบ (LINE target + ทดสอบแจ้งเตือน) · desktop toast ·
-  standing L1 stack.
+- **laptop 10 ปี**: เปิด TFP 1-3 ครั้ง (ratchet flip เอง) หรือกด "โหมดเครื่องช้า" ในการ์ดสุขภาพระบบ
+  → คาด ~1-3s; ดู telemetry ในการ์ดหลังใช้ 1-2 วัน.
+- พรุ่งนี้หลัง 07:30: health cron รอบแรกของ sweep ใหม่ → `node scripts/diag-infra-health.mjs`.
 
-## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
+## Outstanding user-triggered actions
+- User L1: การ์ด 🩺 สุขภาพระบบ → ตั้ง LINE target → กด "ทดสอบแจ้งเตือน" (ค้างจากเช้า).
+- Desktop toast (Windows notification settings เครื่องคลินิก) + standing L1 stack (มือถือ/iPad).
+
+## ⚠️ Landmine — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)

@@ -1,5 +1,22 @@
 # SESSION_HANDOFF — Overflow Archive
 
+## Archived 2026-07-20 PM (SESSION_HANDOFF trim 10+10)
+
+### Current-State bullet
+
+- **NEW (2026-07-07 EOD+1) — Universal modal scroll-lock (AV205) SHIPPED local, NOT deployed → DEPLOYED EOD+2**: master `a5761d63`; rules UNCHANGED → vercel-only. เปิด modal แล้ว scroll ไปเลื่อน background (77 overlay files). 3 ชั้น: `useModalScrollLock` ref-counted `html[data-modal-open]` + sweep ~68 ไฟล์ `overflow-y-auto overscroll-contain` + anti-confinement (V86 glow transform confine WholeSystemBackupModal → `card:has(.fixed){transform:none}`). hook 9/0 + classifier 83/0 + full vitest 17,427/1-flake + Rule Q L1 trusted-wheel 4/4. AV205 both SKILL.md (SY1). Checkpoint `.agents/sessions/2026-07-07-modal-scroll-lock.md`.
+
+### Session block
+
+### Session 2026-07-07 (cont.) — LCP fix + header strip + LINE keywords — SHIPPED + DEPLOYED LIVE
+
+master `92b9ba15` = prod (frontend+api only, rules unchanged). Full vitest **17,336/0**; build clean.
+- **link-patient LCP (AV204)**: entry-time early fetch (`patientViewEarlyFetch.js`, consume-once, retry loop untouched) + endpoint branch-parallel + narrow vite proxy. Local −46% · **LIVE −36% (3472→2212ms)**. Adversarial review killed the warm-import (module-map poisoning) + hardened the B6 proxy lock.
+- **Customer-link header** (Q1=B): centered name+phone, no avatar/HN, "ข้อมูลลูกค้า"/"Customer Info"; `hn` stripped from the anon payload. LIVE L1 + screenshots eyeballed.
+- **Configurable id-link keywords** (Q4=global, AMENDED → NEW doc `clinic_settings/link_id_keywords`): pure interpret layer + validator + webhook 60s-TTL read + settings card in LinkRequestsTab + dynamic hint. LIVE round-trip 22/22 on real prod (pristine cleanup). Defaults = legacy behavior byte-equivalent.
+- Verification: probes 24/24 + 11/11 + 12/12 + 22/22 + 5/5 live · parity 0.000% · L2 payload-identical · +51 tests · 3 V21 repoints. User L1 pending (มือถือจริง + LINE จริง).
+- Checkpoint `.agents/sessions/2026-07-07-lcpfix-header-keywords.md`.
+
 ## Archived 2026-07-20 (SESSION_HANDOFF trim 10+10)
 
 ### Current-State bullet
