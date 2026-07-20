@@ -16,6 +16,9 @@ function localId() {
 
 function openDb() {
   return new Promise((res, rej) => {
+    // M7-class guard (2026-07-20): absent/sync-throwing IndexedDB must reject
+    // cleanly (picker shows empty library), never throw into the caller.
+    if (typeof indexedDB === 'undefined') { rej(new Error('IndexedDB unavailable')); return; }
     const r = indexedDB.open(DB_NAME, 1);
     r.onupgradeneeded = () => {
       if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id' });

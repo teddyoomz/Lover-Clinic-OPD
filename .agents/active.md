@@ -1,40 +1,33 @@
 ---
-updated_at: "2026-07-20 — AV211 observability + TFP #20 DEPLOYED LIVE + final whole-system verification campaign COMPLETE (0 app bugs)."
-status: "master `e67b6d51` = prod (vercel `lover-clinic-ln84axjlk` aliased lover-clinic-app.vercel.app 200; rules UNCHANGED → vercel-only). Post-deploy verified: ping 200 · 14 crons (infra-health-sweep 07:30 BKK, gate 401 ✓) · LIVE beacon round-trip PASS (POST 200 → stored → token stripped → zero-orphan cleanup)."
+updated_at: "2026-07-20 PM — Degradation Matrix (AV212): 2 latent crash classes closed + TFP fast-paint ≤5s — SHIPPED local, NOT deployed."
+status: "master = prod `e67b6d51` + AV212 commits local (rules UNCHANGED → next deploy = vercel-only). Matrix 14/14 PASS on LOCAL PROD BUNDLE; full vitest 17,911 green (1 V21 repoint in-run)."
 branch: "master"
-last_commit: "e67b6d51 — test(e2e): modernize Playwright L1 stack — 150 stale fails → full green, 0 app bugs"
-tests: "full vitest 17,887/17,887 · 0 + extended 4,681/0 + build clean + L2 e2e stack ~160/0 real prod + L1 Playwright ALL GREEN (2026-07-20 final campaign). Do NOT re-run at boot."
+last_commit: "(AV212 degradation-matrix commit — see git log)"
+tests: "full vitest 17,911/17,911 (2026-07-20 PM definitive json + repoint isolated) + matrix e2e 14/14 (E2E_DEGRADE opt-in) + hardening 24/0 + build + verify:filler clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "e67b6d51 (2026-07-20 — AV211 + TFP #20 + e2e harness)"
+production_commit: "e67b6d51 (2026-07-20 เช้า — AV211 + TFP #20 + e2e harness)"
 firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
 ---
 
-# Active — 2026-07-20 — Final verification campaign + DEPLOY (AV211+TFP#20 live)
+# Active — 2026-07-20 PM — Degradation Matrix (AV212) + TFP fast-paint ≤5s
 
 ## State
-- prod = `e67b6d51` LIVE (AV211 observability + TFP #20 + e2e harness) — post-deploy verified.
-- Final whole-system campaign COMPLETE: ทุก gate ที่ automate ได้เขียวหมด, **บั๊คแอปจริง = 0**.
-- Checkpoint: `.agents/sessions/2026-07-20-final-verification-deploy.md` (L1-excavation taxonomy).
-
-## What this session shipped
-- **All-layer verification**: full vitest 17,887/0 · extended 4,681/0 · build clean ·
-  L2 e2e ~160 asserts/0 บน prod จริง (เงิน/คอร์ส/สต็อค/นัด/TFP/backup/observability).
-- **L1 Playwright bank ฟื้น 150 stale fails → 36 ไฟล์เขียวหมด** — ทุก failure = harness stale
-  (3 รุ่น redesign); adjudicated ด้วย screenshot + live browser. ไฮไลท์: customer-card =
-  `onViewCustomer` เปิด popup by design (assert มองผิดหน้ามาตลอด 7 รอบ).
-- Harness modernized 16 ไฟล์ test-only (`e67b6d51`) + backend-tabs.spec DELETED (V50 world).
-- **DEPLOYED** `lover-clinic-ln84axjlk` → alias 200 · 14 crons (infra-health 07:30, gate 401 ✓) ·
-  **LIVE beacon round-trip PASS** (POST→stored→token stripped→zero-orphan cleanup).
-- Health diag วันนี้: 13/14 ok + 1 true-🟡 (archive-retention รอบแรก 03:20 คืนนี้) · recon ตรง 8 ใบ.
+- User report: mini PC (BMAX B6 i5-8257U/16GB — ไม่ใช่เครื่องอ่อน) ยังชนการ์ด TFP 15 วิ →
+  `/systematic-debugging` + 14-cell degradation matrix (CPU/net/IDB/quota/offline) vs LIVE bundle.
+- **พบ + ปิด 2 crash class แฝง**: M7 IDB-throw → Firestore assertion b815 ฆ่าทั้งแอป
+  (fix: idbHealthy probe + self-heal flag) · M10 offline lazy-chunk → boundary กลืนทั้งแอป
+  (fix: lazyRetry chokepoint, 79 callsites via alias).
+- **≤5s directive เข้าเป้า**: TFP fast-paint pre-stage (paint จาก ~15 docs; enrichment 595 docs
+  ตามหลัง chip; save-gate เดิม 100%) → M1 ×6 6.6s→1.26s · M4 cold+400k→2.6-3.7s ·
+  M12 warm+×20 35s→14.3s. เครื่องระดับจริงทุกเงื่อนไข ≤5s; ×20 synthetic = survive+honest.
+- Telemetry `kind:'telemetry'` ([tfp-slow]+[client-env]) → health-card viewer โชว์ แต่ไม่นับ
+  errorCount → หลัง deploy เครื่องช้าจะรายงานสาเหตุตัวเอง.
+- Checkpoint: `.agents/sessions/2026-07-20-degradation-matrix.md` (ตาราง before/after เต็ม).
 
 ## Next action
-- ✅ DEPLOYED 2026-07-20. เหลือ USER L1 ปิดท้าย: การ์ดสุขภาพระบบ (SystemSettingsTab) →
-  ตั้ง LINE target → กด "ทดสอบแจ้งเตือน" → ต้องเห็นการ์ดใน staff chat + LINE เด้งจริง.
-- Health cron รอบแรก 07:30 BKK เช้านี้ · retention cron รอบแรก 03:20 คืนนี้ →
-  เช็ค `node scripts/diag-cron-first-night.mjs` + `diag-infra-health.mjs` (🟡 จะหายเอง).
-
-## Outstanding user-triggered actions
-- L1 ปิดท้าย alert: LINE target + "ทดสอบแจ้งเตือน" · desktop toast = Windows settings
-  ที่เครื่องคลินิก · standing L1 stack (wheel guard / VIP sort / AV209 / TFP เครื่องช้า / mobile).
+- **user สั่ง "deploy"** → vercel-only → หลัง deploy: เปิด TFP บน mini PC จริง 1 ครั้ง →
+  ดูการ์ดสุขภาพระบบ → [tfp-slow]/[client-env] จะระบุสาเหตุเครื่องนั้น (คำตอบ "เครื่องหรือระบบ").
+- ค้างจากเช้า: user L1 การ์ดสุขภาพระบบ (LINE target + ทดสอบแจ้งเตือน) · desktop toast ·
+  standing L1 stack.
 
 ## ⚠️ Landmine เดิม — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)

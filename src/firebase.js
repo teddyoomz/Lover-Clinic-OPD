@@ -40,7 +40,36 @@ export const auth = getAuth(app);
 // targets between opens → every TFP open became a cold ~630KB pull → spinner
 // hangs on weak clinic WiFi. 200MB stops the churn; NOT unlimited so GC stays
 // as a multi-year backstop. Recurring check: scripts/diag-staffapp-working-set.mjs
-const canPersist = typeof indexedDB !== 'undefined';
+// Degradation-matrix M7 (2026-07-20) — a machine whose IndexedDB THROWS on
+// open (corrupt Chrome profile / disk-full / AV interference) trips a Firestore
+// INTERNAL ASSERTION (ID: b815) that crashes the whole React tree — the SDK's
+// graceful memory fallback only covers the ASYNC open-error path, not a
+// synchronous throw. Pre-flight probe: (a) catch sync throws NOW, (b) if the
+// open fails ASYNC, stamp a localStorage flag so the NEXT load (the error
+// boundary's "โหลดหน้าใหม่") boots on memory cache — self-healing in 1 reload.
+const IDB_BROKEN_FLAG = 'lover.idbBroken';
+function idbHealthy() {
+  if (typeof indexedDB === 'undefined') return false;
+  try {
+    if (localStorage.getItem(IDB_BROKEN_FLAG) === '1') return false;
+  } catch { /* storage blocked — treat as healthy, probe below decides */ }
+  try {
+    const req = indexedDB.open('lover-idb-preflight');
+    req.onsuccess = () => {
+      try { req.result.close(); localStorage.removeItem(IDB_BROKEN_FLAG); } catch {}
+    };
+    req.onerror = () => {
+      try { localStorage.setItem(IDB_BROKEN_FLAG, '1'); } catch {}
+    };
+    return true;
+  } catch {
+    try { localStorage.setItem(IDB_BROKEN_FLAG, '1'); } catch {}
+    return false;
+  }
+}
+const canPersist = idbHealthy();
+// exposed for the client-env beacon (degradation telemetry) — NOT for app logic
+export const firestorePersistenceEnabled = canPersist;
 export const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
   ...(canPersist ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager(), cacheSizeBytes: 200 * 1024 * 1024 }) } : {}),

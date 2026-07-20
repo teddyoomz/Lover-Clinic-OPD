@@ -2,7 +2,10 @@
 // Shaft + GLANS split injection · realistic mushroom 2D/3D · TH/EN · light/dark · no 18+ gate.
 // v4: centered hero header (premium, not edge-stuck) + real clinic logo + result colors
 //     (new=green / baseline=red / delta=gold) + formal copy. Single source of truth = fillerMath.
-import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
+import { useMemo, useState, useEffect, Suspense } from 'react';
+// M10 (2026-07-20): lazyRetry alias — a failed Filler3D chunk fetch degrades
+// in place instead of crashing (pure-JS lib; standalone filler bundle safe).
+import { lazyRetry as lazy } from '../lib/lazyRetry.jsx';
 import {
   CONDOM_LADDER, RANGES, GLANS_BASE_RATIO, GLANS_SPLIT_MAX_CC,
   girthFromWidth, girthFromDiameter, diameterFromGirth,

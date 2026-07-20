@@ -80,6 +80,27 @@ export function reportErrorToBeacon(err, { source = 'manual' } = {}) {
   } catch { /* silent — never loop, never rethrow */ }
 }
 
+/** Degradation telemetry (2026-07-20) — same pipe/gates as errors but stored
+ *  with kind:'telemetry' so the infra-health errorCount24h ignores it. Use for
+ *  machine-environment facts (broken cache, slow TFP entry), NEVER for errors.
+ *  Callers pass a PRE-BUCKETED message (stable text → stable hash → the 5-min
+ *  dedupe actually dedupes). */
+export function reportTelemetryToBeacon(message) {
+  try {
+    const payload = sanitizeErrorPayload({
+      message,
+      stack: '',
+      href: typeof window !== 'undefined' ? window.location.href : '',
+      ua: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      now: Date.now(),
+      kind: 'telemetry',
+    });
+    if (!payload) return;
+    if (!shouldSendBeacon(payload.hash, Date.now())) return;
+    transport(payload);
+  } catch { /* silent */ }
+}
+
 /** Install the global handlers once. Idempotent. */
 export function installErrorBeacon() {
   try {

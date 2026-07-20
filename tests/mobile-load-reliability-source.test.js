@@ -33,7 +33,12 @@ describe('firebase.js — connection layer (Task 4)', () => {
     // AV208 repoint (2026-07-18): the call gained cacheSizeBytes — lock the
     // INVARIANT (tabManager inside persistentLocalCache), not the full literal.
     expect(src).toMatch(/persistentLocalCache\(\{\s*tabManager:\s*persistentMultipleTabManager\(\)/);
-    expect(src).toMatch(/typeof indexedDB !== 'undefined'/);
+    // AV212 repoint (2026-07-20, degradation-matrix M7): the bare typeof check
+    // became the idbHealthy() pre-flight PROBE (same feature-detect invariant +
+    // catches a sync-THROWING IndexedDB that tripped Firestore internal
+    // assertion b815 and crashed the whole app). node/private → false → memory.
+    expect(src).toMatch(/typeof indexedDB === 'undefined'\) return false/);
+    expect(src).toMatch(/const canPersist = idbHealthy\(\);/);
   });
 });
 

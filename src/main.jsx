@@ -47,6 +47,15 @@ if (earlyPatientToken) {
   startEarlyPatientViewFetch(earlyPatientToken)
 }
 
+// Degradation telemetry (2026-07-20): if THIS machine's Firestore cache is
+// degraded (IDB absent/broken/quota-starved → perma-cold loads), report it
+// once so the "🩺 สุขภาพระบบ" card can name the machine class. Healthy machines
+// send nothing. Deferred 8s — never competes with boot; dynamic import keeps
+// the module off the critical path entirely.
+setTimeout(() => {
+  import('./lib/envTelemetry.js').then((m) => m.reportDegradedEnvOnce()).catch(() => {})
+}, 8000)
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     {/* Boundary wraps App ONLY — SwUpdateToast stays outside so a toast crash

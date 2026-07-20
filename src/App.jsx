@@ -1,4 +1,8 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+// M10 (2026-07-20): every lazy chunk routes through lazyRetry — a failed chunk
+// fetch (offline/blip) retries then degrades to an in-place panel, NEVER the
+// app-wide error boundary. Alias keeps the 79 callsites untouched.
+import { lazyRetry as lazy } from './lib/lazyRetry.jsx';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';

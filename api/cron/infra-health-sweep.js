@@ -33,6 +33,9 @@ import {
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const TASK_ID = 'infraHealthSweep';
+// 24h error-count window fetch bound: dailyCap is 500/day and the window can
+// straddle 2 Bangkok days → ≤1000 docs; 1200 = headroom (AV141 bounded read).
+const CLIENT_ERROR_RETENTION_FETCH_LIMIT = 1200;
 
 function initAdmin() {
   if (getApps().length) return;
@@ -93,12 +96,17 @@ export async function sweepInfraHealth({ db, nowMs = Date.now(), readOnly = fals
   let errorSamples = [];
   try {
     const cutoff = nowMs - 24 * 3600000;
-    const agg = await errCol.where('createdAtMs', '>', cutoff).count().get();
-    errorCount24h = agg.data().count || 0;
+    // Degradation telemetry (2026-07-20): kind:'telemetry' rows (slow-machine /
+    // broken-cache environment reports) must NOT count toward the error alert.
+    // Windowed fetch + in-code split instead of an aggregate — the daily cap is
+    // 500 docs so the window is bounded, and a `kind != 'telemetry'` Firestore
+    // query would silently DROP legacy docs that lack the field.
+    const snap = await errCol.where('createdAtMs', '>', cutoff)
+      .orderBy('createdAtMs', 'desc').limit(CLIENT_ERROR_RETENTION_FETCH_LIMIT).get();
+    const realErrors = snap.docs.filter(d => (d.data().kind || 'error') !== 'telemetry');
+    errorCount24h = realErrors.length;
     if (errorCount24h >= errorThreshold24h) {
-      const snap = await errCol.where('createdAtMs', '>', cutoff)
-        .orderBy('createdAtMs', 'desc').limit(3).get();
-      errorSamples = snap.docs.map(d => String(d.data().message || '').slice(0, 80));
+      errorSamples = realErrors.slice(0, 3).map(d => String(d.data().message || '').slice(0, 80));
     }
   } catch (e) {
     console.warn('[infra-health] error-count read failed (non-fatal):', e.message);

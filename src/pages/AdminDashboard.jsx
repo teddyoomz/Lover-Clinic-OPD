@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+// M10 (2026-07-20): lazyRetry alias — chunk-fetch failure degrades in place,
+// never crashes the app (see src/lib/lazyRetry.jsx).
+import { lazyRetry as lazy } from '../lib/lazyRetry.jsx';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { app } from '../firebase.js';

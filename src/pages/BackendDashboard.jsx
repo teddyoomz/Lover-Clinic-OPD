@@ -5,7 +5,10 @@
 // src/components/backend/nav/navConfig.js; this file doesn't need changes
 // for scale.
 
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+// M10 (2026-07-20): lazyRetry alias — chunk-fetch failure degrades in place,
+// never crashes the app (see src/lib/lazyRetry.jsx).
+import { lazyRetry as lazy } from '../lib/lazyRetry.jsx';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
   ArrowLeft, ChevronRight, Users, Link2, Check, Construction, BarChart3,

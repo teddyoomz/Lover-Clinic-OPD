@@ -71,7 +71,8 @@ describe('C5 — validateClientErrorBody (server side, untrusted input)', () => 
     const p = sanitizeErrorPayload({ message: 'boom', stack: 'Error\n at x', href: '/?tab=1', ua: 'UA', now: 5 });
     const v = validateClientErrorBody({ ...p, evil: 'extra', __proto__injection: 'x' });
     expect(v.ok).toBe(true);
-    expect(Object.keys(v.doc).sort()).toEqual(['clientTs', 'hash', 'message', 'stack', 'surface', 'ua', 'url']);
+    // 2026-07-20 degradation telemetry: allowlist gained `kind` ('error'|'telemetry')
+    expect(Object.keys(v.doc).sort()).toEqual(['clientTs', 'hash', 'kind', 'message', 'stack', 'surface', 'ua', 'url']);
     expect(v.doc.message).toBe('boom');
   });
   it('C5.2 rejects null / array / missing message', () => {

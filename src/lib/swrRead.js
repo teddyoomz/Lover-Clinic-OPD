@@ -34,19 +34,34 @@ export async function swrList(fetchBySource, apply) {
 }
 
 export async function swrRun({ cacheLoad, serverLoad, apply }) {
+  // Degradation-matrix fix (2026-07-20) — legs run in PARALLEL. The original
+  // sequential form (`await cacheLoad()` THEN `serverLoad()`) made a slow/hung
+  // IndexedDB read DELAY the server truth on exactly the machines that can
+  // least afford it (slow eMMC / corrupt-profile mini PCs). Now the server leg
+  // starts immediately; the cache leg paints only while the server hasn't
+  // applied yet (a late cache settle is a no-op — never stale-over-fresh).
+  // Contract preserved: apply ≤2 times · cache (if painted) strictly before
+  // server · server errors PROPAGATE · empty cache never paints. After a
+  // server-leg ERROR a late cache settle MAY still paint (graceful
+  // degradation — same data the sequential form would have painted first).
   let paintedFromCache = false;
-  try {
-    const c = await cacheLoad();
-    if (c && c.hasData) {
-      apply(c.data, { fromCache: true });
-      paintedFromCache = true;
-    }
-  } catch { /* cold cache / persistence unavailable — silent, server leg decides */ }
+  let serverApplied = false;
+  const cacheLeg = (async () => {
+    try {
+      const c = await cacheLoad();
+      if (!serverApplied && c && c.hasData) {
+        apply(c.data, { fromCache: true });
+        paintedFromCache = true;
+      }
+    } catch { /* cold cache / persistence unavailable — silent, server leg decides */ }
+  })();
   const fresh = await serverLoad(); // throws → caller's error path
+  serverApplied = true;
   // B1-fix (caught by the S1 Playwright spec): a network-down "server" getDocs
   // silently falls back to cache — the data layer tags such results with a
   // non-enumerable __fromCache so the syncing indicator stays HONEST.
   apply(fresh, { fromCache: _resultFromCache(fresh) });
+  cacheLeg.catch(() => {}); // never an unhandled rejection (leg is self-caught)
   return { paintedFromCache };
 }
 

@@ -58,7 +58,7 @@ export function hashError({ message, stack } = {}) {
 
 /** CLIENT side: build the wire payload. Returns null when there is nothing
  *  meaningful to report (empty message). */
-export function sanitizeErrorPayload({ message, stack, href, ua, now } = {}) {
+export function sanitizeErrorPayload({ message, stack, href, ua, now, kind } = {}) {
   const msg = String(message || '').trim().slice(0, CLIENT_ERROR_LIMITS.message);
   if (!msg) return null;
   return {
@@ -69,10 +69,16 @@ export function sanitizeErrorPayload({ message, stack, href, ua, now } = {}) {
     surface: deriveSurface(href),
     hash: hashError({ message: msg, stack }),
     clientTs: Number(now) || 0,
+    kind: ALLOWED_KINDS.has(kind) ? kind : 'error',
   };
 }
 
 const ALLOWED_SURFACES = new Set(['staff', 'patient']);
+// Degradation telemetry (2026-07-20): 'telemetry' rows (slow-machine /
+// broken-cache environment reports) share the beacon pipe + viewer but are
+// EXCLUDED from the infra-health errorCount24h (a chronically slow mini PC
+// must not trip the daily error alert — it has its own visibility).
+const ALLOWED_KINDS = new Set(['error', 'telemetry']);
 
 /** SERVER side: strict re-validation + re-truncation of an untrusted body.
  *  Field allowlist only — extra fields are dropped, wrong types rejected. */
@@ -94,6 +100,8 @@ export function validateClientErrorBody(body) {
       ? body.hash
       : hashError({ message: msg, stack: body.stack }),
     clientTs: Number.isFinite(Number(body.clientTs)) ? Number(body.clientTs) : 0,
+    // kind allowlist — anything unexpected demotes to 'error' (never trusted)
+    kind: ALLOWED_KINDS.has(body.kind) ? body.kind : 'error',
   };
   return { ok: true, doc };
 }

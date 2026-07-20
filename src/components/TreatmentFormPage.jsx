@@ -270,6 +270,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // paint is worse than the escape. Warm machines never see this — the cache
   // pass paints instantly and the chip covers the syncing state.
   const [loadTimedOut, setLoadTimedOut] = useState(false);
+  // Degradation-matrix (2026-07-20) — STAGED escape: a weak-CPU/cold-cache
+  // machine legitimately takes 20-50s (matrix M2: CPU×20 = 48s, still
+  // succeeds). Showing the ลองใหม่ button at 15s invited a doom-loop: the
+  // user restarts a pull that was 75% done, forever. Stage 1 (15s) = calm
+  // "กำลังโหลดต่อ" info; stage 2 (30s) = the retry button (half-dead escape).
+  const [loadStuck, setLoadStuck] = useState(false);
   const [loadRetryNonce, setLoadRetryNonce] = useState(0);
   // Hunt R1-#1 (2026-07-19): run-sequence — the retry button bumps this
   // SYNCHRONOUSLY to invalidate the hung run BEFORE the network toggle.
@@ -792,6 +798,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     let cancelled = false;
     let hydrated = false;   // AV208: Part-2 edit hydration runs at most ONCE across both passes
     let prefilled = false;  // AV208: Part-3 patientData prefill once-only (server pass must not clobber typing)
+    // AV212 fast-paint (2026-07-20, ≤5s-เมื่อเน็ตโอเค directive): once the FULL
+    // apply has run, the (possibly slow-IDB) fast-paint must never clobber the
+    // full options with its minimal subset. Checked synchronously pre-setState.
+    let fullApplied = false;
 
     // TFP resilient-timeout (2026-07-19): arm the escape for THIS attempt.
     // The timer only matters while `loading` is still true (render-guarded),
@@ -804,9 +814,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // sticky error, and cleared `loading` (killing the escape UI — a
     // no-recovery end-state strictly worse than the spinner).
     setLoadTimedOut(false);
+    setLoadStuck(false);
     const myRunSeq = ++loadRunSeqRef.current;
     const stale = () => cancelled || loadRunSeqRef.current !== myRunSeq;
-    const timeoutTimer = setTimeout(() => { if (!stale()) setLoadTimedOut(true); }, 15000);
+    const loadT0 = Date.now();       // degradation telemetry — entry duration
+    let sawTimeout = false;          // report includes whether the card showed
+    const timeoutTimer = setTimeout(() => { if (!stale()) { sawTimeout = true; setLoadTimedOut(true); } }, 15000);
+    // staged escape (2026-07-20): the retry button arrives at 30s — see the
+    // loadStuck state comment (doom-loop prevention on slow-but-alive pulls).
+    const stuckTimer = setTimeout(() => { if (!stale()) setLoadStuck(true); }, 30000);
 
     // R2-#2b fix (bug-hunt 2026-07-18): ONE shared server point-read of the
     // treatment for BOTH passes — the R1-lens2-#1 server-always read issued
@@ -896,6 +912,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // exact identifiers the verbatim body already references.
     const applyFormData = async (bundle, { fromCache } = {}) => {
       if (stale() || !bundle) return;  // Hunt R1-#1: seq-invalidated runs never paint
+      fullApplied = true;              // AV212: fast-paint may no longer touch state
       // chip: ON at the cache paint, OFF when the server confirms. A
       // network-down "server" leg is __fromCache-tagged → stays ON (honest,
       // B1.4-bis).
@@ -1211,8 +1228,121 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           if (!stale() && (!isEdit || hydrated)) setLoading(false);
     };
 
+    // ── AV212 FAST-PAINT (2026-07-20) — "เน็ตโอเค → ≤5 วิ ทุกกรณี" ────────────
+    // Matrix evidence: the TFP first paint processed ~600 docs (~730KB) while
+    // the form's INITIAL usability needs ~15 (doctors + staff + the customer).
+    // Firestore's local cache has NO indexes — the cache pass UNPACKS every
+    // stored doc, so on weak-CPU machines the big lists cost 30-45s (M12: warm
+    // IDB at CPU×20 = 35s) even with zero network. This pre-stage paints the
+    // form from the SMALL reads only; the UNCHANGED full pipeline below then
+    // overwrites with the complete data (products/courses/DF) seconds later
+    // behind the honest chip. Two-stage = the proven AV206 hub pattern
+    // (loadCore → loadEnrichment) applied to TFP.
+    //   SAFETY (V13/V42/V101/V162 scars): CREATE mode only (edit hydration
+    //   depends on the full bundle) · the full apply's `fullApplied` flag
+    //   makes a late fast-paint a no-op (never minimal-over-full) · the
+    //   save-gate still awaits the FULL pipeline (money serialization never
+    //   reads the minimal subset) · chip stays ON until the full server
+    //   apply confirms · buy/DF surfaces show their existing syncing state
+    //   until enrichment lands.
+    let fastPaintPromise = null;
+    if (!isEdit) {
+      fastPaintPromise = (async () => {
+        try {
+          const {
+            getCustomer: getBackendCustomer,
+            listStaff, listDoctors,
+          } = await import('../lib/scopedDataLayer.js');
+          // cache-first per read, server fallback — both are tiny (~15 docs)
+          const readListFast = async (fn, baseOpts) => {
+            try {
+              const r = await fn({ ...baseOpts, source: 'cache' });
+              if (Array.isArray(r) && r.length) return r;
+            } catch { /* cold cache */ }
+            return fn(baseOpts).catch(() => []);
+          };
+          const readCustomerFast = async () => {
+            if (!customerId) return null;
+            try {
+              const c = await getBackendCustomer(customerId, { source: 'cache' });
+              if (c) return c;
+            } catch { /* cold cache */ }
+            return getBackendCustomer(customerId).catch(() => null);
+          };
+          const [fpDoctors, fpStaff, fpCust] = await Promise.all([
+            readListFast(listDoctors, { includeHidden: true }),
+            readListFast(listStaff, { includeHidden: true }),
+            readCustomerFast(),
+          ]);
+          if (stale() || fullApplied) return;           // full apply won the race
+          if (!fpDoctors.length) return;                 // mirror the doctors MISS gate
+          if (customerId && !fpCust) return;             // mirror the custData MISS gate
+          // ↓ mirrors of the applyFormData create-mode sets (minimal subset)
+          const fpScopedStaff = filterStaffByBranch(fpStaff, SELECTED_BRANCH_ID);
+          const fpScopedDoctors = filterDoctorsByBranch(fpDoctors, SELECTED_BRANCH_ID);
+          const fpAllStaff = fpScopedStaff.filter(s => !s.isHidden).map(s => ({ id: s.id, name: s.name, position: s.position }));
+          const fpAllDoctors = fpScopedDoctors.filter(d => d.status !== 'พักใช้งาน' && !d.isHidden);
+          let fpCourses = [];
+          try {
+            // NOTE: no V43 overlay here (needs the courses master from the
+            // enrichment leg) — rowIds are identical, so selections survive
+            // the full apply's overlaid overwrite; skipStockDeduction is only
+            // consumed at SAVE time, and the save-gate awaits the full data.
+            fpCourses = mapRawCoursesToForm(fpCust?.courses || []);
+          } catch { fpCourses = []; }
+          if (stale() || fullApplied) return;            // re-check after CPU-bound work
+          setOptions({
+            doctors: fpAllDoctors.map(d => ({ id: d.id, name: d.name, position: d.position, defaultDfGroupId: d.defaultDfGroupId || '' })),
+            doctorsUnfiltered: fpDoctors.map(d => ({ id: d.id, name: d.name })),
+            assistants: fpAllDoctors.map(d => ({ id: d.id, name: d.name, defaultDfGroupId: d.defaultDfGroupId || '' })),
+            bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'].map(v => ({ id: v, name: v })),
+            products: [],                                // enrichment fills
+            customerCourses: fpCourses,
+            customerPromotions: [],
+            benefitTypes: [], insuranceCompanies: [],
+            paymentChannels: ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n })),
+            wallets: [],
+            sellers: [...fpAllStaff, ...fpAllDoctors.map(d => ({ id: d.id, name: d.name, position: d.position }))],
+            medicationGroups: [], consumableGroups: [],
+            healthInfo: {}, vitalsDefaults: {},
+          });
+          setCustomerNote(fpCust?.note || fpCust?.patientData?.note || patientData?.note || '');
+          const fpCa = fpCust?.createdAt;
+          const fpMs = fpCa?.toMillis?.() ?? (typeof fpCa === 'number' ? fpCa : 0);
+          if (fpMs) setCustomerCreatedISO(new Date(fpMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }));
+          // prefill NOW (same once-only contract) — without this, the full
+          // apply's later prefill could clobber what the user typed during
+          // the enrichment window.
+          if (patientData && !prefilled) {
+            prefilled = true;
+            if (patientData.bloodType) setBloodType(patientData.bloodType);
+            const fpCongenital = resolvePatientCongenitalDisease(patientData);
+            if (fpCongenital) setCongenitalDisease(fpCongenital);
+            const fpAllergy = resolvePatientDrugAllergy(patientData);
+            if (fpAllergy) setDrugAllergy(fpAllergy);
+            const fpHistory = resolvePatientTreatmentHistory(patientData);
+            if (fpHistory) setTreatmentHistory(fpHistory);
+          }
+          setTfpSyncing(true);   // chip ON — enrichment (products/courses/DF) still loading
+          setLoading(false);     // ← PAINT (the ≤5s moment)
+        } catch { /* fast-paint is best-effort — the full pipeline is the truth */ }
+      })();
+    }
+
     (async () => {
       try {
+        // AV212 sequencing (matrix M2 finding): on a CPU-throttled machine the
+        // 600-doc enrichment parse STARVES the fast-paint when both share the
+        // main thread (cold ×20 stayed ~35s despite the fast path). Let the
+        // fast paint FINISH first — bounded 10s race so a hung fast-paint can
+        // never delay the server truth for long (a 3s cap re-created the
+        // starvation on the very machines it targeted — ×20 SDK boot alone
+        // exceeds it). Normal machines: fast-paint settles in ~0.3-1.5s →
+        // imperceptible; the 15s escape timer pre-dates this wait, so the
+        // card still fires on time on a half-dead path. Edit mode: no wait.
+        if (fastPaintPromise) {
+          await Promise.race([fastPaintPromise, new Promise(r => setTimeout(r, 10000))]);
+        }
         // V50 (2026-05-08) — PROCLINIC MODE block deleted (~177 lines).
         // saveTarget defaults to 'backend' + only callsites pass 'backend';
         // proclinic fallthrough was unreachable. Full strip per H-bis.
@@ -1260,12 +1390,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // tfpSyncing is NOT cleared here — applyFormData owns the chip (a
         // network-down server leg keeps it ON honestly, B1.4-bis).
         clearTimeout(timeoutTimer);  // TFP resilient-timeout — load settled
+        clearTimeout(stuckTimer);    // staged escape — settled before stage 2
+        // Degradation telemetry (2026-07-20): a >10s entry gets reported
+        // (bucketed, kind:'telemetry') so the health card can NAME the slow
+        // machine + why. Fire-and-forget; never blocks the load path.
+        if (!cancelled) {
+          const entryMs = Date.now() - loadT0;
+          if (entryMs > 10000) {
+            import('../lib/envTelemetry.js')
+              .then((m) => m.reportTfpSlowEntry({ ms: entryMs, timedOut: sawTimeout }))
+              .catch(() => {});
+          }
+        }
         // Hunt R1-#1: a seq-invalidated run must NOT clear loading — the
         // spinner + escape stay up until the retry's fresh run settles.
         if (!stale()) setLoading(false);
       }
     })();
-    return () => { cancelled = true; clearTimeout(timeoutTimer); };
+    return () => { cancelled = true; clearTimeout(timeoutTimer); clearTimeout(stuckTimer); };
   // Phase 17.2-quinquies (2026-05-05) — SELECTED_BRANCH_ID added to deps so
   // when the user switches the top-right BranchSelector mid-TFP-life, the
   // page-level state (productItems / courseItems / dfGroupItems / staffItems
@@ -3538,11 +3680,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               infinite spinner (no red on any name per Thai-UI rules). */}
           {loadTimedOut && (
             <div className="flex flex-col items-center gap-2 mt-2" data-testid="tfp-load-timeout-escape">
-              <p className="text-xs text-amber-500">การเชื่อมต่อช้ากว่าปกติ — ยังโหลดข้อมูลไม่สำเร็จ</p>
+              {/* staged escape (2026-07-20): stage 1 = calm "still loading" (a
+                  weak machine at 20-50s is SUCCEEDING — don't invite a restart
+                  of a 75%-done pull); stage 2 (30s) = the half-dead escape. */}
+              <p className="text-xs text-amber-500">
+                {loadStuck
+                  ? 'ยังโหลดข้อมูลไม่สำเร็จ — กดเชื่อมต่อใหม่ได้เลย'
+                  : 'การเชื่อมต่อช้ากว่าปกติ — กำลังโหลดต่อ กรุณารออีกสักครู่'}
+              </p>
+              {loadStuck && (
               <button
                 type="button"
+                data-testid="tfp-load-retry-btn"
                 onClick={() => {
                   setLoadTimedOut(false);
+                  setLoadStuck(false);
                   setError('');
                   // Hunt R1-#1 fix: invalidate the HUNG run FIRST — its pending
                   // server getDocs settle from cache during the reconnect
@@ -3558,6 +3710,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 }}
                 className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-teal-700 hover:bg-teal-600 transition-all"
               >ลองใหม่</button>
+              )}
             </div>
           )}
         </div>

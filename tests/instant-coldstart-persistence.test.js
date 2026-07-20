@@ -14,7 +14,12 @@ describe('A1 — persistentLocalCache (layer 0)', () => {
   });
 
   it('A1.2 feature-detects IndexedDB so node/vitest + private-mode fall back to memory cache (pre-A1 behavior)', () => {
-    expect(fb).toMatch(/typeof indexedDB !== 'undefined'/);
+    // Degradation-matrix M7 repoint (2026-07-20): the bare typeof check became
+    // the idbHealthy() PRE-FLIGHT PROBE (same invariant + catches a
+    // sync-THROWING IndexedDB that tripped a Firestore internal assertion and
+    // crashed the app). node/vitest still → false → memory cache.
+    expect(fb).toMatch(/typeof indexedDB === 'undefined'\) return false/);
+    expect(fb).toMatch(/const canPersist = idbHealthy\(\);/);
   });
 
   it('A1.3 keeps experimentalAutoDetectLongPolling (Mobile-Load Reliability 2026-06-16 — must survive A1)', () => {

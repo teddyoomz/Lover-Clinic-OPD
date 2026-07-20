@@ -157,9 +157,14 @@ describe('AV208 F3 — server failure', () => {
     // getters always carried .catch(() => []) — a lister failure showed empty
     // pickers). Real-world reach is tiny: a network-down getDocs FALLS BACK to
     // cache (doesn't throw), so a genuine throw = permission/index errors.
+    // AV212 repoint (2026-07-20): swrRun legs now run in PARALLEL — the server
+    // leg must be SLOWER than cache in this fixture so the cache paint
+    // deterministically happens first (the scenario under test). Real machines
+    // always have cache(ms) ≪ server(network).
+    const slow = () => new Promise(r => setTimeout(r, 20));
     const fetchers = {
-      listProducts: async ({ source } = {}) => { if (source !== 'cache') throw new Error('net down'); return rows(5); },
-      listCourses: async ({ source } = {}) => (source === 'cache' ? rows(3) : []),
+      listProducts: async ({ source } = {}) => { if (source !== 'cache') { await slow(); throw new Error('net down'); } return rows(5); },
+      listCourses: async ({ source } = {}) => { if (source === 'cache') return rows(3); await slow(); return []; },
       getCustomer: async () => ({ courses: [] }),
       getTreatment: async () => null,
     };
@@ -189,9 +194,12 @@ describe('AV208 F3 — server failure', () => {
 
 describe('AV208 F4 — hydration + prefill run ONCE across both passes', () => {
   it('edit mode with cache: 2 applies but exactly 1 hydration + 1 prefill', async () => {
+    // AV212 repoint: parallel legs — server slower so the cache pass paints
+    // first (the two-apply scenario this test exists to exercise).
+    const slow = () => new Promise(r => setTimeout(r, 20));
     const fetchers = {
-      listProducts: async () => rows(5),
-      listCourses: async () => rows(3),
+      listProducts: async ({ source } = {}) => { if (source !== 'cache') await slow(); return rows(5); },
+      listCourses: async ({ source } = {}) => { if (source !== 'cache') await slow(); return rows(3); },
       getCustomer: async () => ({ courses: [{ name: 'A' }] }),
       getTreatment: async () => ({ detail: { symptoms: 'x' } }),
     };
@@ -204,9 +212,11 @@ describe('AV208 F4 — hydration + prefill run ONCE across both passes', () => {
 
   it('R1-lens2-#1: the treatment is SERVER-fetched even on the cache pass — hydration is never cache-frozen', async () => {
     const treatmentCalls = [];
+    // AV212 repoint: parallel legs — server slower (see above)
+    const slow = () => new Promise(r => setTimeout(r, 20));
     const fetchers = {
-      listProducts: async () => rows(5),
-      listCourses: async () => rows(3),
+      listProducts: async ({ source } = {}) => { if (source !== 'cache') await slow(); return rows(5); },
+      listCourses: async ({ source } = {}) => { if (source !== 'cache') await slow(); return rows(3); },
       getCustomer: async () => ({ courses: [] }),
       getTreatment: async (...args) => { treatmentCalls.push(args); return { detail: { fresh: true } }; },
     };
@@ -244,9 +254,12 @@ describe('AV208 F8 — R1-#1 fix: save-gate + loading cover the HYDRATION TAIL',
   });
 
   it('R2-#1a: a REJECTED cache apply does NOT poison the chain — the server apply still runs', async () => {
+    // AV212 repoint: parallel legs — server slower so the cache apply RUNS
+    // (and explodes) before the server apply, exercising the poison guard.
+    const slow = () => new Promise(r => setTimeout(r, 20));
     const fetchers = {
-      listProducts: async () => rows(5),
-      listCourses: async () => rows(3),
+      listProducts: async ({ source } = {}) => { if (source !== 'cache') await slow(); return rows(5); },
+      listCourses: async ({ source } = {}) => { if (source !== 'cache') await slow(); return rows(3); },
       getCustomer: async () => ({ courses: [] }),
       getTreatment: async () => null,
     };
