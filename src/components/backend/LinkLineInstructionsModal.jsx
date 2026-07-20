@@ -15,8 +15,12 @@
 import { useState, useEffect } from 'react';
 import {
   X, Loader2, AlertCircle, CheckCircle2, Copy, IdCard, MessageSquare,
-  Pause, Play, Unlink, Info, Clock,
+  Pause, Play, Unlink, Info, Clock, Users,
 } from 'lucide-react';
+// LINE Friend Picker (2026-07-20) — admin ผูกจากรายชื่อเพื่อนโดยตรง (real-time)
+// อีกช่องทางข้าง flow เดิม (ลูกค้าส่งเลขบัตร → admin อนุมัติ) ซึ่งคงไว้ครบ
+import LineFriendPickerModal from './LineFriendPickerModal.jsx';
+import { auth } from '../../firebase.js';
 import {
   suspendLineLink, resumeLineLink, unlinkLineAccount,
   updateLineLinkLanguage,
@@ -80,12 +84,15 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
   // local state mirrors the new value optimistically.
   const [language, setLanguage] = useState(() => getLanguageForCustomer(customer));
   const [langBusy, setLangBusy] = useState(false);
+  // LINE Friend Picker (2026-07-20)
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     setError('');
     setSuccess('');
     setBusy(false);
     setConfirmAction(null);
+    setShowPicker(false);
     setLanguage(getLanguageForCustomer(customer));
   }, [customer?.id]);
 
@@ -115,6 +122,41 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
   const nationalId = pd.nationalId || customer?.citizen_id || '';
   const passport = pd.passport || customer?.passport_id || '';
   const lineUserIdMasked = maskLineUserId(customer?.lineUserId || '');
+
+  // LINE Friend Picker (2026-07-20) — bind ผ่าน /api/admin/line-friends
+  // (mirror link-requests approve: collision guard + atomic batch + audit +
+  // best-effort push อยู่ฝั่ง server). Error ต้อง SURFACE เสมอ (V31 class —
+  // ห้าม silent swallow).
+  const handleBindFromPicker = async (row) => {
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const idToken = await auth.currentUser?.getIdToken?.();
+      const res = await fetch('/api/admin/line-friends', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken || ''}` },
+        body: JSON.stringify({
+          action: 'bind',
+          customerId,
+          lineUserId: row.lineUserId,
+          branchId: row.branchId || '',
+          displayName: row.displayName || '',
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.status !== 200) throw new Error(body?.error || 'ผูกบัญชีไม่สำเร็จ');
+      setShowPicker(false);
+      setSuccess(`ผูกบัญชี LINE "${row.displayName || row.lineUserId}" เรียบร้อย`);
+      onActionSuccess?.({ action: 'bind-picker', customerId, lineUserId: row.lineUserId });
+      setTimeout(() => onClose?.(), 1200);
+    } catch (e) {
+      setShowPicker(false);
+      setError(e?.message || 'ผูกบัญชีไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const performAction = async (action) => {
     setError('');
@@ -237,6 +279,19 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
                 <li>Admin จะได้รับคำขอใน “ผูก LINE — คำขอ” แล้วกดอนุมัติ</li>
               </ol>
 
+              {/* LINE Friend Picker (2026-07-20) — ช่องทางใหม่: admin เลือกจาก
+                  รายชื่อเพื่อนแบบ real-time (ลูกค้าไม่ต้องพิมพ์เลขบัตรเอง) */}
+              <button
+                type="button"
+                data-testid="pick-from-friends-btn"
+                onClick={() => setShowPicker(true)}
+                disabled={busy}
+                className="w-full px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+                style={{ color: 'var(--accent-line, #06C755)', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
+              >
+                <Users size={13} /> หรือ… ผูกจากรายชื่อเพื่อน LINE (admin เลือกเอง — แอด/ทักปุ๊ปโผล่ทันที)
+              </button>
+
               <div className="space-y-2 pt-2 border-t border-[var(--bd)]">
                 <div className="text-xs text-[var(--tx-muted)] font-bold flex items-center gap-1.5">
                   <IdCard size={12} /> ข้อมูลที่จะให้ลูกค้าส่ง
@@ -324,6 +379,16 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
       </div>
 
       {renderConfirmDialog()}
+
+      {/* LINE Friend Picker (2026-07-20) — mode=bind: picker แสดง confirm
+          (ชื่อไลน์ vs ชื่อลูกค้า+HN) ก่อน แล้วค่อยยิง handleBindFromPicker */}
+      <LineFriendPickerModal
+        open={showPicker}
+        mode="bind"
+        customer={customer}
+        onPick={handleBindFromPicker}
+        onClose={() => setShowPicker(false)}
+      />
     </div>
   );
 }

@@ -8,8 +8,11 @@
 // Enable/threshold for the cron live in ScheduledTasksTab like every task.
 import { useState, useEffect, useCallback } from 'react';
 import {
-  HeartPulse, RefreshCw, Send, Bug, Play, Trash2, Plus, Loader2,
+  HeartPulse, RefreshCw, Send, Bug, Play, Trash2, Plus, Loader2, Users,
 } from 'lucide-react';
+// LINE Friend Picker (2026-07-20) — เลือก lineUserId จากรายชื่อเพื่อนแบบ
+// real-time แทนการพิมพ์มือ (user pain: "หา user id ไม่ได้")
+import LineFriendPickerModal from './LineFriendPickerModal.jsx';
 import { SectionCard, StatusBanner, SaveButton } from './SettingsPrimitives.jsx';
 import { auth } from '../../firebase.js';
 import { getAdminAuditDoc, listBranches } from '../../lib/scopedDataLayer.js';
@@ -58,6 +61,25 @@ export default function InfraHealthSection({ config, executedBy }) {
   const [testResult, setTestResult] = useState(null);
   const [running, setRunning] = useState(false);
   const [errorGroups, setErrorGroups] = useState(null);
+  // LINE Friend Picker (2026-07-20) — index of the lineTargets row being filled
+  const [pickerRow, setPickerRow] = useState(null);
+
+  const handlePickFriend = (row) => {
+    const i = pickerRow;
+    if (i == null) return;
+    setDraft(d => ({
+      ...d,
+      lineTargets: d.lineTargets.map((t, j) => (j === i ? {
+        ...t,
+        lineUserId: row.lineUserId || '',
+        // label auto-fills from the LINE display name — never clobbers a
+        // label the admin already typed
+        label: t.label || row.displayName || '',
+        branchId: t.branchId || row.branchId || '',
+      } : t)),
+    }));
+    setPickerRow(null);
+  };
   const [errorsLoading, setErrorsLoading] = useState(false);
   // AV212 rule 8 — per-machine slow-mode state (localStorage, this device only)
   const [machinePerf, setMachinePerf] = useState(null);
@@ -298,6 +320,12 @@ export default function InfraHealthSection({ config, executedBy }) {
               <input value={t.label || ''} onChange={e => setTarget(i, 'label', e.target.value)}
                 placeholder="ป้าย (เช่น เจ้าของ)"
                 className="w-28 px-2 py-1.5 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+              <button type="button" data-testid={`infra-line-target-pick-${i}`}
+                title="เลือกจากรายชื่อเพื่อน LINE (real-time)"
+                onClick={() => setPickerRow(i)}
+                className="px-2 py-1.5 rounded-lg text-xs border border-rose-700/50 bg-rose-950/30 text-rose-300 hover:bg-rose-900/40 inline-flex items-center gap-1">
+                <Users size={13} /> เลือกจากรายชื่อ
+              </button>
               <button type="button" title="ลบ target"
                 onClick={() => setDraft(d => ({ ...d, lineTargets: d.lineTargets.filter((_, j) => j !== i) }))}
                 className="p-1.5 rounded-lg border border-[var(--bd)] text-[var(--tx-muted)] hover:bg-[var(--bg-hover)]">
@@ -317,6 +345,15 @@ export default function InfraHealthSection({ config, executedBy }) {
         <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--bd)]">
           <SaveButton onClick={handleSave} saving={saving} success={saveOk} />
         </div>
+
+        {/* LINE Friend Picker (2026-07-20) — fills the row the admin clicked */}
+        <LineFriendPickerModal
+          open={pickerRow != null}
+          branchId={pickerRow != null ? (draft.lineTargets[pickerRow]?.branchId || '') : ''}
+          mode="pick"
+          onPick={handlePickFriend}
+          onClose={() => setPickerRow(null)}
+        />
 
         {/* AV212 rule 8 (2026-07-20) — per-MACHINE performance controls. The
             10-year-laptop class: Firestore's indexless local cache grew until
