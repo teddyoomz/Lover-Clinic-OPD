@@ -84,11 +84,24 @@ export default function InfraHealthSection({ config, executedBy }) {
   // AV212 rule 8 — per-machine slow-mode state (localStorage, this device only)
   const [machinePerf, setMachinePerf] = useState(null);
   const [wiping, setWiping] = useState(false);
+  // 2026-07-21 fx-perf — per-machine visual tier (full/eco; auto = measured)
+  const [visualTier, setVisualTier] = useState(null);
 
   useEffect(() => {
     import('../../lib/machinePerf.js')
       .then((m) => setMachinePerf(m.getMachinePerfState()))
       .catch(() => setMachinePerf({ noPersist: false, probeHist: [] }));
+    import('../../lib/fxPerf.js')
+      .then((m) => setVisualTier(m.getVisualTierState()))
+      .catch(() => setVisualTier({ override: 'auto', applied: 'full', hist: [] }));
+  }, []);
+
+  const setTierMode = useCallback(async (mode) => {
+    try {
+      const m = await import('../../lib/fxPerf.js');
+      m.setVisualTierOverride(mode); // stamps html[data-visual-tier] live — no reload
+      setVisualTier(m.getVisualTierState());
+    } catch { /* best-effort */ }
   }, []);
 
   const toggleSlowMachineMode = useCallback(async () => {
@@ -384,6 +397,35 @@ export default function InfraHealthSection({ config, executedBy }) {
           <p className="text-[10px] text-[var(--tx-muted)] mt-1.5">
             เครื่องเก่าที่เปิดฟอร์มช้า ระบบจะวัดแล้วสลับโหมดให้อัตโนมัติ — ปุ่มนี้ใช้บังคับเอง/ย้อนกลับได้ (กดแล้วหน้าจะรีโหลด; ข้อมูลจริงอยู่บนเซิร์ฟเวอร์ ไม่หายไปไหน)
           </p>
+
+          {/* 2026-07-21 fx-perf — visual tier (เอฟเฟกต์แสง/animation ต่อเครื่อง).
+              auto = ระบบวัดเฟรมแล้วเลือกให้ · full = สวยเต็ม · eco = ประหยัด
+              (หยุด breathing + หรี่ glow — เครื่องอ่อนลื่นขึ้นทันที ไม่ต้องรีโหลด) */}
+          <div className="mt-3 pt-2 border-t border-dashed border-[var(--bd)]" data-testid="infra-visual-tier-box">
+            <p className="text-xs mb-1.5 text-[var(--tx-primary)]">
+              เอฟเฟกต์ภาพเครื่องนี้:{' '}
+              {visualTier === null ? '…' : visualTier.applied === 'eco'
+                ? '🍃 โหมดประหยัด (หยุด animation แสงเรือง)'
+                : '✨ โหมดเต็ม (แสงเรือง + animation ครบ)'}
+              {visualTier && visualTier.override !== 'auto' ? ' · บังคับเอง' : ' · อัตโนมัติ'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[['auto', 'อัตโนมัติ (วัดเอง)'], ['full', 'สวยเต็ม'], ['eco', 'ประหยัด']].map(([mode, label]) => (
+                <button key={mode} type="button" data-testid={`infra-visual-tier-${mode}`}
+                  onClick={() => setTierMode(mode)}
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                    (visualTier?.override || 'auto') === mode
+                      ? 'border-teal-600/60 text-teal-400 bg-teal-950/20'
+                      : 'border-[var(--bd)] text-[var(--tx-muted)] hover:bg-[var(--bg-hover)]'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-[var(--tx-muted)] mt-1.5">
+              ทุกเครื่องหยุด animation ชั่วคราวขณะเลื่อนหน้าอยู่แล้ว (แก้จอขาวตอนเลื่อนเร็วบนมือถือ) — ปุ่มนี้คุมตอน "อยู่นิ่งๆ" เท่านั้น
+            </p>
+          </div>
         </div>
       </div>
     </SectionCard>

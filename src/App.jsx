@@ -9,6 +9,7 @@ import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
 import { reconnectFirestore } from './lib/firestoreReconnect.js';
 import { installNumberInputWheelGuard } from './lib/wheelGuard.js';
+import { applyVisualTier, startFrameJankProbe, installFxScrollPause } from './lib/fxPerf.js';
 import LoadErrorRetry from './components/LoadErrorRetry.jsx';
 import { UserPermissionProvider } from './contexts/UserPermissionContext.jsx';
 import { BranchProvider } from './lib/BranchContext.jsx';
@@ -197,6 +198,17 @@ export default function App() {
   // data-wheelable qty fields step by EXACTLY ±1. One listener, app-wide,
   // safe-by-default for every current + future <input type="number">.
   useEffect(() => installNumberInputWheelGuard(document), []);
+
+  // 2026-07-21 — FX perf (adaptive visuals): pause box-shadow "breathing"
+  // while scrolling (iOS white-tile fix — the page stops invalidating its
+  // own paint mid-scroll) + measured visual tier (weak machines → eco =
+  // breath off + dimmer halo; strong machines stay FULL). Manual override in
+  // the 🩺 health card. See src/lib/fxPerf.js for the evidence chain.
+  useEffect(() => {
+    applyVisualTier();
+    startFrameJankProbe();
+    return installFxScrollPause();
+  }, []);
 
   // Auto-reload เมื่อ deploy version ใหม่ (poll ทุก 60 วิ)
   useEffect(() => {

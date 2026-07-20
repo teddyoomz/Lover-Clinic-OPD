@@ -1081,6 +1081,7 @@ html.theme-transitioning *::after {
   background: var(--accent, #dc2626);
   box-shadow: 0 0 8px rgba(var(--accent-rgb, 220,38,38), 0.8);
   animation: glow-pulse 2s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   flex-shrink: 0;
 }
 .pf-session-id {
@@ -1599,6 +1600,7 @@ select.pf-input {
 }
 .card-filled-pending {
   animation: card-filled-pending-breathe 2s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   border-color: rgba(168,85,247,0.65) !important;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1676,6 +1678,7 @@ select.pf-input {
 .fx-glow-v4 {
   border: 1px solid rgba(var(--v85-rose-rgb), 0.28);
   animation: v85-heartbeat 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 @keyframes v85-heartbeat {
   0%, 100% {
@@ -1732,6 +1735,7 @@ select.pf-input {
     #ef4444, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #ec4899, #ef4444);
   z-index: -1;
   animation: v85-hue-cycle 8s linear infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   filter: blur(2px) brightness(1.05);
   opacity: 0.7;
 }
@@ -1748,6 +1752,7 @@ select.pf-input {
   filter: blur(14px);
   z-index: -2;
   animation: v85-hue-cycle 12s linear infinite reverse;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 @keyframes v85-hue-cycle { to { --v85-v6-hue: 360deg; } }
 
@@ -1906,6 +1911,7 @@ select.pf-input {
 
 .fx-glow-u6 {
   animation: v85-u6-breathe 8s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 @keyframes v85-u6-breathe {
   0%, 100% {
@@ -1993,6 +1999,7 @@ select.pf-input {
 [data-theme="light"] .fx-glow-v4 {
   border-color: rgba(var(--v85-rose-rgb), 0.32);
   animation: v85-heartbeat-light 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 @keyframes v85-heartbeat-light {
   0%, 100% {
@@ -2104,6 +2111,7 @@ select.pf-input {
 }
 [data-theme="light"] .fx-glow-u6 {
   animation: v85-u6-breathe-light 8s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 @keyframes v85-u6-breathe-light {
   0%, 100% {
@@ -2246,6 +2254,7 @@ select.pf-input {
 }
 .chat-tab-blink {
   animation: chat-blink 1s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   color: white !important;
   border-color: transparent !important;
 }
@@ -2258,12 +2267,12 @@ select.pf-input {
   0%, 100% { background-color: var(--bg-hover); border-color: var(--bd); color: var(--tx-muted); box-shadow: none; }
   50%      { background-color: #dc2626; border-color: #dc2626; color: #fff; box-shadow: 0 0 14px rgba(239, 68, 68, 0.6); }
 }
-.recall-pill-blink { animation: recall-pill-blink 1s ease-in-out infinite; }
+.recall-pill-blink { animation: recall-pill-blink 1s ease-in-out infinite; animation-play-state: var(--fx-anim, running); }
 @keyframes recall-pill-blink-active {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
   50%      { box-shadow: 0 0 16px 2px rgba(239, 68, 68, 0.7); }
 }
-.recall-pill-blink-active { animation: recall-pill-blink-active 1s ease-in-out infinite; }
+.recall-pill-blink-active { animation: recall-pill-blink-active 1s ease-in-out infinite; animation-play-state: var(--fx-anim, running); }
 @media (prefers-reduced-motion: reduce) {
   .recall-pill-blink, .recall-pill-blink-active {
     animation: none;
@@ -2363,6 +2372,7 @@ select.pf-input {
   border-radius: 50%;
   background-color: var(--accent, #dc2626);
   animation: glow-pulse 1.8s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   flex-shrink: 0;
 }
 
@@ -2570,7 +2580,7 @@ select.pf-input {
 .status-badge.status-waiting  { color: #f59e0b; background: rgba(245,158,11,0.12); }
 .status-badge.status-active   { color: #22c55e; background: rgba(34,197,94,0.12); }
 .status-badge.status-done     { color: #64748b; background: rgba(100,116,139,0.1); }
-.status-badge.status-urgent   { color: #ef4444; background: rgba(239,68,68,0.12); animation: accent-breathe 2s ease-in-out infinite; }
+.status-badge.status-urgent   { color: #ef4444; background: rgba(239,68,68,0.12); animation: accent-breathe 2s ease-in-out infinite; animation-play-state: var(--fx-anim, running); }
 
 /* =====================================================
    TABLE ROW — hover reveal action
@@ -2608,6 +2618,7 @@ tr:hover .table-row-actions,
    ===================================================== */
 .fab-glow {
   animation: accent-breathe 3s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 
 /* =====================================================
@@ -2798,6 +2809,7 @@ body {
   background: var(--accent, #dc2626);
   border: 2px solid var(--bg-base);
   animation: glow-pulse 2s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 
 /* =====================================================
@@ -3971,6 +3983,36 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
   --neon-intensity: 0.45;       /* alpha multiplier — 0.45 = 45% of V86 v1 baseline */
 }
 
+/* ─── FX-PERF control plane (2026-07-21) ────────────────────────────────
+   Root cause (measured on the live TFP): 10 full-width section cards run
+   infinite BOX-SHADOW keyframes (v86-breath) — the page invalidates ~its
+   whole painted area at 60fps forever, so iOS's tile rasterizer can never
+   cache tiles → fast scroll = white checkerboard EVEN on an iPhone 17 Pro
+   Max (device power is irrelevant when the page repaints itself by design).
+   Every box-shadow-animating rule now carries
+   `animation-play-state: var(--fx-anim, running)` so two switches control
+   them all:
+   1. html.is-scrolling      — src/lib/fxPerf.js adds this class during any
+      scroll (+180ms settle). Breathing is invisible mid-scroll anyway;
+      pausing it makes tiles cacheable → the white flash dies on ALL tiers.
+   2. html[data-visual-tier="eco"] — weak machines (auto-probed frame jank,
+      or manual toggle in the 🩺 health card) pause the breath permanently
+      + dim the halo. Strong machines stay FULL: everything animates when
+      idle. Transform/opacity/background animations (spinners, orbs,
+      shimmer, petals) are compositor-cheap and are NOT paused. */
+html.is-scrolling {
+  --fx-anim: paused;
+}
+html[data-visual-tier="eco"] {
+  --fx-anim: paused;
+  /* !important: useV86GlowApply (admin glow settings) writes --neon-intensity
+     as an INLINE style on <html>, which beats a plain stylesheet rule —
+     stylesheet !important beats non-important inline, so eco's dim wins on
+     this machine while the admin's saved intensity still applies elsewhere.
+     (Caught live in the 2026-07-21 fx-perf L1 — eco showed 0.45 pre-fix.) */
+  --neon-intensity: 0.25 !important; /* dimmer halo = cheaper static paint on weak GPUs */
+}
+
 /* --- V86 base utility class --- */
 .v86-glow-card {
   border: 1px solid rgba(var(--neon-c1), calc(0.40 * var(--neon-intensity)));
@@ -3979,6 +4021,7 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
     0 0 14px rgba(var(--neon-c2), calc(0.45 * var(--neon-intensity))),
     0 0 32px rgba(var(--neon-c2), calc(0.20 * var(--neon-intensity)));
   animation: v86-breath 4s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
@@ -4051,6 +4094,7 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 }
 [data-theme="light"] .v86-glow-card {
   animation: v86-breath-light 4s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 
 /* --- V86 auto-glow override (replaces V85 black-shadow auto-glow) ---
@@ -4072,6 +4116,7 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
     0 0 14px rgba(var(--neon-c2), calc(0.45 * var(--neon-intensity))),
     0 0 32px rgba(var(--neon-c2), calc(0.20 * var(--neon-intensity)));
   animation: v86-breath 4s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
   transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
@@ -4099,6 +4144,7 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
     0 0 12px rgba(var(--neon-c2), calc(0.30 * var(--neon-intensity))),
     0 0 28px rgba(var(--neon-c2), calc(0.15 * var(--neon-intensity)));
   animation: v86-breath-light 4s ease-in-out infinite;
+  animation-play-state: var(--fx-anim, running); /* 2026-07-21 fx-perf: shadow-anim pause plane */
 }
 
 /* Reduced-motion override for auto-glow */
