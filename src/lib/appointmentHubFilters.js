@@ -54,6 +54,36 @@ export function sortApptsByDateTimeDesc(appts) {
   });
 }
 
+// ─── Done-tab sort (2026-07-20) ──────────────────────────────────────────────
+// User directive: "หน้าเสร็จแล้วใน tab วันนี้ เรียงตามคนที่เพิ่งกดรับบริการเรียบร้อย
+// ... คนที่เพิ่งกดจะอยู่บนสุด ไม่ต้องเรียงตามเวลาแล้ว". Applies ONLY to the
+// today tab's 'completed' sub-pill (AppointmentHubView) — every other tab/pill
+// keeps the V64-fix9 / past-desc comparators.
+
+/**
+ * Timestamp-shape-safe → ms. serviceCompletedAt arrives as a Firestore
+ * Timestamp ({toMillis}), a raw {seconds,nanoseconds} shape, an optimistic
+ * client Date (HubView's optimistic stamp), an ISO string, or a number.
+ * Anything unparseable → 0 (sorts to the bottom).
+ */
+export function svcCompletedMs(v) {
+  if (!v) return 0;
+  if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch { return 0; } }
+  if (typeof v.seconds === 'number') return v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6);
+  if (v instanceof Date) return v.getTime();
+  const ms = typeof v === 'number' ? v : Date.parse(v);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/**
+ * Sort by serviceCompletedAt DESCENDING — most recently completed first.
+ * Returns a NEW array; does not mutate input.
+ */
+export function sortApptsByServiceCompletedDesc(appts) {
+  if (!Array.isArray(appts)) return [];
+  return [...appts].sort((a, b) => svcCompletedMs(b?.serviceCompletedAt) - svcCompletedMs(a?.serviceCompletedAt));
+}
+
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function bangkokYearMonthDay(d) {

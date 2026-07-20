@@ -30,6 +30,7 @@ import {
   sortApptsByDateTimeAsc,
   sortApptsByDateTimeDesc,   // ③ (2026-06-14) — ย้อนหลัง 30 วัน = newest first
   sortApptsConfirmedFirst,   // ① (2026-05-31)
+  sortApptsByServiceCompletedDesc, // (2026-07-20) — เสร็จแล้ว: เพิ่งกดเสร็จบนสุด
 } from '../../lib/appointmentHubFilters.js';
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
 // B2 (2026-07-07 instant cold-start) — stale-while-revalidate one-shot orchestrator
@@ -482,11 +483,16 @@ export default function AppointmentHubView({
     // at the top, descending into the past (DESC). Upcoming tabs (tomorrow/future/
     // opd-pending) keep "soonest queue first" (ASC). The print PDF inherits this
     // order (buildPrintRows maps filteredAppts without re-sorting).
-    return activeTab === 'today'
-      ? sortApptsConfirmedFirst(scoped)
-      : activeTab === 'past'
-        ? sortApptsByDateTimeDesc(scoped)
-        : sortApptsByDateTimeAsc(scoped);
+    // (2026-07-20) — the "เสร็จแล้ว" sub-pill sorts by most-recently-completed
+    // first (serviceCompletedAt DESC) per user directive; every other tab/pill
+    // keeps its existing comparator.
+    return activeTab === 'today' && todaySubPill === 'completed'
+      ? sortApptsByServiceCompletedDesc(scoped)
+      : activeTab === 'today'
+        ? sortApptsConfirmedFirst(scoped)
+        : activeTab === 'past'
+          ? sortApptsByDateTimeDesc(scoped)
+          : sortApptsByDateTimeAsc(scoped);
   }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill, resolveLinkedSession]);
 
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.
