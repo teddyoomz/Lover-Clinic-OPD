@@ -121,7 +121,10 @@ export default async function handler(req, res) {
     if (!token) return res.status(401).json({ ok: false, error: 'NO_TOKEN' });
     getDb(); // ensures the admin app exists before getAuth()
     let decoded;
-    try { decoded = await getAuth(getApp()).verifyIdToken(token); }
+    // checkRevoked=true (2026-07-21): disabled/offboarded staff are rejected
+    // instantly instead of retaining access until the ~1h token expiry —
+    // matches api/admin/_lib/adminAuth.js which always passes the flag.
+    try { decoded = await getAuth(getApp()).verifyIdToken(token, true); }
     catch { return res.status(401).json({ ok: false, error: 'BAD_TOKEN' }); }
     // same gate firestore.rules isClinicStaff() applies to these collections
     if (decoded.isClinicStaff !== true && decoded.admin !== true) {

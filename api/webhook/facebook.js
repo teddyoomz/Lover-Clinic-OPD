@@ -366,15 +366,16 @@ export default async function handler(req, res) {
   const rawBodyBuf = await getRawBody(req);
   const rawBody = rawBodyBuf.toString('utf8');
 
-  // Verify signature
+  // Verify signature — fail CLOSED on a missing header (2026-07-21; mirrors
+  // api/webhook/line.js:986). Facebook ALWAYS sends X-Hub-Signature-256, so a
+  // headerless POST is never legitimate Meta traffic. Pre-fix, a missing header
+  // skipped verification entirely (auth bypass → forged inbound chat messages).
   const signature = req.headers['x-hub-signature-256'];
-  if (signature) {
-    if (!verifySignature(rawBody, signature, fbConfig.appSecret)) {
-      console.warn('[fb-webhook] Invalid signature');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-    console.log('[fb-webhook] Signature verified ✓');
+  if (!signature || !verifySignature(rawBody, signature, fbConfig.appSecret)) {
+    console.warn('[fb-webhook] Missing or invalid signature');
+    return res.status(401).json({ error: 'Invalid signature' });
   }
+  console.log('[fb-webhook] Signature verified ✓');
 
   const body = JSON.parse(rawBody);
   console.log(`[fb-webhook] POST entries=${body.entry?.length || 0}`);

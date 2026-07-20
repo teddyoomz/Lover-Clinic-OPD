@@ -47,7 +47,9 @@ export function isRetryEligible(log, nowDate = new Date()) {
 
 export default async function handler(req, res) {
   const auth = req.headers.authorization || '';
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Fail CLOSED when CRON_SECRET is unset (2026-07-21): without the !secret
+  // guard, "Bearer undefined" would authenticate against a mis-provisioned env.
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
   }
   if (req.method !== 'POST' && req.method !== 'GET') {
