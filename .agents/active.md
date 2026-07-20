@@ -5,7 +5,7 @@ branch: "master"
 last_commit: "(AV212 degradation-matrix commit — see git log)"
 tests: "full vitest 17,911/17,911 (2026-07-20 PM definitive json + repoint isolated) + matrix e2e 14/14 (E2E_DEGRADE opt-in) + hardening 24/0 + build + verify:filler clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "e67b6d51 (2026-07-20 เช้า — AV211 + TFP #20 + e2e harness)"
+production_commit: "a1ef64ff (2026-07-20 เย็น — AV212 full stack: fast-paint + money-gate + rules 8+9)"
 firestore_rules_version: "UNCHANGED — next deploy = vercel-only, no Probe-Deploy-Probe"
 ---
 
