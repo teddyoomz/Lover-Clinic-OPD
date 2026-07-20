@@ -39,11 +39,17 @@ export async function readScheduledTaskConfig(db, taskId) {
 /**
  * Merge a per-task status slice. Non-fatal: a status-write failure never breaks
  * the cron (the cron's real work + audit doc already succeeded).
+ *
+ * `warn` (2026-07-21): ran-but-PARTIALLY-failed — the cron completed (ok:true)
+ * but dropped work a human should know about (backup missing collections, a
+ * fully-failed reminder night). infraHealthCore.checkOneTask surfaces it as a
+ * 'warn' check → daily alert card/LINE — closing the "green on a partial run"
+ * silent-death class. `counts` carries the raw numbers for the health card.
  * @param {import('firebase-admin/firestore').Firestore} db
  * @param {string} taskId
- * @param {{ok?:boolean, summary?:string, error?:string, skipped?:boolean}} result
+ * @param {{ok?:boolean, summary?:string, error?:string, skipped?:boolean, warn?:boolean, counts?:object|null}} result
  */
-export async function writeScheduledTaskStatus(db, taskId, { ok = true, summary = '', error = '', skipped = false } = {}) {
+export async function writeScheduledTaskStatus(db, taskId, { ok = true, summary = '', error = '', skipped = false, warn = false, counts = null } = {}) {
   try {
     await db.doc(STATUS_DOC).set(
       {
@@ -53,6 +59,8 @@ export async function writeScheduledTaskStatus(db, taskId, { ok = true, summary 
           summary: String(summary).slice(0, 200),
           error: String(error).slice(0, 300),
           skipped,
+          warn: warn === true,
+          ...(counts && typeof counts === 'object' && !Array.isArray(counts) ? { counts } : {}),
         },
       },
       { merge: true },

@@ -85,7 +85,20 @@ export default async function handler(req, res) {
       createdBy: 'cron',
       runCleanup: true, // cron does cleanup (manual does not — per spec §5.1)
     });
-    await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: 'สำรองสำเร็จ' });
+    // 2026-07-21: surface PARTIAL failures — pre-fix this wrote ok:true
+    // "สำรองสำเร็จ" unconditionally, so a backup silently dropping collections
+    // every night stayed ✅ in infra-health forever (silent-rot class).
+    const failedCols = Array.isArray(result?.failedCollections) ? result.failedCollections.length : 0;
+    const failedObjs = Array.isArray(result?.failedStorageObjects) ? result.failedStorageObjects.length : 0;
+    const partial = failedCols + failedObjs > 0;
+    await writeScheduledTaskStatus(db, TASK_ID, {
+      ok: true, skipped: false,
+      warn: partial,
+      summary: partial
+        ? `สำรองสำเร็จบางส่วน — collection ล้มเหลว ${failedCols} / ไฟล์ ${failedObjs}`
+        : 'สำรองสำเร็จ',
+      counts: { failedCollections: failedCols, failedStorageObjects: failedObjs },
+    });
     return res.status(200).json(result);
   } catch (e) {
     await writeScheduledTaskStatus(db, TASK_ID, { ok: false, error: e.message });

@@ -448,6 +448,50 @@ export function shouldCleanupBackup(name, ageMs, nowMs = Date.now()) {
   return { action: 'keep', reason: 'manual — admin responsibility' };
 }
 
+/**
+ * planRetentionWithValidityGuard (2026-07-21) — keep-last-valid retention.
+ *
+ * Age-only retention had a failure mode the V122 saga proved realistic: a
+ * multi-night broken-backup streak (NO_MANIFEST folders) lets the LAST healthy
+ * auto backup age past the 5-day line and get DELETED — leaving zero valid
+ * auto backups exactly when the system is already sick. This planner deletes a
+ * retention-expired folder ONLY when a STRICTLY NEWER manifest-valid folder
+ * exists. If no folder is manifest-valid at all, NOTHING is deleted (maximum
+ * caution during an outage; storage growth is the cheaper failure).
+ *
+ * Pure — the executor supplies {name, createdMs, hasManifest} per folder from
+ * the single getFiles() listing it already holds (no extra API calls).
+ *
+ * @param {Array<{name:string, createdMs:number, hasManifest:boolean}>} folders
+ * @param {number} nowMs
+ * @returns {{toDelete:string[], kept:Array<{name:string, reason:string}>}}
+ */
+export function planRetentionWithValidityGuard(folders, nowMs = Date.now()) {
+  const list = Array.isArray(folders) ? folders : [];
+  const newestValidMs = list.reduce(
+    (max, f) => (f && f.hasManifest === true && Number.isFinite(f.createdMs) && f.createdMs > max ? f.createdMs : max),
+    -Infinity,
+  );
+  const toDelete = [];
+  const kept = [];
+  for (const f of list) {
+    if (!f || typeof f.name !== 'string') continue;
+    const ageMs = nowMs - (Number.isFinite(f.createdMs) ? f.createdMs : nowMs);
+    const decision = shouldCleanupBackup(f.name, ageMs, nowMs);
+    if (decision.action !== 'delete') {
+      kept.push({ name: f.name, reason: decision.reason });
+      continue;
+    }
+    if (!(f.createdMs < newestValidMs)) {
+      // retention-expired but NO strictly-newer valid backup exists → keep.
+      kept.push({ name: f.name, reason: 'retention-expired but no newer manifest-valid backup — kept (validity guard)' });
+      continue;
+    }
+    toDelete.push(f.name);
+  }
+  return { toDelete, kept };
+}
+
 // ─── V81-fix1 (2026-05-17 EOD+1) — Firestore type encoder/decoder ────────
 // Firebase admin SDK Timestamp's JSON.stringify produces {_seconds, _nanoseconds}
 // which Firestore.batch.set treats as a plain Map field, NOT a Timestamp.

@@ -102,7 +102,34 @@ function checkOneTask(taskId, exp, statusMap, taskConfigMap, nowMs) {
       detail: `รันแล้วล้มเหลว: ${String(st.error || st.summary || 'ไม่ทราบสาเหตุ').slice(0, 120)}`,
     };
   }
+  // warn (2026-07-21): ran-but-PARTIAL — ok:true but the cron dropped work
+  // (backup missing collections / a fully-failed reminder night). Pre-fix this
+  // rendered as ✅ ปกติ = a partial run stayed invisible (silent-rot class).
+  if (st.warn === true) {
+    return {
+      id, label, status: 'warn',
+      detail: `รันสำเร็จแต่มีปัญหาบางส่วน: ${String(st.summary || 'ไม่ระบุ').slice(0, 120)}`,
+    };
+  }
   return { id, label, status: 'ok', detail: `ปกติ — รันล่าสุด ${formatAgeThai(ageMs)}` };
+}
+
+/**
+ * evaluateSweepStaleness (2026-07-21) — watcher-of-the-watcher, client side.
+ * The sweep cannot announce its OWN death (it is excluded from its task
+ * expectations by design), so staff-facing shells check the age of
+ * be_admin_audit/infra-health-latest.performedAt and show a banner when the
+ * sweep has not run within maxAgeHours (default 36h = one missed daily run
+ * + grace). Pure — caller supplies performedAt + nowMs.
+ */
+export const SWEEP_STALE_HOURS = 36;
+export function evaluateSweepStaleness({ performedAt = null, nowMs = 0, maxAgeHours = SWEEP_STALE_HOURS } = {}) {
+  if (!performedAt) return { stale: true, reason: 'never-ran', ageHours: null };
+  const t = Date.parse(performedAt);
+  if (!Number.isFinite(t)) return { stale: true, reason: 'never-ran', ageHours: null };
+  const ageHours = (nowMs - t) / HOUR_MS;
+  if (ageHours > maxAgeHours) return { stale: true, reason: 'stale', ageHours };
+  return { stale: false, reason: 'fresh', ageHours };
 }
 
 /**

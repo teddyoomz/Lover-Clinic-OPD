@@ -14,6 +14,7 @@ import {
   resolveStorageScopeForBackup, // V81-fix6: scope-aware (full vs customer-only)
   CUSTOMER_SUBCOLLECTIONS,
   shouldCleanupBackup,
+  planRetentionWithValidityGuard, // 2026-07-21: keep-last-valid retention guard
   buildWholeSystemManifest,
   computeWholeSystemManifestHash,
   sanitizeAuthUser,
@@ -75,29 +76,40 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
   const collections = [];
   const storageObjects = [];
 
-  // 1. Cleanup retention (AV64) — only for auto (cron) per spec §5.1
+  // 1. Cleanup retention (AV64) — only for auto (cron) per spec §5.1.
+  // 2026-07-21: keep-last-valid guard — a retention-expired auto folder is
+  // deleted ONLY when a strictly-newer manifest-valid folder exists, so a
+  // V122-style broken-backup streak can never age the LAST healthy backup
+  // into deletion. hasManifest comes from the same getFiles() listing.
   if (runCleanup) {
     const [files] = await storage.getFiles({ prefix: `${pathPrefix}/` });
     const folderTs = new Map();
+    const folderHasManifest = new Set();
     for (const f of files) {
-      const m = f.name.match(/^backups\/whole-system\/([^/]+)\//);
+      const m = f.name.match(/^backups\/whole-system\/([^/]+)\/(.*)$/);
       if (!m) continue;
       const folder = m[1];
       if (!folderTs.has(folder)) {
         const ts = f.metadata?.timeCreated ? new Date(f.metadata.timeCreated).getTime() : Date.now();
         folderTs.set(folder, ts);
       }
+      if (m[2] === 'manifest.json') folderHasManifest.add(folder);
     }
-    for (const [folder, createdMs] of folderTs.entries()) {
-      const ageMs = Date.now() - createdMs;
-      const decision = shouldCleanupBackup(folder, ageMs, Date.now());
-      if (decision.action === 'delete') {
-        try {
-          await storage.deleteFiles({ prefix: `${pathPrefix}/${folder}/` });
-        } catch (e) {
-          // Tolerant — log + continue (don't abort cron on cleanup failure)
-          console.warn(`Cleanup failed for ${folder}: ${e.message}`);
-        }
+    const plan = planRetentionWithValidityGuard(
+      [...folderTs.entries()].map(([name, createdMs]) => ({
+        name, createdMs, hasManifest: folderHasManifest.has(name),
+      })),
+      Date.now(),
+    );
+    for (const k of plan.kept) {
+      if (k.reason.includes('validity guard')) console.warn(`[retention] ${k.name}: ${k.reason}`);
+    }
+    for (const folder of plan.toDelete) {
+      try {
+        await storage.deleteFiles({ prefix: `${pathPrefix}/${folder}/` });
+      } catch (e) {
+        // Tolerant — log + continue (don't abort cron on cleanup failure)
+        console.warn(`Cleanup failed for ${folder}: ${e.message}`);
       }
     }
   }

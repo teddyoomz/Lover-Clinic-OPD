@@ -259,9 +259,11 @@ export async function runReminderPipeline(ctx) {
 }
 
 export default async function handler(req, res) {
-  // Auth
+  // Auth — fail CLOSED when CRON_SECRET is unset (2026-07-21): without the
+  // !secret guard, "Bearer undefined" would authenticate against a
+  // mis-provisioned env. Mirrors every other cron in the fleet.
   const auth = req.headers.authorization || '';
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
   }
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -360,6 +362,16 @@ export default async function handler(req, res) {
     [`hourly.${currentHour}`]: summary,
   }, { merge: true });
 
-  await writeScheduledTaskStatus(db, TASK_ID, { ok: true, skipped: false, summary: `ส่ง ${summary.sent} / ข้าม ${summary.skipped}` });
+  // 2026-07-21: a FULLY-failed tick (sent=0 + failed>0 — e.g. channel token
+  // regenerated in the LINE console) now surfaces as warn instead of ✅ ปกติ.
+  // A zero-appointment tick (sent=0, failed=0) stays ok. Partial failures show
+  // in the summary/counts without warning (retry cron picks them up).
+  const reminderWarn = summary.failed > 0 && summary.sent === 0;
+  await writeScheduledTaskStatus(db, TASK_ID, {
+    ok: true, skipped: false,
+    warn: reminderWarn,
+    summary: `ส่ง ${summary.sent} / ข้าม ${summary.skipped} / ล้มเหลว ${summary.failed}`,
+    counts: { sent: summary.sent, skipped: summary.skipped, failed: summary.failed },
+  });
   return res.status(200).json({ ok: true, currentHour, tomorrow, today, summary });
 }

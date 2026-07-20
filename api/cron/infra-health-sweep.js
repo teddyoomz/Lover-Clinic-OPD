@@ -192,6 +192,27 @@ export async function sweepInfraHealth({ db, nowMs = Date.now(), readOnly = fals
   return { result, alerted, errorCount24h, dateKey };
 }
 
+/**
+ * pingDeadMansSwitch (2026-07-21) — external heartbeat after a successful
+ * sweep. An external monitor (healthchecks.io class) alerts the owner when
+ * pings STOP — covering the one class this cron cannot see: its OWN death.
+ * The sweep shares every platform failure mode with what it watches (same
+ * Vercel account, same CRON_SECRET, same admin creds) — a platform-level
+ * outage kills all 14 crons AND the in-app alert channels simultaneously,
+ * recreating the AV210/V122 multi-day-silence class. Pings go OUTSIDE both
+ * accounts. Fail-safe: never throws; no-op until HEALTHCHECK_PING_URL is set.
+ */
+export async function pingDeadMansSwitch(url, fetchFn = fetch) {
+  if (!url) return { pinged: false, reason: 'no-url' };
+  try {
+    await fetchFn(url, { method: 'GET', signal: AbortSignal.timeout(5000) });
+    return { pinged: true };
+  } catch (e) {
+    console.warn('[infra-health] heartbeat ping failed (non-fatal):', e?.message || e);
+    return { pinged: false, error: String(e?.message || e) };
+  }
+}
+
 export default async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
   const provided = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '')
@@ -215,7 +236,8 @@ export default async function handler(req, res) {
       ok: true,
       summary: `overall=${result.overall} · issues=${result.checks.filter(c => c.status === 'red' || c.status === 'warn').length} · errors24h=${errorCount24h}`,
     });
-    return res.status(200).json({ ok: true, overall: result.overall, checks: result.checks, alerted });
+    const heartbeat = await pingDeadMansSwitch(process.env.HEALTHCHECK_PING_URL);
+    return res.status(200).json({ ok: true, overall: result.overall, checks: result.checks, alerted, heartbeat });
   } catch (e) {
     console.error('[infra-health-sweep] failed:', e);
     try {
