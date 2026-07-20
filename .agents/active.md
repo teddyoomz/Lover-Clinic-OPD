@@ -1,35 +1,36 @@
 ---
-updated_at: "2026-07-20 NIGHT+1 /session-end — LINE Friend Picker (AV213) + done-sort + mobile wedge-escalation (AV214) — ALL DEPLOYED LIVE."
-status: "master `31d67b68`+ = prod LIVE (`lover-clinic-o1abzsdk8` aliased lover-clinic-app.vercel.app 200; post-deploy L1 wedge-ladder PASS on LIVE bundle + L2 --full 20/0). rules DEPLOYED ค่ำนี้ (be_line_friends + probe #20, probes green). Korat roster PRE-SEEDED 2,087/2,087 (OA VERIFIED)."
+updated_at: "2026-07-21 ~03:00 — whole-app risk-audit worry list CLOSED (12/12 tasks) — SHIPPED local, NOT deployed"
+status: "master `2c277f7f`+ = 6 commits ahead of prod `31f87210`. rules UNCHANGED → next deploy = vercel-only. FULL vitest 18,120/18,120 · 0 fail (exit-0) + build clean + L1 QR/banner on real surfaces + Rule M backfill APPLIED on prod."
 branch: "master"
-last_commit: "31d67b68 — docs(agents): AV214 wedge-escalation deployed"
-tests: "full vitest exit-0 ×2 today (319s/324s) + ~119 new tests 0 fail + L2 --full 20/0 vs prod + L1 Playwright 5 specs (picker/done-sort/wedge — Q-vis eyeballed) + build clean. Do NOT re-run at boot."
+last_commit: "2c277f7f — test(repoint): 5 stale V21 locks from 2026-07-20 AV212-R2 + probe-20"
+tests: "FULL 18,120/0 exit-0 (326s) + ~100 new tests + build clean. 5 stale repoints = yesterday's AV212-R2/probe-20 drift, NOT this batch."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "31f87210 (AV214) on top of 36a3b8f9 (line-friends stack)"
-firestore_rules_version: "2026-07-20 NIGHT — be_line_friends added (probe #20). Next deploy: vercel-only unless rules touched."
+production_commit: "31f87210 (AV214) — pre-batch"
+firestore_rules_version: "2026-07-20 NIGHT (be_line_friends + probe #20) — UNCHANGED this batch"
 ---
 
-# Active — 2026-07-20 NIGHT+1 — picker + done-sort + wedge fix DEPLOYED
+# Active — 2026-07-21 — worry-list sweep เสร็จทั้ง 12 · รอ "deploy"
 
-## State
-- ① LINE Friend Picker: เลือก userId จากรายชื่อ real-time (แอด/ทักปุ๊ปโผล่ปั๊บ) — การ์ดสุขภาพ + ผูกลูกค้า;
-  bind mirror approve + audit + collision guard; Korat 2,087 คน pre-seeded (OA verified).
-- ② วันนี้·เสร็จแล้ว เรียง serviceCompletedAt desc (กดล่าสุดบนสุด) — L1 บน prod ผ่าน.
-- ③ AV214: มือถือค้าง-retry-ไม่หาย → timeboxed reconnect + ลองใหม่ escalate เป็น hard reload
-  (≤2 กดจบทุกกรณี) + `[conn-wedge]` telemetry เข้าการ์ดสุขภาพ.
-
-## What this session shipped
-- Detail ทั้งหมด: `.agents/sessions/2026-07-20-line-picker-donesort-wedgefix.md` (checkpoint)
-- AV213 + AV214 both SKILL copies (SY1) · Rule B probe #20 · COLLECTION_MATRIX be_line_friends
-- บั๊คที่ e2e จับสด 2 ตัว: legacy-token cross-branch backfill pollution (guard+sweep แล้ว) +
-  probe5 403 harness artifact (พิสูจน์ก่อน ไม่ revert มั่ว)
+## Shipped this batch (จาก whole-app 5-dimension audit)
+1. 💣 Rule M backfill APPLIED: 3 legacy inline-blob be_treatments (1021KB=100% cap!) → Storage, docs เหลือ 5/8/3KB
+2. FB webhook fail-closed (เคย fail-open — พิสูจน์สดบน prod: unsigned POST ได้ 200) + checkRevoked + cron fail-closed
+3. Warn contract: backup partial-fail + LINE-reminder failed-night → การ์ดสุขภาพเตือน (เคยเขียวหลอก)
+4. Dead-man's switch (HEALTHCHECK_PING_URL — user ต้องสมัคร healthchecks.io + ตั้ง env) + staleness banner 2 shells
+5. Retention keep-last-valid guard (V122 streak จะไม่ลบ backup valid ตัวสุดท้ายอีก)
+6. QR self-host (<QrImage> — เลิกพึ่ง api.qrserver.com; L1 จริงบน CustomerPatientLinkModal + Q-vis)
+7. Heartbeat dedup 144→2 docs/วัน + npm uninstall cheerio/bottleneck + off-site pull (F:\LoverClinic-backups
+   มี auto-20260720-0301 verified แล้ว) + docs/RUNBOOK-restore.md
 
 ## Next action
-- User L1: picker → ผูกเจ้าของ → "ทดสอบแจ้งเตือน" · แอดเพื่อน OA จริงจากมือถือ → ดูโผล่สด
-- พรุ่งนี้หลัง 07:30: `node scripts/diag-infra-health.mjs` (sweep ใหม่รอบแรก)
+- ⏰ background waiter จะเช็ค infra-health sweep รอบแรกหลัง 07:35 อัตโนมัติ (งานปิดท้าย per user)
+- รอ user สั่ง "deploy" → vercel-only → post-deploy: `node scripts/diag-webhook-signature-probe.mjs`
+  (FB ต้อง 401 = prove-green) + `diag-infra-health.mjs`
 
-## Outstanding user-triggered actions
-- มือถือ: สังเกต 1-2 วัน — ค้างอีกต้องหายใน ≤2 กด + เช็ค [conn-wedge] ในการ์ดสุขภาพ
-- ค้างเดิม: desktop toast Windows · laptop 10 ปี TFP ratchet · standing L1 stack (มือถือ/iPad)
+## Outstanding user-triggered
+- สมัคร healthchecks.io (ฟรี) → ใส่ HEALTHCHECK_PING_URL ใน Vercel env
+- ยืนยัน LINE/FB channel secrets เคย rotate หลัง WS1 (10 มิ.ย.) หรือยัง (comment ใน rules ยังค้าง)
+- ritual รายสัปดาห์: `node scripts/offsite-backup-pull.mjs`
+- ค้างเดิม: picker ผูกเจ้าของ + ทดสอบแจ้งเตือน · มือถือ [conn-wedge] (count สะอาดแล้ว — harness 2 ตัวถูกลบ) ·
+  desktop toast Windows · laptop 10 ปี ratchet
 
 ## ⚠️ Landmine — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
