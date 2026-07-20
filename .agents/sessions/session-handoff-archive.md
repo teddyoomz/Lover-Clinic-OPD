@@ -1,5 +1,22 @@
 # SESSION_HANDOFF — Overflow Archive
 
+## Archived 2026-07-20 NIGHT (SESSION_HANDOFF trim 10+10)
+
+### Current-State bullet — 2026-07-07 EOD+2 Instant Cold-Start (AV206+AV207)
+
+- **NEW (2026-07-07 EOD+2) — Instant Cold-Start (AV206+AV207) SHIPPED + DEPLOYED LIVE (deploy ships AV205 ด้วย)**: master `2cf71bdc` = prod (vercel-only, **firestore.rules UNCHANGED → no Probe-Deploy-Probe**; alias HTTP 200 + sw.js no-cache header live). User video: iPhone PWA cold-start after long gap → นัด hub "กำลังโหลด…" 7-10+s. `/brainstorming`(Q1=A SWR staff + ลูกค้า fresh-gate — REVERSES 2026-06-16 fresh-always ฝั่ง staff / Q2=A hub 2 จังหวะ / Q3=B ทั้ง staff app / Q4=B SW)→spec→plan→inline. **Fix 5 ชั้น**: `persistentLocalCache`+multi-tab+IDB-detect+storage.persist (listener SWR ฟรีทั้งแอป) · NEW `freshGate.js` (PatientForm+ClinicSchedule ลูกค้าไม่มีวันเห็น cache; ?patient==server API) · NEW `swrRead.js` swrRun/swrList + `{source:'cache'}` 16 getters + `_tagCache` `__fromCache` honesty · hub loadCore/loadEnrichment + SyncIndicator + chip skeleton · sweep 12 staff tabs (`docs/perf/swr-inventory.md` closed list; reports/stock-ops/modals SANCTIONED) · vite-plugin-pwa SW (shell precache เล็ก + /assets CacheFirst, ห้าม /api+googleapis, update toast + kill-switch, **FCM SW → dedicated scope** — 2 SW แชร์ '/' จะ replace กัน). **2 บั๊คที่ L1 จับ**: network-down getDocs คืน cache เงียบ → indicator โกหก (fix REAL snap.metadata.fromCache) + S4 `reg.active`@'activating' race (โผล่เฉพาะ prod เน็ตจริง). **Verified**: full vitest **17,485/17,486** (1 = phase15.5b flake เดิม 51/0 isolated; 2 V21 repoints) + build clean + **Rule Q L1 Playwright 4/4 บน LIVE prod** (offline SWR paint+honest indicator / server correction / customer fresh-gate / SW offline shell) + parity 34/40 + 6 dark flags = starfield noise (hub/link 0.000%) + **วัดจริง 1736→566ms (−67%) data-on-screen**. AV206/AV207 both SKILL.md (SY1). Honest gap: user L1 มือถือ/iPad จริง (batch นี้ + AV205); push re-scope self-heals on next staff load. Checkpoint `.agents/sessions/2026-07-07-instant-coldstart.md` · spec/plan `docs/superpowers/{specs,plans}/2026-07-07-instant-staff-app-cold-start*` · perf `docs/perf/instant-coldstart-report.md`.
+
+### Session 2026-07-07 EOD+1 — Universal modal scroll-lock (AV205) — SHIPPED local, NOT deployed
+
+master `a5761d63` (11 ahead of prod `92b9ba15`); rules UNCHANGED → deploy = vercel-only. full vitest **17,427/17,428** (1 = phase15.5b flake เดิม, isolated 51/0; 0 V21 fixups); build clean.
+- Fix บั๊ค class ใหญ่: เปิด modal แล้ว scroll ไปเลื่อน background (77 overlay files). 3 ชั้น:
+  hook `useModalScrollLock` (ref-counted html[data-modal-open]) · sweep ~68 ไฟล์ backdrop
+  `overflow-y-auto overscroll-contain` + panel max-h audit · layer-3 anti-confinement
+  (`html[data-modal-open] card:has(.fixed){transform:none}` — V86 hover-lift confine ที่จับจาก Q-vis).
+- Sanctioned (classifier closed list): print views · full-screen editors · dropdowns · BackendMobileDrawer (Radix) · StaffChatPanel (V82 เดิม).
+- Rule Q L1 Playwright trusted-wheel 4/4 (background frozen / modal scrolls / unlock) + screenshots eyeballed; hook 9/0 + classifier 83/0; AV205 both SKILL.md (SY1). e2e helpers.js รองรับ ArcBloom new menu.
+- NO agent fan-out (memory lock). User L1 pending (นิ้วจริง). Checkpoint `.agents/sessions/2026-07-07-modal-scroll-lock.md`.
+
 ## Archived 2026-07-20 PM (SESSION_HANDOFF trim 10+10)
 
 ### Current-State bullet

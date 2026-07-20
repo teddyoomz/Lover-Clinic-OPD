@@ -1,30 +1,35 @@
 ---
-updated_at: "2026-07-20 NIGHT+1 — mobile wedged-client escalation fix (AV214) DEPLOYED (vercel-only) หลัง LINE Friend Picker (AV213) + done-sort + rules deploy รอบค่ำ."
-status: "master = prod LIVE (`lover-clinic-o1abzsdk8` aliased lover-clinic-app.vercel.app 200; post-deploy L1 wedge-ladder PASS on the LIVE bundle). ค่ำ: combined deploy (rules: be_line_friends + probe #20, probes green). AV214: timeboxed reconnect + ลองใหม่ escalates to hard reload (มือถือค้าง = กดไม่เกิน 2 ครั้งจบ; [conn-wedge] telemetry เข้าการ์ดสุขภาพ). Korat roster PRE-SEEDED 2,087/2,087 (OA VERIFIED)."
+updated_at: "2026-07-20 NIGHT+1 /session-end — LINE Friend Picker (AV213) + done-sort + mobile wedge-escalation (AV214) — ALL DEPLOYED LIVE."
+status: "master `31d67b68`+ = prod LIVE (`lover-clinic-o1abzsdk8` aliased lover-clinic-app.vercel.app 200; post-deploy L1 wedge-ladder PASS on LIVE bundle + L2 --full 20/0). rules DEPLOYED ค่ำนี้ (be_line_friends + probe #20, probes green). Korat roster PRE-SEEDED 2,087/2,087 (OA VERIFIED)."
 branch: "master"
-tests: "Full vitest exit-0 (319s) + 107 new tests 0 fail + L2 --full 20/0 vs redeployed prod (client listener realtime 173ms · guard live) + L1 Playwright 2/2 vs LIVE URL (both realtime legs, Q-vis eyeballed). Do NOT re-run at boot."
+last_commit: "31d67b68 — docs(agents): AV214 wedge-escalation deployed"
+tests: "full vitest exit-0 ×2 today (319s/324s) + ~119 new tests 0 fail + L2 --full 20/0 vs prod + L1 Playwright 5 specs (picker/done-sort/wedge — Q-vis eyeballed) + build clean. Do NOT re-run at boot."
 production_url: "https://lover-clinic-app.vercel.app"
-firestore_rules_version: "2026-07-20 NIGHT — be_line_friends added (probe #20). Next deploy: vercel-only unless rules touched again."
+production_commit: "31f87210 (AV214) on top of 36a3b8f9 (line-friends stack)"
+firestore_rules_version: "2026-07-20 NIGHT — be_line_friends added (probe #20). Next deploy: vercel-only unless rules touched."
 ---
 
-# Active — 2026-07-20 NIGHT — LINE Friend Picker + done-sort DEPLOYED
+# Active — 2026-07-20 NIGHT+1 — picker + done-sort + wedge fix DEPLOYED
 
 ## State
-- Feature ①: picker เลือก LINE userId จากรายชื่อ real-time (แอด/ทักปุ๊ปโผล่ปั๊บ) ใช้ 2 ที่ —
-  การ์ดสุขภาพ (เติม lineTargets) + modal ผูก LINE ลูกค้า (bind mirror approve + audit + collision guard).
-  Webhook เก็บ follow/unfollow → be_line_friends. Endpoint /api/admin/line-friends (list backfill + bind).
-- Feature ②: วันนี้·เสร็จแล้ว เรียง serviceCompletedAt desc (กดล่าสุดบนสุด) — L1 บน prod จริงผ่าน.
-- **บั๊คที่ post-deploy e2e จับสด**: legacy-token fallback ทำ backfill ติด branchId ผิด (300 docs) →
-  guard `source==='be_line_configs' OR fallback-branch-only` + sweep แล้ว + E1.3 lock → redeploy → 20/0.
-- AV213 both SKILL copies (SY1) · spec+plan HTML committed · checkpoint ยังไม่เขียน (รอ /session-end).
+- ① LINE Friend Picker: เลือก userId จากรายชื่อ real-time (แอด/ทักปุ๊ปโผล่ปั๊บ) — การ์ดสุขภาพ + ผูกลูกค้า;
+  bind mirror approve + audit + collision guard; Korat 2,087 คน pre-seeded (OA verified).
+- ② วันนี้·เสร็จแล้ว เรียง serviceCompletedAt desc (กดล่าสุดบนสุด) — L1 บน prod ผ่าน.
+- ③ AV214: มือถือค้าง-retry-ไม่หาย → timeboxed reconnect + ลองใหม่ escalate เป็น hard reload
+  (≤2 กดจบทุกกรณี) + `[conn-wedge]` telemetry เข้าการ์ดสุขภาพ.
+
+## What this session shipped
+- Detail ทั้งหมด: `.agents/sessions/2026-07-20-line-picker-donesort-wedgefix.md` (checkpoint)
+- AV213 + AV214 both SKILL copies (SY1) · Rule B probe #20 · COLLECTION_MATRIX be_line_friends
+- บั๊คที่ e2e จับสด 2 ตัว: legacy-token cross-branch backfill pollution (guard+sweep แล้ว) +
+  probe5 403 harness artifact (พิสูจน์ก่อน ไม่ revert มั่ว)
 
 ## Next action
-- User L1: เปิด picker จริง → ค้นชื่อเจ้าของจาก 2,087 คน → ผูก target → กด "ทดสอบแจ้งเตือน" (ปิด backlog เดิมด้วย).
-- แอดเพื่อนใหม่จริงจากมือถือ → ดูโผล่ใน picker (พิสูจน์ follow-event webhook เต็มทาง — ชิ้นเดียวที่เหลือ).
-- สาขาอื่นเปิด picker ครั้งแรก = backfill อัตโนมัติ (ถ้าสาขานั้นมี be_line_configs ของตัวเอง).
+- User L1: picker → ผูกเจ้าของ → "ทดสอบแจ้งเตือน" · แอดเพื่อน OA จริงจากมือถือ → ดูโผล่สด
+- พรุ่งนี้หลัง 07:30: `node scripts/diag-infra-health.mjs` (sweep ใหม่รอบแรก)
 
 ## Outstanding user-triggered actions
-- (ค้างเดิม) Desktop toast Windows + standing L1 stack (มือถือ/iPad) + laptop 10 ปี เปิด TFP เช็ค ratchet.
-- พรุ่งนี้หลัง 07:30: `node scripts/diag-infra-health.mjs` (health cron sweep ใหม่รอบแรก).
+- มือถือ: สังเกต 1-2 วัน — ค้างอีกต้องหายใน ≤2 กด + เช็ค [conn-wedge] ในการ์ดสุขภาพ
+- ค้างเดิม: desktop toast Windows · laptop 10 ปี TFP ratchet · standing L1 stack (มือถือ/iPad)
 
 ## ⚠️ Landmine — `scripts/trim-session-handoff.mjs` BUGGY (ห้ามรัน; trim มือเท่านั้น)
