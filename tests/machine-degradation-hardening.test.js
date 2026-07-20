@@ -86,6 +86,23 @@ describe('A — swrRun PARALLEL legs (slow disk must not delay the server truth)
     });
     expect(applies).toEqual(['SERVER']);
   });
+
+  it('A7 hunt-R1: a HUNG cache leg that settles AFTER the server ERRORS does NOT paint (no terminal stale over the caller error reset)', async () => {
+    // swrRun findings #1+#2: server rejects fast (rules/auth/index), consumer
+    // catch resets; the hung cache must NOT resurrect stale data as terminal.
+    const applies = [];
+    let releaseCache;
+    const cacheGate = new Promise((r) => { releaseCache = r; });
+    const p = swrRun({
+      cacheLoad: async () => { await cacheGate; return { hasData: true, data: 'STALE_CACHE' }; },
+      serverLoad: async () => { throw new Error('permission-denied'); },
+      apply: (d) => applies.push(d),
+    });
+    await expect(p).rejects.toThrow('permission-denied'); // caller's error path owns terminal state
+    releaseCache();                                        // late cache settle — must be a no-op
+    await new Promise((r) => setTimeout(r, 30));
+    expect(applies).toEqual([]);                           // NEVER painted stale after the server settled
+  });
 });
 
 describe('B — firebase.js IDB pre-flight probe (M7: sync-throwing IDB crashed the app)', () => {
@@ -107,14 +124,40 @@ describe('B — firebase.js IDB pre-flight probe (M7: sync-throwing IDB crashed 
   it('B3 persistence state is exported for the env beacon', () => {
     expect(FIREBASE).toMatch(/export const firestorePersistenceEnabled = canPersist;/);
   });
+
+  it('B4 hunt-R1: NOT a one-way ratchet — the flag must NOT early-return before the probe (else onsuccess never clears it)', () => {
+    // The old bug: `if (localStorage.getItem(IDB_BROKEN_FLAG) === '1') return false;`
+    // ran BEFORE indexedDB.open → the clearing onsuccess never fired → permanent
+    // memory-cache after one transient error. The probe must ALWAYS run.
+    expect(FIREBASE).not.toMatch(/getItem\(IDB_BROKEN_FLAG\) === '1'\) return false/);
+    // the flag now only decides THIS boot's return value; the probe still runs
+    expect(FIREBASE).toMatch(/let flagged = false;/);
+    expect(FIREBASE).toMatch(/return !flagged;/);
+    // structural: the open() call precedes the flagged-based return
+    const openIdx = FIREBASE.indexOf("indexedDB.open('lover-idb-preflight')");
+    const retIdx = FIREBASE.indexOf('return !flagged;');
+    expect(openIdx).toBeGreaterThan(-1);
+    expect(retIdx).toBeGreaterThan(openIdx);
+  });
 });
 
 describe('C — lazyRetry chokepoint (M10: offline chunk fetch crashed the whole app)', () => {
   it('C1 wrapper: retries then resolves the FALLBACK component (never rejects into the boundary)', () => {
     expect(LAZY).toMatch(/for \(let attempt = 0; attempt <= RETRIES/);
-    expect(LAZY).toMatch(/return \{ default: ChunkLoadFallback \};/);
+    expect(LAZY).toMatch(/return \{ default: \(\) => React\.createElement\(ChunkLoadFallback/);
     expect(LAZY).toMatch(/reportErrorToBeacon\(lastErr, \{ source: 'lazy-chunk' \}\)/);
     expect(LAZY).toMatch(/data-testid="chunk-load-retry"/);
+  });
+
+  it('C1b hunt-R1: fallback is a FIXED overlay (recovery never off-viewport) + DISMISSABLE + type-aware copy', () => {
+    // in-flow 40vh panel landed below the fold under fixed-overlay hosts (TFP,
+    // walk-in appt modal, StaffChatWidget) → recovery button off-screen.
+    expect(LAZY).toMatch(/position: 'fixed', inset: 0/);
+    expect(LAZY).toMatch(/data-testid="chunk-load-dismiss"/);
+    // network vs module-evaluation error → different copy (don't blame WiFi for a bad deploy)
+    expect(LAZY).toMatch(/function isNetworkChunkError/);
+    expect(LAZY).toMatch(/networkCause[\s\S]{0,20}\? 'การเชื่อมต่ออินเทอร์เน็ต/);
+    expect(LAZY).toMatch(/const networkCause = isNetworkChunkError\(lastErr\)/);
   });
 
   it('C2 every lazy host aliases lazyRetry as lazy (79 callsites untouched)', () => {

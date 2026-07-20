@@ -50,9 +50,17 @@ export const auth = getAuth(app);
 const IDB_BROKEN_FLAG = 'lover.idbBroken';
 function idbHealthy() {
   if (typeof indexedDB === 'undefined') return false;
-  try {
-    if (localStorage.getItem(IDB_BROKEN_FLAG) === '1') return false;
-  } catch { /* storage blocked — treat as healthy, probe below decides */ }
+  // AV212 hunt R1 fix (2026-07-20): the prior version early-RETURNED false when
+  // the flag was set, which SKIPPED the probe below — so its onsuccess
+  // (the ONLY code that clears the flag) never ran → one transient IDB error
+  // downgraded the machine to memory-cache FOREVER (a one-way ratchet, not a
+  // self-heal). Fix: ALWAYS run the probe (so a recovered machine clears the
+  // flag on success), and use the flag ONLY to decide THIS boot's cache mode.
+  // Net: flag set → memory-cache this session (safe) + probe clears it on
+  // success → NEXT boot recovers persistence (1-session-delayed self-heal).
+  let flagged = false;
+  try { flagged = localStorage.getItem(IDB_BROKEN_FLAG) === '1'; }
+  catch { /* storage blocked — treat as not-flagged; probe still decides */ }
   try {
     const req = indexedDB.open('lover-idb-preflight');
     req.onsuccess = () => {
@@ -61,7 +69,9 @@ function idbHealthy() {
     req.onerror = () => {
       try { localStorage.setItem(IDB_BROKEN_FLAG, '1'); } catch {}
     };
-    return true;
+    // A prior-boot failure → stay memory-cache THIS session; the probe above
+    // still runs and (on success) clears the flag for the next boot.
+    return !flagged;
   } catch {
     try { localStorage.setItem(IDB_BROKEN_FLAG, '1'); } catch {}
     return false;

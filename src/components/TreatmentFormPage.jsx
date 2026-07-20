@@ -1339,6 +1339,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             if (fpHistory) setTreatmentHistory(fpHistory);
           }
           setTfpSyncing(true);   // chip ON — enrichment (products/courses/DF) still loading
+          // AV212 hunt R1: the escape card + its 15s/30s timers are meaningful
+          // ONLY while `loading` (the card renders under `if (loading)`). Once
+          // fast-paint clears loading the card can never show, so cancel the
+          // timers here — otherwise sawTimeout/loadTimedOut fire behind the
+          // painted form and the slow-entry telemetry falsely reports
+          // "the escape card showed" on every slow-enrichment machine.
+          clearTimeout(timeoutTimer);
+          clearTimeout(stuckTimer);
           setLoading(false);     // ← PAINT (the ≤5s moment)
         } catch { /* fast-paint is best-effort — the full pipeline is the truth */ }
       })();
@@ -1395,7 +1403,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // money/stock serialization never runs against unconfirmed cache
           // options OR a half-restored hydration. .catch() so an abandoned
           // form can't unhandled-reject.
-          serverFreshRef.current = run.then(() => applyChain).catch(() => {});
+          // AV212 hunt R1: stale-guard the assignment — the NEW fast-paint race
+          // (Promise.race above) introduced an await between effect start and
+          // here, so a superseded run (branch switch / retry) could overwrite
+          // the LIVE run's save-gate handle with its own dead chain. Only the
+          // current run may own the ref.
+          if (!stale()) serverFreshRef.current = run.then(() => applyChain).catch(() => {});
           await run;        // server-leg errors surface via the catch below (Rule Q-honest)
           await applyChain; // hydration tail (post-await restores) completes before finally clears loading
         }

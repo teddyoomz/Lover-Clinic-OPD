@@ -22,8 +22,12 @@ let envReported = false;
 export function machineFacts() {
   try {
     const n = typeof navigator !== 'undefined' ? navigator : {};
-    const c = n.connection || {};
-    return `cores=${n.hardwareConcurrency ?? '?'} mem=${n.deviceMemory ?? '?'}GB net=${c.effectiveType || '?'}`;
+    // AV212 hunt R1: only STABLE per-device facts here. connection.effectiveType
+    // was dropped — it flaps (4g↔3g by measured RTT) on the exact weak-WiFi
+    // machines this reports on, giving each entry a new message → a new dedupe
+    // hash → the 5-min dedupe never collapsed repeats + burned the shared
+    // 20/session beacon budget. cores/mem are fixed per device → stable hash.
+    return `cores=${n.hardwareConcurrency ?? '?'} mem=${n.deviceMemory ?? '?'}GB`;
   } catch { return 'facts=unavailable'; }
 }
 

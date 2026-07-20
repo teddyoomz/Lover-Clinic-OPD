@@ -33,6 +33,7 @@ export default async function handler(req, res) {
         ua: x.ua || '',
         surface: x.surface || 'unknown',
         hash: x.hash || '',
+        kind: x.kind === 'telemetry' ? 'telemetry' : 'error', // AV212 hunt R1: keep the discriminator (viewer can label/filter telemetry vs real errors)
         createdAtMs: Number(x.createdAtMs) || 0,
       };
     });

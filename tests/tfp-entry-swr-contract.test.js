@@ -101,11 +101,14 @@ describe('AV208 C5 — chip honesty + orchestrator', () => {
     expect(fin).not.toMatch(/setTfpSyncing\(false\)/);
   });
   it('C5.4 swrRun wiring: cacheLoad + serverLoad + never-rejecting save-gate handle', () => {
-    const orch = slice('const run = swrRun({', 1100);
+    const orch = slice('const run = swrRun({', 1700);
     expect(orch).toMatch(/cacheLoad: async \(\)/);
     expect(orch).toMatch(/fetchFormData\('cache'\)/);
     expect(orch).toMatch(/serverLoad: \(\) => fetchFormData\(undefined\)/);
-    expect(orch).toMatch(/serverFreshRef\.current = run\.then\(\(\) => applyChain\)\.catch\(\(\) => \{\}\);/);
+    // AV212 hunt R1: stale-guarded assignment (a superseded run must not
+    // overwrite the live run's save-gate handle — the fast-paint race added an
+    // await before this point).
+    expect(orch).toMatch(/if \(!stale\(\)\) serverFreshRef\.current = run\.then\(\(\) => applyChain\)\.catch\(\(\) => \{\}\);/);
     expect(orch).toMatch(/await run;/);
   });
 

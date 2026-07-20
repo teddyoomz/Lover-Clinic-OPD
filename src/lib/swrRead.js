@@ -45,18 +45,34 @@ export async function swrRun({ cacheLoad, serverLoad, apply }) {
   // server-leg ERROR a late cache settle MAY still paint (graceful
   // degradation — same data the sequential form would have painted first).
   let paintedFromCache = false;
-  let serverApplied = false;
+  // AV212 hunt R1 fix (2026-07-20): guard on server SETTLED (resolve OR reject),
+  // not just applied. The prior version only set the flag on RESOLVE, so when
+  // the server leg REJECTED (fast: rules/auth/index errors — network-down serves
+  // cache, it doesn't reject), a still-hung cacheLoad could settle LATER and
+  // paint stale data as the TERMINAL state — reversing the consumer's error
+  // reset and sticking its syncing chip ON forever (swrRun findings #1+#2). Now
+  // once the server leg settles either way, a late cache settle is a no-op and
+  // the consumer's catch owns the terminal state (restores the old sequential
+  // guarantee without losing the parallel-start speed-up).
+  let serverSettled = false;
   const cacheLeg = (async () => {
     try {
       const c = await cacheLoad();
-      if (!serverApplied && c && c.hasData) {
+      if (!serverSettled && c && c.hasData) {
         apply(c.data, { fromCache: true });
         paintedFromCache = true;
       }
     } catch { /* cold cache / persistence unavailable — silent, server leg decides */ }
   })();
-  const fresh = await serverLoad(); // throws → caller's error path
-  serverApplied = true;
+  let fresh;
+  try {
+    fresh = await serverLoad(); // throws → caller's error path
+  } catch (e) {
+    serverSettled = true;       // suppress any late cache paint; caller's catch is terminal
+    cacheLeg.catch(() => {});
+    throw e;
+  }
+  serverSettled = true;
   // B1-fix (caught by the S1 Playwright spec): a network-down "server" getDocs
   // silently falls back to cache — the data layer tags such results with a
   // non-enumerable __fromCache so the syncing indicator stays HONEST.
