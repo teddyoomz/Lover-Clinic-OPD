@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>LINE Friend Picker + Done-tab Sort Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .flow-box { display: inline-block; background: #f0f4f8; border: 1px solid #b5d4f4; border-radius: 6px; padding: 5px 10px; font-size: 0.82em; margin: 2px; }
+    .flow-arrow { color: #dc2626; font-weight: bold; padding: 0 3px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; font-size: 0.9em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>LINE Friend Picker (Hybrid + Real-time) + Done-tab Sort — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline — subagents thrash on this baseline, V81/V86 lesson; fan-out ≤5 allowed for verify only). Spec: <code>docs/superpowers/specs/2026-07-20-line-friend-picker-and-done-sort-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ① เลือกผูก LINE userId จากรายชื่อเพื่อนแบบ real-time (การ์ดสุขภาพระบบ + ผูกลูกค้า) ② แท็บวันนี้·เสร็จแล้ว เรียงคนที่เพิ่งกดเสร็จบนสุด</p>
+  <p><strong>Architecture:</strong> Webhook เก็บ follow/unfollow → <code>be_line_friends</code> (admin SDK write, staff read) → client onSnapshot listeners (real-time) + endpoint backfill จาก Followers API (verified OA) ที่เขียนกลับเข้า <code>be_line_friends</code> เพื่อให้ listener เป็น render path เดียว. Bind = mirror link-requests approve. Sort = comparator ใหม่ตัวเดียวใน appointmentHubFilters.</p>
+  <p><strong>Tech Stack:</strong> Firebase client SDK (onSnapshot) + firebase-admin (webhook/endpoint) + LINE Messaging API (followers/ids + profile) + React + Vitest + Playwright</p>
+  <p><strong>Deploy:</strong> COMBINED vercel + firestore:rules (Probe-Deploy-Probe, Rule B) — user-gated เท่านั้น</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">be_line_friends doc shape · docId = `${branchId}_${lineUserId}`</div>
+<pre><code>{
+  lineUserId: "U4af4980629...",       // identity key (เสมอ)
+  displayName: "Oomz Peerapat",       // จาก profile API ตอน follow / refresh ตอน re-follow
+  pictureUrl: "https://profile.line-scdn.net/...",
+  branchId: "BR-1777873556815-26df6480",
+  branchIdSource: "webhook-line" | "webhook-line-fallback-hardcoded-nakhonratchasima",
+  source: "follow" | "followers-api", // ที่มาของ doc
+  followedAt: "2026-07-20T12:00:00.000Z" | null,   // ISO string (webhook convention) — null สำหรับ followers-api backfill
+  unfollowedAt: null | "2026-07-21T...",           // soft flag; re-follow เคลียร์กลับ null
+  updatedAt: "2026-07-20T12:00:00.000Z",
+}</code></pre>
+  <div class="mockup-label" style="margin-top:1em">UI mockups (4 states) — ดูในสเปค § Mockup Design (ก่อน/หลัง การ์ดสุขภาพ · picker modal · bind confirm · done-tab sort)</div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Real-time roster + bind + sort (สรุป — เต็มในสเปค § Flow A/B/C)</div>
+  <p>
+    <span class="flow-box">follow event</span><span class="flow-arrow">→</span>
+    <span class="flow-box">webhook line.js: resolve branch + profile API</span><span class="flow-arrow">→</span>
+    <span class="flow-box">admin SDK set be_line_friends/{branchId}_{userId}</span><span class="flow-arrow">→</span>
+    <span class="flow-box">client onSnapshot (staff read rule)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">แถวโผล่ใน LineFriendPickerModal ทันที</span>
+  </p>
+  <p>
+    <span class="flow-box">เปิด modal</span><span class="flow-arrow">→</span>
+    <span class="flow-box">POST /api/admin/line-friends action=list</span><span class="flow-arrow">→</span>
+    <span class="flow-box">followers/ids (403 → skip เงียบ)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">resolve profile เฉพาะ id ใหม่ (cap 300, conc 10)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">เขียนกลับ be_line_friends (source: followers-api)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">listener เดิม render (single data path)</span>
+  </p>
+  <p>
+    <span class="flow-box">เลือก (mode=bind) → confirm</span><span class="flow-arrow">→</span>
+    <span class="flow-box">action=bind: collision check → batch(customer update + audit) → LINE push</span><span class="flow-arrow">→</span>
+    <span class="flow-box">live customer listener สะท้อน "LINE ✓"</span>
+  </p>
+  <p>
+    <span class="flow-box">กดรับบริการเรียบร้อย</span><span class="flow-arrow">→</span>
+    <span class="flow-box">serviceCompletedAt stamp (V71 เดิม)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">HubView: tab=today + subPill=completed → sortApptsByServiceCompletedDesc</span><span class="flow-arrow">→</span>
+    <span class="flow-box">แถวขึ้นบนสุด</span>
+  </p>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/lineFriendRoster.js</code></td><td>Create</td><td>Pure helpers: decideFollowEventUpdate / mergeFriendRoster / searchRoster / friendMs (ใช้ทั้ง webhook + client — pattern lineBotResponder)</td></tr>
+  <tr><td><code>src/lib/appointmentHubFilters.js</code></td><td>Modify (append)</td><td>+ sortApptsByServiceCompletedDesc + svcCompletedMs</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubView.jsx:485-490</code></td><td>Modify</td><td>done sub-pill sort branch + import</td></tr>
+  <tr><td><code>api/webhook/line.js:743,777</code></td><td>Modify</td><td>follow/unfollow gate + handleFollowEvent (best-effort)</td></tr>
+  <tr><td><code>firestore.rules:~511</code></td><td>Modify</td><td>be_line_friends: read staff / write false</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>Modify (append)</td><td>listenToLineFriendsByBranch (BS-13 mirror ของ chat listener :3535)</td></tr>
+  <tr><td><code>src/lib/scopedDataLayer.js:~366</code></td><td>Modify</td><td>Layer-2 wrapper (mirror :359)</td></tr>
+  <tr><td><code>api/admin/line-friends.js</code></td><td>Create</td><td>action=list (followers backfill) + action=bind (mirror link-requests approve + audit)</td></tr>
+  <tr><td><code>src/components/backend/LineFriendPickerModal.jsx</code></td><td>Create</td><td>Shared picker: 2 listeners + backfill trigger + search + AV78 + scroll-lock</td></tr>
+  <tr><td><code>src/components/backend/InfraHealthSection.jsx:288-314</code></td><td>Modify</td><td>ปุ่มเลือกจากรายชื่อ per target row</td></tr>
+  <tr><td><code>src/components/backend/LinkLineInstructionsModal.jsx (UNLINKED state)</code></td><td>Modify</td><td>ปุ่ม "ผูกจากรายชื่อเพื่อน LINE" → picker mode=bind</td></tr>
+  <tr><td><code>tests/branch-collection-coverage.test.js</code></td><td>Modify</td><td>COLLECTION_MATRIX + be_line_friends</td></tr>
+  <tr><td><code>.claude/rules/01-iron-clad.md</code> Rule B</td><td>Modify</td><td>Probe #20: be_line_friends anon read/write → denied</td></tr>
+  <tr><td><code>tests/line-friend-roster.test.js · tests/hub-done-sort-service-completed.test.js · tests/line-friends-webhook-follow.test.js · tests/line-friends-listener-bsa.test.js · tests/line-friends-endpoint.test.js · tests/line-friend-picker-rtl.test.jsx · tests/line-friends-flow-simulate.test.js</code></td><td>Create</td><td>Test bank (unit / source-grep / RTL / Rule I)</td></tr>
+  <tr><td><code>scripts/e2e-line-friends-realtime.mjs</code> · <code>tests/e2e/line-friend-picker.spec.js</code> · <code>tests/e2e/hub-done-sort.spec.js</code></td><td>Create</td><td>Rule Q L2 (real client SDK realtime + bind) + L1 Playwright</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: Pure lib — lineFriendRoster.js (TDD)</h3>
+<p><strong>Files:</strong> Create <code>src/lib/lineFriendRoster.js</code> + <code>tests/line-friend-roster.test.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: เขียน failing tests ก่อน</strong> — กลุ่ม R1 <code>decideFollowEventUpdate({eventType, existing, profile, branchId, branchIdSource, nowIso})</code>: new-follow (สร้าง doc เต็ม) / re-follow (เคลียร์ unfollowedAt + refresh ชื่อ/รูป — ห้าม downgrade followedAt เดิม) / unfollow-existing (merge unfollowedAt เท่านั้น — ชื่อ/รูปเดิมคงไว้) / unfollow-unknown (สร้าง stub พร้อม unfollowedAt — กัน orphan) / profile fetch ล้มเหลว (displayName fallback = userId). กลุ่ม R2 <code>mergeFriendRoster({friends, conversations})</code>: dedupe ด้วย lineUserId (conv "line_U..." → strip prefix "line_") / badge source: มี conv = 'chat' ชนะ / ชื่อ-รูปใช้ตัว updatedAt/lastMessageAt ใหม่กว่า / unfollowed flag ติดมา / sort: ล่าสุดก่อน (max(lastMessageAt, followedAt, updatedAt)). กลุ่ม R3 <code>searchRoster(rows, q)</code>: Thai/emoji/space/case-insensitive/userId substring. Adversarial: null/undefined fields, ชื่อ 500 ตัว, NUL, ซ้ำ 2 branch.</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>npx vitest run tests/line-friend-roster.test.js</code> → FAIL (module not found)</div>
+<div class="step"><input type="checkbox"> <strong>Step 3: implement</strong> — pure JS ล้วน (ห้าม import react/firebase — V36.G.51-class):</div>
+<pre><code>// src/lib/lineFriendRoster.js — pure helpers (ใช้ทั้ง api/webhook + client UI)
+export function decideFollowEventUpdate({ eventType, existing, profile, branchId, branchIdSource, nowIso }) {
+  // returns { fields } to merge-set — never returns undefined leaves (V14)
+}
+export function conversationToRosterRow(conv) { /* line_U → U strip; platform==='line' only */ }
+export function mergeFriendRoster({ friends = [], conversations = [] }) { /* → [{lineUserId, displayName, pictureUrl, source, unfollowed, sortMs, branchId}] */ }
+export function searchRoster(rows, q) { /* trim/lower includes on displayName + lineUserId */ }</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> rerun → PASS ทั้งไฟล์</div>
+<div class="step"><input type="checkbox"> <strong>Step 5:</strong> <code>git add + git commit -m "feat(line-friends): pure roster helpers (TDD)"</code> + push</div>
+</div>
+
+<div class="task">
+<h3>Task 2: Feature ② — done-tab sort (TDD, ปิดจบในตัว)</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/appointmentHubFilters.js</code> (append) · <code>src/components/admin/AppointmentHubView.jsx:30,485-489</code> · Create <code>tests/hub-done-sort-service-completed.test.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: failing tests</strong> — S1 comparator: Timestamp{toMillis} / {seconds,nanoseconds} / Date / ISO string / number / null (null ลงล่างสุด) / desc order / stable / ไม่ mutate input. S2 source-grep: HubView วันนี้+completed ใช้ comparator ใหม่; branch เดิม (confirmedFirst/past-desc/asc) ยังอยู่ครบ 3 ตัว (กัน silent regression)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> run → FAIL</div>
+<div class="step"><input type="checkbox"> <strong>Step 3: implement comparator</strong> ใน appointmentHubFilters.js:</div>
+<pre><code>export function svcCompletedMs(v) {
+  if (!v) return 0;
+  if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch { return 0; } }
+  if (typeof v.seconds === 'number') return v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6);
+  if (v instanceof Date) return v.getTime();
+  const ms = typeof v === 'number' ? v : Date.parse(v);
+  return Number.isFinite(ms) ? ms : 0;
+}
+export function sortApptsByServiceCompletedDesc(appts) {
+  if (!Array.isArray(appts)) return [];
+  return [...appts].sort((a, b) => svcCompletedMs(b?.serviceCompletedAt) - svcCompletedMs(a?.serviceCompletedAt));
+}</code></pre>
+<p>HubView:485-489 → เพิ่ม branch แรกสุด (import ใน block :30):</p>
+<pre><code>return activeTab === 'today' && todaySubPill === 'completed'
+  ? sortApptsByServiceCompletedDesc(scoped)
+  : activeTab === 'today'
+    ? sortApptsConfirmedFirst(scoped)
+    : activeTab === 'past'
+      ? sortApptsByDateTimeDesc(scoped)
+      : sortApptsByDateTimeAsc(scoped);</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> new file PASS + targeted collateral: <code>npx vitest run tests/hub-done-sort-service-completed.test.js "tests/**appointment-hub*"</code> (ทุกไฟล์ hub เดิมต้องเขียว — กำลังรอ/แท็บอื่นไม่แตะ)</div>
+<div class="step"><input type="checkbox"> <strong>Step 5:</strong> commit "feat(hub): done sub-pill sorts by serviceCompletedAt desc" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 3: Webhook follow/unfollow capture</h3>
+<p><strong>Files:</strong> Modify <code>api/webhook/line.js</code> (:743 gate + handler หลัง config-resolve :777) · Create <code>tests/line-friends-webhook-follow.test.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: failing source-grep + unit tests</strong> — W1: gate :743 ยอมรับ 'follow'/'unfollow' (join/leave ยัง ignore); W2: follow branch อยู่ AFTER config resolution + BEFORE chat message path + ห่อ try/catch + return (ไม่ไหลลง chat path); W3: doc path = <code>be_line_friends/${chatBranchId}_${userId}</code> + ใช้ resolveChatFallbackBranchId (V78 BUG-XR-24 class); W4: unfollow ไม่เรียก profile API (ประหยัด + ไม่จำเป็น); W5: message pipeline เดิม verbatim (anchor: adminChatSet convPath ยังอยู่, maybeEmitBotReply ยังอยู่)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> run → FAIL</div>
+<div class="step"><input type="checkbox"> <strong>Step 3: implement</strong> — :743 <code>if (!['message','postback','follow','unfollow'].includes(event.type)) return;</code> แล้วเพิ่มหลัง config-resolve (mirror postback branch):</div>
+<pre><code>// LINE Friend Picker (2026-07-20) — follow/unfollow roster capture. Best-effort:
+// throw ใดๆ ห้ามกระทบ message pipeline (return ก่อน chat path เสมอ)
+if (event.type === 'follow' || event.type === 'unfollow') {
+  try {
+    const db = getAdminFirestore();
+    const FALLBACK = resolveChatFallbackBranchId(process.env.LOVER_DEFAULT_BRANCH_ID);
+    const friendBranchId = branchId || FALLBACK;
+    const friendBranchIdSource = branchId ? 'webhook-line'
+      : (process.env.LOVER_DEFAULT_BRANCH_ID ? 'webhook-line-fallback-nakhonratchasima' : 'webhook-line-fallback-hardcoded-nakhonratchasima');
+    const ref = db.doc(`artifacts/${APP_ID}/public/data/be_line_friends/${friendBranchId}_${userId}`);
+    const existingSnap = await ref.get();
+    const profile = event.type === 'follow' ? await getLineProfile(userId, config.channelAccessToken) : null;
+    const { fields } = decideFollowEventUpdate({
+      eventType: event.type, existing: existingSnap.exists ? existingSnap.data() : null,
+      profile, branchId: friendBranchId, branchIdSource: friendBranchIdSource,
+      nowIso: new Date().toISOString(),
+    });
+    await ref.set({ lineUserId: userId, ...fields }, { merge: true });
+  } catch (err) {
+    console.warn('[line-webhook] follow handler failed:', err?.message || err);
+  }
+  return;
+}</code></pre>
+<p>+ import <code>decideFollowEventUpdate</code> from <code>../../src/lib/lineFriendRoster.js</code> (pattern เดียวกับ lineBotResponder import :34)</p>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> new tests PASS + targeted collateral: ทุกไฟล์เทสที่ grep เจอ <code>webhook/line</code> (v67/v75/v78 banks) ต้องเขียว</div>
+<div class="step"><input type="checkbox"> <strong>Step 5:</strong> commit "feat(line-friends): webhook follow/unfollow roster capture" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 4: firestore.rules + COLLECTION_MATRIX + Probe #20</h3>
+<p><strong>Files:</strong> Modify <code>firestore.rules:~511</code> (หลัง be_line_configs) · <code>tests/branch-collection-coverage.test.js</code> · <code>.claude/rules/01-iron-clad.md</code> Rule B · Create rules-shape asserts ในไฟล์เทส Task 3</p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> failing test — rules source-grep: match /be_line_friends มี read isClinicStaff + write false; BC1.1 matrix มี be_line_friends</div>
+<div class="step"><input type="checkbox"> <strong>Step 2: implement rules</strong>:</div>
+<pre><code>      // LINE Friend Picker (2026-07-20) — follower roster per branch. Webhook
+      // (admin SDK) is the ONLY writer; staff read for the real-time picker
+      // listener. Client write DENIED — Rule B probe #20.
+      match /be_line_friends/{friendId} {
+        allow read: if isClinicStaff();
+        allow write: if false;
+      }</code></pre>
+<p>+ COLLECTION_MATRIX entry (scope: branch) + Rule B probe #20 (curl anon GET/POST → 403) ใน 01-iron-clad.md</p>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> tests PASS + <code>npx vitest run tests/branch-collection-coverage.test.js</code> เขียวทั้งไฟล์</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> commit "feat(line-friends): be_line_friends rules (staff read / deny write) + probe #20" + push — <em>ห้าม deploy rules ที่นี่</em></div>
+</div>
+
+<div class="task">
+<h3>Task 5: Client listener (BSA Layer 1+2)</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> (append ใกล้ :3559) · <code>src/lib/scopedDataLayer.js:~366</code> · Create <code>tests/line-friends-listener-bsa.test.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: failing tests</strong> — L1: safe-by-default (branchId ว่าง + !allBranches → onChange([]) + noop unsub — BS-13); L2: explicit branchId → where('branchId','==',...) equality เท่านั้น (<strong>ห้าม orderBy</strong> — กัน composite-index dependency; sort ฝั่ง client ใน mergeFriendRoster); L3: wrapper auto-inject resolveSelectedBranchId (mirror :359-366); L4: V38 spread-order <code>{ ...d.data(), id: d.id }</code></div>
+<div class="step"><input type="checkbox"> <strong>Step 2: implement</strong> — copy shape จาก listenToChartTabletPresenceByBranch :3574-3590 เปลี่ยนชื่อ collection + docstring BS-13; wrapper ใน scopedDataLayer copy :359-366</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> PASS + <code>npx vitest run tests/audit-branch-scope.test.js</code> (BSA audit ต้องเขียว — listener ใหม่ตาม pattern)</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> commit "feat(line-friends): listenToLineFriendsByBranch (BS-13) + Layer-2 wrapper" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 6: Endpoint /api/admin/line-friends (list backfill + bind)</h3>
+<p><strong>Files:</strong> Create <code>api/admin/line-friends.js</code> · <code>tests/line-friends-endpoint.test.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: failing tests</strong> (pattern v75-fb-test-endpoint: mock apiFetch + admin db) — E1 list: followers/ids 403 → <code>{followersApi:'unavailable', backfilled:0}</code> ไม่ throw; E2 list: 200 → pagination ตาม <code>next</code> token (cap 5 หน้า) → รู้จักแล้ว (มี doc be_line_friends/conv) ข้าม → unknown resolve profile (concurrency ≤10, cap 300) → เขียน be_line_friends source='followers-api' followedAt=null; E3 list: module-cache 60s/branch (เรียกซ้ำใน 60s → LINE API 0 calls); E4 bind: collision (userId ผูกลูกค้าอื่น) → throw Thai + ศูนย์ write; E5 bind: happy path → batch มี customer update (lineUserId + lineLinkedAt + lineDisplayName + lineUserId_byBranch.{branchId} dotted-path — shape ตรง handleApprove :155-175 เป๊ะ) + audit doc <code>be_admin_audit/line-friend-bind-*</code> {customerId, lineUserId, branchId, source:'friend-picker', performedBy, performedAt} + pushLineMessage best-effort (fail ไม่ throw); E6 auth: no token → 401/403 (verifyAdminToken — gate parity กับ link-requests byte-for-byte); E7 bind: customer ไม่มีจริง → throw "ลูกค้าถูกลบจากระบบ"</div>
+<div class="step"><input type="checkbox"> <strong>Step 2: implement</strong> — โครงไฟล์ mirror <code>api/admin/link-requests.js</code>: verifyAdminToken + getAdminFirestore + getLineTokenForBranch (resolveLineConfigForAdmin) + pushLineMessage + apiFetch. handleBind = copy handleApprove :121-193 ตัดส่วน request-doc ออก + เพิ่ม audit doc (crypto.randomBytes id) + <code>lineDisplayName</code> จาก body. handleListBackfill:</div>
+<pre><code>async function fetchFollowerIds(token) {
+  const ids = []; let next = '';
+  for (let page = 0; page < 5; page++) {
+    const url = `https://api.line.me/v2/bot/followers/ids?limit=1000${next ? `&start=${next}` : ''}`;
+    const res = await apiFetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 403) return { available: false, ids: [] };   // unverified OA — expected
+    if (!res.ok) return { available: false, ids: [] };
+    const body = await res.json();
+    ids.push(...(body.userIds || []));
+    if (!body.next) break; next = body.next;
+  }
+  return { available: true, ids };
+}</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> tests PASS + build clean (<code>npm run build</code> — vercel fn ไม่เข้า vite bundle แต่ node --check)</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> commit "feat(line-friends): admin endpoint — followers backfill + picker bind (mirror approve)" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 7: LineFriendPickerModal (shared)</h3>
+<p><strong>Files:</strong> Create <code>src/components/backend/LineFriendPickerModal.jsx</code> · <code>tests/line-friend-picker-rtl.test.jsx</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: failing RTL tests</strong> — P1: mount → 2 listeners subscribe (mock scopedDataLayer) + backfill fetch ยิง 1 ครั้ง; P2: listener ยิงเพิ่มระหว่างเปิด → แถวใหม่ render (real-time contract ระดับ component); P3: search กรอง; P4: กดเลือก → onPick(row) ถูก payload; P5: mode='bind' → confirm dialog ก่อน (ชื่อไลน์ + ชื่อลูกค้า+HN) → ยืนยัน → onPick; P6: AV78 backdrop click ไม่ปิด + มี X + useModalScrollLock; P7: unmount → unsubscribe ทั้งคู่ (leak guard); P8: branch switch ใน dropdown → resubscribe; P9: empty state Thai copy; P10: unfollowed row จาง + badge "เลิกติดตาม"</div>
+<div class="step"><input type="checkbox"> <strong>Step 2: implement</strong> — props <code>{open, branchId, mode='pick', customer=null, onPick, onClose}</code>; ภายใน: useState branch (default prop→resolveSelectedBranchId), useEffect×2 listeners (deps [branch]) → mergeFriendRoster + searchRoster; backfill: adminFetch POST /api/admin/line-friends {action:'list', branchId} once per open+branch (best-effort — ผลไปทาง listener); ธีม dark ตาม mockup (bg-[var(--bg-base)] + แถว bg-[var(--bg-hover)] + avatar initial fallback เมื่อ pictureUrl ว่าง — <strong>ห้ามแดงบนชื่อ</strong> per 04-thai-ui)</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> RTL PASS</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> commit "feat(line-friends): shared LineFriendPickerModal" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 8: Integrate — InfraHealthSection + LinkLineInstructionsModal</h3>
+<p><strong>Files:</strong> Modify <code>src/components/backend/InfraHealthSection.jsx</code> (:288-314 + import + state) · <code>src/components/backend/LinkLineInstructionsModal.jsx</code> (UNLINKED block :223-264 + import) · Extend RTL ไฟล์ Task 7 หรือไฟล์ใหม่ <code>tests/line-friend-picker-integration-rtl.test.jsx</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: failing tests</strong> — I1: การ์ดสุขภาพ target row มีปุ่ม data-testid <code>infra-line-target-pick-{i}</code> → เปิด picker (branchId จากแถว; แถวยังไม่เลือกสาขา → default) → onPick เติม lineUserId + label(ถ้าว่าง=displayName) + branchId(ถ้าว่าง=row ที่เลือกใน picker); I2: LinkLineInstructionsModal UNLINKED มีปุ่ม <code>pick-from-friends-btn</code> → picker mode=bind → success → onActionSuccess({action:'bind-picker'}) + success copy; I3: AV211 bank เดิมของ InfraHealthSection เขียวหมด (ไม่แตะ save path); I4: LinkLineInstructionsModal เดิม (suspend/resume/unlink + ACTIVE state) เขียวหมด</div>
+<div class="step"><input type="checkbox"> <strong>Step 2: implement</strong> — infra: <code>const [pickerRow, setPickerRow] = useState(null)</code> + ปุ่ม + <code>&lt;LineFriendPickerModal open={pickerRow!=null} ... onPick={(row)=>{ setTarget(pickerRow,'lineUserId',row.lineUserId); ... }}/&gt;</code>; instructions modal: ปุ่มใต้ instructions box + picker + bind ผ่าน adminFetch action=bind → setSuccess/setError</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> ทุก RTL PASS + targeted: ไฟล์เทสเดิมที่ import 2 components นี้เขียวหมด (grep -l ใน tests/)</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> commit "feat(line-friends): wire picker into infra-health targets + customer link modal" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 9: Rule I flow-simulate bank</h3>
+<p><strong>Files:</strong> Create <code>tests/line-friends-flow-simulate.test.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> F1 chain แอด: follow event → decideFollowEventUpdate → doc shape → mergeFriendRoster → search → pick → bind payload → customerUpdate shape (dotted-path key ตรง handleApprove) — ทุก step ใช้ helper จริง; F2 chain ทัก: conv doc (REST shape จริงจาก webhook) → conversationToRosterRow → merge dedupe กับ friend doc คนเดียวกัน = 1 แถว badge 'chat'; F3 re-follow lifecycle: follow→unfollow→follow → doc สุดท้าย unfollowedAt=null + ชื่อใหม่; F4 adversarial: 2 สาขาคนเดียวกัน = คนละ doc คนละ picker; Thai+emoji ชื่อ; profile ล้ม → userId fallback; F5 no-undefined-leaves ทุก write path (V14); F6 done-sort chain: markServiceCompleted stamp → filter completed → sort → ใหม่สุดบนสุด (ใช้ applyTabFilter + comparator จริง)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> PASS ทั้ง bank</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> commit "test(line-friends): Rule I flow-simulate bank" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 10: Rule Q L2 — real prod client-SDK realtime + bind e2e</h3>
+<p><strong>Files:</strong> Create <code>scripts/e2e-line-friends-realtime.mjs</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: เขียน script</strong> (Rule R env + TEST- prefix + cleanup zero-orphan + audit):
+Phase A realtime: client SDK signIn (E2E staff creds — pattern e2e-mobile-load-coldstart.mjs) → เปิด onSnapshot listener query จริงที่ UI ใช้ (where branchId==TEST-BR) → admin SDK เขียน TEST- friend doc → <strong>assert listener fires ภายใน 5s พร้อม doc ใหม่</strong> (คือ acceptance #1/#2 ของจริง) → เขียน doc ที่ 2 (unfollow merge) → assert fires อีกครั้ง;
+Phase B security: client SDK เขียน be_line_friends → assert PERMISSION_DENIED (rules write false — ต้องรันหลัง rules deploy; pre-deploy โหมด <code>--pre-rules</code> ข้าม assert นี้พร้อม log ตรงๆ);
+Phase C bind: import handler <code>api/admin/line-friends.js</code> ตรง (pattern endpoint-import e2e) + TEST- customer → bind → อ่าน customer doc จริง assert lineUserId + byBranch map + audit doc มีจริง → bind ซ้ำกับลูกค้า TEST- คนที่ 2 → assert Thai collision error + ศูนย์ write;
+Phase D follow-handler: เรียก logic follow บน real admin db (mock profile fetch) → doc จริงถูกต้อง → cleanup ทุก TEST- + verify zero orphan</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>node scripts/e2e-line-friends-realtime.mjs</code> → ALL PASS (log ตัวเลขจริงทุก phase; Phase B ระบุโหมด)</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> commit "test(line-friends): Rule Q L2 realtime+bind e2e vs real prod" + push</div>
+</div>
+
+<div class="task">
+<h3>Task 11: Rule Q L1 — Playwright real browser</h3>
+<p><strong>Files:</strong> Create <code>tests/e2e/line-friend-picker.spec.js</code> + <code>tests/e2e/hub-done-sort.spec.js</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1: picker spec</strong> (helpers.js auth-inject + deep-link) — เปิด SystemSettingsTab → การ์ดสุขภาพ → เพิ่ม target → กดเลือกจากรายชื่อ → modal โชว์รายชื่อจริงจาก prod (มีอย่างน้อยแถวจากแชทจริง) → <strong>ระหว่าง modal เปิด</strong> admin SDK seed TEST- friend doc → <code>expect(row).toBeVisible()</code> โดยไม่ reload (real-time L1 จริง) → เลือก → assert input เติมค่า → cleanup TEST- doc + screenshot Q-vis</div>
+<div class="step"><input type="checkbox"> <strong>Step 2: done-sort spec</strong> — seed TEST-APPT-×3 วันนี้ (V33.13 prefix) เวลานัด 09:00/10:30/13:00 → mark completed ตามลำดับ B,A,C (ผ่าน UI ปุ่มจริง "รับบริการเรียบร้อย" ใน กำลังรอ) → เปิด sub-pill เสร็จแล้ว → assert ลำดับ DOM = C,A,B (กดล่าสุดบนสุด) → กด "↩ กลับไปคิวรอ" C → เสร็จแล้วเหลือ A,B ลำดับถูก → cleanup + screenshot</div>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> <code>npx playwright test tests/e2e/line-friend-picker.spec.js tests/e2e/hub-done-sort.spec.js</code> → PASS (0 fail) — ดู screenshot ด้วยตาจริง (Q-vis)</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> commit + push</div>
+</div>
+
+<div class="task">
+<h3>Task 12: Batch-end gate — full suite + build + collateral sweep + docs</h3>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> <code>npm test -- --run</code> FULL suite → 0 fail (Rule P/N batch-end; V21 lock-in ที่โผล่ = แก้ตาม invariant-not-literal)</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>npm run build</code> → clean</div>
+<div class="step"><input type="checkbox"> <strong>Step 3: silent-regression sweep</strong> — targeted rerun: chat family (v75/v76 banks) + webhook line banks + AV211 infra bank + hub/appointment banks + link-requests bank + audit-branch-scope + branch-collection-coverage → เขียวหมด</div>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> อัพเดท docs: AVxx invariant ใหม่ (follow-capture + picker single-source contract) ทั้ง 2 SKILL copies (SY1 verbatim) + V-entry/checkpoint + active.md + SESSION_HANDOFF (ผ่าน session-end ตอนจบ)</div>
+<div class="step"><input type="checkbox"> <strong>Step 5:</strong> commit + push. <strong>STOP — ไม่ deploy.</strong> Deploy = combined vercel + firestore:rules + Probe-Deploy-Probe (probe เดิมทั้งหมด + #20) + post-deploy: L2 Phase B โหมดเต็ม + user แอดเพื่อนจริง → โผล่ใน picker + ตั้ง target + ทดสอบแจ้งเตือน</div>
+</div>
+
+<h2>Post-deploy verification (user-gated — รอคำสั่ง "deploy")</h2>
+<ol>
+  <li>Probe-Deploy-Probe เต็มขั้น (Rule B): probe 1,5,6,7,8,9,12,15-19 + <strong>#20 ใหม่</strong> (anon read/write be_line_friends → denied)</li>
+  <li><code>node scripts/e2e-line-friends-realtime.mjs</code> โหมดเต็ม (Phase B client-write-denied ต้องผ่านจริง)</li>
+  <li>User L1: มือถือแอด LINE OA จริง → ชื่อโผล่ใน picker ทันที; ทักแชท → โผล่; เลือกผูกเจ้าของ → save → กด "ทดสอบแจ้งเตือน" → LINE เด้งจริง</li>
+</ol>
+
+</body>
+</html>
