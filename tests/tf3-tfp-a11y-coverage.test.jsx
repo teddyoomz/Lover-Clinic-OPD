@@ -81,7 +81,9 @@ describe('TF3 — TreatmentFormPage a11y wiring', () => {
       // window bumped 2500 → 4000 chars. V21-class regex fixup (Phase 26.1c).
       // setFieldErrors({}) early-clear contract preserved.
       // V104 (2026-05-19): 2nd param renamed options→submitOpts (shadowed React state).
-      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*(?:,\s*submitOpts\s*=\s*\{\s*\}\s*)?\)[\s\S]{0,4000}?setFieldErrors\(\{\}\)/);
+      // 2026-07-21: window 4000→6000 — AV212 R2 enrichment/money-gate prelude
+      // grew the declaration→early-clear distance to 4,168 chars (measured).
+      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*(?:,\s*submitOpts\s*=\s*\{\s*\}\s*)?\)[\s\S]{0,6000}?setFieldErrors\(\{\}\)/);
       expect(m).toBeTruthy();
     });
   });

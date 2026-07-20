@@ -26,7 +26,9 @@ describe('Phase 26.0 — Status display RTL', () => {
       // immediately above its <div> opener (sanity check the removal landed).
       const btnIdx = TFP_SOURCE.indexOf('tfp-doctor-save-btn');
       expect(btnIdx).toBeGreaterThan(-1);
-      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 600), btnIdx);
+      // 2026-07-21: window 600→800 — AV212 R2 (00ad1766) grew the disabled
+      // attr (optionsEnriched money gate) → marker fell past the old window.
+      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 800), btnIdx);
       // Old conditional gate must NOT appear immediately above
       expect(before).not.toMatch(/\(\s*!isEdit\s*\|\|\s*loadedTreatmentStatus\s*===\s*['"]vitalsigns-recorded['"]\s*\)\s*&&\s*\(\s*\n\s*<div/);
       // Phase 27.2-bis marker comment present

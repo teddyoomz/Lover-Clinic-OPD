@@ -271,7 +271,11 @@ describe('V136.LOCK mirror gates are locked to real TreatmentFormPage source', (
     expect(m.length).toBe(2);
   });
   it('L7 double-submit guard — save button disabled while saving', () => {
-    expect(TFP).toMatch(/onClick=\{canEditCourseUsageRetro \? \(\) => handleSubmit\('course'\) : handleSubmit\}\s*\n\s*disabled=\{saving\}/);
+    // 2026-07-21 repoint: AV212 R2 (00ad1766) extended the disabled gate with
+    // the optionsEnriched money guard (create-mode save blocked until the full
+    // options pipeline lands — V43-class protection). `saving` still leads =
+    // the double-submit contract this test locks, now WITH the money gate.
+    expect(TFP).toMatch(/onClick=\{canEditCourseUsageRetro \? \(\) => handleSubmit\('course'\) : handleSubmit\}\s*\n\s*disabled=\{saving \|\| \(!isEdit && !optionsEnriched\)\}/);
   });
   it('L8 deductCourseItems call passes treatmentId/staffId/staffName (no branchId — branch-agnostic)', () => {
     // 2026-06-09 — staffName = the OPD editor (editorContext), not the doctor.

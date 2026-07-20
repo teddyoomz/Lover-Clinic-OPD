@@ -141,7 +141,10 @@ describe('F6-F7 — rules + BSA bookkeeping', () => {
   it('F6.2 Rule B probe #19 ลงทะเบียนแล้ว', () => {
     const ironClad = fs.readFileSync(path.resolve('.claude/rules/01-iron-clad.md'), 'utf8');
     expect(ironClad).toContain('be_opd_note_templates?documentId=test-probe-opdt-');
-    expect(ironClad).toMatch(/รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19 ซ้ำ/);
+    // 2026-07-21 repoint: probe #20 (be_line_friends) joined the list on
+    // 2026-07-20 NIGHT — assert probe 19 IS in the re-run list without
+    // freezing the full enumeration (future probes extend it again).
+    expect(ironClad).toMatch(/รัน probe 1, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19(?:, \d+)* ซ้ำ/);
   });
 
   it('F7 BC1.1 matrix classify เป็น branch-spread', () => {

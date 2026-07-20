@@ -289,7 +289,10 @@ describe('Phase 26.0 — Rule I full-flow simulate', () => {
       // from D1.3 in phase-26-0-status-display-rtl.test.jsx.
       const btnIdx = TFP_SOURCE.indexOf('tfp-doctor-save-btn');
       expect(btnIdx).toBeGreaterThan(-1);
-      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 600), btnIdx);
+      // 2026-07-21: window 600→800 — AV212 R2 (00ad1766) grew the disabled
+      // attr to `saving || (!isEdit && !optionsEnriched)` which pushed the
+      // Phase 27.2-bis marker past the old window (V21 fixed-window churn).
+      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 800), btnIdx);
       // Old conditional gate must NOT appear immediately above
       expect(before).not.toMatch(/\(\s*!isEdit\s*\|\|\s*loadedTreatmentStatus\s*===\s*['"]vitalsigns-recorded['"]\s*\)\s*&&\s*\(\s*\n\s*<div/);
       // Phase 27.2-bis marker comment present near button
