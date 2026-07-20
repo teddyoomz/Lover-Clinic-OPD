@@ -116,8 +116,25 @@ cache ใน mock เพื่อคง intent "cache paints first") + hardening
 - CPU×20 คือ paranoia band (Atom/Celeron); i5-8257U อยู่ ~×2-4.
 - Slow-IDB sim = open-delay proxy (ไม่ wrap transaction reads) — CPU throttle ครอบพฤติกรรมจริงแทน.
 
+## Hunt loop (หลัง deploy 57347648 — ผู้ใช้อนุญาต agent ≤5/รอบ แล้วสลับ inline เพราะใกล้ limit)
+- **R1 (5-lens Workflow)**: 2 major confirmed — (1) save/buy ระหว่าง fast-paint window
+  serialize เงินจาก minimal subset (skip-flag ไม่มี V43 overlay / dfEntries=[] /
+  15s save-gate < enrichment 14-35s + stale closure); (2) buy-in-window แถวถูก
+  enrichment setOptions ทับหาย → mis-target/no-deduct (V101-class). Fix `53103321`:
+  NEW `optionsEnriched` gate (set โดย full apply เท่านั้น) คุม save+buy; ฟอร์มยัง paint
+  ≤5s (ดู/พิมพ์/vitals ได้). + R1 batch `7e0f12d0` (idb-ratchet, swr late-cache no-op,
+  lazy overlay panel + minors). L1 mega-l1 2/2.
+- **R2 (inline)**: vitals save EXEMPT จาก gate (path ข้ามเงินทุก block — สถานี vitals คือ
+  ลูกค้าหลักของ fast-paint; doctor-save ยัง gate เพราะเขียน DF) · ปุ่ม staff save หลัก
+  เพิ่ม disabled ให้ครบ · **painted-form enrichment escape**: fast-paint เลิก clear
+  escape timers; enrichment ค้าง >30s → banner `tfp-enrich-stuck-banner` + ลองใหม่
+  (reconnect contract เดิม) — ปุ่มเงินไม่มีทางเทาค้างถาวร. Fix `00ad1766`. F7/F8 locks;
+  full vitest เขียว; mega-l1 2/2.
+
 ## Next
-1. Full-matrix local re-run green + full vitest green → commit + push.
-2. User สั่ง "deploy" → หลัง deploy: เปิด TFP บน mini PC จริง 1 ครั้ง → ดู health card
-   error viewer → จะเห็น [tfp-slow]/[client-env] ระบุสาเหตุเครื่องนั้น.
-3. (ยังค้างจากเช้า) user L1 การ์ดสุขภาพระบบ: LINE target + ทดสอบแจ้งเตือน.
+1. **⚠️ DEPLOY PENDING — prod ตอนนี้ = `57347648` (fast-paint ไม่มี money-gate!)**
+   → hazard R1 ยัง live บน prod (window เล็กบนเครื่องเร็ว แต่เป็น money-class);
+   3 commits fix (`53103321`+`7e0f12d0`+`00ad1766`) รอ user สั่ง "deploy".
+2. หลัง deploy: เปิด TFP บน mini PC จริง 1 ครั้ง → ดู health card → [tfp-slow]/[client-env]
+   ระบุสาเหตุเครื่องนั้น.
+3. (ค้างจากเช้า) user L1 การ์ดสุขภาพระบบ: LINE target + ทดสอบแจ้งเตือน.
