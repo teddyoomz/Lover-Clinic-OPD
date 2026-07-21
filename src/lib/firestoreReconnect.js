@@ -22,9 +22,16 @@
 //
 // ponytail: single global debounce; per-listener coordination only if profiling
 // ever shows real contention.
+// 2026-07-21 — the ladder's MISSING RUNG. Field beacon proved a wedge recurs
+// ~13s after the AV214 hard-reload (reload → 8s soft-timeout → 4s timebox →
+// wedge again): a wedged IndexedDB / frozen primary lease is ORIGIN STORAGE, so
+// it survives the reload and the loop is infinite ("ตายรัวๆ กดลองใหม่ก็ยังตาย").
+// escalateWedgeIfReloadFailed stamps lover.noPersist so the NEXT boot runs
+// memory-cache — no IDB, no lease → the wedge class becomes impossible.
 import { disableNetwork, enableNetwork } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { reportTelemetryToBeacon } from './errorBeacon.js';
+import { escalateWedgeIfReloadFailed, noteWedgeReload } from './wedgeEscalation.js';
 
 let lastToggleAt = 0;
 let toggling = false;
@@ -45,6 +52,10 @@ export function isConnectionWedged() {
 let hardReloadImpl = null;
 export function hardReloadApp(reason = '') {
   try { reportTelemetryToBeacon(`[conn-wedge] hard-reload (${reason})`); } catch { /* best-effort */ }
+  // Stamp BEFORE reloading: if a wedge recurs within RELOAD_HEAL_WINDOW_MS on
+  // the next boot, that proves the reload did not heal → escalate to a
+  // memory-cache boot (the rung this reload alone can never reach).
+  try { noteWedgeReload(); } catch { /* blocked storage */ }
   try {
     if (hardReloadImpl) { hardReloadImpl(reason); return; }
     window.location.reload();
@@ -70,6 +81,15 @@ export async function reconnectFirestore() {
     if (String(err?.message || '').includes(TIMEBOX_SENTINEL)) {
       wedged = true;
       try { reportTelemetryToBeacon('[conn-wedge] reconnect toggle timed out (client wedged)'); } catch { /* best-effort */ }
+      // NEVER leave the client offline: the timebox abandons the toggle chain
+      // mid-flight, so if disableNetwork() resolved but enableNetwork() hung,
+      // the client would sit network-DISABLED with the latch cleared (silent
+      // cache-only forever). Queue a detached enable — a no-op while the async
+      // queue is wedged, and the guarantee that it ends ENABLED once it drains.
+      try { enableNetwork(db).catch(() => {}); } catch { /* SDK teardown */ }
+      // MISSING RUNG (2026-07-21): if this wedge followed a wedge-reload, the
+      // reload provably did not heal → downgrade the NEXT boot to memory cache.
+      try { escalateWedgeIfReloadFailed(); } catch { /* best-effort */ }
       console.warn('[reconnectFirestore] toggle TIMED OUT — client wedged; retry ladder will escalate to reload');
     } else {
       // Non-fatal — SDK may still recover via its own retries.

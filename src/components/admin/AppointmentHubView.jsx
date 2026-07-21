@@ -68,6 +68,10 @@ import { subPillCountsForToday } from '../../lib/appointmentHubFilters.js';
 // transient double-badge state. V68/AV47 audit assertion for HubView moved
 // to RowCard (the new consumer surface).
 
+// 2026-07-21 — spinner stall bound (see loadCore). 10s > the 8s resilient
+// soft-timeout, so the queue banner's own recovery ladder always speaks first.
+const LOAD_STALL_MS = 10000;
+
 export default function AppointmentHubView({
   // V64-fix7 (2026-05-09): caller-provided counter that bumps after any
   // treatment-related mutation (TFP onSaved + CustomerDetailView delete).
@@ -225,11 +229,30 @@ export default function AppointmentHubView({
       setSyncing(fromCache);
     };
     if (silent) { const r = await fetchCore(undefined); applyCore(r, { fromCache: _resultFromCache(r) }); return; }
-    await swrRun({
-      cacheLoad: async () => { const r = await fetchCore('cache'); return { hasData: r[0].length > 0, data: r }; },
-      serverLoad: () => fetchCore(undefined),
-      apply: applyCore,
-    });
+    // 2026-07-21 — BOUNDED SPINNER. On a wedged client BOTH swr legs hang
+    // forever (a wedged Firestore async queue never settles, cache leg
+    // included), so setLoading(false) never ran → the eternal "กำลังโหลด…"
+    // in the field screenshot. The timer only releases the SPINNER; the legs
+    // keep running and still apply whenever they settle (applyCore is the sole
+    // writer, so no data semantics change). The syncing chip is forced ON so
+    // the empty list can never read as "confirmed no appointments" — the red
+    // queue banner + its now-working retry ladder own the recovery.
+    let settled = false;
+    const stall = setTimeout(() => {
+      if (settled) return;
+      setLoading(false);
+      setSyncing(true);
+    }, LOAD_STALL_MS);
+    try {
+      await swrRun({
+        cacheLoad: async () => { const r = await fetchCore('cache'); return { hasData: r[0].length > 0, data: r }; },
+        serverLoad: () => fetchCore(undefined),
+        apply: applyCore,
+      });
+    } finally {
+      settled = true;
+      clearTimeout(stall);
+    }
   }, [wideRange.from, wideRange.to, selectedBranchId]);
 
   const loadEnrichment = useCallback(async ({ silent = false } = {}) => {
