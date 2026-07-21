@@ -32,7 +32,7 @@
 // The stamp carries machinePerf's 14-day TTL + health-card toggle + cache wipe,
 // so a machine whose real problem was elsewhere self-heals back to persistence.
 import { reportTelemetryToBeacon } from './errorBeacon.js';
-import { setNoPersist, isNoPersistActive } from './machinePerf.js';
+import { setNoPersist, isNoPersistActive, NO_PERSIST_REASON_WEDGE } from './machinePerf.js';
 
 export const WEDGE_RELOAD_KEY = 'lover.wedgeReloadAt';
 export const NO_PERSIST_ESCALATED_KEY = 'lover.noPersistEscalatedAt';
@@ -40,6 +40,50 @@ export const NO_PERSIST_ESCALATED_KEY = 'lover.noPersistEscalatedAt';
 export const RELOAD_HEAL_WINDOW_MS = 90 * 1000;
 /** At most one persistence downgrade per hour — the anti-loop cap. */
 export const ESCALATION_COOLDOWN_MS = 60 * 60 * 1000;
+/** Wedge downgrades expire FAST (24h): a frozen tab / stuck lease is transient,
+ *  and this is NOT the AV212 slow-machine case (fast phones wedge too), so the
+ *  device must get its offline cache + instant cold start back quickly. */
+export const WEDGE_NO_PERSIST_TTL_MS = 24 * 60 * 60 * 1000;
+const PROBE_TIMEOUT_MS = 3000;
+// Public project id (same value ships in src/firebase.js) — kept literal so
+// this module stays free of the firebase import graph (pure + unit-testable).
+const REACHABILITY_URL =
+  'https://firestore.googleapis.com/v1/projects/loverclinic-opd-4c39b/databases/(default)/documents/__reachability__/__probe__';
+
+/**
+ * Is the Firestore BACKEND reachable right now, judged OUTSIDE the SDK?
+ *
+ * This is the measurement that separates the two wedge flavors — and the whole
+ * reason a fast phone must never be labelled "slow":
+ *   reachable   → the network is fine, so the hang is CLIENT-side state
+ *                 (wedged IndexedDB / frozen multi-tab lease) → downgrading
+ *                 persistence for the next boot genuinely heals it.
+ *   unreachable → the path to firestore.googleapis.com is blocked/half-dead
+ *                 (captive portal, carrier proxy, flaky WiFi). Dropping the
+ *                 local cache would only make that WORSE — do NOT escalate.
+ * A plain fetch cannot be blocked by the SDK's wedged async queue, so the
+ * answer is trustworthy even while every Firestore op hangs. ANY HTTP response
+ * (403/404 included) proves the round trip; only a network error/timeout does not.
+ * @returns {Promise<'reachable'|'unreachable'>}
+ */
+export async function probeFirestoreReachable(fetchFn, timeoutMs = PROBE_TIMEOUT_MS) {
+  const f = fetchFn || (typeof fetch === 'function' ? fetch : null);
+  if (!f) return 'unreachable';
+  let timer = null;
+  try {
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const p = f(REACHABILITY_URL, { method: 'GET', cache: 'no-store', ...(ctrl ? { signal: ctrl.signal } : {}) });
+    const timeout = new Promise((_, rej) => {
+      timer = setTimeout(() => { try { ctrl?.abort(); } catch { /* noop */ } rej(new Error('probe-timeout')); }, timeoutMs);
+    });
+    await Promise.race([p, timeout]);
+    return 'reachable';
+  } catch {
+    return 'unreachable';
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* blocked storage */ } }
@@ -64,12 +108,10 @@ export function decideWedgeEscalation({ nowMs, lastReloadAt, lastEscalatedAt, no
 
 /**
  * Called by firestoreReconnect when a toggle times out (client wedged).
- * Reads the storage ladder, applies the pure decision, and — only on
- * 'escalate' — stamps lover.noPersist (via machinePerf, so the health-card
- * toggle/TTL/wipe all apply) + telemetry. Never throws, never reloads.
- * @returns {'escalate'|'no-recent-reload'|'cooldown'|'already-memory-cache'}
+ * Ladder → reachability probe → (only then) stamp. Never throws, never reloads.
+ * @returns {Promise<'escalate'|'no-recent-reload'|'cooldown'|'already-memory-cache'|'backend-unreachable'>}
  */
-export function escalateWedgeIfReloadFailed(nowMs = Date.now()) {
+export async function escalateWedgeIfReloadFailed(nowMs = Date.now(), fetchFn) {
   try {
     const decision = decideWedgeEscalation({
       nowMs,
@@ -78,11 +120,20 @@ export function escalateWedgeIfReloadFailed(nowMs = Date.now()) {
       noPersistActive: isNoPersistActive(nowMs),
     });
     if (decision !== 'escalate') return decision;
-    setNoPersist(true, nowMs);                       // next boot = memory cache (14d TTL)
+    // Only downgrade persistence once we've PROVEN the backend is reachable —
+    // i.e. the hang is client-side state, not the network. Dropping the local
+    // cache on a blocked/half-dead network would make things strictly worse
+    // (and mislabel a perfectly fast device).
+    const reach = await probeFirestoreReachable(fetchFn);
+    if (reach !== 'reachable') {
+      reportTelemetryToBeacon('[conn-wedge] no-escalate reason=firestore-unreachable (network path, not client state)');
+      return 'backend-unreachable';
+    }
+    setNoPersist(true, nowMs, { reason: NO_PERSIST_REASON_WEDGE, ttlMs: WEDGE_NO_PERSIST_TTL_MS });
     lsSet(NO_PERSIST_ESCALATED_KEY, String(nowMs));
     // bucketed message (stable dedupe hash) — kind:'telemetry', never counts
     // toward the error alert; visible in the health-card viewer.
-    reportTelemetryToBeacon('[conn-wedge] escalate=no-persist reason=reload-did-not-heal');
+    reportTelemetryToBeacon('[conn-wedge] escalate=no-persist reason=reload-did-not-heal backend=reachable');
     return 'escalate';
   } catch { return 'no-recent-reload'; }
 }

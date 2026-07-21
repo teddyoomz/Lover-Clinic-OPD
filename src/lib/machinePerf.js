@@ -36,30 +36,62 @@ function lsGet(k) { try { return localStorage.getItem(k); } catch { return null;
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* blocked storage */ } }
 function lsDel(k) { try { localStorage.removeItem(k); } catch { /* blocked storage */ } }
 
-/** Boot check — true while the no-persist stamp is active (14d TTL).
+// 2026-07-21 — the stamp carries a REASON + its own TTL. Two very different
+// conditions disable persistence and they must never wear each other's label:
+//   'idb-slow'   — AV212: this machine's cache read genuinely costs more than
+//                  the network (10-year laptop). 14d TTL.
+//   'conn-wedge' — the IndexedDB/primary-lease is WEDGED. Nothing to do with
+//                  speed: it happens on an iPhone 17 Pro Max because iOS
+//                  freezes a background tab while it holds the Firestore
+//                  multi-tab lease. Short TTL — the freeze is transient.
+// Legacy stamps (a bare timestamp string) decode as 'idb-slow' + the 14d TTL.
+export const NO_PERSIST_REASON_SLOW = 'idb-slow';
+export const NO_PERSIST_REASON_WEDGE = 'conn-wedge';
+
+function readNoPersist() {
+  const v = lsGet(NO_PERSIST_KEY);
+  if (!v) return null;
+  if (/^\d+$/.test(v)) return { at: Number(v), reason: NO_PERSIST_REASON_SLOW, ttlMs: NO_PERSIST_TTL_MS };
+  try {
+    const o = JSON.parse(v);
+    const at = Number(o?.at) || 0;
+    if (!at) return null;
+    const ttlMs = Number(o?.ttlMs) > 0 ? Number(o.ttlMs) : NO_PERSIST_TTL_MS;
+    return { at, reason: String(o?.reason || NO_PERSIST_REASON_SLOW), ttlMs };
+  } catch { return null; }
+}
+
+/** Boot check — true while the no-persist stamp is active (per-reason TTL).
  *  Called by firebase.js at module init; expiry clears the stamp so the
  *  next boot retries persistence. */
 export function isNoPersistActive(nowMs = Date.now()) {
-  const v = lsGet(NO_PERSIST_KEY);
-  if (!v) return false;
-  const setAt = Number(v) || 0;
-  if (!setAt || nowMs - setAt > NO_PERSIST_TTL_MS) { lsDel(NO_PERSIST_KEY); return false; }
+  const rec = readNoPersist();
+  if (!rec) return false;
+  if (nowMs - rec.at > rec.ttlMs) { lsDel(NO_PERSIST_KEY); return false; }
   return true;
 }
 
-/** Manual override (health-card toggle). on=true stamps now; false clears +
- *  clears the probe history so old slow samples can't instantly re-flip. */
-export function setNoPersist(on, nowMs = Date.now()) {
-  if (on) lsSet(NO_PERSIST_KEY, String(nowMs));
+/** Manual override (health-card toggle) + the auto ratchets. on=true stamps
+ *  now with a reason/TTL; false clears + clears the probe history so old slow
+ *  samples can't instantly re-flip. */
+export function setNoPersist(on, nowMs = Date.now(), { reason = NO_PERSIST_REASON_SLOW, ttlMs = NO_PERSIST_TTL_MS } = {}) {
+  if (on) lsSet(NO_PERSIST_KEY, JSON.stringify({ at: nowMs, reason, ttlMs }));
   else { lsDel(NO_PERSIST_KEY); lsDel(PROBE_HIST_KEY); }
 }
 
-/** UI state for the health card. */
+/** UI state for the health card (reason drives the wording — never call a
+ *  fast phone "slow"). */
 export function getMachinePerfState(nowMs = Date.now()) {
   const active = isNoPersistActive(nowMs);
+  const rec = active ? readNoPersist() : null;
   let hist = [];
   try { hist = JSON.parse(lsGet(PROBE_HIST_KEY) || '[]'); } catch { hist = []; }
-  return { noPersist: active, probeHist: Array.isArray(hist) ? hist : [] };
+  return {
+    noPersist: active,
+    reason: rec ? rec.reason : null,
+    expiresAt: rec ? rec.at + rec.ttlMs : null,
+    probeHist: Array.isArray(hist) ? hist : [],
+  };
 }
 
 /** Record one fast-paint cache-probe measurement. Flip rule: persistence ON
@@ -78,7 +110,7 @@ export function recordCacheProbe(ms, { persistOn, nowMs = Date.now() } = {}) {
     lsSet(PROBE_HIST_KEY, JSON.stringify(hist));
     const slowCount = hist.filter((h) => h && h.ms > PROBE_SLOW_MS).length;
     if (hist.length >= 2 && slowCount >= 2) {
-      lsSet(NO_PERSIST_KEY, String(nowMs));
+      setNoPersist(true, nowMs, { reason: NO_PERSIST_REASON_SLOW, ttlMs: NO_PERSIST_TTL_MS });
       // bucketed message (stable dedupe hash) — kind:'telemetry', never counts
       // toward the error alert; visible in the health-card viewer.
       reportTelemetryToBeacon('[client-env] auto-nopersist reason=idb-slow probe=1500ms+ hits=2of3');

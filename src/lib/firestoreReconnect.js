@@ -88,8 +88,11 @@ export async function reconnectFirestore() {
       // queue is wedged, and the guarantee that it ends ENABLED once it drains.
       try { enableNetwork(db).catch(() => {}); } catch { /* SDK teardown */ }
       // MISSING RUNG (2026-07-21): if this wedge followed a wedge-reload, the
-      // reload provably did not heal → downgrade the NEXT boot to memory cache.
-      try { escalateWedgeIfReloadFailed(); } catch { /* best-effort */ }
+      // reload provably did not heal → downgrade the NEXT boot to memory cache
+      // (gated on a reachability probe so a blocked network never gets
+      // mislabelled as client state). Detached: it awaits a 3s probe and must
+      // not extend the caller's timebox.
+      try { escalateWedgeIfReloadFailed().catch(() => {}); } catch { /* best-effort */ }
       console.warn('[reconnectFirestore] toggle TIMED OUT — client wedged; retry ladder will escalate to reload');
     } else {
       // Non-fatal — SDK may still recover via its own retries.

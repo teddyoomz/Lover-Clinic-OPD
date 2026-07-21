@@ -376,11 +376,17 @@ export default function InfraHealthSection({ config, executedBy }) {
             a local-cache wipe (server data untouched — safe, reload required). */}
         <div className="mt-4 pt-3 border-t border-[var(--bd)]" data-testid="infra-machine-box">
           <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-1.5">เครื่องนี้ (ตั้งค่าเฉพาะเครื่องที่เปิดหน้านี้)</p>
+          {/* 2026-07-21 — the wording follows the REASON. A wedge downgrade
+              happens on fast devices too (iOS freezes a background tab holding
+              the Firestore lease), so it must never read as "your machine is
+              slow" — user pushback: "นี่เข้าผ่าน 17 pro max เครื่องไม่ได้ช้านะ". */}
           <p className="text-xs mb-2 text-[var(--tx-primary)]">
             แคชข้อมูลในเครื่อง:{' '}
-            {machinePerf === null ? '…' : machinePerf.noPersist
-              ? '⛔ ปิดอยู่ — โหมดเครื่องช้า (ดึงข้อมูลสดจากเซิร์ฟเวอร์ เร็วกว่าสำหรับเครื่องเก่า)'
-              : '✅ เปิดปกติ'}
+            {machinePerf === null ? '…' : !machinePerf.noPersist
+              ? '✅ เปิดปกติ'
+              : machinePerf.reason === 'conn-wedge'
+                ? '⏸ ปิดชั่วคราว — แก้อาการค้าง/โหลดไม่ขึ้น (ไม่เกี่ยวกับความเร็วเครื่อง; เปิดคืนเองใน 24 ชม.)'
+                : '⛔ ปิดอยู่ — โหมดเครื่องช้า (ดึงข้อมูลสดจากเซิร์ฟเวอร์ เร็วกว่าสำหรับเครื่องเก่า)'}
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" data-testid="infra-slow-machine-toggle"

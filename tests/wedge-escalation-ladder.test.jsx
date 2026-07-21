@@ -72,53 +72,114 @@ describe('WE1 — decideWedgeEscalation (pure)', () => {
   });
 });
 
-describe('WE2 — escalateWedgeIfReloadFailed (storage + machinePerf reuse)', () => {
-  it('WE2.1 escalation stamps lover.noPersist so the NEXT boot is memory-cache', () => {
+// fetch stubs for the reachability probe (the gate that separates
+// "client state is wedged" from "the network to Firestore is blocked")
+const reachable = async () => ({ ok: false, status: 403 });      // ANY HTTP answer = round trip proven
+const unreachable = async () => { throw new TypeError('Failed to fetch'); };
+const hangs = () => new Promise(() => {});                        // never settles → probe timeout
+
+describe('WE2 — escalateWedgeIfReloadFailed (ladder → probe → stamp)', () => {
+  it('WE2.1 escalation stamps lover.noPersist so the NEXT boot is memory-cache', async () => {
     expect(mp.isNoPersistActive()).toBe(false);
     we.noteWedgeReload(NOW - 13_000);
-    expect(we.escalateWedgeIfReloadFailed(NOW)).toBe('escalate');
+    expect(await we.escalateWedgeIfReloadFailed(NOW, reachable)).toBe('escalate');
     expect(mp.isNoPersistActive(NOW)).toBe(true);           // ← the actual escape: firebase.js boots memory-cache
     expect(mockBeacon).toHaveBeenCalledWith(expect.stringContaining('escalate=no-persist'));
   });
 
-  it('WE2.2 no reload stamp → no escalation, no stamp, no telemetry', () => {
-    expect(we.escalateWedgeIfReloadFailed(NOW)).toBe('no-recent-reload');
+  it('WE2.2 no reload stamp → no escalation, no stamp, no telemetry, NO probe', async () => {
+    const probe = vi.fn(reachable);
+    expect(await we.escalateWedgeIfReloadFailed(NOW, probe)).toBe('no-recent-reload');
     expect(mp.isNoPersistActive(NOW)).toBe(false);
+    expect(probe).not.toHaveBeenCalled();                  // ladder short-circuits before any network call
     expect(mockBeacon).not.toHaveBeenCalled();
   });
 
-  it('WE2.3 repeated wedges inside the cooldown escalate exactly ONCE (no downgrade storm)', () => {
+  it('WE2.3 repeated wedges inside the cooldown escalate exactly ONCE (no downgrade storm)', async () => {
     we.noteWedgeReload(NOW - 10_000);
-    expect(we.escalateWedgeIfReloadFailed(NOW)).toBe('escalate');
+    expect(await we.escalateWedgeIfReloadFailed(NOW, reachable)).toBe('escalate');
     mp._resetMachinePerfForTests();                          // simulate the user undoing it in the health card
     we.noteWedgeReload(NOW + 5_000);
-    expect(we.escalateWedgeIfReloadFailed(NOW + 6_000)).toBe('cooldown');
+    expect(await we.escalateWedgeIfReloadFailed(NOW + 6_000, reachable)).toBe('cooldown');
     expect(mp.isNoPersistActive(NOW + 6_000)).toBe(false);
     expect(mockBeacon).toHaveBeenCalledTimes(1);
   });
 
-  it('WE2.4 the stamp carries machinePerf semantics (14d TTL + health-card toggle undoes it)', () => {
+  it('WE2.4 wedge stamps carry the WEDGE reason + a 24h TTL — never the slow-machine label', async () => {
     we.noteWedgeReload(NOW - 5_000);
-    we.escalateWedgeIfReloadFailed(NOW);
-    expect(mp.isNoPersistActive(NOW + 13 * 24 * 3600 * 1000)).toBe(true);   // still on at 13d
-    expect(mp.isNoPersistActive(NOW + 15 * 24 * 3600 * 1000)).toBe(false);  // auto-retries persistence at 14d
-    we.noteWedgeReload(NOW - 5_000);
+    await we.escalateWedgeIfReloadFailed(NOW, reachable);
+    const st = mp.getMachinePerfState(NOW);
+    expect(st.noPersist).toBe(true);
+    expect(st.reason).toBe('conn-wedge');                                   // ← NOT 'idb-slow'
+    expect(mp.isNoPersistActive(NOW + 23 * 3600 * 1000)).toBe(true);        // still on at 23h
+    expect(mp.isNoPersistActive(NOW + 25 * 3600 * 1000)).toBe(false);       // persistence back within a day
     mp.setNoPersist(false, NOW);                                            // health-card "เปิดแคชกลับ"
     expect(mp.isNoPersistActive(NOW)).toBe(false);
   });
 
-  it('WE2.5 blocked storage never throws (private mode / iOS lockdown)', () => {
+  it('WE2.5 blocked storage never throws (private mode / iOS lockdown)', async () => {
     const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
     expect(() => we.noteWedgeReload(NOW)).not.toThrow();
-    expect(() => we.escalateWedgeIfReloadFailed(NOW)).not.toThrow();
+    await expect(we.escalateWedgeIfReloadFailed(NOW, reachable)).resolves.toBeTruthy();
     spy.mockRestore();
   });
 });
 
+describe('WE2b — reachability probe (the fast-device guard)', () => {
+  it('WE2b.1 ANY HTTP response proves the round trip (403/404 included)', async () => {
+    expect(await we.probeFirestoreReachable(reachable)).toBe('reachable');
+    expect(await we.probeFirestoreReachable(async () => ({ ok: true, status: 200 }))).toBe('reachable');
+  });
+
+  it('WE2b.2 network error / hang → unreachable (hang honors the timeout)', async () => {
+    expect(await we.probeFirestoreReachable(unreachable)).toBe('unreachable');
+    expect(await we.probeFirestoreReachable(hangs, 30)).toBe('unreachable');
+  });
+
+  it('WE2b.3 blocked backend → NO downgrade (a fast phone on bad WiFi keeps its cache)', async () => {
+    we.noteWedgeReload(NOW - 10_000);
+    expect(await we.escalateWedgeIfReloadFailed(NOW, unreachable)).toBe('backend-unreachable');
+    expect(mp.isNoPersistActive(NOW)).toBe(false);                          // cache preserved — dropping it would be WORSE
+    expect(mockBeacon).toHaveBeenCalledWith(expect.stringContaining('firestore-unreachable'));
+  });
+
+  it('WE2b.4 a blocked-backend verdict does NOT burn the hourly cooldown', async () => {
+    we.noteWedgeReload(NOW - 10_000);
+    expect(await we.escalateWedgeIfReloadFailed(NOW, unreachable)).toBe('backend-unreachable');
+    // network recovers on the next wedge → the real escalation is still available
+    expect(await we.escalateWedgeIfReloadFailed(NOW + 1_000, reachable)).toBe('escalate');
+  });
+});
+
+describe('WE2c — machinePerf reason/TTL (backward compatible)', () => {
+  it('WE2c.1 legacy bare-timestamp stamps decode as slow-machine + 14d TTL', () => {
+    localStorage.setItem('lover.noPersist', String(NOW));
+    expect(mp.isNoPersistActive(NOW)).toBe(true);
+    expect(mp.getMachinePerfState(NOW).reason).toBe('idb-slow');
+    expect(mp.isNoPersistActive(NOW + 13 * 24 * 3600 * 1000)).toBe(true);
+    expect(mp.isNoPersistActive(NOW + 15 * 24 * 3600 * 1000)).toBe(false);
+  });
+
+  it('WE2c.2 the AV212 slow-machine ratchet still stamps its own reason + 14d TTL', () => {
+    mp.recordCacheProbe(2000, { persistOn: true, nowMs: NOW });
+    mp.recordCacheProbe(2000, { persistOn: true, nowMs: NOW + 1000 });
+    const st = mp.getMachinePerfState(NOW + 2000);
+    expect(st.noPersist).toBe(true);
+    expect(st.reason).toBe('idb-slow');
+    expect(mp.isNoPersistActive(NOW + 13 * 24 * 3600 * 1000)).toBe(true);   // NOT shortened by the wedge TTL
+  });
+
+  it('WE2c.3 corrupt stamp → treated as absent (never wedges the boot path itself)', () => {
+    localStorage.setItem('lover.noPersist', '{not json');
+    expect(mp.isNoPersistActive(NOW)).toBe(false);
+    expect(mp.getMachinePerfState(NOW).reason).toBe(null);
+  });
+});
+
 describe('WE3 — the field sequence, end to end (PROVE-RED without the rung)', () => {
-  it('WE3.1 wedge → reload → wedge-again now produces the memory-cache escape', () => {
+  it('WE3.1 wedge → reload → wedge-again now produces the memory-cache escape', async () => {
     // 13:23:03 — first wedge. Ladder rung 1: no reload has happened yet.
-    expect(we.escalateWedgeIfReloadFailed(NOW - 19_000)).toBe('no-recent-reload');
+    expect(await we.escalateWedgeIfReloadFailed(NOW - 19_000, reachable)).toBe('no-recent-reload');
     expect(mp.isNoPersistActive(NOW)).toBe(false);
 
     // 13:23:09 — user presses ลองใหม่ → hardReloadApp stamps + reloads.
@@ -127,18 +188,20 @@ describe('WE3 — the field sequence, end to end (PROVE-RED without the rung)', 
     // 13:23:22 — wedged AGAIN 13s later (the reload did NOT heal).
     // PRE-FIX: nothing happened here → next press reloaded into the same wedge
     // → the infinite "ตายรัวๆ" loop. POST-FIX: the boot config changes.
-    expect(we.escalateWedgeIfReloadFailed(NOW)).toBe('escalate');
+    expect(await we.escalateWedgeIfReloadFailed(NOW, reachable)).toBe('escalate');
     expect(mp.isNoPersistActive(NOW)).toBe(true);
+    // …and the device is NOT labelled slow for it (iPhone 17 Pro Max case)
+    expect(mp.getMachinePerfState(NOW).reason).toBe('conn-wedge');
   });
 
-  it('WE3.2 ≤2 presses honored — after the escalation the next boot has no IDB/lease to wedge on', () => {
+  it('WE3.2 ≤2 presses honored — after the escalation the next boot has no IDB/lease to wedge on', async () => {
     we.noteWedgeReload(NOW - 13_000);
-    we.escalateWedgeIfReloadFailed(NOW);
+    await we.escalateWedgeIfReloadFailed(NOW, reachable);
     // firebase.js: canPersist = idbHealthy() && !isNoPersistActive() → memory cache
     expect(mp.isNoPersistActive(NOW)).toBe(true);
     // and a wedge on THAT boot no longer churns the ladder
     we.noteWedgeReload(NOW + 1000);
-    expect(we.escalateWedgeIfReloadFailed(NOW + 2000)).toBe('already-memory-cache');
+    expect(await we.escalateWedgeIfReloadFailed(NOW + 2000, reachable)).toBe('already-memory-cache');
   });
 });
 
@@ -154,12 +217,21 @@ describe('WE4 — wiring locks', () => {
     expect(j).toBeGreaterThan(i);
   });
 
-  it('WE4.2 the timebox branch escalates + re-enables the network (never leave it disabled)', () => {
-    expect(fr).toMatch(/escalateWedgeIfReloadFailed\(\)/);
+  it('WE4.2 the timebox branch escalates (detached) + re-enables the network', () => {
+    expect(fr).toMatch(/escalateWedgeIfReloadFailed\(\)\.catch\(\(\) => \{\}\)/); // never extends the timebox
     expect(fr).toMatch(/enableNetwork\(db\)\.catch\(\(\) => \{\}\)/);
     const box = fr.slice(fr.indexOf('TIMEBOX_SENTINEL)) {'), fr.indexOf('} else {'));
     expect(box).toContain('escalateWedgeIfReloadFailed');
     expect(box).toContain('enableNetwork');
+  });
+
+  it('WE4.6 the health card wording follows the REASON (never calls a fast device slow)', () => {
+    const card = read('src/components/backend/InfraHealthSection.jsx');
+    expect(card).toMatch(/machinePerf\.reason === 'conn-wedge'/);
+    expect(card).toMatch(/ไม่เกี่ยวกับความเร็วเครื่อง/);
+    // the slow-machine wording must remain reachable ONLY on the slow branch
+    const idx = card.indexOf('โหมดเครื่องช้า (ดึงข้อมูลสด');
+    expect(idx).toBeGreaterThan(card.indexOf("machinePerf.reason === 'conn-wedge'"));
   });
 
   it('WE4.3 firebase.js honors the stamp at boot (the escape actually applies)', () => {
