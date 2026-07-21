@@ -4,9 +4,10 @@ import { useState, useEffect, Suspense } from 'react';
 // app-wide error boundary. Alias keeps the 79 callsites untouched.
 import { lazyRetry as lazy } from './lib/lazyRetry.jsx';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDocFromCache } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
-import { auth, db, appId } from './firebase.js';
+import { auth, db, appId, firestorePersistenceEnabled } from './firebase.js';
+import { runBootCacheWatchdog } from './lib/bootCacheWatchdog.js';
 import { reconnectFirestore } from './lib/firestoreReconnect.js';
 import { installNumberInputWheelGuard } from './lib/wheelGuard.js';
 import { applyVisualTier, startFrameJankProbe, installFxScrollPause } from './lib/fxPerf.js';
@@ -198,6 +199,23 @@ export default function App() {
   // data-wheelable qty fields step by EXACTLY ±1. One listener, app-wide,
   // safe-by-default for every current + future <input type="number">.
   useEffect(() => installNumberInputWheelGuard(document), []);
+
+  // 2026-07-21 — boot cache watchdog: ONE cache-only read raced against 3s.
+  // A cache read touches no network, so a hang can only be the local
+  // persistence layer (wedged IndexedDB / a sibling tab frozen by iOS mid
+  // transaction). Catching it HERE — while the app still shows its loading
+  // screen — pre-empts the 12s discovery chain that used to end in the red
+  // banner the user had to press. User: "เอาแบบครั้งแรกก็ไม่เป็นเลยไม่ได้เหรอ".
+  useEffect(() => {
+    runBootCacheWatchdog({
+      enabled: firestorePersistenceEnabled,
+      // SAME doc + SAME segment form as the clinic-settings listener above —
+      // a path typo here would make the probe reject instantly and the whole
+      // watchdog a silent no-op (the exact dead-feature class this session
+      // has been closing). getLastBootWatchdogVerdict() proves it ran.
+      cacheRead: () => getDocFromCache(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main')),
+    });
+  }, []);
 
   // 2026-07-21 — FX perf (adaptive visuals): pause box-shadow "breathing"
   // while scrolling (iOS white-tile fix — the page stops invalidating its
