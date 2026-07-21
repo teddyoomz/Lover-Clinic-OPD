@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-07-21 ~04:20 — worry-list 12/12 + fx-perf + hub pagination 20/หน้า — ALL DEPLOYED LIVE"
-status: "master `32f772b6` = prod LIVE (`lover-clinic-ge9igmdg1` aliased; ping 200). rules UNCHANGED → vercel-only. Hub pagination L1 บน LIVE: past-30 = 20 การ์ด/หน้า 1/14, DOM 3,000 vs 21,359 บน bundle เก่า (7×). fx-perf L1 LIVE (scroll→paused→resume). FB prove-green 200→401. FULL vitest 18,147/0. หมายเหตุ: SW เก่าถือ cache — เครื่อง user reload 1-2 ครั้ง/รอ auto-update toast."
+updated_at: "2026-07-21 ~15:10 — worry-list 12/12 + fx-perf + hub pagination + WEDGE PREVENTION — ALL DEPLOYED LIVE"
+status: "master `3a1ba363` = prod LIVE (`lover-clinic-e2q4c5j5p` aliased; ping 200; new code verified IN the live bundle). rules UNCHANGED → vercel-only. FULL vitest 18,187/0 + build clean. L1 LIVE: no false-positive auto-reload on a healthy client (navType=navigate, zero stamps)."
 branch: "master"
 last_commit: "2c277f7f — test(repoint): 5 stale V21 locks from 2026-07-20 AV212-R2 + probe-20"
 tests: "FULL 18,120/0 exit-0 (326s) + ~100 new tests + build clean. 5 stale repoints = yesterday's AV212-R2/probe-20 drift, NOT this batch."
@@ -9,7 +9,21 @@ production_commit: "3cdcbeb2 (worry-list sweep) — deployed 2026-07-21 ~03:15"
 firestore_rules_version: "2026-07-20 NIGHT (be_line_friends + probe #20) — UNCHANGED this batch"
 ---
 
-# Active — 2026-07-21 — worry-list 12/12 + fx-perf (AV215-class) DEPLOYED
+# Active — 2026-07-21 — worry-list + fx-perf + pagination + wedge-prevention DEPLOYED
+
+## มือถือค้าง "ตายรัวๆ" — root cause + 3-rung fix (2026-07-21 บ่าย) ⭐
+- **หลักฐาน beacon**: 13:23:03 wedge → :09 hard-reload → :22 wedge ซ้ำ (13s = 8s+4s).
+  beacon POST สำเร็จ = เน็ตดี, ตายเฉพาะ Firestore. Windows ก็ wedge 3 ครั้ง = ไม่ใช่เครื่องเดียว
+- **Root**: บันได AV214 ตันที่ "reload ด้วย config เดิม" แต่ IDB/lease ที่ค้าง = origin storage
+  → รอด reload → วนไม่จบ. ทางออก AV212 (memory-cache) มีอยู่แต่เอื้อมไม่ถึง (idbBroken ตั้งเฉพาะ
+  throw/onerror; noPersist ตั้งจาก TFP probe เท่านั้น)
+- **Fix 3 ชั้น**: ① boot watchdog (cache read แข่ง 3s → ค้าง = สลับ memory-cache + reload เอง
+  ตอนยังอยู่หน้าโหลด = "ครั้งแรกก็ไม่เจอ") ② wedge-after-reload → escalate (กันด้วย reachability
+  probe: ปิดแคชเฉพาะเมื่อพิสูจน์ว่าเน็ต Firestore ปกติ) ③ hub spinner bound 10s
+- **reason แยกจาก AV212**: `conn-wedge` (24h TTL) ≠ `idb-slow` (14d) — **ห้ามเรียกเครื่องเร็วว่าช้า**
+  (user: "17 pro max เครื่องไม่ได้ช้านะ"); การ์ดสุขภาพขึ้นข้อความตาม reason
+- **User L1 ที่ต้องดู**: เปิดแอปจาก home screen ซ้ำๆ — ครั้งแรกไม่ควรเจอ banner เลย;
+  ถ้าหลุดมา กดลองใหม่ครั้งที่ 2 ต้องหาย; ดู [conn-wedge] ในการ์ดสุขภาพว่าลดลงไหม
 
 ## fx-perf — iOS white-scroll root fix + visual tier (2026-07-21 ~03:50)
 - Root (วัดจริง): 10 การ์ด TFP เต็มกว้าง breathe box-shadow infinite (v86 auto-glow) →
