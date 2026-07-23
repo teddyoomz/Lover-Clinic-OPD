@@ -14,7 +14,14 @@
 //      SW has cached never gets here — /assets is CacheFirst per AV207)
 //   2. still failing → resolve to a friendly recovery panel instead of
 //      rejecting — the APP STAYS ALIVE (menu, other tabs keep working)
-//   3. beacon-report the failure (kind 'error')
+//   3. beacon-report the failure as TELEMETRY (2026-07-23) — a chunk-load
+//      failure is self-healing churn (in-loop retries + a reload fetching a
+//      fresh index.html recover it) that SPIKES on deploy days when a user on
+//      an old tab requests deleted chunk hashes. Reported as kind:'telemetry'
+//      so it stays visible in the health-card viewer but never trips the daily
+//      error alert (which is reserved for real runtime crashes). Pre-2026-07-23
+//      it was kind:'error' → 4 benign post-deploy chunk churn events tripped the
+//      5/24h threshold on 2026-07-22 (a cry-wolf 🟡).
 //
 // AV212 hunt R1 fixes (2026-07-20):
 //   - The panel is a FIXED full-screen overlay (was an in-flow 40vh div): many
@@ -31,7 +38,7 @@
 // the module map poison-caches a failed specifier so the in-loop retries are a
 // no-op there — reload is the real iOS recovery (hence the short backoff).
 import React from 'react';
-import { reportErrorToBeacon } from './errorBeacon.js';
+import { reportTelemetryToBeacon } from './errorBeacon.js';
 
 function isNetworkChunkError(err) {
   const m = String((err && err.message) || err || '');
@@ -96,7 +103,9 @@ export function lazyRetry(importFn) {
         }
       }
     }
-    try { reportErrorToBeacon(lastErr, { source: 'lazy-chunk' }); } catch { /* silent */ }
+    try {
+      reportTelemetryToBeacon(`[lazy-chunk] ${String((lastErr && lastErr.message) || lastErr || 'chunk load failed')}`);
+    } catch { /* silent */ }
     const networkCause = isNetworkChunkError(lastErr);
     return { default: () => React.createElement(ChunkLoadFallback, { networkCause }) };
   });

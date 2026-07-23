@@ -1,8 +1,14 @@
 // Infra observability (2026-07-19): install the global error beacon FIRST so
 // it catches failures from every later boot stage (SW register, early fetch,
 // React mount). Beacon is fully try/catch-guarded — cannot break boot.
-import { installErrorBeacon } from './lib/errorBeacon.js'
+import { installErrorBeacon, setFirestoreAssertionHandler } from './lib/errorBeacon.js'
+import { onFirestoreAssertion } from './lib/wedgeEscalation.js'
 installErrorBeacon()
+// Route Firestore INTERNAL ASSERTION (ca9/b815) crashes into the AV214 wedge
+// ladder → a recurrence downgrades the next boot to memory-cache (drops the
+// persistentMultipleTabManager trigger). Both modules are firebase-free, so this
+// stays off the pre-boot critical path. No auto-reload (AV214 invariant).
+setFirestoreAssertionHandler(onFirestoreAssertion)
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'

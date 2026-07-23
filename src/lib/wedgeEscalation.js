@@ -138,6 +138,24 @@ export async function escalateWedgeIfReloadFailed(nowMs = Date.now(), fetchFn) {
   } catch { return 'no-recent-reload'; }
 }
 
+/**
+ * Firestore INTERNAL ASSERTION (ca9/b815) handler — registered by main.jsx onto
+ * the error beacon (setFirestoreAssertionHandler). The assertion means the SDK's
+ * internal state is corrupt (open bug firebase-js-sdk#9267) and only a reload
+ * recovers; a recurrence within RELOAD_HEAL_WINDOW_MS of a wedge-reload proves
+ * the reload did NOT heal → escalateWedgeIfReloadFailed downgrades the NEXT boot
+ * to memory-cache (dropping persistentMultipleTabManager, one of the two
+ * documented triggers). Reuses the ENTIRE AV214 ladder — reachability probe,
+ * once-per-hour cap, 24h TTL, no auto-reload. First occurrence = no-op (no
+ * recent wedge-reload yet); the user-initiated reload (retry ladder hardReloadApp
+ * / AppErrorBoundary) stamps WEDGE_RELOAD, so the recurrence escalates. Firebase-
+ * free (no firebase import) — safe for the pre-boot beacon's graph. Never throws.
+ */
+export function onFirestoreAssertion(nowMs = Date.now(), fetchFn) {
+  try { reportTelemetryToBeacon('[fs-assert] firestore internal assertion (ca9/b815) — routed to wedge ladder'); } catch { /* best-effort */ }
+  try { return escalateWedgeIfReloadFailed(nowMs, fetchFn); } catch { return Promise.resolve('no-recent-reload'); }
+}
+
 export function _resetWedgeEscalationForTests() {
   try { localStorage.removeItem(WEDGE_RELOAD_KEY); } catch { /* blocked */ }
   try { localStorage.removeItem(NO_PERSIST_ESCALATED_KEY); } catch { /* blocked */ }

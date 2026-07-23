@@ -148,7 +148,11 @@ describe('C — lazyRetry chokepoint (M10: offline chunk fetch crashed the whole
   it('C1 wrapper: retries then resolves the FALLBACK component (never rejects into the boundary)', () => {
     expect(LAZY).toMatch(/for \(let attempt = 0; attempt <= RETRIES/);
     expect(LAZY).toMatch(/return \{ default: \(\) => React\.createElement\(ChunkLoadFallback/);
-    expect(LAZY).toMatch(/reportErrorToBeacon\(lastErr, \{ source: 'lazy-chunk' \}\)/);
+    // 2026-07-23 de-noise: a self-healing chunk-load failure reports as TELEMETRY
+    // (kind:'telemetry'), not kind:'error' — so benign post-deploy stale-bundle
+    // churn no longer trips the infra-health 5/24h alert (it cried wolf 07-22).
+    expect(LAZY).toMatch(/reportTelemetryToBeacon\(`\[lazy-chunk\]/);
+    expect(LAZY).not.toMatch(/reportErrorToBeacon\(lastErr/);
     expect(LAZY).toMatch(/data-testid="chunk-load-retry"/);
   });
 

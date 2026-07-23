@@ -15,7 +15,7 @@
 // On the vite dev server /api/client-error does not exist → the fetch fails →
 // swallowed. Full round-trip works on prod (and is verified post-deploy).
 
-import { sanitizeErrorPayload } from './clientErrorCore.js';
+import { sanitizeErrorPayload, isFirestoreInternalAssertion } from './clientErrorCore.js';
 
 export const BEACON_ENDPOINT = '/api/client-error';
 export const DEDUPE_WINDOW_MS = 5 * 60 * 1000;
@@ -26,6 +26,16 @@ const state = {
   sentCount: 0,
   lastSentByHash: new Map(), // hash → ms
 };
+
+// Firestore INTERNAL ASSERTION (ca9/b815) handler — registered by main.jsx to
+// the wedge ladder (wedgeEscalation.onFirestoreAssertion). Kept as a callback
+// slot so this pre-boot, firebase-free beacon never pulls firebase/wedge modules
+// into its critical-path import graph (and no errorBeacon↔wedgeEscalation cycle).
+let assertionHandler = null;
+export function setFirestoreAssertionHandler(fn) {
+  assertionHandler = typeof fn === 'function' ? fn : null;
+}
+export function _getAssertionHandlerForTest() { return assertionHandler; }
 
 // Exported for tests only — resets the in-memory gate.
 export function _resetBeaconStateForTest() {
@@ -67,6 +77,15 @@ function transport(payload) {
 export function reportErrorToBeacon(err, { source = 'manual' } = {}) {
   try {
     const message = err && (err.message || (typeof err === 'string' ? err : String(err)));
+    // Route Firestore's unrecoverable INTERNAL ASSERTION (ca9/b815) into the
+    // wedge ladder BEFORE the normal report — a recurrence downgrades the next
+    // boot to memory-cache (removes the persistentMultipleTabManager trigger).
+    // Covers every path into here: onerror, unhandledrejection, react-boundary.
+    // The error is still reported below (it's a real crash — it must stay
+    // countable in the health alert; only lazy-chunk churn is demoted).
+    if (assertionHandler && isFirestoreInternalAssertion(message)) {
+      try { assertionHandler(); } catch { /* never let recovery break reporting */ }
+    }
     const payload = sanitizeErrorPayload({
       message: source === 'manual' ? message : `[${source}] ${message}`,
       stack: err && err.stack,

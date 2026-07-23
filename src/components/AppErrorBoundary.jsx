@@ -4,20 +4,34 @@
 // main.jsx. Class component — error boundaries require one.
 import React from 'react';
 import { reportErrorToBeacon } from '../lib/errorBeacon.js';
+import { isFirestoreInternalAssertion } from '../lib/clientErrorCore.js';
+import { noteWedgeReload } from '../lib/wedgeEscalation.js';
 
 export default class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { crashed: false };
+    this.state = { crashed: false, isAssertion: false };
   }
 
-  static getDerivedStateFromError() {
-    return { crashed: true };
+  static getDerivedStateFromError(error) {
+    // Flag a Firestore INTERNAL ASSERTION crash so the reload below stamps the
+    // wedge marker → a recurrence within the heal window escalates to a
+    // memory-cache boot (drops the persistentMultipleTabManager trigger).
+    return { crashed: true, isAssertion: isFirestoreInternalAssertion(error?.message) };
   }
 
   componentDidCatch(error) {
+    // reportErrorToBeacon also routes the assertion into the wedge ladder
+    // (escalation check) — the render-crash path mirrors the onerror path.
     try { reportErrorToBeacon(error, { source: 'react-boundary' }); } catch { /* silent */ }
   }
+
+  handleReload = () => {
+    // For an assertion crash, mark this as a wedge-reload so a recurrence on the
+    // fresh boot escalates to memory-cache (AV214 ladder). User-initiated → no loop.
+    if (this.state.isAssertion) { try { noteWedgeReload(); } catch { /* blocked storage */ } }
+    try { window.location.reload(); } catch { /* noop — jsdom */ }
+  };
 
   render() {
     if (!this.state.crashed) return this.props.children;
@@ -38,7 +52,7 @@ export default class AppErrorBoundary extends React.Component {
         </div>
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={this.handleReload}
           style={{
             marginTop: '0.5rem', padding: '0.55rem 1.4rem', borderRadius: '10px',
             border: '1px solid #dc2626', background: 'rgba(220,38,38,0.85)',

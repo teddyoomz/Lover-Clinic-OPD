@@ -44,6 +44,19 @@ export function deriveSurface(href) {
   return /[?&](patient|session|schedule|ed)=/.test(s) ? 'patient' : 'staff';
 }
 
+/** Firestore's unrecoverable INTERNAL ASSERTION (ID: ca9 / b815 / any). An open
+ *  upstream SDK bug (firebase-js-sdk#9267 — same ID + 12.x version family)
+ *  triggered by repeated disableNetwork/enableNetwork churn (our
+ *  firestoreReconnect toggle) + persistentMultipleTabManager. Once it fires the
+ *  SDK's internal state is corrupt and only a reload recovers → route it into
+ *  the wedge ladder so a recurrence downgrades the next boot to memory-cache
+ *  (which drops persistentMultipleTabManager, one of the two documented
+ *  triggers). Deliberately does NOT match the transient 'missing stream token'
+ *  (the SDK self-recovers that; escalating on it would be over-aggressive). */
+export function isFirestoreInternalAssertion(message) {
+  return /INTERNAL ASSERTION FAILED: Unexpected state/i.test(String(message || ''));
+}
+
 /** djb2 over message + first stack line — deterministic dedupe key, no crypto
  *  dependency, stable across client + viewer grouping. */
 export function hashError({ message, stack } = {}) {
