@@ -1,5 +1,32 @@
 # SESSION_HANDOFF — Overflow Archive
 
+## Archived 2026-07-23 — SESSION_HANDOFF overflow: sessions `2026-07-07 EOD+2` → `2026-07-07 EOD+2` + Current-State index
+
+### Session blocks (1)
+
+### Session 2026-07-07 EOD+2 — Instant Cold-Start (AV206+AV207) — SHIPPED + DEPLOYED LIVE
+
+master `2cf71bdc` = prod (vercel-only; rules UNCHANGED → no Probe-Deploy-Probe; ships AV205 too). Full vitest **17,485/17,486** (1 known flake, 51/0 isolated); build clean.
+- User video: PWA cold-start after long gap → นัด hub loading 7-10+s. Fix = SWR everywhere it's safe:
+  persistentLocalCache (layer 0, listeners free) · freshGate (customers NEVER see cache) · swrRead
+  {source:'cache'} + __fromCache honesty · hub 2-stage + SyncIndicator + chip skeletons · 12-tab
+  sweep (inventory closed list) · app-shell SW (AV207: static-only, FCM re-scoped, kill-switch).
+- Rule Q L1 4/4 **on LIVE prod** + measured 1736→566ms (−67%) data-on-screen + parity adjudicated.
+- 2 real bugs caught by the L1 itself: indicator honesty (network-down getDocs serves cache
+  silently) + SW 'activating' race (prod-only). AV206/AV207 both SKILL.md; SY1 green.
+- User L1 pending: มือถือจริง cold-start + AV205 modal scroll + push still arrives (FCM self-heal).
+- Checkpoint `.agents/sessions/2026-07-07-instant-coldstart.md`.
+
+---
+
+📂 **Older sessions (`2026-06-21` and earlier) + older Current-State index entries → `.agents/sessions/session-handoff-archive.md`** (cold storage, NOT read at boot).
+
+### Current State index entries
+
+- **NEW (2026-07-07 EOD+3) — Fable-5 final batch: TFP extraction ×2 + Money Reconciliation (tab+cron) + CentralStock in-place modal + extended-suite revival — SHIPPED + DEPLOYED LIVE**: master = prod (vercel-only; **firestore.rules UNCHANGED → no Probe-Deploy-Probe**; alias 200 + live cron L2 `recon-daily-20260706` written on the DEPLOYED endpoint). FINAL gate **full vitest 17,526/17,526 · 0 fail** (flake ก็ผ่าน) + **extended 2,668/0** + build clean. ① **TFP extraction steps 1+2** (extraction-only, verbatim): 7 memo leaf components → `treatment-form/TfpFormPrimitives.jsx` + 6 item modals (lab/med/medGroup/remed/cons/consGroup) → `TfpItemModals.jsx`; TFP 5,946→5,330; state/handlers อยู่ที่เดิม (explicit props), mount-conditionals ที่ callsites (V160); buy modal ไม่ย้าย (V13 เงิน — session หน้า); V21 repoints tf2/TF3/V125/cc-row = family-union scans; execution smokes 8/0 (V163 net). ② **Reconciliation (V155/V157 residual CLOSED)**: SSOT pure `reconcileSaleCore.js` (injected fetchers) → tab `reports-reconciliation` (BS-11, drill-down, cron banner) + cron 04:15 BKK idempotent `recon-daily-YYYYMMDD`; deterministic-only discrepancies (deposit/wallet V158/cancelled V153/courses V104-class), stock+active-points = INFO; **Rule Q L2 จริง 17 ใบ → จับ false positive 1 ตัว (source:reduceRemaining audit-sale) → ฆ่าก่อน ship → 17/17 clean**; **Rule Q L1 Playwright บน prod data จริง: 39 ใบ นครราชสีมา → ตาราง+ยอดบาทจริง+all-clear+drill-down (screenshot eyeballed)**; L1 จับบั๊คจริง: tab หายจาก ALL_ITEM_IDS (deep-link whitelist) → ลงทะเบียน navConfig. ③ **CentralStockTab in-place modal** — V144/AV173 deferred instance CLOSED (`CentralStockActionModal` warehouse-scoped; CB1 flipped; AV173 both SKILL.md, SY1). ④ **extended revival** — ROOT CAUSE: vite.config เป็น FUNCTION (filler-obfuscator ~06-20) แต่ extended config spread เป็น object → jsdom หาย → .jsx ตายเงียบทั้งหมด; fix = call function (+125 เทส); 317 stale asserts/49 ไฟล์ → `quarantineStale20260707` ledger. **Wishlist ที่ stale (verify-first ได้ผล)**: chart Storage-ref ทำแล้ว 05-22 + legacy inline = 0 บน prod; movement-log มี V106 retention cron แล้ว. Backlog เหลือ → memory `project_next_model_backlog.md`. Checkpoint `.agents/sessions/2026-07-07-fable-final-batch.md`.
+
+---
+
 ## Archived 2026-07-20 NIGHT (SESSION_HANDOFF trim 10+10)
 
 ### Current-State bullet — 2026-07-07 EOD+2 Instant Cold-Start (AV206+AV207)
