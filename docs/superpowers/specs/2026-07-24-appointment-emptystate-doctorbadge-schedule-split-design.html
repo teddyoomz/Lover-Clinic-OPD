@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Appointment empty-state + doctor-badge nav + doctor/staff schedule split — Design Spec</title>
+<style>
+  :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Thai',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+  h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+  h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+  h3 { margin-top:1.4em; color:#333; }
+  pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.88em; }
+  code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+  blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+  table { border-collapse:collapse; width:100%; margin:1em 0; }
+  th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+  th { background:var(--bg-meta); }
+  .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.6em; }
+  /* app-faithful dark panels (LoverClinic dark/ember theme) */
+  .app { background:#000; border-radius:12px; padding:16px; color:#e5e5e5; font-family:'Noto Sans Thai',sans-serif; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .ec { text-align:center; padding:28px 16px; border:1px dashed #333; border-radius:12px; background:linear-gradient(to bottom right,#161616,#0e0e0e); }
+  .ec .ic { font-size:26px; opacity:.4; }
+  .ec .h { font-size:14px; font-weight:700; color:#f5f5f5; margin-top:6px; }
+  .ec .s { font-size:12px; color:#a3a3a3; font-style:italic; margin-top:4px; line-height:1.55; }
+  .ec .cta { display:inline-block; margin-top:10px; font-size:12px; font-weight:700; color:#fb923c; border:1px solid #7c3a12; background:#3a1e0c; border-radius:8px; padding:5px 12px; }
+  .cap { font-size:11px; color:#737373; margin:2px 4px 8px; font-weight:700; }
+  .badnote { color:#f87171; }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:5px 10px; border-radius:8px; background:#0c2a3f; border:1px solid #1e5a7a; color:#cae8ff; }
+  .chip.empty { background:transparent; border:1px dashed #444; color:#a3a3a3; font-style:italic; font-weight:400; }
+  .modal-wrap { background:rgba(0,0,0,.55); border-radius:12px; padding:32px 16px; display:flex; justify-content:center; }
+  .modal { background:#141414; border:1px solid #333; border-radius:14px; padding:20px; max-width:300px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+  .modal .mt { font-size:15px; font-weight:700; color:#f5f5f5; }
+  .modal .mm { font-size:12.5px; color:#a3a3a3; margin-top:6px; line-height:1.55; }
+  .modal .row { display:flex; gap:8px; margin-top:16px; }
+  .btn { flex:1; text-align:center; font-size:13px; font-weight:700; padding:9px; border-radius:9px; }
+  .btn.cancel { background:transparent; border:1px solid #333; color:#cbd5e1; }
+  .btn.go { background:#b91c1c; color:#fff; border:1px solid #7f1d1d; }
+  .tabrow { display:flex; gap:8px; margin-bottom:10px; }
+  .tab { font-size:12px; font-weight:700; padding:6px 12px; border-radius:8px; background:#1a1a1a; border:1px solid #333; color:#a3a3a3; }
+  .tab.on { background:#3a1e0c; border-color:#7c3a12; color:#fbbf24; }
+  .prow { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #222; border-radius:8px; margin-bottom:6px; background:#0f0f0f; font-size:13px; }
+  .pos { font-size:11px; color:#737373; margin-left:auto; }
+  .pos.doc { color:#7dd3fc; } .pos.asst { color:#c4b5fd; }
+  .strike { opacity:.35; text-decoration:line-through; }
+  .flowbox { display:inline-block; border:1px solid #cbd5e1; border-radius:8px; padding:8px 12px; font-size:13px; background:#f8fafc; }
+  .arr { color:#94a3b8; font-weight:700; padding:0 6px; }
+  ul li { margin:.25em 0; }
+</style>
+</head>
+<body>
+
+<h1>Appointment empty-state · doctor-badge nav · doctor/staff schedule split</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-07-24 · <strong>Status:</strong> Approved by user (Q1=A · Q2=A · Q3=A) · <strong>Scope:</strong> frontend-only, no data migration, no rules change · <strong>Plan:</strong> TBD (writing-plans next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Three UX/data fixes on the mobile appointment hub (<code>AppointmentHubView</code>) surfaced by the user's screenshot (วันนี้ · กำลังรอ 0 · เสร็จแล้ว 2):</p>
+<ol>
+  <li><strong>Empty-state lies.</strong> When the day's queue is genuinely finished (0 waiting, 2 completed), the list shows <em>"ลองเปลี่ยน tab หรือ ปรับตัวกรอง"</em> — nagging the user to adjust filters that <em>cannot</em> reveal anything, because the work is simply done. The message must reflect <em>why</em> it's empty.</li>
+  <li><strong>Doctor badge is a dead end.</strong> The 🩺 doctor badge (or "ไม่มีแพทย์เข้า") is pure display. The user wants to tap it → confirm → jump to the editable doctor-schedule page in a new tab; users lacking permission see the destination's own "can't open".</li>
+  <li><strong>ตารางแพทย์ mixes roles.</strong> <code>listDoctors()</code> returns both <code>แพทย์</code> and <code>ผู้ช่วยแพทย์</code> (they share <code>be_doctors</code> via a <code>position</code> field), so the doctor-schedule tab shows assistants too. Assistants are staff — they belong in ตารางพนักงาน. Real prod data (Rule R): exactly <strong>2 แพทย์ + 2 ผู้ช่วยแพทย์</strong>, clean values.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<h3>① Empty-state — BEFORE → AFTER (context-aware, 3 cases)</h3>
+<div class="mockup">
+  <div class="mockup-label">BEFORE · one message for every empty reason</div>
+  <div class="app" style="max-width:360px;margin:auto">
+    <div class="cap badnote">สถานะ: วันนี้ · กำลังรอ 0 · เสร็จแล้ว 2 (งานเสร็จหมดแล้ว)</div>
+    <div class="ec"><div class="ic">🗓️</div><div class="h">ไม่มีรายการนัดหมาย</div><div class="s">ลองเปลี่ยน tab หรือ ปรับตัวกรอง</div></div>
+    <div class="cap badnote">↑ บอกให้ปรับกรอง ทั้งที่ปรับยังไงก็ไม่เจอ (เสร็จหมดแล้ว)</div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">AFTER · message + CTA ตามบริบท</div>
+  <div class="app">
+    <div class="grid2">
+      <div>
+        <div class="cap">A · all-done (กำลังรอ 0 · เสร็จแล้ว &gt;0)</div>
+        <div class="ec"><div class="ic">✅</div><div class="h">เสร็จหมดแล้ววันนี้</div><div class="s">ไม่มีคิวที่รออยู่ตอนนี้</div><div class="cta">ดู 2 รายการที่เสร็จแล้ว →</div></div>
+      </div>
+      <div>
+        <div class="cap">B · no-appts (ว่างจริง · ไม่ได้กรอง)</div>
+        <div class="ec"><div class="ic">🗓️</div><div class="h">ยังไม่มีนัดหมายวันนี้</div><div class="s">เริ่มสร้างนัดใหม่ได้เลย</div><div class="cta">+ เพิ่มนัดหมาย</div></div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="cap">C · filtered (มีนัด แต่ค้นหา/กรองซ่อนไว้) — กรณีเดียวที่พูดเรื่องกรอง</div>
+      <div class="ec" style="max-width:340px"><div class="ic">🔍</div><div class="h">ไม่พบนัดหมายที่ค้นหา</div><div class="s">ลองล้างคำค้นหา หรือปรับตัวกรอง</div></div>
+    </div>
+  </div>
+</div>
+
+<h3>② Doctor badge → themed confirm modal</h3>
+<div class="mockup">
+  <div class="mockup-label">tap badge (either state) → confirm modal (dark/ember, AV78 backdrop no-close)</div>
+  <div class="app">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <span style="font-size:13px;color:#a3a3a3">รายการนัดหมาย 0 คน</span>
+      <span class="chip">🩺 หมอมายด์ 11:00-20:00</span>
+      <span style="font-size:11px;color:#737373">← กดได้</span>
+    </div>
+    <div style="margin-bottom:12px"><span class="chip empty">ไม่มีแพทย์เข้า</span> <span style="font-size:11px;color:#737373">← กดได้เหมือนกัน (ไปตั้งตารางหมอ)</span></div>
+    <div class="modal-wrap">
+      <div class="modal">
+        <div class="mt">ไปหน้าแก้ไขตารางแพทย์?</div>
+        <div class="mm">จะเปิดหน้า “ตารางแพทย์” ในแท็บใหม่ให้แก้ไขได้</div>
+        <div class="row"><div class="btn cancel">ยกเลิก</div><div class="btn go">เปิดตารางแพทย์</div></div>
+      </div>
+    </div>
+    <div class="cap">กด “เปิดตารางแพทย์” → <code>window.open('?backend=1&amp;tab=doctor-schedules','_blank')</code> · ไม่มีสิทธิ์ → หน้า backend ปลายทางโชว์ “เข้าไม่ได้” เอง</div>
+  </div>
+</div>
+
+<h3>③ แพทย์/ผู้ช่วยแพทย์ split — BEFORE → AFTER</h3>
+<div class="mockup">
+  <div class="mockup-label">BEFORE · ตารางแพทย์ shows doctors + assistants (real data 2+2)</div>
+  <div class="app" style="max-width:420px;margin:auto">
+    <div class="tabrow"><span class="tab on">ตารางแพทย์</span><span class="tab">ตารางพนักงาน</span></div>
+    <div class="prow">🩺 หมอมายด์ <span class="pos doc">แพทย์</span></div>
+    <div class="prow">🩺 หมออีกคน <span class="pos doc">แพทย์</span></div>
+    <div class="prow">🩺 ยาหยี <span class="pos asst">ผู้ช่วยแพทย์</span></div>
+    <div class="prow">🩺 ผู้ช่วยอีกคน <span class="pos asst">ผู้ช่วยแพทย์</span></div>
+    <div class="cap badnote">↑ ผู้ช่วยแพทย์ 2 คน โผล่ในตารางแพทย์ (แถมโดนบังคับเลือกห้อง staffKind='doctor')</div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">AFTER · ตารางแพทย์ = แพทย์ only · ผู้ช่วย → ตารางพนักงาน (staffKind='assistant', ไม่เลือกห้อง)</div>
+  <div class="app grid2">
+    <div>
+      <div class="tabrow"><span class="tab on">ตารางแพทย์</span></div>
+      <div class="prow">🩺 หมอมายด์ <span class="pos doc">แพทย์</span></div>
+      <div class="prow">🩺 หมออีกคน <span class="pos doc">แพทย์</span></div>
+      <div class="prow strike">🩺 ยาหยี <span class="pos asst">ผู้ช่วยแพทย์</span></div>
+      <div class="prow strike">🩺 ผู้ช่วยอีกคน <span class="pos asst">ผู้ช่วยแพทย์</span></div>
+      <div class="cap">= filter ออก position='ผู้ช่วยแพทย์'</div>
+    </div>
+    <div>
+      <div class="tabrow"><span class="tab on">ตารางพนักงาน</span></div>
+      <div class="prow">👤 พนักงาน A <span class="pos">be_staff</span></div>
+      <div class="prow">👤 พนักงาน B <span class="pos">be_staff</span></div>
+      <div class="prow">➕ ยาหยี <span class="pos asst">ผู้ช่วยแพทย์</span></div>
+      <div class="prow">➕ ผู้ช่วยอีกคน <span class="pos asst">ผู้ช่วยแพทย์</span></div>
+      <div class="cap">= be_staff + ผู้ช่วยแพทย์ (จาก be_doctors)</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>① Empty-state reason → message (pure decision, evaluated only when <code>filteredAppts.length === 0</code>)</h3>
+<table>
+  <tr><th>#</th><th>Condition (in order — first match wins)</th><th>reason</th><th>icon · heading · sub · CTA</th></tr>
+  <tr><td>1</td><td><code>hasActiveFilter && tabHasData</code> (search/type/status set AND the tab's unfiltered <code>appts.length &gt; 0</code>)</td><td><code>filtered</code></td><td>🔍 · ไม่พบนัดหมายที่ค้นหา · ลองล้างคำค้นหา หรือปรับตัวกรอง · —</td></tr>
+  <tr><td>2</td><td><code>activeTab==='today' && todaySubPill==='waiting' && waiting===0 && completed&gt;0</code></td><td><code>all-done</code></td><td>✅ · เสร็จหมดแล้ววันนี้ · ไม่มีคิวที่รออยู่ตอนนี้ · “ดู N รายการที่เสร็จแล้ว” → setTodaySubPill('completed')</td></tr>
+  <tr><td>3</td><td>otherwise (genuinely no data for this view)</td><td><code>no-appts</code></td><td>🗓️ · ยังไม่มีนัดหมาย · เริ่มสร้างนัดใหม่ได้เลย · “+ เพิ่มนัดหมาย” → onAddAppointment()</td></tr>
+</table>
+<p><code>deriveEmptyStateReason(...)</code> is a pure helper (no React) → unit-testable; all inputs already exist in <code>AppointmentHubView</code> (<code>appts</code>, <code>filteredAppts</code>, <code>todaySubCounts</code>, <code>search/typeFilter/statusFilter</code>, <code>todaySubPill</code>).</p>
+
+<h3>② Doctor-badge navigation</h3>
+<div class="mockup"><div class="mockup-label">interaction sequence</div>
+<p style="margin:.4em 0">
+<span class="flowbox">tap badge</span><span class="arr">→</span>
+<span class="flowbox">confirm modal</span><span class="arr">→</span>
+<span class="flowbox">“เปิดตารางแพทย์”</span><span class="arr">→</span>
+<span class="flowbox"><code>window.open('?backend=1&amp;tab=doctor-schedules','_blank')</code></span><span class="arr">→</span>
+<span class="flowbox">BackendDashboard permission gate</span>
+</p>
+<p style="margin:.4em 0;font-size:.9em;color:#555">has permission → doctor-schedule tab renders (editable). · no permission → the tab's existing access-denied ("เข้าไม่ได้"). “ยกเลิก” / ESC / X → close, no navigation. Badge is only shown on today/tomorrow tabs (unchanged).</p>
+</div>
+
+<h3>③ Schedule role classification (data-flow, no migration)</h3>
+<div class="mockup"><div class="mockup-label">where each person's schedule is MANAGED (schedules stay in one be_staff_schedules keyed by staffId)</div>
+<pre>be_doctors ──▶ isAssistant(position) ? ──┬─ true  ("ผู้ช่วยแพทย์") ──▶ EmployeeSchedulesTab  (staffKind='assistant', no rooms)
+                                          └─ false (everyone else)  ──▶ DoctorSchedulesTab    (staffKind='doctor', rooms)
+be_staff  ─────────────────────────────────────────────────────────▶ EmployeeSchedulesTab
+
+shared predicate  isDoctorAssistant(person)  ⇒  String(person.position).trim() === 'ผู้ช่วยแพทย์'
+  · DoctorSchedulesTab:  listDoctors().filter(p =&gt; !isDoctorAssistant(p))
+  · EmployeeSchedulesTab: [...listStaff(), ...listDoctors().filter(isDoctorAssistant)]
+  · schedule-fetch staffIdSet + branch filter extended to include the merged assistant ids
+  · NO write to be_doctors/be_staff · existing treatment/DF/appointment doctor-pickers UNCHANGED</pre>
+</div>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong>① Empty-state:</strong> new pure helper <code>deriveEmptyStateReason()</code> (small module or co-located, exported for tests) + rewrite the empty block in <code>AppointmentHubView.jsx:834-843</code> to render per reason. CTAs reuse existing handlers (<code>setTodaySubPill</code>, <code>onAddAppointment</code>).</li>
+  <li><strong>② Badge:</strong> <code>AppointmentHubDoctorCards.jsx</code> becomes clickable (role=button + aria-label on both chip-list and empty states) + a small themed <code>ConfirmModal</code> (reuse an existing confirm-modal shape if one fits; else a minimal new one following AV78 — backdrop does NOT close). Navigation via <code>window.open('?backend=1&amp;tab=doctor-schedules','_blank')</code>.</li>
+  <li><strong>③ Split:</strong> one shared predicate <code>isDoctorAssistant(person)</code> (Rule of 3 — used by both tabs, prevents drift) in a shared lib (e.g. <code>staffScheduleValidation.js</code> or a small role util). <code>DoctorSchedulesTab</code> filters it OUT; <code>EmployeeSchedulesTab</code> merges it IN (as staffKind='assistant') + extends its schedule <code>staffIdSet</code> + branch filter (assistants use <code>filterDoctorsByBranch</code>).</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> context-aware empty-state — 3 reasons (filtered / all-done / no-appts), each with its own copy + CTA; only the <code>filtered</code> case mentions adjusting the filter.</li>
+  <li><strong>Q2 = A:</strong> tap doctor badge → themed confirm modal → open ตารางแพทย์ in a new tab; permission enforced at the destination (no pre-check); both badge states clickable.</li>
+  <li><strong>Q3 = A:</strong> display re-partition only, NO data migration; scope = the two schedule tabs; move <code>position==='ผู้ช่วยแพทย์'</code> out of ตารางแพทย์ into ตารางพนักงาน; everyone else stays a doctor.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Today · กำลังรอ · 0 waiting + ≥1 completed → shows "เสร็จหมดแล้ววันนี้" + a working "ดู N รายการที่เสร็จแล้ว" that switches to the เสร็จแล้ว sub-pill. NEVER "ปรับตัวกรอง".</li>
+  <li>A tab with genuinely zero appts (no filter) → "ยังไม่มีนัดหมาย" + working "+ เพิ่มนัดหมาย".</li>
+  <li>With a search/type/status active AND the tab has data → "ไม่พบนัดหมายที่ค้นหา" + "ลองล้างคำค้นหา หรือปรับตัวกรอง".</li>
+  <li>Tapping the 🩺 chip OR "ไม่มีแพทย์เข้า" opens the themed confirm; confirming opens <code>?backend=1&amp;tab=doctor-schedules</code> in a new tab; a no-permission account sees the backend's access-denied there; cancel/ESC/backdrop = no navigation.</li>
+  <li>ตารางแพทย์ lists only <code>แพทย์</code> (real: 2). ตารางพนักงาน lists be_staff + the 2 <code>ผู้ช่วยแพทย์</code>, managed as staff (no room selection). Existing schedule entries + treatment/DF doctor-pickers unchanged.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Assistant branch filter:</strong> the 2 assistants have empty <code>branchId</code> in prod — must confirm <code>filterDoctorsByBranch</code> includes them under the selected branch (else they'd vanish from ตารางพนักงาน). Verify during plan (Rule R).</li>
+  <li><strong>Existing assistant schedule entries with roomIds</strong> (set while they lived in ตารางแพทย์) stay as-is (harmless); new/edited entries won't set rooms. No cleanup needed.</li>
+  <li><strong>Predicate strictness:</strong> classify by exact <code>position==='ผู้ช่วยแพทย์'</code> (data is clean). A future variant/typo would default to "doctor" (kept in ตารางแพทย์) — acceptable + safe.</li>
+  <li><strong>Verification (Rule Q):</strong> pure-helper units + L1 real-browser for all three (empty-state message per state, badge→modal→new-tab + no-permission, schedule split counts). Frontend-only → no rules deploy, no data migration.</li>
+</ul>
+
+</body>
+</html>
