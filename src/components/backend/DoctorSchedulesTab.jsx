@@ -24,6 +24,7 @@ import SyncIndicator from '../SyncIndicator.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
+import { isDoctorAssistant } from '../../lib/staffScheduleValidation.js';
 
 function doctorDisplayName(d) {
   if (!d) return '';
@@ -74,8 +75,10 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   const loadDoctors = useCallback(async () => {
     setDoctorsLoading(true);
     try {
-      const list = await listDoctors();
-      // ProClinic doctor positions: 'แพทย์' + 'ผู้ช่วยแพทย์' — both have schedules
+      // 2026-07-24: ตารางแพทย์ = doctors ONLY. Assistants (position 'ผู้ช่วยแพทย์')
+      // are managed as staff in ตารางพนักงาน (EmployeeSchedulesTab). Display
+      // re-partition — no data move; schedules stay keyed by staffId.
+      const list = (await listDoctors()).filter((p) => !isDoctorAssistant(p));
       // Phase BSA leak-fix: branch soft-gate. Only show doctors with access
       // to current branch (branchIds[] contains selectedBranchId).
       const filtered = filterDoctorsByBranch(list || [], selectedBranchId);

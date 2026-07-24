@@ -62,6 +62,7 @@ import AppointmentHubTodaySubPillBar from './AppointmentHubTodaySubPillBar.jsx';
 import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
 import DepositAwareCancelDialog from './DepositAwareCancelDialog.jsx';
 import { subPillCountsForToday } from '../../lib/appointmentHubFilters.js';
+import { deriveEmptyStateReason, EMPTY_STATE_COPY } from '../../lib/appointmentHubEmptyState.js';
 // V71 (2026-05-15) — AppointmentLineBadge MIGRATED to AppointmentHubRowCard
 // (inline next to status chip). HubView no longer renders the badge directly;
 // the absolute-positioned top-right wrapper was REMOVED to close the V68→V71
@@ -774,6 +775,18 @@ export default function AppointmentHubView({
     loadAll({ silent: true });  // reconcile after delete
   }, [loadAll]);
 
+  // 2026-07-24 — context-aware empty-state, computed OUTSIDE the JSX (Vite OXC
+  // forbids IIFE-in-JSX `})()}` — RP1 audit). Only meaningful when the list is empty.
+  const emptyReason = (!loading && filteredAppts.length === 0)
+    ? deriveEmptyStateReason({
+        activeTab, todaySubPill,
+        waiting: todaySubCounts.waiting, completed: todaySubCounts.completed,
+        hasActiveFilter: search.trim() !== '' || typeFilter !== '' || statusFilter !== '__all__',
+        tabHasData: appts.length > 0,
+      })
+    : null;
+  const emptyCopy = emptyReason ? EMPTY_STATE_COPY[emptyReason] : null;
+
   return (
     <div data-testid="appt-hub-view">
       {/* V64-fix13 (2026-05-09): doctor-cards badge moved from TabBar.rightContent
@@ -831,14 +844,35 @@ export default function AppointmentHubView({
       )}
       {/* (2026-07-21) — scroll anchor: the bottom pager jumps back here */}
       <div ref={listTopRef} aria-hidden="true" />
-      {!loading && filteredAppts.length === 0 && (
+      {emptyCopy && (
         <div
           className="text-center py-10 border border-dashed border-[var(--bd)] rounded-xl bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)]"
           data-testid="appt-hub-empty"
+          data-empty-reason={emptyReason}
         >
-          <div className="text-3xl mb-2 opacity-40" aria-hidden="true">🗓️</div>
-          <div className="text-sm font-bold text-[var(--tx-heading)]">ไม่มีรายการนัดหมาย</div>
-          <div className="text-xs text-[var(--tx-muted)] italic mt-1">ลองเปลี่ยน tab หรือ ปรับตัวกรอง</div>
+          <div className="text-3xl mb-2 opacity-40" aria-hidden="true">{emptyCopy.icon}</div>
+          <div className="text-sm font-bold text-[var(--tx-heading)]">{emptyCopy.heading}</div>
+          <div className="text-xs text-[var(--tx-muted)] italic mt-1">{emptyCopy.sub}</div>
+          {emptyReason === 'all-done' && (
+            <button
+              type="button"
+              data-testid="appt-empty-cta-completed"
+              onClick={() => setTodaySubPill('completed')}
+              className="mt-3 text-xs font-bold text-orange-400 border border-orange-900/60 bg-orange-950/40 rounded-lg px-3 py-1.5 hover:bg-orange-950/70"
+            >
+              ดู {todaySubCounts.completed} รายการที่เสร็จแล้ว →
+            </button>
+          )}
+          {emptyReason === 'no-appts' && (
+            <button
+              type="button"
+              data-testid="appt-empty-cta-add"
+              onClick={() => setCreatingAppt(true)}
+              className="mt-3 text-xs font-bold text-orange-400 border border-orange-900/60 bg-orange-950/40 rounded-lg px-3 py-1.5 hover:bg-orange-950/70"
+            >
+              + เพิ่มนัดหมาย
+            </button>
+          )}
         </div>
       )}
       {/* V71 (2026-05-15) — absolute-positioned LINE badge wrapper REMOVED.

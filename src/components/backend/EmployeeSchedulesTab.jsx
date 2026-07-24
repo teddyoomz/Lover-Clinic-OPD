@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Users as UsersIcon, Loader2 } from 'lucide-react';
 import {
   listStaff,
+  listDoctors,
   listStaffSchedules,
   saveStaffSchedule,
   deleteStaffSchedule,
@@ -24,7 +25,8 @@ import SyncIndicator from '../SyncIndicator.jsx';
 import ScheduleEntryFormModal from './scheduling/ScheduleEntryFormModal.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
-import { filterStaffByBranch } from '../../lib/branchScopeUtils.js';
+import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
+import { isDoctorAssistant } from '../../lib/staffScheduleValidation.js';
 
 function staffDisplayName(s) {
   if (!s) return '';
@@ -70,10 +72,16 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
   const loadStaff = useCallback(async () => {
     setStaffLoading(true);
     try {
-      const list = await listStaff();
-      // Phase BSA leak-fix (2026-05-04): branch soft-gate. Only show staff
-      // with access to current branch (branchIds[] contains selectedBranchId).
-      const filtered = filterStaffByBranch(list || [], selectedBranchId);
+      // Phase BSA leak-fix (2026-05-04): branch soft-gate — only show staff with
+      // access to the current branch. 2026-07-24: ตารางพนักงาน also manages the
+      // ผู้ช่วยแพทย์ (assistants live in be_doctors) as staff. Normalize each
+      // assistant's identity to staffId = doctorId||id so the existing
+      // staffId||id resolution (staffIdSet / staffMap / sidebar) matches its
+      // be_staff_schedules entries (which DoctorSchedulesTab keys by doctorId||id).
+      const [staffList, docList] = await Promise.all([listStaff(), listDoctors()]);
+      const assistants = filterDoctorsByBranch((docList || []).filter(isDoctorAssistant), selectedBranchId)
+        .map((d) => ({ ...d, staffId: String(d.doctorId || d.id), position: d.position || 'ผู้ช่วยแพทย์' }));
+      const filtered = [...filterStaffByBranch(staffList || [], selectedBranchId), ...assistants];
       setStaff(filtered);
       if (filtered.length === 0) {
         setSelectedStaffId('');

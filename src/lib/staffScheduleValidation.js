@@ -23,6 +23,19 @@
 //   SS-8 type='recurring' → dayOfWeek required (0..6, 0=Sunday); date forbidden
 //   SS-9 type !== 'recurring' → date required; dayOfWeek forbidden (mutually exclusive)
 
+// ─── Role classification (2026-07-24) ──────────────────────────────────────
+// be_doctors carries BOTH 'แพทย์' and 'ผู้ช่วยแพทย์' in its `position` field
+// (ProClinic doctor positions). The schedule tabs split by it: ตารางแพทย์ shows
+// doctors only; ตารางพนักงาน manages assistants (treated as staff — no rooms).
+// ONE shared predicate (Rule of 3) so DoctorSchedulesTab + EmployeeSchedulesTab
+// never drift. Display re-partition only — no data move; schedules stay keyed by
+// staffId in be_staff_schedules. Strict exact-match: a future variant/typo
+// defaults to "doctor" (kept in ตารางแพทย์) — the safe fallback.
+export const DOCTOR_ASSISTANT_POSITION = 'ผู้ช่วยแพทย์';
+export function isDoctorAssistant(person) {
+  return String((person && person.position) || '').trim() === DOCTOR_ASSISTANT_POSITION;
+}
+
 // 'recurring' added 2026-04-26 Phase 13.2.6 for ProClinic-fidelity weekly-shift model.
 export const TYPE_OPTIONS = Object.freeze(['recurring', 'work', 'halfday', 'holiday', 'leave', 'sick']);
 export const TYPE_LABEL = Object.freeze({
